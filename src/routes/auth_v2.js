@@ -50,17 +50,6 @@ export function createUnifiedAuthRouter(opsEngine) {
         });
     });
 
-    // GET /auth/me - Alias for frontend
-    router.get('/auth/me', verifyJWT, (req, res) => {
-        if (!req.user) {
-            return res.status(401).json({ ok: false, error: "Unauthorized" });
-        }
-        return res.json({
-            ok: true,
-            user: req.user
-        });
-    });
-
     // Mock Login for other roles (DEV ONLY) — includes JWT issuer fix
     if (process.env.NODE_ENV !== 'production') {
         router.post('/__test/auth/login', async (req, res) => {
