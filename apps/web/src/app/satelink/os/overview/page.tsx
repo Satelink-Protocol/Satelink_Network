@@ -173,7 +173,7 @@ export default function OverviewPage() {
 
   const { data: networkStats, isLoading: loadingNetwork } = useSWR('/dashboard-api/network/overview', fetcher, { refreshInterval: 30000 });
   const { data: earnings, isLoading: loadingEarnings } = useSWR('/dashboard-api/earnings/overview', fetcher, { refreshInterval: 30000 });
-  const { data: chainMetrics } = useSWR('/rpc/metrics', fetcher, { refreshInterval: 30000 });
+  const { data: chainMetrics, isLoading: loadingChains } = useSWR('/rpc/metrics', fetcher, { refreshInterval: 30000 });
 
   const loading = loadingNetwork || loadingEarnings;
   const epochs = earnings?.recent_epochs || [];
@@ -401,25 +401,27 @@ export default function OverviewPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8">
-            {Object.entries(
-              chainMetrics?.chains ||
-              {
-                'POLYGON': {providers:{healthy:5,total:5},performance:{avgLatencyMs:29,bestLatencyMs:13}},
-                'ETHEREUM': {providers:{healthy:5,total:5},performance:{avgLatencyMs:2037,bestLatencyMs:41}},
-                'ARBITRUM': {providers:{healthy:2,total:2},performance:{avgLatencyMs:88,bestLatencyMs:41}},
-                'BASE': {providers:{healthy:2,total:2},performance:{avgLatencyMs:100,bestLatencyMs:77}},
-                'AMOY': {providers:{healthy:4,total:4},performance:{avgLatencyMs:132,bestLatencyMs:68}},
-                'SOLANA': {providers:{healthy:2,total:2},performance:{avgLatencyMs:115,bestLatencyMs:77}},
-              }
-            ).map(([chain, data]: [string, any]) => (
-              <ChainRow key={chain}
-                chain={chain}
-                providers={data.providers?.healthy || data.providers || '?'}
-                latency={data.performance?.avgLatencyMs || data.latency || 0}
-                best={data.performance?.bestLatencyMs || data.best || 0}
-                loading={false}
-              />
-            ))}
+            {loadingChains ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="py-2 border-b border-[#0f2318]">
+                  <Skeleton h="h-4" />
+                </div>
+              ))
+            ) : chainMetrics?.chains ? (
+              Object.entries(chainMetrics.chains).map(([chain, data]: [string, any]) => (
+                <ChainRow key={chain}
+                  chain={chain}
+                  providers={data.providers?.healthy || data.providers || '?'}
+                  latency={data.performance?.avgLatencyMs || data.latency || 0}
+                  best={data.performance?.bestLatencyMs || data.best || 0}
+                  loading={false}
+                />
+              ))
+            ) : (
+              <div className="col-span-3 text-center py-4">
+                <p className="text-[10px] text-[#285A48]">No chain metrics available</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

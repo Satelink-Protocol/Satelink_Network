@@ -23,63 +23,99 @@ export async function getSystemHealth(db, cache) {
         if (cached) return JSON.parse(cached);
     }
 
+    // Helper for async queries (supports both pg Pool and PgDatabase adapter)
+    const query = async (sql, params = []) => {
+        if (db.query) {
+            const result = await db.query(sql, params);
+            return result.rows || result;
+        }
+        if (db.prepare) {
+            return await db.prepare(sql).all(params);
+        }
+        return [];
+    };
+
+    const queryOne = async (sql, params = []) => {
+        if (db.query) {
+            const result = await db.query(sql, params);
+            return result.rows?.[0] || null;
+        }
+        if (db.prepare) {
+            return await db.prepare(sql).get(params);
+        }
+        return null;
+    };
+
     const now = Math.floor(Date.now() / 1000);
     const fiveMinAgo = now - 300;
     const oneHourAgo = now - 3600;
+    const fiveMinAgoMs = Date.now() - 300000;
+    const oneHourAgoMs = Date.now() - 3600000;
+    const oneDayAgoMs = Date.now() - 86400000;
 
     // ── System flags ──
     const flags = {};
-    const flagRows = db.prepare?.(
-        "SELECT key, value FROM system_flags WHERE key IN ('system_state', 'withdrawals_paused', 'security_freeze', 'revenue_mode', 'beta_gate_enabled')"
-    )?.all() || [];
-    for (const row of flagRows) {
-        flags[row.key] = row.value;
-    }
+    try {
+        const flagRows = await query(
+            "SELECT key, value FROM system_flags WHERE key IN ('system_state', 'withdrawals_paused', 'security_freeze', 'revenue_mode', 'beta_gate_enabled')"
+        );
+        for (const row of flagRows) {
+            flags[row.key] = row.value;
+        }
+    } catch { /* table may not exist */ }
 
     // ── Active nodes (5 min) ──
-    const activeNodes = db.prepare?.(
-        "SELECT COUNT(*) as count FROM registered_nodes WHERE active = 1 AND last_heartbeat > ?"
-    )?.get(fiveMinAgo)?.count || 0;
+    const activeNodesRow = await queryOne(
+        "SELECT COUNT(*) as count FROM registered_nodes WHERE status = 'active' AND last_heartbeat_at > $1",
+        [fiveMinAgo]
+    );
+    const activeNodes = parseInt(activeNodesRow?.count || 0);
 
     // ── Ops last 5 min ──
-    const ops5m = db.prepare?.(
-        "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > ?"
-    )?.get(fiveMinAgo)?.count || 0;
+    const ops5mRow = await queryOne(
+        "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > $1",
+        [fiveMinAgoMs]
+    );
+    const ops5m = parseInt(ops5mRow?.count || 0);
 
     // ── Success rate last 5 min ──
-    const successCount = db.prepare?.(
-        "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > ? AND status = 'success'"
-    )?.get(fiveMinAgo)?.count || 0;
+    const successCountRow = await queryOne(
+        "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > $1 AND status = 'success'",
+        [fiveMinAgoMs]
+    );
+    const successCount = parseInt(successCountRow?.count || 0);
     const successRate = ops5m > 0 ? parseFloat(((successCount / ops5m) * 100).toFixed(1)) : 100;
 
     // ── Revenue last 24h ──
-    const oneDayAgo = now - 86400;
-    const revenue24h = db.prepare?.(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > ?"
-    )?.get(oneDayAgo)?.total || 0;
+    const revenue24hRow = await queryOne(
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        [oneDayAgoMs]
+    );
+    const revenue24h = parseFloat(revenue24hRow?.total || 0);
 
     // ── Error count last hour ──
     let errors1h = 0;
     try {
-        errors1h = db.prepare?.(
-            "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > ? AND status != 'success'"
-        )?.get(oneHourAgo)?.count || 0;
+        const errors1hRow = await queryOne(
+            "SELECT COUNT(*) as count FROM revenue_events_v2 WHERE created_at > $1 AND status != 'success'",
+            [oneHourAgoMs]
+        );
+        errors1h = parseInt(errors1hRow?.count || 0);
     } catch { /* table may not exist */ }
 
     // ── User counts by role ──
-    const usersByRole = db.prepare?.(
-        "SELECT role, COUNT(*) as count FROM users GROUP BY role"
-    )?.all() || [];
+    let usersByRole = [];
+    try {
+        usersByRole = await query("SELECT role, COUNT(*) as count FROM users GROUP BY role");
+    } catch { /* table may not exist */ }
 
     // ── Current epoch ──
-    const currentEpoch = db.prepare?.(
-        "SELECT id, status FROM epochs ORDER BY id DESC LIMIT 1"
-    )?.get() || { id: 0, status: 'UNKNOWN' };
+    const currentEpoch = await queryOne("SELECT id, status FROM epochs ORDER BY id DESC LIMIT 1")
+        || { id: 0, status: 'UNKNOWN' };
 
     // ── Total epochs closed ──
-    const epochsClosed = db.prepare?.(
-        "SELECT COUNT(*) as count FROM epochs WHERE status = 'CLOSED'"
-    )?.get()?.count || 0;
+    const epochsClosedRow = await queryOne("SELECT COUNT(*) as count FROM epochs WHERE status = 'CLOSED'");
+    const epochsClosed = parseInt(epochsClosedRow?.count || 0);
 
     const result = {
         system_state: flags['system_state'] || 'UNKNOWN',
@@ -91,7 +127,7 @@ export async function getSystemHealth(db, cache) {
             active_nodes_5m: activeNodes,
             ops_5m: ops5m,
             success_rate_5m: successRate,
-            revenue_24h_usdt: parseFloat(revenue24h.toFixed(4)),
+            revenue_24h_usdt: parseFloat(revenue24h.toFixed(6)),
             errors_1h: errors1h,
         },
         current_epoch: currentEpoch,
