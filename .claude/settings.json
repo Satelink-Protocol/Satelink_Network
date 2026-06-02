@@ -1,23 +1,9 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash:npm *",
-      "Bash:forge *",
-      "Bash:git *",
-      "Bash:docker *",
-      "Bash:node *",
-      "Bash:curl *",
-      "Bash:railway *",
-      "Bash:npx *",
-      "Bash:sed *",
-      "Bash:grep *",
-      "Bash:cat *",
-      "Bash:mkdir *",
-      "Bash:cp *",
-      "Bash:mv *"
-    ],
-    "deny": [
-      "Bash:rm -rf /"
-    ]
-  }
+  "model": "claude-sonnet-4-6",
+  "extendedThinking": false,
+  "maxConcurrentSessions": 3,
+  "allowedTools": ["bash","read","write","edit","grep","glob","mcp"],
+  "autoApprove": false,
+  "confirmBeforeWrite": false,
+  "confirmBeforeDelete": true
 }
