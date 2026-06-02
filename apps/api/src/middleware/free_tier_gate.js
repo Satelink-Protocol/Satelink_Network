@@ -107,3 +107,34 @@ export function getFreeTierStats() {
 
   return { activeIPs, totalCalls, nearLimitIPs, limit: FREE_TIER_LIMIT };
 }
+
+// Export conversion targets: IPs at >=90% of free tier limit
+export function getConversionTargets() {
+  const now = Date.now();
+  const threshold = FREE_TIER_LIMIT * 0.9;
+  const targets = [];
+
+  for (const [ip, counter] of ipCounters.entries()) {
+    if (now < counter.resetAt && counter.count >= threshold) {
+      const thresholdPct = Math.round((counter.count / FREE_TIER_LIMIT) * 100);
+      targets.push({
+        client_id: hashIp(ip),
+        calls_today: counter.count,
+        limit: FREE_TIER_LIMIT,
+        threshold_pct: thresholdPct,
+        exceeded: counter.count > FREE_TIER_LIMIT,
+        resets_at: new Date(counter.resetAt).toISOString()
+      });
+    }
+  }
+
+  // Sort by calls descending
+  targets.sort((a, b) => b.calls_today - a.calls_today);
+  return targets;
+}
+
+// Hash IP for privacy in logs/exports
+function hashIp(ip) {
+  const crypto = require('crypto');
+  return 'IP-' + crypto.createHash('sha256').update(ip + (process.env.IP_HASH_SALT || 'satelink')).digest('hex').substring(0, 12);
+}

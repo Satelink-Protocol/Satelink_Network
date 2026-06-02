@@ -317,8 +317,15 @@ async function start() {
     // Free tier usage stats (Path C monitoring)
     app.get('/system/free-tier', async (req, res) => {
       try {
-        const { getFreeTierStats } = await import('./src/middleware/free_tier_gate.js');
-        res.json({ ok: true, ...getFreeTierStats() });
+        const { getFreeTierStats, getConversionTargets } = await import('./src/middleware/free_tier_gate.js');
+        const stats = getFreeTierStats();
+        const conversionTargets = getConversionTargets();
+        res.json({
+          ok: true,
+          ...stats,
+          conversion_targets: conversionTargets,
+          conversion_count: conversionTargets.length
+        });
       } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
       }
