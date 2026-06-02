@@ -22,6 +22,7 @@ import { createCreditsRouter } from "./src/routes/credits.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
+import { createAuthController } from './src/auth/auth_controller.js';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP)
@@ -198,16 +199,37 @@ app.get("/api/mode", (req, res) => {
   app.use("/api/auth", createUnifiedAuthRouter());
 
   // Unified auth router — login, register, /me
-  // auth_v2 uses SQLite-style prepare().get() — adapt pg pool to match
+  // Adapt pg pool to match the db interface expected by auth modules
   const pgDbAdapter = {
     prepare: (sql) => ({
       get: async (params) => {
-        const result = await pool.query(sql, params);
+        const pgSql = sql.replace(/\?/g, (_, i) => `$${i + 1}`);
+        const result = await pool.query(pgSql, params);
         return result.rows[0] || null;
       },
-      run: async (params) => pool.query(sql, params)
-    })
+      run: async (params) => {
+        const pgSql = sql.replace(/\?/g, (_, i) => `$${i + 1}`);
+        return pool.query(pgSql, params);
+      }
+    }),
+    // Direct query methods for wallet_auth.js
+    query: async (sql, params) => {
+      let idx = 0;
+      const pgSql = sql.replace(/\?/g, () => `$${++idx}`);
+      return pool.query(pgSql, params);
+    },
+    get: async (sql, params) => {
+      let idx = 0;
+      const pgSql = sql.replace(/\?/g, () => `$${++idx}`);
+      const result = await pool.query(pgSql, params);
+      return result.rows[0] || null;
+    }
   };
+
+  // Wallet signature auth — /auth/challenge, /auth/verify (frontend wallet login flow)
+  app.use("/auth", createAuthController(pgDbAdapter));
+
+  // Email/password auth — /auth/login, /auth/register, /auth/me
   app.use("/auth", createUserAuthRouter({ db: pgDbAdapter }));
 
   // Free tier monitoring endpoint (outside /api to avoid router conflicts)
