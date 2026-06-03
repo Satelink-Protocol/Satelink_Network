@@ -96,6 +96,42 @@ export function createCreditsRouter(db, logger) {
     }
   });
 
+  // GET /credits/initiate?amount=<usdt_amount> — return deposit calldata for autonomous payers
+  router.get('/initiate', (req, res) => {
+    const { amount } = req.query;
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number' });
+    }
+
+    const amountUsdt = parseFloat(amount);
+    const amountRaw = (amountUsdt * 1_000_000).toFixed(0);
+    const vaultAddress = process.env.REVENUE_VAULT_ADDRESS;
+    const usdtAddress = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+
+    // Manual ABI encoding — approve(address,uint256) selector 0x095ea7b3
+    const paddedVault = (vaultAddress || '').replace(/^0x/i, '').toLowerCase().padStart(64, '0');
+    const paddedAmount = BigInt(amountRaw).toString(16).padStart(64, '0');
+    const approveCalldata = `0x095ea7b3${paddedVault}${paddedAmount}`;
+
+    // Manual ABI encoding — deposit(uint256) selector 0xb6b55f25
+    const depositCalldata = `0xb6b55f25${paddedAmount}`;
+
+    return res.json({
+      revenueVaultAddress: vaultAddress,
+      usdtAddress,
+      chainId: 137,
+      amountUsdt,
+      amountRaw,
+      approveCalldata,
+      depositCalldata,
+      instructions: [
+        'Step 1: Call USDT.approve(revenueVaultAddress, amountRaw) on Polygon',
+        'Step 2: Call RevenueVault.deposit(amountRaw) on Polygon',
+        'Chain: Polygon Mainnet (chainId 137)'
+      ]
+    });
+  });
+
   // POST /credits/check — pre-flight: can this wallet afford X calls?
   router.post('/check', async (req, res) => {
     const { wallet, method, call_count } = req.body;
