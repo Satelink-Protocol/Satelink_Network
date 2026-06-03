@@ -148,8 +148,6 @@ paperclip-org/
 paperclip_backup.sql
 
 # Keep agent memory structure in git (org state versioned)
-# but ignore archives and reports
-agent/memory/archive/
 agent/memory/reports/
 
 # Legacy agents directory (with node_modules)
