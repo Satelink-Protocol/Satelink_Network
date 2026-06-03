@@ -1,82 +1,43 @@
-# CURRENT SPRINT STATUS
-# Updated by ORCHESTRATOR after each week review.
-# Agents read this to understand what is happening right now.
+# CURRENT SPRINT — ENTERPRISE OS PHASE 1
 
----
+## Sprint Goal
+First collected USDT. Not metered. Physically collected on-chain.
 
-## SPRINT: Foundation Completion — Cycle 2 (May 29 – June 7, 2026)
+## Active Events (source of truth: ACTIVE_EVENTS.md)
 
-Goal: Complete the remaining 8% of platform. Get to first paying customer.
-Ordering: Revenue-first based on Cycle 1 risk flags.
+EVT-REV-001 | REV-1 | ECONOMY_COMMANDER
+→ Revenue truth validation: confirm collected vs metered gap
 
----
+EVT-OPS-001 | OPS-2 | ENGINEERING_COMMANDER  
+→ Local diagnostic failure: better-sqlite3 dependency issue
 
-## SLOT STATUS THIS SPRINT
+EVT-REV-002 | REV-2 | ECONOMY_COMMANDER
+→ USDT payment flow verification end to end
 
-Slot C2-1 — REVENUE_WORKER — Mainnet USDT settlement completion
-  Status: ACTIVE (SAT-35 not yet assigned — activate after SAT-34 closes)
-  Goal: Identify settlement contract / payout mechanism
-  Test: At least one USDT payout path functional or documented
+EVT-CUST-001 | REV-2 | ECONOMY_COMMANDER
+→ Customer Zero: first intentional paying machine customer
 
-Slot C2-2 — FRONTEND_WORKER — Verify admin panel live data wiring
-  Status: WAITING
-  Goal: Confirm 4 endpoints return real data, fix any hardcoded values
-  Endpoints: /api/status, /admin/nodes, /admin/revenue, /system/free-tier
+EVT-AUTO-001 | OPS-3 | AUTONOMY_COMMANDER
+→ Automate founder daily revenue truth synthesis
 
-Slot C2-3 — DEVOPS_WORKER — Railway autoscaling + OpenObserve
-  Status: WAITING
-  Goal: Autoscaling active, logs ingesting, runbook written
+## Blocking Questions (answer these before anything else)
 
-Slot C2-4 — SECURITY_WORKER — Trivy scan + Infisical audit
-  Status: WAITING
-  Output: agent/memory/SECURITY_REPORT.md
+1. Is BILLING_ENABLED=true in Railway production?
+   Check: Railway dashboard → satelink service → Variables
+   
+2. Is there a working deposit flow?
+   Test: Can a wallet deposit USDT and receive credits?
+   
+3. What does GET /system/free-tier return right now?
+   Run: curl https://rpc.satelink.network/system/free-tier
+   
+4. Are the 62 near-limit IPs still there?
+   Check: agent/memory/CONVERSIONS.md last update date
 
-Slot C2-5 — MARKET_SCANNER — Competitor pricing check
-  Status: WAITING
-  Output: agent/memory/MARKET_SCAN.md
+## Definition of Sprint Success
 
-Slot C2-6 — ORCHESTRATOR — Week 2 review
-  Status: WAITING
-  Goal: Append Cycle 2 summary, write Cycle 3 queue
-
----
-
-## CYCLE 1 COMPLETED (2026-05-28 to 2026-05-29)
-
-Slot 1 — BACKEND_WORKER — Auth login fix ✓
-  Result: createUnifiedAuthRouter mounted at /api/auth (commit 9daffb9)
-
-Slot 2 — FRONTEND_WORKER — Admin panel wiring
-  Result: ASSUMED DONE (no explicit DONE entry — unverified, flagged for C2-2)
-
-Slot 3 — CONVERSION_MONITOR — Free tier check ✓
-  Result: 70 near-limit IPs found, CONVERSIONS.md written
-
-Slot 4 — SENTINEL — Health check ✓
-  Result: Production HEALTHY, epoch 4757, SENTINEL_STATUS.md written
-
-Slot 5 — GROWTH_WORKER — Node operator guide ✓
-  Result: docs/NODE_OPERATOR_GUIDE.md written (commit f10b0fa)
-
-Slot 6 — ORCHESTRATOR — Week 1 review ✓
-  Result: MASTER_PROGRESS.md written, MASTER_TASK_QUEUE.md updated with Cycle 2
-
----
-
-## HUMAN ACTIONS PENDING (cannot be delegated)
-
-[ ] Submit Chainlist mainnet PR — docs/chainlist_mainnet_pr.md — 10 min
-[ ] Submit dRPC registration — docs/DRPC_SUBMISSION.md — 30 min
-[ ] macOS Full Disk Access: enable for Terminal, VSCode, Node
-
-These are the single highest-leverage actions to drive organic M2M revenue.
-The Chainlist PR merge will trigger machine-to-machine RPC discovery automatically.
-
----
-
-## METRICS TO TRACK
-
-Free tier conversions: check CONVERSIONS.md
-Production health: check SENTINEL_STATUS.md
-Epoch progress: curl https://rpc.satelink.network/api/status
-Queue progress: read PROGRESS.md
+[ ] BILLING_ENABLED=true confirmed in production
+[ ] One successful USDT deposit → credits → API call flow tested
+[ ] PAYG pricing option exists (or decision made to add it)
+[ ] Customer Zero: one machine or protocol identified as target
+[ ] Collected USDT > $0 in REVENUE_LOG.md
