@@ -60,7 +60,7 @@ export default function DepositPage() {
     setInstructions(null);
 
     try {
-      const res = await api.get(`/credits/deposit/initiate?amount=${parsed}`);
+      const res = await api.get(`/credits/initiate?amount=${parsed}`);
       setInstructions(res.data);
     } catch (e: unknown) {
       const msg =
