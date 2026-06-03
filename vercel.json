@@ -5,9 +5,14 @@
   "installCommand": "npm install",
   "rewrites": [
     {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "app.satelink.network" }],
-      "destination": "/satelink/os/overview/:path*"
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.satelink.network"
+        }
+      ],
+      "destination": "/satelink/os/overview"
     }
   ]
 }
