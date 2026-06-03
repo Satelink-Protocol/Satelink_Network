@@ -14,6 +14,17 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
 
+  webpack: (config) => {
+    // @wagmi/core@3.5.0 statically imports 'accounts' (optional peer dep) in
+    // tempo/Connectors.js, causing "Can't resolve 'accounts'" at build time.
+    // Aliasing to false creates an empty webpack module to satisfy the import.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      accounts: false,
+    };
+    return config;
+  },
+
   turbopack: {},
 
   experimental: {
