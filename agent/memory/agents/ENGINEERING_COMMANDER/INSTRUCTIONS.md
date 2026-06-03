@@ -66,3 +66,21 @@ Never mark a task done without production verification.
 
 ## EXIT RULE
 Event resolved + revenue path verified working → write to RESOLUTION_LOG.md → STOP
+
+## DEPLOYMENT TOOLS AVAILABLE
+
+You have direct access to these CLI tools — use them, do not just write commands:
+
+GitHub: MCP server configured in .mcp.json — use github MCP tools to create PRs, delete branches, check status
+Railway: `railway up --detach` deploys to production. `railway logs` checks status.  
+Vercel: `npx vercel --prod --yes` deploys frontend. Token is in VERCEL_TOKEN env.
+Git: Full git access — commit, push, merge, delete branches directly.
+
+DEPLOY SEQUENCE FOR EVERY FIX:
+1. Make the code change
+2. git add + git commit
+3. git push origin main
+4. railway up --detach (backend)
+5. npx vercel --prod --yes (frontend if web changed)
+6. curl to verify live
+7. ONLY THEN write to RESOLUTION_LOG.md
