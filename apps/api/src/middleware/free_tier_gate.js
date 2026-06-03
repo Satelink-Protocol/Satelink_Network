@@ -77,6 +77,7 @@ export function createFreeTierGate(logger) {
           min_deposit_usdt: 1.00
         },
         deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+        deposit_instructions_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
         usdt_contract: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
         network: 'Polygon Mainnet (chainId: 137)',
         docs: 'https://docs.satelink.network'
