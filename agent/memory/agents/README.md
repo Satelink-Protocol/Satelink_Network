@@ -1,30 +1,58 @@
-# SATELINK AGENT ROSTER
-# Intelligence files for all 7 agents.
+# SATELINK AGENT ROSTER — ENTERPRISE OS V2
+# Status: Phase 1 shadow mode
 
-## COMMAND LAYER
-CEO/INSTRUCTIONS.md          — Queue manager, milestone gatekeeper
-ORCHESTRATOR/INSTRUCTIONS.md — Sprint reviewer, next-cycle planner
+## Active Paperclip Roster
 
-## ENGINEERING WORKERS (Claude Sonnet — rotate 1 at a time)
-BACKEND_WORKER/INSTRUCTIONS.md  — API + services + DB
-FRONTEND_WORKER/INSTRUCTIONS.md — Next.js dashboard + admin panel
-GROWTH_WORKER/INSTRUCTIONS.md   — Docs + operator guides + developer content
+These are the only always-available agents in the initial rollout:
 
-## OPS WORKERS (Gemini Flash Lite — cheap, fast)
-CONVERSION_MONITOR/INSTRUCTIONS.md — Free tier → paid conversion tracking
-SENTINEL/INSTRUCTIONS.md           — Production health monitoring
+- `CEO` — final escalation gate and approval owner
+- `ENGINEERING_COMMANDER` — engineering, QA, deployment, and SRE owner
+- `ECONOMY_COMMANDER` — revenue, customer, and funnel owner
+- `SECURITY_COMMANDER` — treasury, secrets, and adversarial owner
+- `AUTONOMY_COMMANDER` — founder-independence owner
 
-## HOW AGENTS USE THESE FILES
+## Dormant Governance
 
-Each agent reads its INSTRUCTIONS.md before executing any task.
-Instructions define: identity, decision framework, what agent owns, what it must never do.
+These remain playbooks only in the initial rollout:
 
-Combined with skills/ directory (project-wide context), agents have complete
-autonomous decision-making capability for their domain.
+- `BOARD`
+- `RISK_AGENT`
 
-## UPGRADING AGENT INTELLIGENCE
+They are not routine runtime agents and should not consume tokens unless a
+future governance threshold explicitly activates them.
 
-When agent consistently makes wrong decisions → update its INSTRUCTIONS.md.
-When project architecture changes → update relevant files in skills/.
-ORCHESTRATOR updates CURRENT_SPRINT.md each Sunday.
-CEO updates AGENT_STATUS.md when slot changes.
+## Role Packs
+
+These files exist for commanders to load on demand, not as always-on agents:
+
+- `QA_COMMANDER`
+- `DEPLOYMENT_COMMANDER`
+- `SRE_COMMANDER`
+- `DEMAND_COMMANDER`
+- `CONVERSION_COMMANDER`
+- `RETENTION_COMMANDER`
+- `TREASURY_GUARDIAN`
+- `RED_TEAM`
+- `BLUE_TEAM`
+
+## Legacy Compatibility Agents
+
+The previous queue-era agents remain in this directory during shadow mode:
+
+- `BACKEND_WORKER`
+- `FRONTEND_WORKER`
+- `GROWTH_WORKER`
+- `ORCHESTRATOR`
+- `CONVERSION_MONITOR`
+- `SENTINEL`
+
+They are compatibility artifacts while the queue is still preserved.
+They are not the target operating model.
+
+## Operating Law
+
+- One open event has one owner.
+- No slot rotation.
+- No routine wakeups.
+- No CEO polling.
+- Collected cash outranks task throughput.

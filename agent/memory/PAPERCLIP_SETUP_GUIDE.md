@@ -1,200 +1,112 @@
-# PAPERCLIP AGENT SETUP GUIDE
-# Configure these agents in Paperclip UI at localhost:8080
-# Company: Satelink Network
-# Reset: If agents are in wrong state, reset DB and reconfigure from scratch.
+# PAPERCLIP SETUP GUIDE — ENTERPRISE OS V2
+# Configure these agents in Paperclip UI
+# Status: Phase 1 shadow mode
 
----
+## Purpose
 
-## STEP 1 — Create Company (if not exists)
-Name: Satelink Network
-Description: DePIN infrastructure platform — autonomous revenue engine
+This guide replaces the rotational queue setup with a 5-agent event-driven
+roster while preserving the legacy queue files during migration.
 
----
-
-## STEP 2 — Configure Each Agent (exact settings)
+## Active Agents To Configure
 
 ### CEO
-Name: CEO
-Model: claude-sonnet-4-6
-Heartbeat: DISABLED (0 or "wake on demand")
-Max Turns: 15
-Max Concurrent Runs: 1
-Can Create Agents: YES
-Can Assign Tasks: YES
-Wake On Demand: YES
+- Name: `CEO`
+- Model: `claude-sonnet-4-6`
+- Heartbeat: `DISABLED`
+- Max Turns: `15`
+- Max Concurrent Runs: `1`
+- Can Assign Tasks: `YES`
+- Can Create Agents: `NO` in initial rollout
 
-System Prompt:
-```
-You are the CEO of Satelink DePIN Network.
+System prompt source:
+- `agent/memory/agents/CEO/INSTRUCTIONS.md`
 
-Your ONLY job is to manage the rotational task queue.
+### ENGINEERING_COMMANDER
+- Name: `ENGINEERING_COMMANDER`
+- Model: `claude-sonnet-4-6`
+- Heartbeat: `DISABLED`
+- Max Turns: `20`
+- Can Assign Tasks: `NO`
+- Can Create Agents: `NO`
 
-STARTUP PROCEDURE (every session):
-1. Read /Users/pradeepjakuraa/satelink/agent/memory/MASTER_TASK_QUEUE.md
-2. Read /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md
-3. Find the current active slot
-4. If previous slot shows DONE → activate the next slot's agent
-5. If no DONE yet → check if worker is actually running, if stuck → alert
-6. Write what you did to PROGRESS.md
-7. STOP
+System prompt source:
+- `agent/memory/agents/ENGINEERING_COMMANDER/INSTRUCTIONS.md`
 
-HARD RULES:
-- Activate exactly ONE worker per session
-- Never run two workers simultaneously
-- Never write code
-- Never redesign architecture  
-- Only activate from approved list: ORCHESTRATOR, SENTINEL, BACKEND_WORKER, FRONTEND_WORKER, GROWTH_WORKER, CONVERSION_MONITOR
-- Heartbeat is OFF — you wake on demand only
-- Max 15 turns per session
+### ECONOMY_COMMANDER
+- Name: `ECONOMY_COMMANDER`
+- Model: `claude-sonnet-4-6`
+- Heartbeat: `DISABLED`
+- Max Turns: `20`
+- Can Assign Tasks: `NO`
+- Can Create Agents: `NO`
 
-EXIT: After activating worker + writing to PROGRESS.md → STOP
-```
+System prompt source:
+- `agent/memory/agents/ECONOMY_COMMANDER/INSTRUCTIONS.md`
 
-### ORCHESTRATOR
-Name: ORCHESTRATOR
-Model: claude-sonnet-4-6
-Heartbeat: DISABLED (triggered by CEO only)
-Max Turns: 8
-Can Create Agents: NO
-Can Assign Tasks: NO
+### SECURITY_COMMANDER
+- Name: `SECURITY_COMMANDER`
+- Model: `claude-sonnet-4-6`
+- Heartbeat: `DISABLED`
+- Max Turns: `20`
+- Can Assign Tasks: `NO`
+- Can Create Agents: `NO`
 
-System Prompt:
-```
-You are the ORCHESTRATOR for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/ORCHESTRATOR_TASK.md
-Follow it exactly. Do not deviate.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP immediately.
-```
+System prompt source:
+- `agent/memory/agents/SECURITY_COMMANDER/INSTRUCTIONS.md`
 
-### BACKEND_WORKER
-Name: BACKEND_WORKER
-Model: claude-sonnet-4-6
-Heartbeat: DISABLED (triggered by CEO only)
-Max Turns: 20
-Can Create Agents: NO
-Can Assign Tasks: NO
+### AUTONOMY_COMMANDER
+- Name: `AUTONOMY_COMMANDER`
+- Model: `claude-sonnet-4-6`
+- Heartbeat: `DISABLED`
+- Max Turns: `15`
+- Can Assign Tasks: `NO`
+- Can Create Agents: `NO`
 
-System Prompt:
-```
-You are the BACKEND_WORKER for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/BACKEND_TASK.md
-Follow it exactly. Stay within your file scope.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP immediately. Do not continue beyond the task.
-```
+System prompt source:
+- `agent/memory/agents/AUTONOMY_COMMANDER/INSTRUCTIONS.md`
 
-### FRONTEND_WORKER
-Name: FRONTEND_WORKER
-Model: claude-sonnet-4-6
-Heartbeat: DISABLED (triggered by CEO only)
-Max Turns: 25
-Can Create Agents: NO
-Can Assign Tasks: NO
+## Dormant Governance
 
-System Prompt:
-```
-You are the FRONTEND_WORKER for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/FRONTEND_TASK.md
-Follow it exactly. Stay within your file scope.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP immediately.
-```
+Do not provision `BOARD` or `RISK_AGENT` as active runtime agents in the
+initial rollout. Keep them as playbooks only.
 
-### GROWTH_WORKER
-Name: GROWTH_WORKER
-Model: claude-sonnet-4-6
-Heartbeat: DISABLED (triggered by CEO only)
-Max Turns: 20
-Can Create Agents: NO
-Can Assign Tasks: NO
+## Legacy Queue Compatibility
 
-System Prompt:
-```
-You are the GROWTH_WORKER for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/GROWTH_TASK.md
-Follow it exactly.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP immediately.
-```
+During Phases 0-2:
+- preserve `agent/memory/MASTER_TASK_QUEUE.md`
+- preserve `agent/memory/PROGRESS.md`
+- preserve legacy worker instruction files
 
-### CONVERSION_MONITOR
-Name: CONVERSION_MONITOR
-Model: gemini-2.5-flash-lite  [USE THIS — cheapest model]
-Heartbeat: DISABLED (triggered by CEO only, runs as slot 3 in rotation)
-Max Turns: 4
-Can Create Agents: NO
-Can Assign Tasks: NO
+But do not configure the old queue model as the primary operating system.
 
-System Prompt:
-```
-You are CONVERSION_MONITOR for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/CONVERSION_TASK.md
-Follow it exactly. You have 4 turns maximum.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP.
-```
+## Runtime Files To Use
 
-### SENTINEL
-Name: SENTINEL
-Model: gemini-2.5-flash-lite  [USE THIS — cheapest model]
-Heartbeat: DISABLED (triggered by CEO as slot 4 in rotation)
-Max Turns: 3
-Can Create Agents: NO
-Can Assign Tasks: NO
+Primary operating files:
+- `agent/memory/events/ACTIVE_EVENTS.md`
+- `agent/memory/events/RESOLUTION_LOG.md`
+- `agent/memory/events/EVENT_ROUTING.md`
+- `agent/memory/enterprise_os/REVENUE_SEVERITY_LEVELS.md`
+- `agent/memory/enterprise_os/ESCALATION_PATHS.md`
 
-System Prompt:
-```
-You are SENTINEL for Satelink.
-Read your task file at: /Users/pradeepjakuraa/satelink/agent/memory/tasks/SENTINEL_TASK.md
-Follow it exactly. You have 3 turns maximum.
-Write DONE to /Users/pradeepjakuraa/satelink/agent/memory/PROGRESS.md when complete.
-Then STOP.
-```
+Reference operating files:
+- `agent/memory/enterprise_os/PHASE_0_REVENUE_VALIDATION.md`
+- `agent/memory/enterprise_os/CUSTOMER_ZERO_PROGRAM.md`
+- `agent/memory/enterprise_os/REVENUE_FUNNEL_ANALYTICS.md`
+- `agent/memory/enterprise_os/FOUNDER_DASHBOARD_KPIS.md`
+- `agent/memory/enterprise_os/AUTOMATION_BACKLOG.md`
 
----
+## Activation Rules
 
-## STEP 3 — Verify Configuration
+- No agent wakes on a timer
+- No queue slot scheduling
+- One open event has one owner
+- CEO wakes only for approvals or unresolved escalations
+- Commanders load role packs from `agent/memory/roles/` as needed
 
-After creating all agents, verify in Paperclip:
-- 7 agents exist (CEO, ORCHESTRATOR, BACKEND_WORKER, FRONTEND_WORKER, GROWTH_WORKER, CONVERSION_MONITOR, SENTINEL)
-- All heartbeats are DISABLED
-- CEO is the only agent that can assign tasks
-- CTO agent is ARCHIVED (not deleted due to FK constraints)
+## Shadow Mode Rollout
 
----
-
-## STEP 4 — First Run
-
-1. Start Paperclip: ./start-satelink.sh
-2. Open localhost:8080
-3. Select CEO agent
-4. Assign task: "Read MASTER_TASK_QUEUE.md and activate slot 1 (BACKEND_WORKER)"
-5. CEO wakes, reads queue, activates BACKEND_WORKER
-6. BACKEND_WORKER fixes auth 404
-7. BACKEND_WORKER writes DONE to PROGRESS.md
-8. CEO next session: reads DONE, activates slot 2 (FRONTEND_WORKER)
-9. Continue rotation through slots 1-6
-
----
-
-## GEMINI TRUST FIX
-When running Gemini CLI agents, use this flag:
-gemini --skip-trust --yolo
-
-This resolves the "Skipping project agents due to untrusted folder" error.
-
----
-
-## CURRENT AGENT STATE IN DB (as of 2026-05-28)
-
-| Name | Status | Note |
-|------|--------|------|
-| CEO | paused | Ready |
-| ORCHESTRATOR | paused | Ready |
-| BACKEND_WORKER | paused | Ready |
-| FRONTEND_WORKER | paused | Ready |
-| GROWTH_WORKER | paused | Ready |
-| CONVERSION_MONITOR | paused | Ready |
-| SENTINEL | paused | Ready |
-| CTO | archived | Noise — not in approved list |
+1. Create the 5 active agents
+2. Paste the corresponding instruction files into their system prompts
+3. Keep old queue files intact
+4. Mirror live work into `ACTIVE_EVENTS.md` and `RESOLUTION_LOG.md`
+5. Do not freeze the queue until Phase 3 exit criteria are met
