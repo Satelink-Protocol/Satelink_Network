@@ -2,12 +2,12 @@
 // Path C hybrid gate: free tier per IP, then 402 with deposit instructions
 // Free tier: FREE_TIER_LIMIT calls/day per IP (default 500)
 // Wallet-authenticated requests bypass IP limit entirely → go to creditGate
-// Resets daily at midnight UTC (in-memory, acceptable reset on redeploy)
+// Resets daily at midnight UTC. Redis-backed when available; falls back to in-memory.
 
 const FREE_TIER_LIMIT = parseInt(process.env.FREE_TIER_DAILY_LIMIT || '500');
 const LOG_PREFIX = '[FreeTierGate]';
 
-// Map<ip, { count, resetAt }>
+// Map<ip, { count, resetAt }> — in-memory fallback when Redis unavailable
 const ipCounters = new Map();
 
 function getMidnightUTC() {
@@ -40,10 +40,10 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
-export function createFreeTierGate(logger) {
+export function createFreeTierGate(logger, redis) {
   const log = logger || console;
 
-  return function freeTierGate(req, res, next) {
+  return async function freeTierGate(req, res, next) {
     // Wallet-authenticated → skip IP gate entirely, go to creditGate
     const walletHeader = req.headers['x-wallet-address'];
     if (walletHeader) return next();
@@ -55,17 +55,40 @@ export function createFreeTierGate(logger) {
       req.socket?.remoteAddress ||
       'unknown';
 
-    const counter = getCounter(ip);
-    counter.count++;
+    let count;
+    let resetAt;
 
-    if (counter.count > FREE_TIER_LIMIT) {
-      const resetIn = Math.ceil((counter.resetAt - Date.now()) / 1000 / 60);
+    if (redis) {
+      try {
+        const key = `ft:${ip}`;
+        count = await redis.incr(key);
+        if (count === 1) {
+          const ttl = Math.ceil((getMidnightUTC() - Date.now()) / 1000);
+          await redis.expire(key, ttl);
+        }
+        resetAt = getMidnightUTC();
+      } catch (err) {
+        log.warn(`${LOG_PREFIX} Redis error, using in-memory fallback: ${err.message}`);
+        const counter = getCounter(ip);
+        counter.count++;
+        count = counter.count;
+        resetAt = counter.resetAt;
+      }
+    } else {
+      const counter = getCounter(ip);
+      counter.count++;
+      count = counter.count;
+      resetAt = counter.resetAt;
+    }
 
-      log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${counter.count} limit=${FREE_TIER_LIMIT}`);
+    if (count > FREE_TIER_LIMIT) {
+      const resetIn = Math.ceil((resetAt - Date.now()) / 1000 / 60);
+
+      log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${FREE_TIER_LIMIT}`);
 
       return res.status(402).json({
         error: 'Free tier limit reached',
-        free_tier_used: counter.count - 1,
+        free_tier_used: count - 1,
         free_tier_limit: FREE_TIER_LIMIT,
         resets_in_minutes: resetIn,
         upgrade: 'Add X-Wallet-Address header with a funded wallet to continue',
@@ -86,12 +109,12 @@ export function createFreeTierGate(logger) {
 
     // Under limit — track usage and pass through
     req.freeTierIp = ip;
-    req.freeTierCount = counter.count;
+    req.freeTierCount = count;
     next();
   };
 }
 
-// Export current stats for monitoring
+// Export current stats for monitoring (reflects in-memory counters only)
 export function getFreeTierStats() {
   const now = Date.now();
   let activeIPs = 0;

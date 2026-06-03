@@ -25,7 +25,7 @@ import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP)
-  const freeTierGate = createFreeTierGate(console);
+  const freeTierGate = createFreeTierGate(console, redis);
   const app = express();
 
   // Attach base middleware (CORS, helmet, security headers)
