@@ -1,16 +1,54 @@
-# AGENT STATUS — PRODUCTION ROTATIONAL MODE
-# Updated: 2026-05-28T00:00:00Z
-# Law: One worker runs at a time. CEO activates next only after DONE appears in PROGRESS.md.
+# AGENT STATUS — ENTERPRISE OS V2
+# Updated: 2026-06-03
+# Mode: Event-driven shadow mode
 
-## COMMAND LAYER
-CEO              | claude-sonnet-4-6      | IDLE — wake on demand
-ORCHESTRATOR     | claude-sonnet-4-6      | WAITING — Slot 6
+## Active Roster Readiness
 
-## ENGINEERING WORKERS (rotate one at a time)
-BACKEND_WORKER   | claude-sonnet-4-6      | SLOT 1 — ACTIVE NOW
-FRONTEND_WORKER  | claude-sonnet-4-6      | SLOT 2 — WAITING
-GROWTH_WORKER    | claude-sonnet-4-6      | SLOT 5 — WAITING
+| Agent | Role | Status |
+|------|------|--------|
+| CEO | Escalation and approvals | READY — wake on demand |
+| ENGINEERING_COMMANDER | Engineering, QA, deployment, SRE | READY — wake on event |
+| ECONOMY_COMMANDER | Revenue, funnel, customer | READY — wake on event |
+| SECURITY_COMMANDER | Treasury, secrets, adversarial response | READY — wake on event |
+| AUTONOMY_COMMANDER | Founder-independence and automation capture | READY — wake on event |
 
-## OPS WORKERS (Gemini — cheap, fast)
-CONVERSION_MONITOR | gemini-2.5-flash-lite | SLOT 3 — WAITING
-SENTINEL           | gemini-2.5-flash-lite | SLOT 4 — WAITING
+## Dormant Governance
+
+| Role | Status | Note |
+|------|--------|------|
+| BOARD | DORMANT | Governance playbook only |
+| RISK_AGENT | DORMANT | Governance playbook only |
+
+## Legacy Compatibility Layer
+
+Legacy queue-era workers remain preserved during shadow mode:
+- `BACKEND_WORKER`
+- `FRONTEND_WORKER`
+- `GROWTH_WORKER`
+- `ORCHESTRATOR`
+- `CONVERSION_MONITOR`
+- `SENTINEL`
+
+## Active Events By Owner
+
+| Owner | Open Events |
+|-------|-------------|
+| ENGINEERING_COMMANDER | `EVT-OPS-001` |
+| ECONOMY_COMMANDER | `EVT-REV-001`, `EVT-REV-002`, `EVT-CUST-001` |
+| SECURITY_COMMANDER | none |
+| AUTONOMY_COMMANDER | `EVT-AUTO-001` |
+| CEO | none |
+
+## Critical Counters
+
+- Open `REV-1` items: `1`
+- Open `SEC-1` items: `0`
+- Blocked approvals: `0`
+- Customer Zero stage: `definition_required`
+
+## Authority State
+
+- Queue files preserved: `YES`
+- Queue authoritative: `NO`
+- Event mirror active: `YES`
+- Board/Risk routine wakeups: `DISABLED`

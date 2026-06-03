@@ -76,7 +76,7 @@ export async function attachRoutes(app, rawDb) {
     // ═══════════════════════════════════════════════════════════
     // AUTH ROUTES
     // ═══════════════════════════════════════════════════════════
-    safeMountRouter(app, '/', () => createUnifiedAuthRouter(opsEngine), 'auth_v2');
+    safeMountRouter(app, '/auth', () => createUnifiedAuthRouter(opsEngine), 'auth_v2');
 
     const authEmbedded = await tryImport('../apps/api/src/gateway/routes/auth_embedded.js');
     if (authEmbedded) safeMountRouter(app, '/', () => authEmbedded.createEmbeddedAuthRouter(rawDb), 'auth_embedded');

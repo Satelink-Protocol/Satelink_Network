@@ -1,9 +1,11 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import useSWR from 'swr';
 import { useDashboardFilters } from '@/lib/stores/dashboard-filters';
 import { FilterBar } from '@/components/satelink/filter-bar';
+import api from '@/lib/api';
 
-const API = 'https://rpc.satelink.network';
+const fetcher = (url: string) => api.get(url).then(r => r.data);
 
 function Skeleton({ w = 'w-full', h = 'h-4' }: { w?: string; h?: string }) {
   return (
@@ -97,7 +99,7 @@ function EpochRow({ epoch, revenue, nodePool, requests, status, fmt }: {
   status: string;
   fmt: (n: number) => string;
 }) {
-  const isPending = epoch === '#pending' || status === 'open';
+  const isPending = epoch === '#pending' || status === 'open' || status === 'pending';
   return (
     <div className={`grid grid-cols-6 gap-2 py-2 border-b border-[#0f2318]
                      last:border-0 hover:bg-[#0f2318]/30 transition-colors
@@ -128,80 +130,59 @@ function EpochRow({ epoch, revenue, nodePool, requests, status, fmt }: {
 
 export default function OverviewPage() {
   const { fmt, revenueType } = useDashboardFilters();
-  const [loading, setLoading] = useState(true);
-  const [epochs, setEpochs] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>(null);
-  const [chainMetrics, setChainMetrics] = useState<any>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [eventsPerSec, setEventsPerSec] = useState(0);
   const eventCountRef = useRef(0);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/epochs`).then(r => r.json()),
-      fetch(`${API}/rpc/metrics`).then(r => r.json()).catch(() => null),
-    ]).then(([epochData, metricsData]) => {
-      const eps = epochData.epochs || [];
-      setEpochs(eps);
-
-      const total = eps.reduce((s: number, e: any) =>
-        s + parseFloat(e.total_revenue_usdt || e.total || 0), 0);
-      const nodePool = eps.reduce((s: number, e: any) =>
-        s + parseFloat(e.node_pool_usdt || (e.total || 0) * 0.5), 0);
-      const totalReqs = eps.reduce((s: number, e: any) =>
-        s + parseInt(e.total_requests || e.requests || 0), 0);
-
-      setMetrics({ total, nodePool, totalReqs, epochCount: eps.length });
-      if (metricsData) setChainMetrics(metricsData);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    const es = new EventSource(`${API}/os/events`);
-
-    es.onmessage = (e) => {
-      try {
-        const d = JSON.parse(e.data);
-        const isRevenueEvent = d.type?.includes('revenue') || d.type === 'revenue';
-        const eventData = d.data || d;
-        if (isRevenueEvent || eventData.amount_usdt) {
-          eventCountRef.current++;
-          setEvents(prev => [{
-            type: d.type?.replace('revenue:', '') || 'revenue',
-            method: eventData.method || 'rpc',
-            amount_usdt: eventData.amount_usdt || 0,
-            chain: eventData.chain || 'polygon',
-          }, ...prev].slice(0, 12));
+    const token = typeof window !== 'undefined' ? localStorage.getItem('satelink_token') : null;
+    if (!token) return;
+    let active = true;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+    fetch(`${base}/stream/admin`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async res => {
+        if (!res.ok || !res.body) return;
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (active) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const ev = JSON.parse(line.slice(6));
+              if (ev.type === 'revenue_batch' && Array.isArray(ev.events)) {
+                setEvents(prev => [...ev.events.slice(0, 5), ...prev].slice(0, 20));
+                eventCountRef.current += ev.events.length;
+              }
+            } catch { /* skip malformed */ }
+          }
         }
-      } catch {}
-    };
-
-    const timer = setInterval(() => {
+      })
+      .catch(() => { /* silent — stream unavailable */ });
+    const ticker = setInterval(() => {
       setEventsPerSec(eventCountRef.current);
       eventCountRef.current = 0;
     }, 1000);
-
-    return () => {
-      es.close();
-      clearInterval(timer);
-    };
+    return () => { active = false; clearInterval(ticker); };
   }, []);
 
-  const closed = epochs.filter(e => e.epoch_id !== null && e.status !== 'open' && e.status !== 'pending');
+  const { data: networkStats, isLoading: loadingNetwork } = useSWR('/dashboard-api/network/overview', fetcher, { refreshInterval: 30000 });
+  const { data: earnings, isLoading: loadingEarnings } = useSWR('/dashboard-api/earnings/overview', fetcher, { refreshInterval: 30000 });
+  const { data: chainMetrics, isLoading: loadingChains } = useSWR('/rpc/metrics', fetcher, { refreshInterval: 30000 });
 
-  // Real on-chain collected values (from TX 0x814d348d)
-  const COLLECTED_USDT = 1.296464;
-  const COLLECTED_NODE_POOL = COLLECTED_USDT; // entire claim went to node pool
+  const loading = loadingNetwork || loadingEarnings;
+  const epochs = earnings?.recent_epochs || [];
+  const closed = epochs.filter(e => e.id !== null && e.status !== 'open' && e.status !== 'pending');
 
-  // Display values based on filter type
-  const displayRevenue = revenueType === 'collected' ? COLLECTED_USDT : (metrics?.total || 0);
-  const displayNodePool = revenueType === 'collected' ? COLLECTED_NODE_POOL : (metrics?.nodePool || 0);
-
-  // Hourly rate calculation (6 days × 24 hours = 144 hours)
-  const totalReqs = metrics?.totalReqs || 0;
-  const avgCallsPerHour = totalReqs > 0 ? Math.round(totalReqs / 144) : 0;
-  const meteredPerHour = avgCallsPerHour * 0.000030;
+  const displayRevenue = networkStats?.total_revenue || 0;
+  const displayNodePool = earnings?.split?.node_operator || 0;
+  const totalReqs = chainMetrics?.rpcGateway?.totalRequestsToday || 0;
+  const avgCallsPerHour = totalReqs > 0 ? Math.round(totalReqs / 24) : 0;
 
   return (
     <div className="flex flex-col h-full bg-[#091413]">
@@ -245,42 +226,36 @@ export default function OverviewPage() {
           <MetricCard
             label="Total Revenue"
             value={loading ? '...' : fmt(displayRevenue)}
-            sub={revenueType === 'collected'
-              ? '1 claim · TX 0x814d…'
-              : 'metered · not collected'}
-            glow={revenueType === 'collected'}
+            sub='metered · not collected'
             loading={loading}
           />
           <MetricCard
             label="Node Pool (50%)"
             value={loading ? '...' : fmt(displayNodePool)}
-            sub={revenueType === 'collected'
-              ? 'on-chain confirmed'
-              : 'claimable by operators'}
+            sub='claimable by operators'
             loading={loading}
-            trend={revenueType === 'collected' ? undefined : 'up'}
           />
           <MetricCard
             label="Total RPC Calls"
-            value={loading ? '...' : totalReqs.toLocaleString()}
-            sub="6-day cumulative total"
+            value={loading ? '...' : totalReqs > 0 ? totalReqs.toLocaleString() : '—'}
+            sub="today's requests"
             loading={loading}
           />
           <MetricCard
             label="Avg Hourly Rate"
-            value={loading ? '...' : `${avgCallsPerHour.toLocaleString()}/hr`}
-            sub={`${fmt(meteredPerHour)}/hr metered`}
+            value={loading ? '...' : avgCallsPerHour > 0 ? `${avgCallsPerHour.toLocaleString()}/hr` : '—/hr'}
+            sub="req/hr estimate"
             loading={loading}
           />
           <MetricCard
             label="Active Nodes"
-            value="1"
-            sub="ap-south-1 · active"
-            loading={false}
+            value={loading ? '...' : String(networkStats?.active_nodes || 0)}
+            sub="active"
+            loading={loading}
           />
           <MetricCard
             label="Epochs Tracked"
-            value={loading ? '...' : String(metrics?.epochCount || 0)}
+            value={loading ? '...' : String(epochs.length || 0)}
             sub="60s close interval"
             loading={loading}
           />
@@ -299,7 +274,7 @@ export default function OverviewPage() {
                   Epoch Revenue History
                 </p>
                 <p className="text-[9px] text-[#285A48] mt-0.5">
-                  50/30/20 split · real-time from /api/epochs
+                  50/30/20 split · real-time from /dashboard-api/earnings/overview
                 </p>
               </div>
               <a href="https://polygonscan.com/address/0x6987921e2453f360e314e4424F6c2789F10a1CC9"
@@ -332,15 +307,15 @@ export default function OverviewPage() {
                 ))
               ) : (
                 epochs.slice(0, 8).map((e, i) => {
-                  const isPending = e.epoch_id === null || e.status === 'open' || e.status === 'pending';
+                  const isPending = e.id === null || e.status === 'open' || e.status === 'pending';
                   return (
                     <EpochRow key={i}
                       epoch={isPending
                         ? '#pending'
-                        : `#${e.epoch_id ?? e.id ?? e.epoch_number ?? '?'}`}
-                      revenue={e.total_revenue_usdt || e.total || '0'}
-                      nodePool={e.node_pool_usdt || String((parseFloat(e.total || '0') * 0.5))}
-                      requests={e.total_requests || e.requests || '0'}
+                        : `#${e.id}`}
+                      revenue={String(e.total_revenue_usdt || '0')}
+                      nodePool={String(e.node_pool_usdt || '0')}
+                      requests={'0'} // Need endpoint
                       status={isPending ? 'open' : 'closed'}
                       fmt={fmt}
                     />
@@ -426,25 +401,27 @@ export default function OverviewPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8">
-            {Object.entries(
-              chainMetrics?.chains ||
-              {
-                'POLYGON': {providers:{healthy:5,total:5},performance:{avgLatencyMs:29,bestLatencyMs:13}},
-                'ETHEREUM': {providers:{healthy:5,total:5},performance:{avgLatencyMs:2037,bestLatencyMs:41}},
-                'ARBITRUM': {providers:{healthy:2,total:2},performance:{avgLatencyMs:88,bestLatencyMs:41}},
-                'BASE': {providers:{healthy:2,total:2},performance:{avgLatencyMs:100,bestLatencyMs:77}},
-                'AMOY': {providers:{healthy:4,total:4},performance:{avgLatencyMs:132,bestLatencyMs:68}},
-                'SOLANA': {providers:{healthy:2,total:2},performance:{avgLatencyMs:115,bestLatencyMs:77}},
-              }
-            ).map(([chain, data]: [string, any]) => (
-              <ChainRow key={chain}
-                chain={chain}
-                providers={data.providers?.healthy || data.providers || '?'}
-                latency={data.performance?.avgLatencyMs || data.latency || 0}
-                best={data.performance?.bestLatencyMs || data.best || 0}
-                loading={false}
-              />
-            ))}
+            {loadingChains ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="py-2 border-b border-[#0f2318]">
+                  <Skeleton h="h-4" />
+                </div>
+              ))
+            ) : chainMetrics?.chains ? (
+              Object.entries(chainMetrics.chains).map(([chain, data]: [string, any]) => (
+                <ChainRow key={chain}
+                  chain={chain}
+                  providers={data.providers?.healthy || data.providers || '?'}
+                  latency={data.performance?.avgLatencyMs || data.latency || 0}
+                  best={data.performance?.bestLatencyMs || data.best || 0}
+                  loading={false}
+                />
+              ))
+            ) : (
+              <div className="col-span-3 text-center py-4">
+                <p className="text-[10px] text-[#285A48]">No chain metrics available</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

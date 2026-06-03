@@ -22,71 +22,101 @@ export async function getEarningsOverview(db, cache) {
         if (cached) return JSON.parse(cached);
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const oneDayAgo = now - 86400;
-    const sevenDaysAgo = now - 604800;
-    const thirtyDaysAgo = now - 2592000;
+    // Helper for async queries (supports both pg Pool and PgDatabase adapter)
+    const query = async (sql, params = []) => {
+        if (db.query) {
+            const result = await db.query(sql, params);
+            return result.rows || result;
+        }
+        if (db.prepare) {
+            return await db.prepare(sql).all(params);
+        }
+        return [];
+    };
+
+    const queryOne = async (sql, params = []) => {
+        if (db.query) {
+            const result = await db.query(sql, params);
+            return result.rows?.[0] || null;
+        }
+        if (db.prepare) {
+            return await db.prepare(sql).get(params);
+        }
+        return null;
+    };
+
+    const now = Date.now();
+    const oneDayAgo = now - 86400000;
+    const sevenDaysAgo = now - 604800000;
+    const thirtyDaysAgo = now - 2592000000;
 
     // ── Total revenue (all time) ──
-    const totalRevenue = db.prepare?.(
+    const totalRevenueRow = await queryOne(
         "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success'"
-    )?.get()?.total || 0;
+    );
+    const totalRevenue = parseFloat(totalRevenueRow?.total || 0);
 
     // ── Revenue by time window ──
-    const revenue24h = db.prepare?.(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > ?"
-    )?.get(oneDayAgo)?.total || 0;
+    const revenue24hRow = await queryOne(
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        [oneDayAgo]
+    );
+    const revenue24h = parseFloat(revenue24hRow?.total || 0);
 
-    const revenue7d = db.prepare?.(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > ?"
-    )?.get(sevenDaysAgo)?.total || 0;
+    const revenue7dRow = await queryOne(
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        [sevenDaysAgo]
+    );
+    const revenue7d = parseFloat(revenue7dRow?.total || 0);
 
-    const revenue30d = db.prepare?.(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > ?"
-    )?.get(thirtyDaysAgo)?.total || 0;
+    const revenue30dRow = await queryOne(
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        [thirtyDaysAgo]
+    );
+    const revenue30d = parseFloat(revenue30dRow?.total || 0);
 
     // ── Revenue split (50/30/20) from epoch_earnings ──
-    const splitTotals = db.prepare?.(
+    const splitTotals = await query(
         `SELECT role, COALESCE(SUM(amount_usdt), 0) as total
          FROM epoch_earnings
          GROUP BY role`
-    )?.all() || [];
+    );
 
     const splitMap = {};
     for (const row of splitTotals) {
-        splitMap[row.role] = parseFloat(row.total.toFixed(4));
+        splitMap[row.role] = parseFloat(parseFloat(row.total || 0).toFixed(6));
     }
 
     // ── Revenue by operation type (top 10) ──
-    const byOpType = db.prepare?.(
+    const byOpType = await query(
         `SELECT op_type, COUNT(*) as count, COALESCE(SUM(amount_usdt), 0) as total
          FROM revenue_events_v2
          WHERE status = 'success'
          GROUP BY op_type
          ORDER BY total DESC
          LIMIT 10`
-    )?.all() || [];
+    );
 
     // ── Epoch history (last 10 completed epochs) ──
-    const recentEpochs = db.prepare?.(
+    const recentEpochs = await query(
         `SELECT id, status, total_revenue_usdt, node_pool_usdt, platform_share_usdt, distributor_share_usdt
          FROM epochs
          ORDER BY id DESC
          LIMIT 10`
-    )?.all() || [];
+    );
 
     // ── Payout status distribution ──
-    const payoutStatus = db.prepare?.(
+    const payoutStatus = await query(
         `SELECT status, COUNT(*) as count, COALESCE(SUM(amount_usdt), 0) as total
          FROM epoch_earnings
          GROUP BY status`
-    )?.all() || [];
+    );
 
     const result = {
-        total_revenue: parseFloat(totalRevenue.toFixed(4)),
-        revenue_24h: parseFloat(revenue24h.toFixed(4)),
-        revenue_7d: parseFloat(revenue7d.toFixed(4)),
-        revenue_30d: parseFloat(revenue30d.toFixed(4)),
+        total_revenue: parseFloat(totalRevenue.toFixed(6)),
+        revenue_24h: parseFloat(revenue24h.toFixed(6)),
+        revenue_7d: parseFloat(revenue7d.toFixed(6)),
+        revenue_30d: parseFloat(revenue30d.toFixed(6)),
         split: {
             node_operator: splitMap['node_operator'] || 0,
             platform: splitMap['platform'] || 0,
@@ -94,14 +124,14 @@ export async function getEarningsOverview(db, cache) {
         },
         by_op_type: byOpType.map(r => ({
             op_type: r.op_type,
-            count: r.count,
-            total_usdt: parseFloat(r.total.toFixed(4)),
+            count: parseInt(r.count || 0),
+            total_usdt: parseFloat(parseFloat(r.total || 0).toFixed(6)),
         })),
         recent_epochs: recentEpochs,
         payout_status: payoutStatus.map(r => ({
             status: r.status,
-            count: r.count,
-            total_usdt: parseFloat(r.total.toFixed(4)),
+            count: parseInt(r.count || 0),
+            total_usdt: parseFloat(parseFloat(r.total || 0).toFixed(6)),
         })),
     };
 

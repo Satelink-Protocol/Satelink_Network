@@ -27,8 +27,8 @@ export async function createSession(db, wallet, deviceInfo = {}) {
     await db.query(
         `INSERT INTO users (wallet, role, created_at, last_login_at)
          VALUES (?, 'user', ?, ?)
-         ON CONFLICT(wallet) DO UPDATE SET last_login_at = ?`,
-        [normalizedWallet, now, now, now]
+         ON CONFLICT (wallet) DO UPDATE SET last_login_at = EXCLUDED.last_login_at`,
+        [normalizedWallet, now, now]
     );
 
     // Fetch user with role
@@ -67,8 +67,9 @@ export async function createSession(db, wallet, deviceInfo = {}) {
             .substring(0, 32);
 
         await db.query(
-            `INSERT OR REPLACE INTO trusted_devices (device_public_id, wallet, ip_hash, user_agent, created_at, last_used_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO trusted_devices (device_public_id, wallet, ip_hash, user_agent, created_at, last_used_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT (device_public_id) DO UPDATE SET last_used_at = EXCLUDED.last_used_at`,
             [deviceId, normalizedWallet, ipHash, (deviceInfo.userAgent || '').substring(0, 200), now, now]
         );
     } catch (_) {

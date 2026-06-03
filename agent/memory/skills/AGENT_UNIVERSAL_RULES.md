@@ -1,96 +1,59 @@
-# UNIVERSAL AGENT RULES
-# Every agent reads this. These rules override all task instructions.
+# UNIVERSAL AGENT RULES — ENTERPRISE OS V2
 
----
+These rules override local task prompts and role preferences.
 
 ## THE 7 HARD RULES
 
-1. EXIT RULE
-   Every task has an exit condition. When that condition is met → STOP.
-   Do not explore further. Do not improve other things. Do not refactor.
-   Write DONE to PROGRESS.md. Then STOP.
+1. EVENT OWNERSHIP RULE
+   Every open event has exactly one accountable owner.
+   If ownership changes, record it in `agent/memory/events/RESOLUTION_LOG.md`.
 
-2. SCOPE RULE
-   Every agent has a file scope defined in its task file.
-   Never read or write outside that scope.
-   If the fix requires touching another agent's scope → write a note in PROGRESS.md
-   and STOP. Do not cross scope boundaries.
+2. EXIT RULE
+   When an event is resolved, escalated, blocked on approval, or accepted as
+   risk, stop immediately. Do not linger for optional cleanup work.
 
-3. ONE SLOT RULE
-   Only one worker runs at a time.
-   If you are a worker and you notice another worker is active → STOP immediately.
-   Write: "SCOPE_CONFLICT detected, stopping" to PROGRESS.md.
+3. WAKE RULE
+   Agents wake only on event triggers.
+   No hourly loops. No cron-style status checks. No "just checking" sessions.
 
-4. ARCHIVE RULE
-   Never delete any file. Always move to agent/memory/archive/ first.
-   If unsure whether to delete something → archive it.
+4. APPROVAL RULE
+   Treasury movement, secret access or rotation, production deployment approval,
+   and org-structure changes require CEO approval.
 
-5. COMMIT RULE
-   Every code change must be committed before writing DONE.
-   Uncommitted changes + DONE = invalid completion.
-   Commit message format: "type: description [agent: AGENT_NAME]"
+5. REVENUE TRUTH RULE
+   Collected cash outranks metered usage.
+   Dashboard value does not count as revenue truth without cash validation.
 
-6. PROGRESS RULE
-   Every completed task writes exactly this format to PROGRESS.md:
-   DONE | slot=N | task=TASK_NAME | result=ONE_LINE | commit=HASH_OR_NA | timestamp=ISO
+6. SHADOW MODE RULE
+   During migration, queue files may exist for compatibility.
+   They are not permission to reintroduce slot-driven scheduling.
 
-7. NO REDESIGN RULE
-   Agents fix what is assigned. They do not redesign, refactor, or improve
-   things outside their task. If a better approach is noticed → write it to
-   agent/memory/SUGGESTIONS.md and continue the assigned task.
+7. SCOPE RULE
+   Solve the assigned event inside the commander's scope.
+   If another division must act, escalate through the event system instead of
+   silently crossing ownership boundaries.
 
----
+## DEFAULT EVENT FLOW
 
-## ROTATIONAL QUEUE MODEL
+`ACTIVE_EVENTS.md`
+-> commander owns event
+-> commander loads role pack if needed
+-> commander resolves or escalates
+-> `RESOLUTION_LOG.md`
+-> commander sleeps
 
-The org runs one slot at a time.
-CEO wakes → reads PROGRESS.md → activates next slot → sleeps.
-Workers complete → write DONE → sleep.
-CEO activates on demand only (no heartbeat).
+## WHAT NOT TO OPTIMIZE FOR
 
-Current cycle slot order:
-C2-1 → REVENUE_WORKER (USDT settlement completion)
-C2-2 → FRONTEND_WORKER (admin panel live data)
-C2-3 → DEVOPS_WORKER (Railway autoscaling + observability)
-C2-4 → SECURITY_WORKER (Trivy scan + Infisical audit)
-C2-5 → MARKET_SCANNER (competitor pricing)
-C2-6 → ORCHESTRATOR (week review + Cycle 3 queue)
+Do not optimize for:
+- task count
+- commit count
+- issue count
+- agent wake frequency
 
----
-
-## MODEL ASSIGNMENTS
-
-Gemini Flash Lite: CONVERSION_MONITOR, SENTINEL, SECURITY_WORKER, MARKET_SCANNER
-Claude Sonnet 4.6: CEO, ORCHESTRATOR, BACKEND_WORKER, FRONTEND_WORKER, REVENUE_WORKER, DEVOPS_WORKER
-Claude Opus 4: CHIEF_ARCHITECT (Phase 4 only, manual trigger)
-
-Model changes: edit in Paperclip UI only. No file changes required.
-
----
-
-## PRODUCTION ENVIRONMENT
-
-Always verify production is live before any deployment:
-curl https://rpc.satelink.network/health
-
-Always test locally before pushing:
-Local API: http://localhost:3000
-Local Paperclip: http://localhost:8080
-
-Never push directly to main without testing.
-Never touch production DB directly.
-Never activate more than 1 worker simultaneously.
-
----
-
-## APPROVED AGENT ROSTER (7 agents max)
-
-1. CEO
-2. ORCHESTRATOR
-3. BACKEND_WORKER / REVENUE_WORKER
-4. FRONTEND_WORKER
-5. DEVOPS_WORKER
-6. SECURITY_WORKER / SENTINEL / CONVERSION_MONITOR
-7. MARKET_SCANNER / GROWTH_WORKER
-
-Do not create agents outside this roster without CEO approval.
+Optimize for:
+- collected USDT
+- active paying wallets
+- recurring deposits
+- customer retention
+- founder independence
+- security integrity
