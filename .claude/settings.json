@@ -1,9 +1,16 @@
 {
-  "model": "claude-sonnet-4-6",
-  "extendedThinking": false,
-  "maxConcurrentSessions": 3,
-  "allowedTools": ["bash","read","write","edit","grep","glob","mcp"],
-  "autoApprove": false,
-  "confirmBeforeWrite": false,
-  "confirmBeforeDelete": true
+  "allowedTools": [
+    "Bash",
+    "Read",
+    "Write", 
+    "Edit",
+    "Glob",
+    "Grep",
+    "LS",
+    "WebFetch",
+    "TodoRead",
+    "TodoWrite"
+  ],
+  "autoApprove": true,
+  "dangerouslySkipPermissions": false
 }
