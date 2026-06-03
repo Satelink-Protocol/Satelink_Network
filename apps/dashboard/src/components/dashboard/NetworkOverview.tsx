@@ -5,20 +5,23 @@ import { Activity, Server, LayoutDashboard, DollarSign, CheckCircle2, Zap, Clock
 import api from "@/lib/api";
 
 interface NetworkStats {
+    total_nodes?: number;
     active_nodes?: number;
-    managed_nodes?: number;
-    router_nodes?: number;
-    total_revenue_usdt?: number;
-    tasks_processed?: number;
-    uptime_percent?: number;
-    current_epoch?: number;
-    settlement_mode?: string;
+    flagged_nodes?: number;
+    total_revenue?: number;
+    revenue_24h?: number;
+    ops_24h?: number;
+    epoch_id?: number;
+    epoch_status?: string;
+    network_health?: string;
+    health_pct?: number;
+    node_types?: { node_type: string; count: number }[];
 }
 
 const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
 export function NetworkOverview() {
-    const { data: stats, error, isLoading } = useSWR<NetworkStats>('/api/network/stats', fetcher, {
+    const { data: stats, error, isLoading } = useSWR<NetworkStats>('/dashboard-api/network/overview', fetcher, {
         refreshInterval: 30000,
         revalidateOnFocus: false
     });
@@ -34,50 +37,43 @@ export function NetworkOverview() {
 
     const metrics = [
         {
-            title: "Active Nodes",
-            value: stats?.active_nodes?.toLocaleString() ?? "---",
+            title: "Total Nodes",
+            value: stats?.total_nodes?.toLocaleString() ?? "---",
             icon: Server,
             color: "text-[#3B82F6]",
             bg: "bg-[#3B82F6]/10"
         },
         {
-            title: "Managed Nodes",
-            value: stats?.managed_nodes?.toLocaleString() ?? "---",
-            icon: LayoutDashboard,
+            title: "Active Nodes",
+            value: stats?.active_nodes?.toLocaleString() ?? "---",
+            icon: Server,
             color: "text-[#22C55E]",
             bg: "bg-[#22C55E]/10"
         },
         {
-            title: "Router Nodes",
-            value: stats?.router_nodes?.toLocaleString() ?? "---",
-            icon: Activity,
-            color: "text-purple-500",
-            bg: "bg-purple-500/10"
-        },
-        {
             title: "Total Revenue (USDT)",
-            value: stats?.total_revenue_usdt !== undefined ? `$${stats.total_revenue_usdt.toLocaleString()}` : "---",
+            value: stats?.total_revenue !== undefined ? `$${stats.total_revenue.toLocaleString()}` : "---",
             icon: DollarSign,
             color: "text-yellow-500",
             bg: "bg-yellow-500/10"
         },
         {
-            title: "Tasks Processed",
-            value: stats?.tasks_processed?.toLocaleString() ?? "---",
+            title: "Tasks (24h)",
+            value: stats?.ops_24h?.toLocaleString() ?? "---",
             icon: Zap,
             color: "text-[#3B82F6]",
             bg: "bg-[#3B82F6]/10"
         },
         {
-            title: "Uptime %",
-            value: stats?.uptime_percent !== undefined ? `${stats.uptime_percent}%` : "---",
+            title: "Health %",
+            value: stats?.health_pct !== undefined ? `${stats.health_pct}%` : "---",
             icon: CheckCircle2,
             color: "text-[#22C55E]",
             bg: "bg-[#22C55E]/10"
         },
         {
             title: "Current Epoch",
-            value: stats?.current_epoch?.toLocaleString() ?? "---",
+            value: stats?.epoch_id?.toLocaleString() ?? "---",
             icon: Clock,
             color: "text-zinc-400",
             bg: "bg-zinc-800"

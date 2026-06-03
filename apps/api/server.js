@@ -8,6 +8,7 @@ import { getHealerStats } from "./src/autonomous/rpc_healer.js";
 import { getAnomalyStats } from "./src/autonomous/revenue_anomaly.js";
 import { checkTreasury, getTreasuryStatus } from "./src/autonomous/treasury_monitor.js";
 import { getCapacityStats } from "./src/autonomous/capacity_alerter.js";
+import { startEconomyCommander, createEconomyCommanderRouter } from "./src/autonomous/economy_commander.js";
 import { createApp } from "./app_factory.mjs";
 import { createWsGateway, getWsStats } from "./src/workloads/rpc_gateway/ws_gateway.js";
 import { startHealthMonitor, healthMonitorStatus } from "./src/scheduler/node_health_monitor.js";
@@ -236,6 +237,7 @@ async function start() {
   try {
     app.use("/", createPhase3Router());
     app.use("/credits", createCreditsRouter(pool, console));
+    app.use("/", createEconomyCommanderRouter());
 
     app.get('/ws/stats', (req, res) => {
       res.json({ ok: true, ...getWsStats() });
@@ -464,6 +466,14 @@ async function start() {
   } catch (err) {
     console.error('[BOOT] ❌ FAILED at startSentinel:', err.message);
     
+  }
+
+  // Step 11b: Start Economy Commander (aggregated revenue OS)
+  try {
+    await startEconomyCommander(pool, redis);
+    console.log('[BOOT] ✅ Economy Commander started');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Economy Commander failed (non-fatal):', err.message);
   }
 
   // Step 12: Start claim expiry job
