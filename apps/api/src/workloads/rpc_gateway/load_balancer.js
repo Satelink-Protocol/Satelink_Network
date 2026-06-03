@@ -11,54 +11,23 @@
  * - Distributes load proportionally to weights
  * - Prevents single provider from being overwhelmed
  * - Still favors faster, more reliable providers
- *
- * Storage: In-memory Map (no Redis dependency)
- * - Request counts are local metrics, don't need cross-server sharing
- * - Saves 0-2 Redis commands per RPC call
  */
 
+import { getSharedRedis } from "./shared_redis.js";
 import { CHAIN_ALIASES } from "./providers.js";
 
 const DEFAULT_LATENCY = 500;
 const MIN_WEIGHT = 1;
 const MAX_WEIGHT = 100;
-const COUNTER_TTL_MS = 60 * 60 * 1000; // 1 hour
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-// In-memory request counters (replaces Redis)
-// Key: "chain:providerId" → { count, expires }
-const requestCounts = new Map();
-
-let cleanupHandle = null;
-
-function startCleanup() {
-  if (cleanupHandle) return;
-
-  cleanupHandle = setInterval(() => {
-    const now = Date.now();
-    let cleaned = 0;
-
-    for (const [key, entry] of requestCounts) {
-      if (entry.expires && entry.expires < now) {
-        requestCounts.delete(key);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      console.log(`[LoadBalancer] Cleaned ${cleaned} expired counters`);
-    }
-  }, CLEANUP_INTERVAL_MS);
-
-  cleanupHandle.unref?.();
+// Use shared Redis client to avoid connection pool exhaustion
+function getRedis() {
+  return getSharedRedis();
 }
-
-// Start cleanup on module load
-startCleanup();
 
 function getRequestCountKey(chain, providerId) {
   const normalized = CHAIN_ALIASES[chain] || chain;
-  return `${normalized}:${providerId}`;
+  return `rpc:requests:${normalized}:${providerId}`;
 }
 
 export function calculateWeight(provider) {
@@ -105,25 +74,35 @@ export function selectWeightedProvider(providers) {
 }
 
 export async function incrementRequestCount(chain, providerId) {
-  const key = getRequestCountKey(chain, providerId);
-  const entry = requestCounts.get(key);
+  const client = getRedis();
+  if (!client) return;
 
-  if (entry) {
-    entry.count++;
-  } else {
-    requestCounts.set(key, {
-      count: 1,
-      expires: Date.now() + COUNTER_TTL_MS
-    });
+  try {
+    const key = getRequestCountKey(chain, providerId);
+    await client.incr(key);
+    await client.expire(key, 3600);
+  } catch (err) {
+    console.error(
+      "[LoadBalancer] Failed to increment request count:",
+      err.message,
+    );
   }
 }
 
 export async function getRequestCounts(chain, providerIds) {
-  return providerIds.map((id) => {
-    const key = getRequestCountKey(chain, id);
-    const entry = requestCounts.get(key);
-    return entry?.count || 0;
-  });
+  const client = getRedis();
+  if (!client) {
+    return providerIds.map(() => 0);
+  }
+
+  try {
+    const keys = providerIds.map((id) => getRequestCountKey(chain, id));
+    const values = await client.mget(...keys);
+    return values.map((v) => parseInt(v) || 0);
+  } catch (err) {
+    console.error("[LoadBalancer] Failed to get request counts:", err.message);
+    return providerIds.map(() => 0);
+  }
 }
 
 export function getWeightsForProviders(providers) {
@@ -133,26 +112,6 @@ export function getWeightsForProviders(providers) {
     latency: p.latency,
     rateLimit: p.rateLimit,
   }));
-}
-
-// For testing/admin
-export function getMemoryStats() {
-  let totalRequests = 0;
-  for (const entry of requestCounts.values()) {
-    totalRequests += entry.count;
-  }
-
-  return {
-    providers: requestCounts.size,
-    totalRequests
-  };
-}
-
-export function stopCleanup() {
-  if (cleanupHandle) {
-    clearInterval(cleanupHandle);
-    cleanupHandle = null;
-  }
 }
 
 export { MIN_WEIGHT, MAX_WEIGHT, DEFAULT_LATENCY };

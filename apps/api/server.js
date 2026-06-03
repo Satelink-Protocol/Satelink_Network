@@ -17,30 +17,32 @@ import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
-import { startRpcAggregationScheduler } from "./src/jobs/rpc_aggregation_job.mjs";
-import { createSettlementAnchorJob } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
 import pkg from "pg";
-import { DepositListener } from "./src/services/deposit_listener.js";
-import { runMigrations } from "./src/db/migrate.js";
-import { createCreditsRouter } from "./src/routes/credits.js";
+import Redis from "ioredis";
 
 const { Pool } = pkg;
 
-// Suppress ethers.js internal @TODO console.log for eth_getFilterChanges "filter not found".
-// ethers v6 subscriber-filterid.js#poll() catches filter-expiry errors and emits
-// console.log("@TODO", error) — harmless but noisy in production logs.
-const _origConsoleLog = console.log;
-console.log = (...args) => {
-  if (args[0] === '@TODO' && (
-    args[1]?.payload?.method === 'eth_getFilterChanges' ||
-    args[1]?.message?.includes('could not coalesce')
-  )) return;
-  _origConsoleLog(...args);
-};
+function createRedisClient() {
+  const url = process.env.REDIS_URL;
+  if (!url || url === 'redis://') {
+    console.log('[Redis] No REDIS_URL configured, running without Redis');
+    return null;
+  }
 
-// Redis eliminated — all caching/rate-limiting/circuit-breaker is in-memory
-// This saves ~865k commands/month on Upstash free tier
+  try {
+    const redis = new Redis(url, {
+      maxRetriesPerRequest: 3,
+      tls: url.startsWith('rediss://') ? {} : undefined
+    });
+    redis.on('error', (err) => console.error('[Redis] Error:', err.message));
+    redis.on('connect', () => console.log('[Redis] Connected'));
+    return redis;
+  } catch (err) {
+    console.error('[Redis] Failed to create client:', err.message);
+    return null;
+  }
+}
 
 async function ensureBillingTables(pool) {
   // CRITICAL: Drop NOT NULL on node_id FIRST (runs independently)
@@ -157,44 +159,6 @@ async function ensureBillingTables(pool) {
     await pool.query(`ALTER TABLE registered_nodes ADD COLUMN IF NOT EXISTS last_failure_reason TEXT DEFAULT NULL`).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_dispatch ON registered_nodes(status, node_type, last_heartbeat_at) WHERE status = 'active'`).catch(() => {});
 
-    // Create nodes table (referenced by /api/status and epoch earnings)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS nodes (
-        node_id TEXT PRIMARY KEY,
-        wallet TEXT,
-        device_type TEXT DEFAULT 'undefined',
-        status TEXT DEFAULT 'pending',
-        last_seen INTEGER,
-        created_at INTEGER
-      )
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_wallet ON nodes(wallet)`).catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)`).catch(() => {});
-
-    // Performance indexes for revenue queries
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_rev2_created_at ON revenue_events_v2(created_at)`).catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_rev2_epoch_id ON revenue_events_v2(epoch_id)`).catch(() => {});
-
-    // RPC usage hourly aggregates table (for rpc_aggregation_job)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS rpc_usage_hourly (
-        id SERIAL PRIMARY KEY,
-        hour_start BIGINT NOT NULL,
-        client_id TEXT,
-        method TEXT NOT NULL,
-        chain_id INTEGER NOT NULL,
-        request_count INTEGER DEFAULT 0,
-        error_count INTEGER DEFAULT 0,
-        cached_count INTEGER DEFAULT 0,
-        total_cost_usdt NUMERIC(18,8) DEFAULT 0,
-        avg_latency_ms NUMERIC DEFAULT 0,
-        p99_latency_ms INTEGER DEFAULT 0,
-        UNIQUE(hour_start, client_id, method, chain_id)
-      )
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_rpc_usage_hour ON rpc_usage_hourly(hour_start)`).catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_rpc_usage_client ON rpc_usage_hourly(client_id)`).catch(() => {});
-
     console.log('[STARTUP] Billing tables ensured');
   } catch (err) {
     console.error('[STARTUP] Billing migration failed:', err.message);
@@ -218,10 +182,14 @@ async function start() {
     console.error('[BOOT] ❌ FAILED at Pool creation:', err.message);
   }
 
-  // Step 2: Redis ELIMINATED — using in-memory Maps instead
-  // Saves ~865k commands/month on Upstash free tier
-  const redis = null;
-  console.log('[BOOT] ✅ Redis disabled — all caching/rate-limiting in-memory');
+  // Step 2: Create Redis client (non-blocking)
+  let redis;
+  try {
+    redis = createRedisClient();
+    console.log('[BOOT] ✅ Redis client created (or skipped)');
+  } catch (err) {
+    console.error('[BOOT] ❌ FAILED at createRedisClient:', err.message);
+  }
 
   // Step 3: Create Express app (non-blocking)
   let app;
@@ -234,8 +202,8 @@ async function start() {
 
   // Step 5: Mount additional middleware and routes
   try {
+    app.use(express.json());
     app.use("/", createPhase3Router());
-    app.use("/credits", createCreditsRouter(pool, console));
 
     app.get('/ws/stats', (req, res) => {
       res.json({ ok: true, ...getWsStats() });
@@ -274,7 +242,7 @@ async function start() {
       }
     });
 
-    app.get(['/system/rpc-healer', '/system/rpc-healer/:chain'], async (req, res) => {
+    app.get('/system/rpc-healer{/:chain}', async (req, res) => {
       try {
         const chain = req.params.chain || 'polygon-amoy';
         const stats = await getHealerStats(chain);
@@ -314,16 +282,6 @@ async function start() {
       }
     });
 
-    // Free tier usage stats (Path C monitoring)
-    app.get('/system/free-tier', async (req, res) => {
-      try {
-        const { getFreeTierStats } = await import('./src/middleware/free_tier_gate.js');
-        res.json({ ok: true, ...getFreeTierStats() });
-      } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-      }
-    });
-
     // Treasury settlement status endpoint (mounted early, uses job instance later)
     app.get('/system/treasury-settlement', async (req, res) => {
       try {
@@ -358,32 +316,6 @@ async function start() {
         res.json({ ok: true, ...result });
       } catch (e) {
         console.error('[ADMIN] Manual data retention failed:', e.message);
-        res.status(500).json({ ok: false, error: e.message });
-      }
-    });
-
-    // RPC aggregation job status endpoint
-    app.get('/system/rpc-aggregation', async (req, res) => {
-      try {
-        const { RpcAggregationJob } = await import('./src/jobs/rpc_aggregation_job.mjs');
-        const job = new RpcAggregationJob(pool);
-        const status = job.getStatus();
-        res.json({ ok: true, ...status });
-      } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-      }
-    });
-
-    // Manual RPC aggregation trigger
-    app.post('/system/rpc-aggregation/trigger', async (req, res) => {
-      try {
-        console.log('[ADMIN] Manual RPC aggregation triggered');
-        const { RpcAggregationJob } = await import('./src/jobs/rpc_aggregation_job.mjs');
-        const job = new RpcAggregationJob(pool);
-        const result = await job.run();
-        res.json({ ok: true, ...result });
-      } catch (e) {
-        console.error('[ADMIN] Manual RPC aggregation failed:', e.message);
         res.status(500).json({ ok: false, error: e.message });
       }
     });
@@ -428,17 +360,7 @@ async function start() {
     console.log('[BOOT] ✅ Offline detector started');
   } catch (err) {
     console.error('[BOOT] ❌ FAILED at startOfflineDetector:', err.message);
-
-  }
-
-  // Step 9b: Start DepositListener — watches Polygon Mainnet for USDT deposits to RevenueVault
-  let depositListener;
-  try {
-    depositListener = new DepositListener(pool, console);
-    // Moved to after listen to avoid blocking Railway healthcheck
-    console.log('[BOOT] ✅ DepositListener initialized');
-  } catch (err) {
-    console.error('[BOOT] ❌ FAILED at DepositListener initialization:', err.message);
+    
   }
 
   // Step 10: Start epoch scheduler
@@ -486,31 +408,6 @@ async function start() {
     console.error('[BOOT] ⚠️ Data retention job failed (non-fatal):', err.message);
   }
 
-  // Step 12d: Start RPC aggregation job (aggregate revenue_events_v2 into rpc_usage_hourly)
-  let rpcAggregation;
-  try {
-    rpcAggregation = startRpcAggregationScheduler(pool, 60);
-    console.log('[BOOT] ✅ RPC aggregation job started (60min interval)');
-  } catch (err) {
-    console.error('[BOOT] ⚠️ RPC aggregation job failed (non-fatal):', err.message);
-  }
-
-  // Step 12e: Start settlement anchor job (anchors closed epochs to blockchain every 5 min)
-  let settlementAnchor;
-  try {
-    const anchorJob = createSettlementAnchorJob(pool);
-    settlementAnchor = setInterval(async () => {
-      try {
-        await anchorJob.run();
-      } catch (err) {
-        console.error('[SettlementAnchor] Scheduled run failed:', err.message);
-      }
-    }, 5 * 60 * 1000);
-    console.log('[BOOT] ✅ Settlement anchor job started (5min interval)');
-  } catch (err) {
-    console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
-  }
-
   // Step 13: Bind to port FIRST (Railway healthcheck needs this fast)
   const PORT = process.env.PORT || 8080;
   try {
@@ -519,28 +416,12 @@ async function start() {
       console.log(`✅ Satelink Backend Running on port ${PORT}`);
       console.log(`📡 WebSocket available at /rpc/ws/:chain`);
 
-      // Start DepositListener after server is up (non-blocking for Railway)
-      if (depositListener) {
-        depositListener.start().then(() => {
-          console.log('[POST-BOOT] ✅ DepositListener started — watching Polygon Mainnet for USDT deposits');
-        }).catch(err => {
-          console.error('[POST-BOOT] ⚠️ DepositListener failed to start:', err.message);
-        });
-      }
-
       // Run migrations and schedulers AFTER server is up (non-blocking for Railway)
       try {
         await ensureBillingTables(pool);
         console.log('[POST-BOOT] ✅ Billing tables ensured');
       } catch (err) {
         console.error('[POST-BOOT] ⚠️ Billing tables failed (non-fatal):', err.message);
-      }
-
-      try {
-        await runMigrations(pool);
-        console.log('[POST-BOOT] ✅ Credit tables migrated');
-      } catch (err) {
-        console.error('[POST-BOOT] ⚠️ Credit tables migration failed:', err.message);
       }
 
       try {
@@ -560,8 +441,6 @@ async function start() {
       console.log(`📊 Capacity-alerter started (2min interval)`);
       console.log(`💸 Treasury-settlement started (5min interval)`);
       console.log(`🗑️ Data-retention started (daily at 3:00 UTC)`);
-      console.log(`📊 RPC-aggregation started (60min interval)`);
-      console.log(`⚓ Settlement-anchor started (5min interval)`);
     });
   } catch (err) {
     console.error('[BOOT] ❌ FAILED at httpServer.listen:', err.message);
@@ -585,19 +464,7 @@ async function start() {
   }, 300000); // Every 5 minutes
   console.log(`[BOOT] ✅ Self-heartbeat started for ${SELF_NODE_ID} (5min interval)`);
 
-  // Step 15: Graceful shutdown handler
-  const shutdown = async (signal) => {
-    console.log(`[SHUTDOWN] Received ${signal} — shutting down gracefully`);
-    if (depositListener) {
-      await depositListener.stop();
-      console.log('[SHUTDOWN] DepositListener stopped');
-    }
-    process.exit(0);
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
-
-  // Step 16: Discord daily summary scheduler (8:00 AM UTC)
+  // Step 15: Discord daily summary scheduler (8:00 AM UTC)
   if (discord.isEnabled()) {
     const scheduleDailySummary = () => {
       const now = new Date();

@@ -1,11 +1,9 @@
 /**
  * Latency-Based RPC Router
- * S1-RPC-002: Latency-based provider routing with in-memory EMA tracking
- * S1-RPC-003: 3-state circuit breaker (in-memory)
+ * S1-RPC-002: Latency-based provider routing with Redis EMA tracking
+ * S1-RPC-003: 3-state circuit breaker with Redis persistence
  * S1-RPC-005: Weighted load balancing across providers
  * S2-NODE: Network node routing with revenue attribution
- *
- * NOTE: Redis dependency eliminated — all latency tracking is in-memory (Map)
  */
 
 import { getProviders, getChainConfig, CHAIN_ALIASES } from "./providers.js";
@@ -27,6 +25,7 @@ import {
   recordNodeSuccess,
   recordNodeFailure,
 } from "./node_dispatcher.js";
+import { getSharedRedis } from "./shared_redis.js";
 
 // Database pool reference - set by initRouterWithPool()
 let pgPool = null;
@@ -39,48 +38,62 @@ export function initRouterWithPool(pool) {
 const EMA_ALPHA = 0.2;
 const REQUEST_TIMEOUT_MS = 10000;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// IN-MEMORY LATENCY TRACKING — Replaces Redis
-// ═══════════════════════════════════════════════════════════════════════════
-const _latencyStore = new Map(); // key → { ema, count, lastUpdate }
+// Use shared Redis client to avoid connection pool exhaustion
+async function getRedis() {
+  return getSharedRedis();
+}
 
 function getLatencyKey(chain, providerId) {
   const normalized = CHAIN_ALIASES[chain] || chain;
-  return `${normalized}:${providerId}`;
-}
-
-function updateLatencyInMemory(chain, providerId, newLatency) {
-  const key = getLatencyKey(chain, providerId);
-  const existing = _latencyStore.get(key);
-
-  let ema;
-  if (existing) {
-    ema = EMA_ALPHA * newLatency + (1 - EMA_ALPHA) * existing.ema;
-  } else {
-    ema = newLatency;
-  }
-
-  _latencyStore.set(key, {
-    ema: Math.round(ema * 100) / 100,
-    count: (existing?.count || 0) + 1,
-    lastUpdate: Date.now()
-  });
-}
-
-function getLatencyInMemory(chain, providerId) {
-  const key = getLatencyKey(chain, providerId);
-  return _latencyStore.get(key)?.ema ?? null;
+  return `rpc:latency:${normalized}:${providerId}`;
 }
 
 async function getProviderLatencies(chain, providers) {
-  return providers.map((p) => ({
-    ...p,
-    latency: getLatencyInMemory(chain, p.id),
-  }));
+  const redis = await getRedis();
+  if (!redis) {
+    return providers.map((p) => ({ ...p, latency: null }));
+  }
+
+  const keys = providers.map((p) => getLatencyKey(chain, p.id));
+
+  try {
+    const mgetPromise = redis.mget(...keys);
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve(keys.map(() => null)), 300)
+    );
+    const values = await Promise.race([mgetPromise, timeoutPromise]);
+
+    return providers.map((p, i) => ({
+      ...p,
+      latency: values[i] ? parseFloat(values[i]) : null,
+    }));
+  } catch (err) {
+    console.error("[RPC Router] Failed to get latencies:", err.message);
+    return providers.map((p) => ({ ...p, latency: null }));
+  }
 }
 
 async function updateLatency(chain, providerId, newLatency) {
-  updateLatencyInMemory(chain, providerId, newLatency);
+  const redis = await getRedis();
+  if (!redis) return;
+
+  const key = getLatencyKey(chain, providerId);
+
+  try {
+    const oldValue = await redis.get(key);
+    let ema;
+
+    if (oldValue) {
+      const oldLatency = parseFloat(oldValue);
+      ema = EMA_ALPHA * newLatency + (1 - EMA_ALPHA) * oldLatency;
+    } else {
+      ema = newLatency;
+    }
+
+    await redis.set(key, ema.toFixed(2), "EX", 3600);
+  } catch (err) {
+    console.error("[RPC Router] Failed to update latency:", err.message);
+  }
 }
 
 function sortProvidersByLatency(providersWithLatency) {
@@ -412,4 +425,4 @@ export async function getRouterStats(chain) {
   return stats;
 }
 
-// Redis dependency eliminated — latency tracking is in-memory
+export { getRedis };

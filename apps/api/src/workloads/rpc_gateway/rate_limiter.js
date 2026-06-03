@@ -8,14 +8,13 @@
  * - pro: 100,000 requests/day
  * - enterprise: 1,000,000 requests/day
  *
- * Storage: In-memory Maps (no Redis dependency)
- * - apiKeys: Map<apiKey, { tier, owner, created, status }>
- * - usageCounts: Map<usageKey, { count, expires }>
- *
- * Trade-off: Rate limits are per-server, not global.
- * At 474K calls/day this saves 5 Redis commands/call = 2.37M commands/day.
+ * Redis keys:
+ * - rpc:apikey:{key} → { tier, owner, created }
+ * - rpc:usage:{key}:{date} → request count
+ * - rpc:usage:ip:{ip}:{date} → request count (free tier)
  */
 
+import { getSharedRedis } from './shared_redis.js';
 import crypto from 'crypto';
 
 const TIERS = {
@@ -41,51 +40,25 @@ const TIERS = {
   }
 };
 
-// In-memory storage (replaces Redis)
-const apiKeys = new Map();
-const usageCounts = new Map();
-
-// Cleanup expired entries every 60 seconds
-const CLEANUP_INTERVAL_MS = 60_000;
-const USAGE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-
-let cleanupHandle = null;
-
-function startCleanup() {
-  if (cleanupHandle) return;
-
-  cleanupHandle = setInterval(() => {
-    const now = Date.now();
-    let cleaned = 0;
-
-    for (const [key, entry] of usageCounts) {
-      if (entry.expires && entry.expires < now) {
-        usageCounts.delete(key);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      console.log(`[RateLimiter] Cleaned ${cleaned} expired entries`);
-    }
-  }, CLEANUP_INTERVAL_MS);
-
-  cleanupHandle.unref?.();
+// Use shared Redis client to avoid connection pool exhaustion
+function getRedis() {
+  return getSharedRedis();
 }
-
-// Start cleanup on module load
-startCleanup();
 
 function getDateKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getApiKeyInfoKey(apiKey) {
+  return `rpc:apikey:${apiKey}`;
+}
+
 function getUsageKey(apiKey, date) {
-  return `usage:${apiKey}:${date}`;
+  return `rpc:usage:${apiKey}:${date}`;
 }
 
 function getIpUsageKey(ip, date) {
-  return `usage:ip:${ip}:${date}`;
+  return `rpc:usage:ip:${ip}:${date}`;
 }
 
 export function generateApiKey() {
@@ -93,6 +66,11 @@ export function generateApiKey() {
 }
 
 export async function createApiKey(tier, owner) {
+  const client = getRedis();
+  if (!client) {
+    throw new Error('Redis not available');
+  }
+
   if (!TIERS[tier]) {
     throw new Error(`Invalid tier: ${tier}`);
   }
@@ -105,7 +83,7 @@ export async function createApiKey(tier, owner) {
     status: 'active'
   };
 
-  apiKeys.set(apiKey, keyInfo);
+  await client.set(getApiKeyInfoKey(apiKey), JSON.stringify(keyInfo));
 
   console.log(`[RateLimiter] Created API key: ${apiKey.slice(0, 10)}... tier=${tier}`);
 
@@ -113,17 +91,27 @@ export async function createApiKey(tier, owner) {
 }
 
 export async function getApiKeyInfo(apiKey) {
-  return apiKeys.get(apiKey) || null;
+  const client = getRedis();
+  if (!client) return null;
+
+  try {
+    const data = await client.get(getApiKeyInfoKey(apiKey));
+    return data ? JSON.parse(data) : null;
+  } catch (err) {
+    console.error('[RateLimiter] Failed to get API key info:', err.message);
+    return null;
+  }
 }
 
 export async function checkRateLimit(apiKey, ip) {
+  const client = getRedis();
   const date = getDateKey();
 
   let tier = 'free';
   let usageKey;
 
   if (apiKey && apiKey.startsWith('sk_')) {
-    const keyInfo = apiKeys.get(apiKey);
+    const keyInfo = await getApiKeyInfo(apiKey);
     if (keyInfo && keyInfo.status === 'active') {
       tier = keyInfo.tier;
       usageKey = getUsageKey(apiKey, date);
@@ -135,33 +123,45 @@ export async function checkRateLimit(apiKey, ip) {
   }
 
   const limit = TIERS[tier].limit;
-  const entry = usageCounts.get(usageKey);
-  const current = entry?.count || 0;
 
-  if (current >= limit) {
-    return {
-      allowed: false,
-      tier,
-      remaining: 0,
-      limit,
-      resetAt: getNextResetTime()
-    };
+  if (!client) {
+    return { allowed: true, tier, remaining: limit, limit };
   }
 
-  return {
-    allowed: true,
-    tier,
-    remaining: limit - current - 1,
-    limit
-  };
+  try {
+    const current = parseInt(await client.get(usageKey)) || 0;
+
+    if (current >= limit) {
+      return {
+        allowed: false,
+        tier,
+        remaining: 0,
+        limit,
+        resetAt: getNextResetTime()
+      };
+    }
+
+    return {
+      allowed: true,
+      tier,
+      remaining: limit - current - 1,
+      limit
+    };
+  } catch (err) {
+    console.error('[RateLimiter] Check failed:', err.message);
+    return { allowed: true, tier, remaining: limit, limit };
+  }
 }
 
 export async function incrementUsage(apiKey, ip) {
+  const client = getRedis();
+  if (!client) return;
+
   const date = getDateKey();
   let usageKey;
 
   if (apiKey && apiKey.startsWith('sk_')) {
-    const keyInfo = apiKeys.get(apiKey);
+    const keyInfo = await getApiKeyInfo(apiKey);
     if (keyInfo && keyInfo.status === 'active') {
       usageKey = getUsageKey(apiKey, date);
     } else {
@@ -171,35 +171,40 @@ export async function incrementUsage(apiKey, ip) {
     usageKey = getIpUsageKey(ip, date);
   }
 
-  const entry = usageCounts.get(usageKey);
-  if (entry) {
-    entry.count++;
-  } else {
-    usageCounts.set(usageKey, {
-      count: 1,
-      expires: Date.now() + USAGE_TTL_MS
-    });
+  try {
+    await client.incr(usageKey);
+    await client.expire(usageKey, 86400 * 2);
+  } catch (err) {
+    console.error('[RateLimiter] Increment failed:', err.message);
   }
 }
 
 export async function getUsageStats(apiKey) {
-  const keyInfo = apiKeys.get(apiKey);
+  const client = getRedis();
+  if (!client) return null;
+
+  const keyInfo = await getApiKeyInfo(apiKey);
   if (!keyInfo) return null;
 
   const date = getDateKey();
   const usageKey = getUsageKey(apiKey, date);
-  const entry = usageCounts.get(usageKey);
-  const current = entry?.count || 0;
-  const limit = TIERS[keyInfo.tier].limit;
 
-  return {
-    tier: keyInfo.tier,
-    used: current,
-    limit,
-    remaining: Math.max(0, limit - current),
-    percentUsed: ((current / limit) * 100).toFixed(1),
-    resetAt: getNextResetTime()
-  };
+  try {
+    const current = parseInt(await client.get(usageKey)) || 0;
+    const limit = TIERS[keyInfo.tier].limit;
+
+    return {
+      tier: keyInfo.tier,
+      used: current,
+      limit,
+      remaining: Math.max(0, limit - current),
+      percentUsed: ((current / limit) * 100).toFixed(1),
+      resetAt: getNextResetTime()
+    };
+  } catch (err) {
+    console.error('[RateLimiter] Usage stats failed:', err.message);
+    return null;
+  }
 }
 
 function getNextResetTime() {
@@ -212,21 +217,6 @@ function getNextResetTime() {
 
 export function getTiers() {
   return TIERS;
-}
-
-// For testing/admin
-export function getMemoryStats() {
-  return {
-    apiKeys: apiKeys.size,
-    usageCounts: usageCounts.size
-  };
-}
-
-export function stopCleanup() {
-  if (cleanupHandle) {
-    clearInterval(cleanupHandle);
-    cleanupHandle = null;
-  }
 }
 
 export { TIERS };

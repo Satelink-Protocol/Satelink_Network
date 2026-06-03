@@ -2,18 +2,20 @@
  * DataRetentionJob — Scheduled cleanup of old logs and metrics
  *
  * Retention policy:
- * - revenue_events_v2: 24 hours (raw RPC billing rows - aggregated hourly)
+ * - RPC request logs: 7 days
  * - Metrics/analytics tables: 30 days
  *
  * Runs daily at 3 AM UTC (configurable).
  * Executes VACUUM ANALYZE after cleanup to reclaim space.
  */
 
-const RETENTION_REVENUE_HOURS = 24;
+const RETENTION_RPC_LOGS_DAYS = 7;
 const RETENTION_METRICS_DAYS = 30;
 
-const REVENUE_TABLES = [
-  { table: 'revenue_events_v2', timestampCol: 'created_at', retentionHours: RETENTION_REVENUE_HOURS },
+const RPC_LOG_TABLES = [
+  { table: 'rpc_requests', timestampCol: 'created_at', isEpochMs: true },
+  { table: 'rate_limit_windows', timestampCol: 'window_start', isEpochMs: false },
+  { table: 'rpc_response_cache', timestampCol: 'created_at', isEpochMs: true },
 ];
 
 const METRICS_TABLES = [
@@ -54,7 +56,7 @@ export class DataRetentionJob {
     console.log('[DataRetention] Starting cleanup...');
 
     const results = {
-      revenue: { deleted: 0, tables: [] },
+      rpcLogs: { deleted: 0, tables: [] },
       metrics: { deleted: 0, tables: [] },
       vacuumed: [],
       errors: [],
@@ -63,22 +65,21 @@ export class DataRetentionJob {
 
     try {
       const nowMs = Date.now();
-      const nowSec = Math.floor(nowMs / 1000);
+      const rpcCutoffMs = nowMs - (RETENTION_RPC_LOGS_DAYS * 24 * 60 * 60 * 1000);
       const metricsCutoffMs = nowMs - (RETENTION_METRICS_DAYS * 24 * 60 * 60 * 1000);
+      const rpcCutoffSec = Math.floor(rpcCutoffMs / 1000);
       const metricsCutoffSec = Math.floor(metricsCutoffMs / 1000);
 
-      // Revenue tables (24h retention, timestamp in seconds)
-      for (const { table, timestampCol, retentionHours } of REVENUE_TABLES) {
-        const cutoffSec = nowSec - (retentionHours * 60 * 60);
-        const deleted = await this.deleteOldRecords(table, timestampCol, cutoffSec, results.errors);
+      for (const { table, timestampCol, isEpochMs } of RPC_LOG_TABLES) {
+        const cutoff = isEpochMs ? rpcCutoffMs : rpcCutoffSec;
+        const deleted = await this.deleteOldRecords(table, timestampCol, cutoff, results.errors);
         if (deleted > 0) {
-          results.revenue.deleted += deleted;
-          results.revenue.tables.push({ table, deleted });
+          results.rpcLogs.deleted += deleted;
+          results.rpcLogs.tables.push({ table, deleted });
           await this.vacuumTable(table, results);
         }
       }
 
-      // Metrics tables (30d retention)
       for (const { table, timestampCol, isEpochMs } of METRICS_TABLES) {
         const cutoff = isEpochMs ? metricsCutoffMs : metricsCutoffSec;
         const deleted = await this.deleteOldRecords(table, timestampCol, cutoff, results.errors);
@@ -94,7 +95,7 @@ export class DataRetentionJob {
       this.lastResult = results;
 
       console.log(`[DataRetention] Cleanup complete in ${results.durationMs}ms`);
-      console.log(`  → Revenue: ${results.revenue.deleted} rows deleted (${RETENTION_REVENUE_HOURS}h retention)`);
+      console.log(`  → RPC logs: ${results.rpcLogs.deleted} rows deleted (${RETENTION_RPC_LOGS_DAYS}d retention)`);
       console.log(`  → Metrics: ${results.metrics.deleted} rows deleted (${RETENTION_METRICS_DAYS}d retention)`);
       console.log(`  → Vacuumed: ${results.vacuumed.length} tables`);
 
@@ -153,9 +154,9 @@ export class DataRetentionJob {
       lastRun: this.lastRun,
       lastResult: this.lastResult,
       config: {
-        revenueRetentionHours: RETENTION_REVENUE_HOURS,
+        rpcLogsRetentionDays: RETENTION_RPC_LOGS_DAYS,
         metricsRetentionDays: RETENTION_METRICS_DAYS,
-        revenueTables: REVENUE_TABLES.map(t => t.table),
+        rpcLogTables: RPC_LOG_TABLES.map(t => t.table),
         metricsTables: METRICS_TABLES.map(t => t.table),
       },
     };
