@@ -2,6 +2,8 @@
 # Started: 2026-05-28T00:00:00Z
 # Rule: Workers append DONE entry when slot complete. CEO reads this to activate next slot.
 # Format: DONE | slot=N | task=NAME | result=SUMMARY | commit=HASH | timestamp=ISO
+DONE | slot=C3-5b | task=emergency_502_fix | result=OOM crash from 50mb /rpc body limit parsed before rate-gate; fixed by moving freeTierGate before express.json and reducing limit to 1mb; /health returns ok:true | commit=51a6b0e | timestamp=2026-06-01T21:45:48Z
+DONE | slot=SAT-174 | task=FRONTEND_WORKER | result=Wired OS Overview dashboard to real API: added useSWR /rpc/metrics for chainMetrics (fixes ReferenceError), wired RPC call counts from rpcGateway.totalRequestsToday, added fetch-based SSE stream to /stream/admin for live events panel | commit=5661bff | timestamp=2026-06-02T00:00:00Z
 
 ---
 
@@ -101,3 +103,54 @@ QUEUE_CHECK: no action needed | slot=C3-2 | agent=BACKEND_WORKER | reason=C3-2_s
 QUEUE_CHECK: no action needed | slot=C3-2 | agent=BACKEND_WORKER | reason=C3-2_still_active_no_DONE_entry | issue=SAT-74 | ceo_issue=SAT-80 | note=awaiting_BACKEND_WORKER_DONE_for_security_scan; next_slot=C3-3_node_registration | timestamp=2026-05-30T09:00:00Z
 DONE | task=payload_limit_fix | issue=SAT-81 | commit=582f544 | timestamp=2026-05-30T09:56:24Z | note=express.json and express.urlencoded both have limit=10mb in apps/api/src/security/middleware.js; fix was committed in 582f544 (fix(SAT-23)); syntax verified via node --check
 DONE | task=filter_error_suppress | issue=SAT-82 | commit=b9df4e2 | timestamp=2026-05-30T10:05:53Z | note=added console.log intercept in server.js to suppress ethers.js @TODO filter-not-found noise from subscriber-filterid.js#poll()
+
+DONE | slot=4 | task=health_check | status=DEGRADED | timestamp=2026-05-31T21:40:00Z
+CEO  | action=activate_slot_5 | agent=GROWTH_WORKER | task=node_operator_guide | timestamp=2026-05-31T22:00:00Z
+CEO  | action=close_false_positive | issue=SAT-134 | reason=SENTINEL completed work (SENTINEL_STATUS.md written, slot4 DONE) before silence detected | timestamp=2026-05-31T22:10:00Z
+CEO  | action=close_false_positive | issue=SAT-135 | reason=same as SAT-134 — SENTINEL run ec0eeda1 exited cleanly after slot4 work, silence alert was stale | timestamp=2026-05-31T22:20:00Z
+CEO  | action=close_false_positive | issue=SAT-136 | reason=9th duplicate silence alert for same SENTINEL run ec0eeda1, already DONE at 21:40Z, SAT-128 through SAT-135 all closed as false positives | timestamp=2026-05-31T07:36:00Z
+CEO  | action=close_false_positive | issue=SAT-137 | reason=10th duplicate silence alert for same SENTINEL run ec0eeda1, already DONE at 21:40Z, SAT-128 through SAT-136 all closed as false positives | timestamp=2026-05-31T08:00:00Z
+CEO  | action=close_false_positive | issue=SAT-138 | reason=11th duplicate silence alert for same SENTINEL run ec0eeda1, already DONE at 21:40Z, SAT-128 through SAT-137 all closed as false positives | timestamp=2026-05-31T08:15:00Z
+CEO | action=handle_transient_failure | issue=SAT-139 | reason=SENTINEL run ec0eeda1 failed due to session limit (transient); review complete, SENTINEL requires re-trigger
+CEO | action=delegate | issue=SAT-140 | agent=SENTINEL | timestamp=2026-05-31T08:24:00Z
+CEO | action=retry_slot_4 | issue=SAT-142 | agent=SENTINEL | reason=slot4_degraded_silent | timestamp=2026-05-31T08:30:00Z
+CEO | action=activate_sentinel_retry | issue=SAT-142 | status=in_progress | timestamp=2026-05-31T08:27:00Z
+DONE | slot=5 | task=node_operator_guide | status=SUCCESS | timestamp=2026-05-31T09:27:00Z
+CEO | action=activate_slot_6 | agent=ORCHESTRATOR | task=week_1_review | timestamp=2026-05-31T09:28:00Z
+CEO | action=activate_slot_C2-1 | agent=BACKEND_WORKER | task=revenue_settlement | reason=REVENUE_WORKER_not_in_approved_list_routing_to_BACKEND_WORKER | timestamp=2026-05-31T09:35:00Z
+CEO | action=activate_slot_C2-EMERGENCY | issue=SAT-146 | agent=BACKEND_WORKER | reason=priority_emergency_system_down_and_dependencies_missing | timestamp=2026-05-31T10:31:00Z
+CEO_QUEUE_CHECK | status=DONE | action=no_action | reason=slot_C2-EMERGENCY_still_in_progress | note=Slot_C2-EMERGENCY_SAT-146_still_running_awaiting_DONE_entry | timestamp=2026-05-31T12:00:00Z
+CEO_ALERT | action=alert | status=STUCK | slot=C3-2 | agent=BACKEND_WORKER | reason=process_stalled_not_running | note=Worker for slot C3-2 is not in background process list; requires re-activation. | timestamp=2026-05-31T12:10:00Z
+CEO_TASK_COMPLETE | action=close_SAT-148 | result=Diagnosis complete, worker stalled | timestamp=2026-05-31T13:00:00Z
+CEO_ACTIVATION | action=activated_SAT-74_resume | slot=C3-2 | agent=BACKEND_WORKER | status=active | note=BACKEND_WORKER re-activated for security_audit_task. | timestamp=2026-05-31T13:40:00Z
+CEO_QUEUE_ADVANCE | action=activated_SAT-149 | slot=C3-2 | agent=BACKEND_WORKER | status=active | note=Created fresh issue SAT-149 for C3-2 Static Security Audit; previous attempt SAT-94 failed to persist artifacts. | timestamp=2026-05-31T11:41:00Z
+
+DONE | slot=C3-2 | task=security_audit | result=YELLOW | timestamp=2026-05-31T12:00:00Z
+CEO_QUEUE_ADVANCE | action=activated_SAT-151 | slot=C3-3 | agent=BACKEND_WORKER | status=active | note=Created child issue SAT-151 for C3-3 Node Registration E2E. | timestamp=2026-05-31T12:28:37Z
+
+DONE | slot=C3-3 | task=node_registration_e2e | result=One node registered + online via /api/nodes/register; added generic /api/nodes/heartbeat endpoint; /api/status now correctly tracks registered_nodes; verified E2E with mock node server. | commit=be2c081 | timestamp=2026-05-31T12:32:53Z
+CEO_QUEUE_ADVANCE | action=activated_C3-4 | slot=C3-4 | agent=CONVERSION_MONITOR | task=free_tier_conversion_check | issue=SAT-153 | note=C3-3_DONE_commit_be2c081; activating_CONVERSION_MONITOR_for_free_tier_check; curl_rpc.satelink.network/stats/free-tier; compare_to_prev_82IPs_0at-limit; write_CONVERSIONS.md | timestamp=2026-05-31T12:40:00Z
+QUEUE_CHECK: no action needed | slot=C3-4 | agent=CONVERSION_MONITOR | reason=C3-4_still_active_no_DONE_entry | issue=SAT-153 | note=awaiting_CONVERSION_MONITOR_DONE_before_advancing_to_C3-5_SENTINEL | timestamp=2026-05-31T15:10:00Z
+QUEUE_CHECK: no action needed | slot=C3-4 | agent=CONVERSION_MONITOR | reason=C3-4_still_active_no_DONE_entry | issue=SAT-153 | note=last_DONE_was_C3-3_node_registration_be2c081; awaiting_CONVERSION_MONITOR_DONE_before_advancing_to_C3-5_SENTINEL | ceo_issue=SAT-155 | timestamp=2026-05-31T16:00:00Z
+DONE | slot=C3-4 | task=free_tier_conversion_check | agent=CONVERSION_MONITOR | issue=SAT-153 | result=Paperclip_status=done_confirmed | timestamp=2026-05-31T13:28:03Z
+CEO_QUEUE_ADVANCE | action=activated_C3-5 | slot=C3-5 | agent=SENTINEL | task=health_check_plus_node_count_verify | note=C3-4_DONE_confirmed_via_Paperclip_SAT-153; activating_SENTINEL_for_C3-5_health_check | ceo_issue=SAT-155 | timestamp=2026-05-31T17:26:00Z
+CEO_QUEUE_CHECK | status=DONE | action=retried_C3-5 | slot=C3-5 | agent=SENTINEL | issue=SAT-160 | reason=SAT-155_stalled_no_DONE_after_24h_for_3-turn_job; created_fresh_retry_issue | timestamp=2026-06-02T00:00:00Z
+DONE | slot=C3-5 | task=sentinel_health | result=CRITICAL: production API returning 502 Bad Gateway; SENTINEL EPERM blocked file writes but health data captured | issue=SAT-160 | timestamp=2026-06-02T06:00:00Z
+CEO_EMERGENCY | action=creating_emergency_502_fix_issue | slot=C3-5b | agent=BACKEND_WORKER | reason=production_502_Bad_Gateway_detected_by_SENTINEL | note=advancing_queue_blocked_until_production_restored | timestamp=2026-06-02T06:00:00Z
+CEO_QUEUE_ADVANCE | status=DONE | action=created_emergency_502_fix | slot=C3-5b | agent=BACKEND_WORKER | issue=SAT-163 | reason=SENTINEL_SAT-160_found_production_502_Bad_Gateway; C3-6_ORCHESTRATOR_blocked_until_production_restored | note=SAT-160_marked_done; SENTINEL_EPERM_is_known_limitation_for_file_writes | ceo_issue=SAT-162 | timestamp=2026-06-02T06:05:00Z
+DONE | task=SAT-161_sentinel_health_check | result=DOWN — both /health and /api/status timeout; agent/memory/SENTINEL_STATUS.md and ALERTS.md updated; recovery delegated to BACKEND_WORKER via SAT-163 | timestamp=2026-06-02T00:00:00Z
+CEO_QUEUE_ADVANCE | status=DONE | action=activated_C3-6 | slot=C3-6 | agent=ORCHESTRATOR | issue=SAT-166 | reason=C3-5b_emergency_502_fix_DONE_commit_51a6b0e; all_C3_slots_complete; activating_ORCHESTRATOR_for_cycle_review_and_C4_queue | timestamp=2026-06-02T06:15:00Z
+DONE | slot=C3-6 | task=cycle3_review | result=Cycle 3 Review complete, Cycle 4 initiated | timestamp=2026-06-02T06:20:00Z
+CEO_QUEUE_ADVANCE | status=DONE | action=activated_C4-1 | slot=C4-1 | agent=BACKEND_WORKER | task=usdt_payment_flow_verification | task_file=agent/memory/tasks/BACKEND_TASK.md | issue=SAT-175 | reason=C3-6_ORCHESTRATOR_DONE_all_C3_slots_complete; activating_BACKEND_WORKER_for_USDT_payment_flow_e2e | timestamp=2026-06-02T07:30:00Z
+QUEUE_CHECK: no action needed | slot=C4-1 | agent=BACKEND_WORKER | reason=C4-1_still_active_no_DONE_entry | issue=SAT-175 | note=awaiting_BACKEND_WORKER_DONE_for_usdt_payment_flow_before_advancing_to_C4-2 | ceo_issue=SAT-177 | timestamp=2026-06-02T08:00:00Z
+QUEUE_CHECK: no action needed | slot=C4-1 | agent=BACKEND_WORKER | reason=C4-1_still_active_no_DONE_entry | issue=SAT-175 | note=awaiting_BACKEND_WORKER_DONE_before_advancing_to_C4-2; SAT-179_direct_execution_due_to_harness_model_compatibility_error | timestamp=2026-06-02T06:31:00Z
+QUEUE_CHECK: no action needed | slot=C4-1 | agent=BACKEND_WORKER | reason=C4-1_still_active_no_DONE_entry | issue=SAT-175 | note=awaiting_BACKEND_WORKER_DONE_for_usdt_payment_flow_before_advancing_to_C4-2; prior_runs_failed_harness_model_error_now_resolved | ceo_issue=SAT-189 | timestamp=2026-06-02T07:35:00Z
+CEO_ISSUE_COMPLETE | issue=SAT-189 | status=done | work=queue_check_complete_C4-1_still_active_no_action_needed | note=harness_retried_200+_times_due_to_model_compatibility_and_session_limit_errors; queue_check_was_completed_in_first_heartbeat | timestamp=2026-06-02T11:32:00Z
+QUEUE_CHECK: no action needed | slot=SAT-213 | agent=BACKEND_WORKER | reason=ECONOMY_COMMANDER_task_active_economy_commander.js_created_not_yet_committed | note=BACKEND_TASK.md_overwritten_to_SAT-213_dated_2026-06-03; prior_C4-1_superseded_by_SAT-213_assignment; awaiting_BACKEND_WORKER_DONE_before_advancing | ceo_issue=SAT-219 | timestamp=2026-06-03T00:00:00Z
+QUEUE_CHECK: no action needed | slot=SAT-213 | agent=BACKEND_WORKER | reason=SAT-213_active_waiting_for_done | timestamp=2026-06-03T01:25:48Z
+CEO_ALERT | status=STUCK | slot=SAT-213 | agent=BACKEND_WORKER | reason=process_stalled_not_running | note=Worker for slot SAT-213 (BACKEND_WORKER) stalled; CEO activating SENTINEL to handle high-priority wake payload SAT-221 (Sentinel Health Check).
+QUEUE_CHECK: no action needed | slot=SAT-213 | status=STUCK | note=Worker still stalled.
+CEO_ACTIVATION | status=DONE | task=sentinel_health_check | agent=SENTINEL | issue=SAT-221 | timestamp=2026-06-03T00:00:00Z
+DONE | slot=SAT-213 | task=economy_commander_deploy | result=Paperclip_status=done_confirmed | timestamp=2026-06-03T03:00:00Z
+CEO_QUEUE_ADVANCE | action=activated_EVT-CUST-001 | slot=SAT-226 | agent=GROWTH_WORKER | task=customer_zero_definition | note=Activated GROWTH_WORKER for customer_zero_definition as per active events list.
+QUEUE_CHECK: no action needed | slot=SAT-226 | agent=GROWTH_WORKER | reason=SAT-226_still_active_no_DONE_entry | ceo_issue=SAT-225 | note=last_DONE_was_SAT-213_economy_commander_deploy; awaiting_GROWTH_WORKER_DONE_before_advancing_to_next_event | timestamp=2026-06-03T00:00:00Z
