@@ -46,7 +46,7 @@ function LoginContent() {
         }
 
         try {
-            const provider = new ethers.BrowserProvider((window as any).ethereum);
+            const provider = new ethers.providers.Web3Provider((window as any).ethereum);
             const accounts = await provider.send("eth_requestAccounts", []);
             const address = accounts[0];
             if (!address) throw new Error('No account selected');
