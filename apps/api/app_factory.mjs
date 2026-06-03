@@ -95,7 +95,7 @@ app.get("/api/mode", (req, res) => {
           eth_getLogs: { usdt_per_call: 0.000050 },
           eth_getTransactionReceipt: { usdt_per_call: 0.000020 }
         },
-        free_tier: { requests_per_day: 100, api_key_required: false },
+        free_tier: { requests_per_day: 500, api_key_required: false },
         status_url: "https://rpc.satelink.network/api/status"
       });
     } catch (e) {
@@ -184,10 +184,10 @@ app.get("/api/mode", (req, res) => {
       settlement: {
         token: "USDT",
         chain: "Polygon",
-        contract: "0x6987921e2453f360e314e4424F6c2789F10a1CC9"
+        contract: process.env.REVENUE_VAULT_ADDRESS || "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3"
       },
       freeTier: {
-        requestsPerDay: 100,
+        requestsPerDay: 500,
         apiKeyRequired: false
       },
       status: "https://rpc.satelink.network/api/status",
