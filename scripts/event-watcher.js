@@ -39,7 +39,8 @@ function parseNewEvents(content) {
     if (!line.startsWith('|') || line.includes('Event ID') || line.includes('---')) continue;
     const cols = line.split('|').map(c => c.trim()).filter(Boolean);
     if (cols.length < 5) continue;
-    const [id, type, severity, owner, status] = cols;
+    const strip = s => s.replace(/`/g, '').trim();
+    const [id, type, severity, owner, status] = cols.map(strip);
     if (status === 'NEW') {
       events.push({ id, type, severity, owner, status });
     }
