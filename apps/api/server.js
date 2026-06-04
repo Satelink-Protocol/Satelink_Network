@@ -19,6 +19,7 @@ import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { discord } from "./src/services/discord_notify.mjs";
+import { DepositListener } from "./src/services/deposit_listener.js";
 import pkg from "pg";
 import Redis from "ioredis";
 
@@ -205,7 +206,6 @@ async function start() {
   try {
     app.use(express.json());
     app.use("/", createPhase3Router());
-    app.use("/credits", createCreditsRouter(pool, console));
     app.use("/", createEconomyCommanderRouter());
 
     app.get('/ws/stats', (req, res) => {
@@ -390,6 +390,15 @@ async function start() {
   } catch (err) {
     console.error('[BOOT] ❌ FAILED at startEpochScheduler:', err.message);
     
+  }
+
+  // Step 10b: Start Polygon deposit listener — credits wallets when USDT deposited on-chain
+  try {
+    const depositListener = new DepositListener(pool, console);
+    await depositListener.start();
+    console.log('[BOOT] ✅ Deposit listener started');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Deposit listener failed (non-fatal):', err.message);
   }
 
   // Step 11: Start sentinel (auto-scaler, healer, anomaly, treasury, capacity)
