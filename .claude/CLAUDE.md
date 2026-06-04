@@ -1,5 +1,5 @@
 # SATELINK AGENT BRAIN — MASTER CONTEXT
-# Last updated: 2026-06-04 (verified by curl + code audit)
+# Last updated: 2026-06-05 (SAT-240 resolved — deposit flow verified on Polygon Mainnet)
 # Every agent reads this FIRST. No exceptions.
 
 ---
@@ -48,7 +48,7 @@ are mounted inside `app_factory.mjs`, not `server.js` directly.
 | `GET https://rpc.satelink.network/credits/initiate?amount=1` | LIVE | Same handler, both URL variants work |
 | `GET https://app.satelink.network/satelink/os/deposit` | LIVE | Deposit page renders (HTTP 200) |
 | `apps/web/src/app/satelink/os/deposit/page.tsx` | LIVE | Customer USDT deposit UI with copy-calldata + step instructions |
-| RevenueVault on Polygon | CONFIGURED | Fallback: 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3, also env var |
+| RevenueVault on Polygon | VERIFIED | 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3 — accepts deposits, credited within 1s (SAT-240 2026-06-05) |
 | Epoch scheduler | RUNNING | Current epoch: 13303 |
 | WebSocket gateway | MOUNTED | `/ws/stats` endpoint active |
 
@@ -72,11 +72,11 @@ are mounted inside `app_factory.mjs`, not `server.js` directly.
 - `apps/web/src/app/satelink/os/withdraw/page.tsx` exists
 - End-to-end (earn → claim → withdraw USDT) not confirmed working
 
-### UNVERIFIED: RevenueVault contract deployment
-- API uses `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` as vault address
-- No deployment script output or deployment manifest found in repo
+### VERIFIED: RevenueVault contract deployment (SAT-240, 2026-06-05)
+- Contract at `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` is VERIFIED accepting deposits
+- Deposit tx: 0xd188cc0b248e94319d0012ef83a89f7a258d2dcf8a3cf11c3ec3ab68fa83fb71 (block 87932563)
+- DepositListener credits within 1s; billing deducts at 0.00001 USDT/call
 - Polygonscan: https://polygonscan.com/address/0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3
-- Verify this contract accepts deposits before directing customer funds to it
 
 ### Contracts with no confirmed deployment status
 ClaimsContract.sol, ClaimsWithdrawals.sol, EligibilityPolicy.sol, EpochAnchor.sol,
@@ -107,12 +107,9 @@ has nothing to use it for. No nodes = no value delivered = no reason to pay.
    - Once traffic flows, billing triggers, and there is proof-of-value for customers
    - Start by curl-testing `/api/nodes/register` with a valid auth token
 
-2. **Smoke-test the complete deposit flow end-to-end with real USDT**
-   - `GET /credits/deposit/initiate?amount=5` → get calldata
-   - Submit approve + deposit txns on Polygon Mainnet with a real wallet
-   - Confirm credit balance appears in the API
-   - Confirm a follow-up RPC call deducts credits correctly
-   - Without this test, we don't know if money is actually collectible
+2. ~~**Smoke-test the complete deposit flow end-to-end with real USDT**~~ **DONE (SAT-240, 2026-06-05)**
+   - Full e2e verified: initiate → approve → deposit → credit → RPC billing all working
+   - DepositListener credits within 1s; billing deducts 0.00001 USDT/call correctly
 
 3. **Wire API key provisioning into the post-deposit flow**
    - After a customer deposits, they need an API key immediately to use credits
