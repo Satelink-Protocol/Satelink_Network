@@ -92,6 +92,13 @@ export function createFreeTierGate(logger, redis) {
 
       log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${FREE_TIER_LIMIT}`);
 
+      const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+      const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+      // 10 USDT with 6 decimals — default deposit amount for conversion targets
+      const TEN_USDT_RAW = 10_000_000n;
+      const paddedVault = VAULT.replace(/^0x/i, '').toLowerCase().padStart(64, '0');
+      const paddedAmount = TEN_USDT_RAW.toString(16).padStart(64, '0');
+
       return res.status(402).json({
         error: 'Free tier limit reached',
         free_tier_used: count - 1,
@@ -105,11 +112,31 @@ export function createFreeTierGate(logger, redis) {
           cost_per_call_usdt: 0.00003,
           min_deposit_usdt: 1.00
         },
-        deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+        deposit_address: VAULT,
         deposit_instructions_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
-        usdt_contract: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+        usdt_contract: USDT,
         network: 'Polygon Mainnet (chainId: 137)',
-        docs: 'https://docs.satelink.network'
+        docs: 'https://docs.satelink.network',
+        transactions: [
+          {
+            step: 1,
+            description: 'Approve USDT spending',
+            to: USDT,
+            data: `0x095ea7b3${paddedVault}${paddedAmount}`,
+            value: '0x0',
+            chainId: 137,
+            gas: '0x186a0'
+          },
+          {
+            step: 2,
+            description: 'Deposit USDT to RevenueVault',
+            to: VAULT,
+            data: `0xb6b55f25${paddedAmount}`,
+            value: '0x0',
+            chainId: 137,
+            gas: '0x186a0'
+          }
+        ]
       });
     }
 
