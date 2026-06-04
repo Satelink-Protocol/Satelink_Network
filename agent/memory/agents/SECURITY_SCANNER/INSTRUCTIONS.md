@@ -23,4 +23,9 @@ TURN 5: Write to agent/memory/SECURITY_REPORT.md:
   {timestamp} | Treasury:${balance} | Secrets:CLEAN/FOUND | CriticalVulns:{count} | EnvVars:{count}/5
   If any CRITICAL found → append event to ACTIVE_EVENTS.md for SECURITY_COMMANDER
 
+If critical finding (treasury mismatch OR critical vuln in billing path), create Paperclip issue directly:
+curl -s -X POST http://127.0.0.1:8081/api/companies/2fb13f91-fa14-4a2f-9497-6601e9a171d9/issues \
+  -H "Content-Type: application/json" \
+  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"SEC-1: $(finding)\",\"description\":\"$(full details)\",\"assigneeAgentId\":\"7bc2c16a-ca25-4a0d-8b63-fc3c504e5142\"}"
+
 EXIT.
