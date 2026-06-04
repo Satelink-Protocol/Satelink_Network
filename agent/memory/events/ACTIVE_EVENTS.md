@@ -40,19 +40,18 @@ app.use("/rpc/mev", createMevRelayRouter(pool, redis));
 
 ---
 
-### BLOCKER 2 — `/credits/deposit/initiate`: Endpoint exists, needs smoke test
+### BLOCKER 2 — `/credits/deposit/initiate`: ~~Endpoint exists, needs smoke test~~ RESOLVED (SAT-240, 2026-06-05)
 
 **Finding:** Endpoint WAS missing (prompted SAT-228). Commit `2c6b780` added it. It is now mounted:
 - Handler: `apps/api/src/routes/credits.js:149` — `GET /deposit/initiate?amount=<usdt>`
 - Mounted: `apps/api/server.js:239` — `app.use("/credits", createCreditsRouter(pool, console))`
 - Returns: `approveCalldata` + `depositCalldata` (ABI-encoded) for Polygon Mainnet USDT vault
 
-**Risk:** Endpoint exists but has never been smoke-tested against production. Machines hitting 402 may not retry correctly; the response contract (field names, chain_id, gas estimates) hasn't been verified against the M2M client SDK.
-
-**Fix required:**
-1. `curl https://rpc.satelink.network/credits/deposit/initiate?amount=1.00` — confirm 200 + correct JSON shape
-2. Verify `REVENUE_VAULT_ADDRESS` env var is set in production (fallback is `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3`)
-3. Confirm M2M client SDK parses `approveCalldata` / `depositCalldata` field names
+**RESOLVED:** Full e2e smoke test passed on Polygon Mainnet (SAT-240, 2026-06-05).
+- Deposit tx: `0xd188cc0b248e94319d0012ef83a89f7a258d2dcf8a3cf11c3ec3ab68fa83fb71` (block 87932563)
+- DepositListener credited balance within 1s
+- Billing deducted 0.00001 USDT/call correctly
+- Response contract (field names, chain_id, gas estimates) verified
 
 **Files:** `apps/api/src/routes/credits.js:146-230`, `apps/api/server.js:239`
 
