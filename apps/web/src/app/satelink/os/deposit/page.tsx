@@ -192,6 +192,33 @@ export default function DepositPage() {
                 View vault on Polygonscan →
               </a>
             </div>
+
+            {/* WHAT HAPPENS NEXT */}
+            <div className="bg-[#0c2219] border border-[#285A48] rounded-md p-4">
+              <p className="text-[11px] font-semibold text-[#B0E4CC] mb-2">
+                What happens next
+              </p>
+              <ul className="space-y-1.5 text-[10px] text-[#285A48]">
+                <li className="flex items-start gap-2">
+                  <span className="text-[#408A71] mt-0.5">1.</span>
+                  <span>Credits appear automatically within <strong className="text-[#408A71]">~30 seconds</strong> of transaction confirmation (2 Polygon blocks).</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#408A71] mt-0.5">2.</span>
+                  <span>Add <code className="font-mono bg-[#091413] px-1 rounded text-[#00D1FF]">X-Wallet-Address: &lt;your-wallet&gt;</code> to every RPC request so calls are billed to your balance.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#408A71] mt-0.5">3.</span>
+                  <span>Each call costs <strong className="text-[#408A71]">$0.00003 USDT</strong> — 33,333 calls per $1 deposited.</span>
+                </li>
+              </ul>
+              <a
+                href="/satelink/os/billing"
+                className="inline-block mt-3 text-[10px] font-semibold text-[#408A71] hover:text-[#B0E4CC] transition-colors"
+              >
+                Check my credit balance →
+              </a>
+            </div>
           </>
         )}
       </div>

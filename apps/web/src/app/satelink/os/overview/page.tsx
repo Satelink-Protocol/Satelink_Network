@@ -171,17 +171,17 @@ export default function OverviewPage() {
     return () => { active = false; clearInterval(ticker); };
   }, []);
 
-  const { data: networkStats, isLoading: loadingNetwork } = useSWR('/dashboard-api/network/overview', fetcher, { refreshInterval: 30000 });
-  const { data: earnings, isLoading: loadingEarnings } = useSWR('/dashboard-api/earnings/overview', fetcher, { refreshInterval: 30000 });
+  const { data: statusData, isLoading: loadingNetwork } = useSWR('/api/status', fetcher, { refreshInterval: 30000 });
+  const { data: epochsData, isLoading: loadingEarnings } = useSWR('/api/epochs', fetcher, { refreshInterval: 30000 });
   const { data: chainMetrics, isLoading: loadingChains } = useSWR('/rpc/metrics', fetcher, { refreshInterval: 30000 });
 
   const loading = loadingNetwork || loadingEarnings;
-  const epochs = earnings?.recent_epochs || [];
-  const closed = epochs.filter(e => e.id !== null && e.status !== 'open' && e.status !== 'pending');
+  const epochs: any[] = epochsData?.epochs || [];
+  const closed = epochs.filter((e: any) => e.epoch_id !== null && e.status !== 'OPEN' && e.status !== 'PENDING');
 
-  const displayRevenue = networkStats?.total_revenue || 0;
-  const displayNodePool = earnings?.split?.node_operator || 0;
-  const totalReqs = chainMetrics?.rpcGateway?.totalRequestsToday || 0;
+  const displayRevenue = epochs.reduce((s: number, e: any) => s + parseFloat(e.total || '0'), 0);
+  const displayNodePool = epochs.reduce((s: number, e: any) => s + parseFloat(e.node_pool_usdt || '0'), 0);
+  const totalReqs = statusData?.total_requests_24h || 0;
   const avgCallsPerHour = totalReqs > 0 ? Math.round(totalReqs / 24) : 0;
 
   return (
@@ -200,7 +200,7 @@ export default function OverviewPage() {
             </div>
             <span className="text-[#1a3028]">·</span>
             <span className="text-[10px] text-[#285A48]">
-              Epoch #{closed.length > 0 ? closed.length + 1 : '0'} active
+              Epoch #{statusData?.current_epoch || '—'} active
             </span>
             <span className="text-[#1a3028]">·</span>
             <span className="text-[10px] font-mono text-[#285A48]">
@@ -249,7 +249,7 @@ export default function OverviewPage() {
           />
           <MetricCard
             label="Active Nodes"
-            value={loading ? '...' : String(networkStats?.active_nodes || 0)}
+            value={loading ? '...' : String(statusData?.nodes_online ?? 0)}
             sub="active"
             loading={loading}
           />
@@ -274,7 +274,7 @@ export default function OverviewPage() {
                   Epoch Revenue History
                 </p>
                 <p className="text-[9px] text-[#285A48] mt-0.5">
-                  50/30/20 split · real-time from /dashboard-api/earnings/overview
+                  50/30/20 split · real-time from /api/epochs
                 </p>
               </div>
               <a href="https://polygonscan.com/address/0x6987921e2453f360e314e4424F6c2789F10a1CC9"
@@ -306,16 +306,16 @@ export default function OverviewPage() {
                   </div>
                 ))
               ) : (
-                epochs.slice(0, 8).map((e, i) => {
-                  const isPending = e.id === null || e.status === 'open' || e.status === 'pending';
+                epochs.slice(0, 8).map((e: any, i: number) => {
+                  const isPending = e.epoch_id === null || e.status === 'OPEN' || e.status === 'PENDING';
                   return (
                     <EpochRow key={i}
                       epoch={isPending
                         ? '#pending'
-                        : `#${e.id}`}
-                      revenue={String(e.total_revenue_usdt || '0')}
+                        : `#${e.epoch_id}`}
+                      revenue={String(e.total || '0')}
                       nodePool={String(e.node_pool_usdt || '0')}
-                      requests={'0'} // Need endpoint
+                      requests={String(e.requests || '0')}
                       status={isPending ? 'open' : 'closed'}
                       fmt={fmt}
                     />

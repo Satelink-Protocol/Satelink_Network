@@ -79,6 +79,7 @@ const navGroups: NavGroup[] = [
   {
     label: "API & Billing",
     items: [
+      { label: 'Deposit',  href: '/satelink/os/deposit',  icon: Wallet, dot: 'cyan', badge: 'PAY' },
       { label: 'API Keys', href: '/satelink/os/api-keys', icon: Key, dot: 'grey' },
       { label: 'Billing',  href: '/satelink/os/billing',  icon: Receipt, dot: 'grey' },
       { label: 'Plans',    href: '/satelink/os/plans',    icon: Receipt, dot: 'grey' },
@@ -261,6 +262,15 @@ export function SatelinkOsShell({ children }: { children: React.ReactNode }) {
               <Command className="w-3 h-3" />
               <span>K</span>
             </button>
+            <Link href="/satelink/os/deposit">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#408A71] text-[#408A71] text-[10px] font-semibold hover:bg-[#0f2318] transition-colors"
+              >
+                Deposit USDT
+              </motion.button>
+            </Link>
             <Link href="/satelink/os/withdraw">
               <motion.button
                 whileHover={{ scale: 1.02 }}
