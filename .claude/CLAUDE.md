@@ -203,3 +203,34 @@ agent/memory/                 Persistent agent state — NEVER delete
 
 50% node operators | 30% platform | 20% distribution pool
 Settlement: USDT on Polygon, aggregated per epoch, paid via RevenueVault
+
+## AUTONOMOUS EXECUTION AUTHORITY
+
+All agents have full permission to execute without asking:
+- Bash commands (curl, git, railway, vercel, npm)
+- File reads and writes
+- API calls to production endpoints
+- Railway deployments (railway up --detach)
+- Vercel deployments (npx vercel --prod --yes)
+- Git commits and pushes to main
+
+## TOKENS IN ENVIRONMENT
+- GITHUB_PERSONAL_ACCESS_TOKEN: in .mcp.json
+- RAILWAY: authenticated via railway CLI
+- VERCEL: authenticated via npx vercel
+- POLYGON_RPC: https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc
+
+## PRODUCTION URLS
+- API: `https://rpc.satelink.network`
+- Frontend: `https://app.satelink.network`
+- Railway project: 0312ce4a-fb7b-41be-b7c7-0d3dcfdc0f89
+- Vercel project: satelinkinternet-collabs-projects/web
+
+## DEPLOY SEQUENCE (always in this order)
+1. git add -A && git commit -m "description"
+2. git push origin main
+3. railway up --detach (for API changes)
+4. npx vercel --prod --yes (for frontend changes)
+5. sleep 120
+6. curl verify
+7. Log to RESOLUTION_LOG.md

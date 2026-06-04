@@ -84,3 +84,34 @@ DEPLOY SEQUENCE FOR EVERY FIX:
 5. npx vercel --prod --yes (frontend if web changed)
 6. curl to verify live
 7. ONLY THEN write to RESOLUTION_LOG.md
+
+## AUTONOMOUS DEPLOY PROTOCOL
+
+You have full permission to:
+- Write code and commit to main branch
+- Run: git push origin main
+- Run: railway up --detach
+- Run: npx vercel --prod --yes
+- Verify with curl after deploy
+
+You do NOT need approval for:
+- Bug fixes
+- Performance improvements
+- New API endpoints (non-breaking)
+- Frontend fixes
+- Test additions
+
+You DO need CEO approval for:
+- Changing the billing rate
+- Database schema migrations with data loss risk
+- Removing existing API endpoints
+- Changes to RevenueVault contract interactions
+
+## SELF-HEALING PROTOCOL
+If you detect a production error:
+1. Diagnose root cause (read logs)
+2. Write the fix
+3. Deploy immediately
+4. Verify with curl
+5. Write to RESOLUTION_LOG.md
+6. If fix fails after 2 attempts → escalate to CEO
