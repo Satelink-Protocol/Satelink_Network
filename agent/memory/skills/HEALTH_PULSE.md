@@ -23,3 +23,11 @@ Append to agent/memory/SENTINEL_STATUS.md:
 {timestamp} | server:{ok/fail} | db:{ok/fail} | uptime:{seconds} | errors:{count}
 
 EXIT.
+
+## CHECKPOINT DETECTION
+Check for unverified deploys:
+  grep "DEPLOY_STARTED" agent/memory/events/RESOLUTION_LOG.md | \
+  grep -v "DEPLOY_VERIFIED" | tail -5
+  
+If any DEPLOY_STARTED has no matching DEPLOY_VERIFIED → 
+create EVT-OPS: incident.deploy_unverified → ENGINEERING_COMMANDER
