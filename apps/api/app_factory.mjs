@@ -233,7 +233,7 @@ app.get("/api/mode", (req, res) => {
   app.use("/auth", createUserAuthRouter({ db: pgDbAdapter }));
 
   // Free tier monitoring endpoint (outside /api to avoid router conflicts)
-  app.get("/stats/free-tier", (req, res) => res.json(getFreeTierStats()));
+  app.get("/stats/free-tier", async (req, res) => res.json(await getFreeTierStats()));
 
   // RPC Gateway — freeTierGate runs before JSON parsing to reject rate-limited IPs
   // before their request body is allocated (prevents OOM from high-volume abusers).

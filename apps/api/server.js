@@ -289,8 +289,8 @@ async function start() {
     app.get('/system/free-tier', async (req, res) => {
       try {
         const { getFreeTierStats, getConversionTargets } = await import('./src/middleware/free_tier_gate.js');
-        const stats = getFreeTierStats();
-        const conversionTargets = getConversionTargets();
+        const stats = await getFreeTierStats();
+        const conversionTargets = await getConversionTargets();
         res.json({
           ok: true,
           ...stats,
