@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 const API = 'https://rpc.satelink.network';
-const TREASURY = '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
+const TREASURY = '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
 
 const PLANS = [
   {
