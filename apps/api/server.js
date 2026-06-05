@@ -161,6 +161,23 @@ async function ensureBillingTables(pool) {
     await pool.query(`ALTER TABLE registered_nodes ADD COLUMN IF NOT EXISTS last_failure_reason TEXT DEFAULT NULL`).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_dispatch ON registered_nodes(status, node_type, last_heartbeat_at) WHERE status = 'active'`).catch(() => {});
 
+    // auth_users + user_roles — email/password auth and RBAC
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_users (
+        email         TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'node_operator',
+        created_at    BIGINT NOT NULL
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        wallet     TEXT PRIMARY KEY,
+        role       TEXT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )
+    `);
+
     // auth_nonces — wallet-based auth handshake
     await pool.query(`
       CREATE TABLE IF NOT EXISTS auth_nonces (

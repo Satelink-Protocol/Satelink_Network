@@ -105,8 +105,8 @@ export function createUnifiedAuthRouter(opsEngine) {
         return crypto.createHash('sha256').update(password + salt).digest('hex');
     };
 
-    // POST /auth/register - Permissionless onboarding
-    router.post('/auth/register', authLimiter, async (req, res) => {
+    // POST /register - Permissionless onboarding
+    router.post('/register', authLimiter, async (req, res) => {
         const { email, password, username } = req.body;
 
         if (!email || typeof email !== 'string' || !email.includes('@')) {
