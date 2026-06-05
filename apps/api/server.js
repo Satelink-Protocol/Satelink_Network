@@ -161,6 +161,20 @@ async function ensureBillingTables(pool) {
     await pool.query(`ALTER TABLE registered_nodes ADD COLUMN IF NOT EXISTS last_failure_reason TEXT DEFAULT NULL`).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_dispatch ON registered_nodes(status, node_type, last_heartbeat_at) WHERE status = 'active'`).catch(() => {});
 
+    // auth_nonces — wallet-based auth handshake
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_nonces (
+        address    TEXT   NOT NULL,
+        nonce      TEXT   NOT NULL,
+        expires_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        used_at    BIGINT,
+        PRIMARY KEY (address, nonce)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address)`).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires ON auth_nonces(expires_at)`).catch(() => {});
+
     console.log('[STARTUP] Billing tables ensured');
   } catch (err) {
     console.error('[STARTUP] Billing migration failed:', err.message);
