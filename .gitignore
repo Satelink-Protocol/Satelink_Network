@@ -156,3 +156,5 @@ agents/node-agent/node_modules/
 .mcp.json
 scripts/health_check.sh
 
+chainlist/
+audit/

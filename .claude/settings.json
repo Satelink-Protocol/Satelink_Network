@@ -1,16 +1,6 @@
 {
-  "allowedTools": [
-    "Bash",
-    "Read",
-    "Write", 
-    "Edit",
-    "Glob",
-    "Grep",
-    "LS",
-    "WebFetch",
-    "TodoRead",
-    "TodoWrite"
-  ],
-  "autoApprove": true,
-  "dangerouslySkipPermissions": false
+  "model": "claude-opus-4-8",
+  "smallModel": "claude-opus-4-8",
+  "allowedTools": ["Bash","Read","Write","Edit","Glob","Grep","LS","WebFetch","TodoRead","TodoWrite"],
+  "autoApprove": true
 }
