@@ -311,5 +311,8 @@ export function createCreditsRouter(db, logger) {
     });
   });
 
+  // Alias: GET /credits/:wallet → /credits/balance?wallet=:wallet
+  router.get('/:wallet', (req, res) => res.redirect(`/credits/balance?wallet=${req.params.wallet}`));
+
   return router;
 }

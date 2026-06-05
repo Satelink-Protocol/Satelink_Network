@@ -66,7 +66,7 @@ Calls are debited from your credit balance at $0.00003 USDT per call.
 ## Step 4: Verify Credits
 
 ```bash
-curl https://rpc.satelink.network/credits/0xYOUR_WALLET_ADDRESS
+curl "https://rpc.satelink.network/credits/balance?wallet=0xYOUR_WALLET_ADDRESS"
 ```
 
 Response:
