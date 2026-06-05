@@ -68,6 +68,20 @@ export async function runMigrations(pool) {
         last_deposit_at = NOW()
       WHERE credit_balances.total_deposited < 0.500000;
     `);
+
+    // auth_nonces — wallet-based auth handshake (missing causes "relation does not exist")
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_nonces (
+        address    TEXT   NOT NULL,
+        nonce      TEXT   NOT NULL,
+        expires_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        used_at    BIGINT,
+        PRIMARY KEY (address, nonce)
+      );
+      CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address);
+      CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires ON auth_nonces(expires_at);
+    `);
     const verify = await pool.query(`SELECT COUNT(*) as cnt FROM credit_balances`);
     console.log('[Migrate] Tables created. Rows in credit_balances:', verify.rows[0]?.cnt);
     console.log('========== MIGRATE DONE ==========\n\n');
