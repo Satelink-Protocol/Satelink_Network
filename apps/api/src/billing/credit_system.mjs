@@ -8,7 +8,7 @@ import crypto from 'crypto';
 const PRICE_PER_CALL_USDT = 0.000030;
 
 const TIERS = {
-  free:       { daily_limit: 200,       price_usdt: 0 },
+  free:       { daily_limit: 500,       price_usdt: 0 },
   basic:      { daily_limit: 10000,     price_usdt: 9 },
   pro:        { daily_limit: 100000,    price_usdt: 49 },
   enterprise: { daily_limit: 1000000,   price_usdt: 199 },
@@ -30,7 +30,7 @@ export async function ensureCreditTables(pool) {
         id              SERIAL PRIMARY KEY,
         api_key         VARCHAR(100) UNIQUE NOT NULL,
         tier            VARCHAR(20) DEFAULT 'free',
-        daily_limit     INTEGER DEFAULT 200,
+        daily_limit     INTEGER DEFAULT 500,
         credits_usdt    NUMERIC(18,6) DEFAULT 0,
         total_deposited NUMERIC(18,6) DEFAULT 0,
         total_spent     NUMERIC(18,6) DEFAULT 0,

@@ -26,7 +26,7 @@ const TIER_PRICES = {
 };
 
 const TIER_LIMITS = {
-  free: 200,
+  free: 500,
   basic: 10000,
   pro: 100000,
   enterprise: 1000000,
