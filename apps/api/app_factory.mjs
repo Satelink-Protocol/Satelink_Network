@@ -70,38 +70,41 @@ app.get("/api/mode", (req, res) => {
 
   // GET /api/pricing — RPC pricing catalog for machine discovery
   app.get("/api/pricing", async (req, res) => {
+    const DEFAULT_METHODS = {
+      eth_blockNumber:          { usdt_per_call: 0.000001 },
+      eth_getBalance:           { usdt_per_call: 0.000010 },
+      eth_call:                 { usdt_per_call: 0.000030 },
+      eth_sendRawTransaction:   { usdt_per_call: 0.000100 },
+      eth_getLogs:              { usdt_per_call: 0.000050 },
+      eth_getTransactionReceipt:{ usdt_per_call: 0.000020 }
+    };
+
+    let rpcPricing = {};
     try {
-      const result = await pool.query(`
-        SELECT method, base_cost_usdt FROM rpc_method_pricing WHERE enabled = 1 ORDER BY method
-      `);
-      const methods = Array.isArray(result) ? result : (result.rows || []);
-      const rpcPricing = {};
-      for (const m of methods) {
+      const result = await pool.query(
+        `SELECT method, base_cost_usdt FROM rpc_method_pricing WHERE enabled = 1 ORDER BY method`
+      );
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      for (const m of rows) {
         rpcPricing[m.method] = { usdt_per_call: parseFloat(m.base_cost_usdt) };
       }
-      res.json({
-        provider: "Satelink",
-        network: "Polygon PoS",
-        chain_id: 137,
-        rpc_endpoint: "https://rpc.satelink.network/rpc/polygon",
-        pricing_model: "pay_per_use",
-        settlement_token: "USDT",
-        settlement_chain: "Polygon",
-        methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : {
-          eth_blockNumber: { usdt_per_call: 0.000001 },
-          eth_getBalance: { usdt_per_call: 0.000010 },
-          eth_call: { usdt_per_call: 0.000030 },
-          eth_sendRawTransaction: { usdt_per_call: 0.000100 },
-          eth_getLogs: { usdt_per_call: 0.000050 },
-          eth_getTransactionReceipt: { usdt_per_call: 0.000020 }
-        },
-        free_tier: { requests_per_day: 500, api_key_required: false },
-        status_url: "https://rpc.satelink.network/api/status"
-      });
     } catch (e) {
-      console.error("[Pricing] Error:", e.message);
-      res.status(500).json({ error: "internal_error" });
+      console.warn("[Pricing] rpc_method_pricing unavailable, using defaults:", e.message);
     }
+
+    res.json({
+      provider: "Satelink",
+      network: "Polygon PoS",
+      chain_id: 137,
+      rpc_endpoint: "https://rpc.satelink.network/rpc/polygon",
+      pricing_model: "pay_per_use",
+      settlement_token: "USDT",
+      settlement_chain: "Polygon",
+      deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
+      methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : DEFAULT_METHODS,
+      free_tier: { requests_per_day: 500, api_key_required: false },
+      status_url: "https://rpc.satelink.network/api/status"
+    });
   });
 
   // GET /api/status — Live network status for machine monitoring
