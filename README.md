@@ -96,7 +96,7 @@ cd apps/web && npm run dev  # Frontend (port 3000)
 | Contract | Address |
 |----------|---------|
 | ClaimsContract | `0x6987921e2453f360e314e4424F6c2789F10a1CC9` |
-| Treasury | `0x966E1Ae22996545015b1414B35234b10719d7Ad4` |
+| Treasury | `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` |
 
 ## Documentation
 

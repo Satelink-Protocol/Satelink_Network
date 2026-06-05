@@ -15,7 +15,7 @@ import {
 } from './credit_system.mjs';
 import { discord } from '../services/discord_notify.mjs';
 
-const TREASURY = process.env.TREASURY_ADDRESS || '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
+const TREASURY = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
 const USDT_POLYGON = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const POLYGON_RPC = 'https://polygon.drpc.org';
 

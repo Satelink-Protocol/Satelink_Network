@@ -51,7 +51,7 @@ Returns:
 ```json
 {
   "deposit": {
-    "address": "0x966E1Ae22996545015b1414B35234b10719d7Ad4",
+    "address": "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
     "network": "Polygon (ChainId 137)",
     "token": "USDT"
   }
@@ -108,7 +108,7 @@ All payments settle on Polygon mainnet:
 
 - **Token:** USDT (0xc2132D05D31c914a87C6611C10748AEb04B58e8F)
 - **Chain:** Polygon PoS (chainId 137)
-- **Treasury:** 0x966E1Ae22996545015b1414B35234b10719d7Ad4
+- **Treasury:** 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3
 - **ClaimsContract:** 0x6987921e2453f360e314e4424F6c2789F10a1CC9
 
 ## Revenue Distribution

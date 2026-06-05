@@ -144,7 +144,7 @@ export default function WithdrawClient() {
               </p>
               <p className="text-[10px] text-[#285A48]">
                 Use wallet: <span className="font-mono text-[#408A71]">
-                  0x966E1Ae...d7Ad4
+                  0x80AFEaC...dDa3
                 </span> (satelink-project test)
               </p>
               {/* ConnectButton ALWAYS renders here */}
