@@ -17,12 +17,12 @@ Only when ENGINEERING_COMMANDER needs log analysis.
 7. If errors found (crash/OOM/FATAL in logs), create Paperclip issue directly:
 curl -s -X POST http://127.0.0.1:8081/api/companies/2fb13f91-fa14-4a2f-9497-6601e9a171d9/issues \
   -H "Content-Type: application/json" \
-  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"INCIDENT: $(error_type) detected in production\",\"description\":\"Error: $(exact_log_line)\nFrequency: $(count)\nRecommended fix: $(one_sentence)\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\"}"
+  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"INCIDENT: $(error_type) detected in production\",\"description\":\"Error: $(exact_log_line)\nFrequency: $(count)\nRecommended fix: $(one_sentence)\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\",\"status\":\"todo\"}"
 
 8. If DEPLOY_STARTED without DEPLOY_VERIFIED found in RESOLUTION_LOG.md, create Paperclip issue:
 curl -s -X POST http://127.0.0.1:8081/api/companies/2fb13f91-fa14-4a2f-9497-6601e9a171d9/issues \
   -H "Content-Type: application/json" \
-  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"INCIDENT: Unverified deploy detected\",\"description\":\"Deploy started but never verified. Check Railway logs immediately.\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\"}"
+  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"INCIDENT: Unverified deploy detected\",\"description\":\"Deploy started but never verified. Check Railway logs immediately.\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\",\"status\":\"todo\"}"
 
 EXIT.
 

@@ -19,6 +19,6 @@ TURN 3: Append to agent/memory/enterprise_os/AUTOMATION_BACKLOG.md:
 For automate_now items, also create Paperclip issue directly:
 curl -s -X POST http://127.0.0.1:8081/api/companies/2fb13f91-fa14-4a2f-9497-6601e9a171d9/issues \
   -H "Content-Type: application/json" \
-  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"AUTOMATE: $(founder_action)\",\"description\":\"Founder did this manually: $(action)\nAutomate by: $(approach)\nEffort: $(hours)h\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\"}"
+  -d "{\"projectId\":\"898eaef0-6dc2-4e11-beac-9f74e7240982\",\"title\":\"AUTOMATE: $(founder_action)\",\"description\":\"Founder did this manually: $(action)\nAutomate by: $(approach)\nEffort: $(hours)h\",\"assigneeAgentId\":\"85e00acf-7c98-4a0a-97b7-0e22c12e3167\",\"status\":\"todo\"}"
 
 EXIT.
