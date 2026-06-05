@@ -191,6 +191,8 @@ async function ensureBillingTables(pool) {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address)`).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires ON auth_nonces(expires_at)`).catch(() => {});
+    // wallet_auth.js uses ON CONFLICT (address) — requires unique constraint on address alone
+    await pool.query(`ALTER TABLE auth_nonces ADD CONSTRAINT auth_nonces_address_unique UNIQUE (address)`).catch(() => {});
 
     console.log('[STARTUP] Billing tables ensured');
   } catch (err) {
