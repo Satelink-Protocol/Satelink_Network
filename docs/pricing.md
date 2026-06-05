@@ -6,7 +6,7 @@ Satelink offers simple, transparent pricing with pay-per-use USDT settlement on 
 
 | Tier | Daily Limit | Monthly Price | Per-Call Rate |
 |------|-------------|---------------|---------------|
-| **Free** | 200/day | $0 | $0 |
+| **Free** | 500/day | $0 | $0 |
 | **Basic** | 10,000/day | $9 | $0.000030 |
 | **Pro** | 100,000/day | $49 | $0.000016 |
 | **Enterprise** | 1,000,000/day | $199 | $0.0000066 |
@@ -33,7 +33,7 @@ Different RPC methods have different costs based on compute requirements:
 
 ## Free Tier Details
 
-- **200 requests per day** (resets at midnight UTC)
+- **500 requests per day** (resets at midnight UTC)
 - All RPC methods supported
 - All chains supported (Polygon, Ethereum, Arbitrum, Base)
 - No credit card required
@@ -149,7 +149,7 @@ A: All chains (Polygon, Ethereum, Arbitrum, Base) are included in every tier.
 
 | Provider | Free Tier | Paid Starting |
 |----------|-----------|---------------|
-| **Satelink** | 200/day | $9/month |
+| **Satelink** | 500/day | $9/month |
 | Alchemy | 300M CU/month | $49/month |
 | Infura | 100K/day | $50/month |
 | QuickNode | None | $49/month |

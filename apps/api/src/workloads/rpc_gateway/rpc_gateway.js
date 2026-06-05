@@ -179,7 +179,7 @@ export function createRpcGateway(db) {
         const clientIp = getClientIp(req);
 
         // Rate limiting with 500ms timeout - fail open if slow
-        let rateCheck = { allowed: true, tier: 'free', remaining: 100, limit: 200 };
+        let rateCheck = { allowed: true, tier: 'free', remaining: 500, limit: 500 };
         try {
             const ratePromise = checkRateLimit(apiKey, clientIp);
             const timeoutPromise = new Promise((_, reject) =>
