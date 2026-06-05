@@ -123,3 +123,5 @@ Revenue impact: Validates or surfaces the actual failure point blocking Customer
 A broken post-deposit credit flow means all 78 conversion targets are wasting their 402 responses.
 Success metric: Deposit $1 USDT → credits appear in /credits/balance → RPC call deducts credit → DB shows deduction
 Deadline: 48h (2026-06-07)
+
+2026-06-05 16:42 | IPs:3545 | NearLimit:4 | Blocked:75 | PotentialRev/day:$20.08 | Source:track_conversions.mjs
