@@ -107,6 +107,85 @@ app.get("/api/mode", (req, res) => {
     });
   });
 
+  // GET /api/treasury/status — vault balance + deposit totals for agents and dashboards
+  app.get("/api/treasury/status", async (req, res) => {
+    const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+    const USDT  = process.env.USDT_CONTRACT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+    const RPC   = process.env.POLYGON_RPC             || 'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
+
+    // Fetch on-chain vault USDT balance (balanceOf selector = 0x70a08231)
+    async function onChainBalance() {
+      const data = '0x70a08231' + '000000000000000000000000' + VAULT.slice(2).toLowerCase();
+      try {
+        const r = await fetch(RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_call', params: [{ to: USDT, data }, 'latest'], id: 1 }),
+          signal: AbortSignal.timeout(4000)
+        });
+        const j = await r.json();
+        if (!j.result || j.result === '0x') return 0;
+        return Number(BigInt(j.result)) / 1e6;
+      } catch { return null; }
+    }
+
+    try {
+      const [depositsRow, walletsRow, vaultBal] = await Promise.all([
+        pool.query(`SELECT COALESCE(SUM(amount_usdt), 0) AS total FROM credit_deposits`).catch(() => ({ rows: [{ total: 0 }] })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM credit_balances WHERE balance_usdt > 0`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        onChainBalance()
+      ]);
+
+      res.json({
+        ok: true,
+        vault_address:        VAULT,
+        vault_balance_usdt:   vaultBal,
+        total_deposited_usdt: parseFloat(depositsRow.rows[0]?.total || 0),
+        active_wallets:       parseInt(walletsRow.rows[0]?.cnt || 0),
+        network:              'Polygon Mainnet',
+        timestamp:            new Date().toISOString()
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  // GET /api/diagnostics — system health for agents and dashboards (no auth required)
+  app.get("/api/diagnostics", async (req, res) => {
+    const t0 = Date.now();
+    try {
+      const [dbPing, nodeCount, epochCount, revenueSum] = await Promise.all([
+        pool.query('SELECT 1').then(() => ({ ok: true, latencyMs: Date.now() - t0 })).catch(e => ({ ok: false, error: e.message })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM registered_nodes WHERE status = 'active'`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM epochs`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        pool.query(`SELECT COALESCE(SUM(amount_usdt), 0) AS total FROM revenue_events_v2 WHERE is_test_data = false`).catch(() => ({ rows: [{ total: 0 }] }))
+      ]);
+
+      res.json({
+        ok: true,
+        timestamp:  new Date().toISOString(),
+        system: {
+          uptimeSeconds:  Math.floor(process.uptime()),
+          memoryMb:       Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          nodeVersion:    process.version
+        },
+        database:   dbPing,
+        counts: {
+          activeNodes:        parseInt(nodeCount.rows[0]?.cnt  || 0),
+          epochs:             parseInt(epochCount.rows[0]?.cnt || 0),
+          totalRevenueUsdt:   parseFloat(revenueSum.rows[0]?.total || 0)
+        },
+        health: {
+          database:   dbPing.ok ? 'healthy' : 'degraded',
+          api:        'healthy'
+        },
+        responseTimeMs: Date.now() - t0
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
   // GET /api/status — Live network status for machine monitoring
   app.get("/api/status", async (req, res) => {
     try {
