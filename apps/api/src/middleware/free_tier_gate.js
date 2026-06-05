@@ -88,55 +88,16 @@ export function createFreeTierGate(logger, redis) {
     }
 
     if (count > FREE_TIER_LIMIT) {
-      const resetIn = Math.ceil((resetAt - Date.now()) / 1000 / 60);
-
       log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${FREE_TIER_LIMIT}`);
 
       const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
-      const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
-      // 10 USDT with 6 decimals — default deposit amount for conversion targets
-      const TEN_USDT_RAW = 10_000_000n;
-      const paddedVault = VAULT.replace(/^0x/i, '').toLowerCase().padStart(64, '0');
-      const paddedAmount = TEN_USDT_RAW.toString(16).padStart(64, '0');
 
-      return res.status(402).json({
-        error: 'Free tier limit reached',
-        free_tier_used: count - 1,
-        free_tier_limit: FREE_TIER_LIMIT,
-        resets_in_minutes: resetIn,
-        upgrade: 'Add X-Wallet-Address header with a funded wallet to continue',
-        how_to_fund: {
-          step1: 'Approve USDT to RevenueVault on Polygon Mainnet',
-          step2: 'Call deposit(amount) on RevenueVault',
-          step3: 'Add header: X-Wallet-Address: <your-wallet>',
-          cost_per_call_usdt: 0.00003,
-          min_deposit_usdt: 1.00
-        },
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
         deposit_address: VAULT,
-        deposit_instructions_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
-        usdt_contract: USDT,
-        network: 'Polygon Mainnet (chainId: 137)',
-        docs: 'https://docs.satelink.network',
-        transactions: [
-          {
-            step: 1,
-            description: 'Approve USDT spending',
-            to: USDT,
-            data: `0x095ea7b3${paddedVault}${paddedAmount}`,
-            value: '0x0',
-            chainId: 137,
-            gas: '0x186a0'
-          },
-          {
-            step: 2,
-            description: 'Deposit USDT to RevenueVault',
-            to: VAULT,
-            data: `0xb6b55f25${paddedAmount}`,
-            value: '0x0',
-            chainId: 137,
-            gas: '0x186a0'
-          }
-        ]
+        network: 'Polygon Mainnet',
+        docs: 'https://docs.satelink.network/paid-tier'
       });
     }
 

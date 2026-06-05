@@ -199,24 +199,11 @@ export function createRpcGateway(db) {
         if (!rateCheck.allowed) {
             res.set('X-RateLimit-Reset', rateCheck.resetAt);
             return res.status(429).json({
-                ok: false,
                 error: 'rate_limit_exceeded',
-                message: rateCheck.tier === 'free'
-                  ? 'Free tier limit reached (200/day). Create an API key for more.'
-                  : `${rateCheck.tier} tier limit reached. Upgrade for more requests.`,
-                tier: rateCheck.tier,
-                limit: rateCheck.limit,
-                resetAt: rateCheck.resetAt,
-                upgrade: {
-                  create_key: 'POST https://rpc.satelink.network/api/keys',
-                  plans: 'https://app.satelink.network/satelink/os/plans',
-                  pricing: {
-                    free: '200/day - $0',
-                    basic: '10K/day - $9/mo',
-                    pro: '100K/day - $49/mo',
-                    enterprise: '1M/day - $199/mo'
-                  }
-                }
+                upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
+                deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                network: 'Polygon Mainnet',
+                docs: 'https://docs.satelink.network/paid-tier'
             });
         }
 
