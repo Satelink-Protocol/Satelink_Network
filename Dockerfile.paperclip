@@ -7,6 +7,6 @@ COPY agent/ ./agent/
 COPY start-cloud.sh ./
 RUN chmod +x start-cloud.sh
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=10 \
   CMD wget -qO- http://localhost:8080/health || exit 1
 CMD ["sh", "start-cloud.sh"]
