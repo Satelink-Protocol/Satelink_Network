@@ -1,15 +1,12 @@
 FROM node:22-alpine
 LABEL description="Satelink Paperclip — AI Agent Orchestration Layer"
 WORKDIR /app
-
-RUN npm config set legacy-peer-deps true
+COPY .npmrc ./
 RUN npm install -g paperclipai@latest
-
 COPY agent/ ./agent/
 COPY start-cloud.sh ./
 RUN chmod +x start-cloud.sh
-
 EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=10 \
-  CMD wget -qO- http://localhost:3100/ || exit 1
+  CMD wget -qO- http://localhost:3100/health || exit 1
 CMD ["sh", "start-cloud.sh"]
