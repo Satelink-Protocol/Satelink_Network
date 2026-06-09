@@ -15,8 +15,8 @@ cat > "$PAPERCLIP_HOME/config.json" << 'ENDCONFIG'
     "logDir": "/root/.paperclip/instances/default/logs"
   },
   "server": {
-    "deploymentMode": "local_trusted",
-    "exposure": "private",
+    "deploymentMode": "authenticated",
+    "exposure": "public",
     "bind": "lan",
     "host": "0.0.0.0",
     "port": 8081,
@@ -37,7 +37,7 @@ cat > "$PAPERCLIP_HOME/config.json" << 'ENDCONFIG'
   }
 }
 ENDCONFIG
-echo "Cloud config written — server will bind to 0.0.0.0:8081"
+echo "Cloud config written — authenticated mode on 0.0.0.0:8081"
 
 # Auto-reset DB if tables exist but migration journal is missing (failed partial bootstrap)
 if [ -n "$DATABASE_URL" ]; then
