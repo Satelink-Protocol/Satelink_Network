@@ -2,7 +2,7 @@
   "deploy": {
     "dockerfilePath": "Dockerfile.paperclip",
     "startCommand": "sh start-cloud.sh",
-    "healthcheckPath": "/health",
+    "healthcheckPath": "/",
     "healthcheckTimeout": 300
   },
   "environments": {
