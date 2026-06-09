@@ -2,7 +2,7 @@ FROM node:20-alpine
 LABEL description="Satelink Paperclip — AI Agent Orchestration Layer"
 WORKDIR /app
 
-RUN npm config set legacy-peer-deps true
+ENV npm_config_legacy_peer_deps=true
 RUN npm install -g paperclipai@latest
 
 COPY agent/ ./agent/
