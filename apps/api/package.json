@@ -8,6 +8,7 @@
         "@openzeppelin/defender-sdk": "^1.10.0",
         "base32.js": "^0.1.0",
         "bullmq": "^5.70.4",
+        "compression": "^1.8.0",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.6",
         "dotenv": "^17.3.1",
