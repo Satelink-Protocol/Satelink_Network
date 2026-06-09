@@ -1,4 +1,5 @@
 import express from "express";
+import compression from 'compression';
 import { attachBaseMiddleware } from "./src/security/middleware.js";
 import revenueRoutes from "./src/routes/revenue.js";
 import { createRpcGateway } from "./src/workloads/rpc_gateway/rpc_gateway.js";
@@ -31,6 +32,7 @@ export function createApp(pool, redis) {
 
   // Attach base middleware (CORS, helmet, security headers)
   attachBaseMiddleware(app);
+  app.use(compression({ level: 6, threshold: 1024 }));
 
   // Core health endpoints
   app.get("/healthz", (req, res) => res.status(200).json({ status: "ok" }));

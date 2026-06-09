@@ -1,3 +1,5 @@
+process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=400';
+
 import express from "express";
 import { createPhase3Router } from "./src/gateway/routes/api_phase3.js";
 import { createServer } from 'http';
@@ -208,6 +210,7 @@ async function start() {
   try {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      max: 10,
       ssl: process.env.NODE_ENV === "production"
         ? { rejectUnauthorized: false }
         : false,

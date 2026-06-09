@@ -90,6 +90,13 @@ export class DataRetentionJob {
         }
       }
 
+      // Clean revenue_events_v2 by closed epochs
+      const revenueDeleted = await this.cleanRevenueEventsByEpoch(results.errors);
+      if (revenueDeleted > 0) {
+        results.metrics.deleted += revenueDeleted;
+        results.metrics.tables.push({ table: 'revenue_events_v2', deleted: revenueDeleted });
+      }
+
       results.durationMs = Date.now() - startTime;
       this.lastRun = new Date().toISOString();
       this.lastResult = results;
@@ -145,6 +152,26 @@ export class DataRetentionJob {
       results.vacuumed.push(table);
     } catch (e) {
       results.errors.push(`VACUUM ${table}: ${e.message}`);
+    }
+  }
+
+  async cleanRevenueEventsByEpoch(errors) {
+    try {
+      const result = await this.pool.query(`
+        DELETE FROM revenue_events_v2
+        WHERE epoch_id IN (
+          SELECT id FROM epochs WHERE status = 'CLOSED'
+        )
+      `);
+      const count = result.rowCount || 0;
+      if (count > 0) {
+        console.log(`[DataRetention] revenue_events_v2: ${count} rows deleted`);
+        await this.pool.query(`VACUUM ANALYZE revenue_events_v2`);
+      }
+      return count;
+    } catch (e) {
+      errors.push(`revenue_events_v2: ${e.message}`);
+      return 0;
     }
   }
 
