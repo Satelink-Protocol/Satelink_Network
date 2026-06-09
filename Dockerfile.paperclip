@@ -3,7 +3,7 @@ LABEL description="Satelink Paperclip — AI Agent Orchestration Layer"
 WORKDIR /app
 
 # Install paperclipai globally
-RUN npm install -g paperclipai@latest --prefix /usr/local
+RUN npm install -g paperclipai@latest --prefix /usr/local --legacy-peer-deps
 
 # Copy agent memory (org state)
 COPY agent/ ./agent/
