@@ -2,14 +2,14 @@
   "deploy": {
     "dockerfilePath": "Dockerfile.paperclip",
     "startCommand": "sh start-cloud.sh",
-    "healthcheckPath": "/api/health",
+    "healthcheckPath": "/",
     "healthcheckTimeout": 300
   },
   "environments": {
     "production": {
       "variables": {
         "NODE_ENV": "production",
-        "PORT": "8081"
+        "PORT": "3100"
       }
     }
   }
