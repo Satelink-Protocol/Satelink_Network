@@ -16,4 +16,4 @@ proxy.listen(3100, '0.0.0.0', () => console.log('[proxy] 0.0.0.0:3100 ready'));
 sleep 3
 
 # Run paperclipai on internal port 3101
-PORT=3101 exec paperclipai onboard --yes --run
+PORT=3101 exec paperclipai onboard --yes --bind lan --run
