@@ -9,3 +9,4 @@ COPY start-cloud.sh ./
 RUN chmod +x start-cloud.sh
 EXPOSE 3100
 CMD ["sh", "start-cloud.sh"]
+# rebuild Wed Jun 10 13:06:07 IST 2026
