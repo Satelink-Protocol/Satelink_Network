@@ -4,7 +4,7 @@ echo "Starting Paperclip on Railway..."
 node -e "
 const http = require('http');
 const server = http.createServer((req, res) => {
-  if (req.url === '/health' || req.url === '/api/health' || req.url === '/') {
+  if (req.url === '/health' || req.url === '/api/health') {
     res.writeHead(200, {'Content-Type':'application/json'});
     res.end(JSON.stringify({status:'ok'}));
     return;
