@@ -1,6 +1,5 @@
 #!/bin/sh
 echo "Starting Paperclip on Railway..."
-
 node -e "
 const http = require('http');
 const server = http.createServer((req, res) => {
@@ -14,8 +13,7 @@ const server = http.createServer((req, res) => {
   p.on('error', e => { res.writeHead(502); res.end(e.message); });
   req.pipe(p);
 });
-server.listen(3100, '0.0.0.0', () => console.log('[proxy] ready on 0.0.0.0:3100'));
+server.listen(3100, '0.0.0.0', () => console.log('[proxy] ready'));
 " &
-
 sleep 3
 PORT=3101 exec paperclipai onboard --yes --run
