@@ -1,15 +1,19 @@
 #!/bin/sh
 echo "Starting Paperclip on Railway..."
-echo "PORT: ${PORT:-3100}"
 
+# Proxy: 0.0.0.0:3100 (Railway LB) → 127.0.0.1:3101 (paperclipai internal)
 node -e "
-const {Client} = require('pg');
-const c = new Client({connectionString: process.env.DATABASE_URL});
-c.connect()
-  .then(() => c.query('CREATE SCHEMA IF NOT EXISTS drizzle'))
-  .then(() => c.query('CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)'))
-  .then(() => { console.log('[startup] Migration journal ready'); return c.end(); })
-  .catch(e => console.error('[startup]', e.message));
-" 2>/dev/null
+const net = require('net');
+const proxy = net.createServer(src => {
+  const dst = net.createConnection(3101, '127.0.0.1');
+  src.pipe(dst); dst.pipe(src);
+  src.on('error', () => dst.destroy());
+  dst.on('error', () => src.destroy());
+});
+proxy.listen(3100, '0.0.0.0', () => console.log('[proxy] 0.0.0.0:3100 ready'));
+" &
 
-exec paperclipai onboard --yes --bind lan --run
+sleep 3
+
+# Run paperclipai on internal port 3101
+PORT=3101 exec paperclipai onboard --yes --run
