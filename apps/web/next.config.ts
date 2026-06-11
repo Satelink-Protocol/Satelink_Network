@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 const API_BASE =
   process.env.INTERNAL_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
-  "http://localhost:8080";
+  (process.env.NODE_ENV === "production"
+    ? "https://rpc.satelink.network"
+    : "http://localhost:8080");
 
 const nextConfig: NextConfig = {
   typescript: {
