@@ -20,6 +20,7 @@ import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
+import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
 import { DepositListener } from "./src/services/deposit_listener.js";
 import pkg from "pg";
@@ -479,6 +480,14 @@ async function start() {
     console.log('[BOOT] ✅ Data retention job started (daily at 3:00 UTC)');
   } catch (err) {
     console.error('[BOOT] ⚠️ Data retention job failed (non-fatal):', err.message);
+  }
+
+  // Step 12d: DB volume cleanup (revenue_events_v2, epochs, epoch_ledger, node_health_logs)
+  try {
+    startDbCleanupScheduler(pool);
+    console.log('[BOOT] ✅ DB cleanup job started (daily at 3:00 UTC)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ DB cleanup job failed (non-fatal):', err.message);
   }
 
   // Step 13: Bind to port FIRST (Railway healthcheck needs this fast)

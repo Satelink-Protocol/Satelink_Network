@@ -13,6 +13,8 @@ const LOG_PREFIX = '[FreeTierGate]';
 let _redis = null;
 
 // Map<ip, { count, resetAt }> — in-memory fallback when Redis unavailable
+// Max 10,000 entries; when full, oldest entries are evicted to prevent OOM during Redis outages
+const IP_MAP_MAX = 10000;
 const ipCounters = new Map();
 
 function getMidnightUTC() {
@@ -30,6 +32,10 @@ function getCounter(ip) {
   const existing = ipCounters.get(ip);
 
   if (!existing || now >= existing.resetAt) {
+    // Evict oldest entry if at capacity
+    if (!existing && ipCounters.size >= IP_MAP_MAX) {
+      ipCounters.delete(ipCounters.keys().next().value);
+    }
     const counter = { count: 0, resetAt: getMidnightUTC() };
     ipCounters.set(ip, counter);
     return counter;
