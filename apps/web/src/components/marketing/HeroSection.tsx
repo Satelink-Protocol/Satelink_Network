@@ -170,7 +170,7 @@ export function HeroSection() {
           <Link href="/developers" className="btn btn-primary btn-lg">
             Start for free →
           </Link>
-          <Link href="/dashboard/network" className="btn btn-secondary btn-lg">
+          <Link href="/dashboard" className="btn btn-secondary btn-lg">
             View live network
           </Link>
         </div>

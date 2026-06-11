@@ -6,11 +6,6 @@
   "rewrites": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "app.satelink.network" }],
-      "destination": "/satelink/os/overview/:path*"
-    },
-    {
-      "source": "/:path*",
       "has": [{ "type": "host", "value": "status.satelink.network" }],
       "destination": "/_status/:path*"
     }

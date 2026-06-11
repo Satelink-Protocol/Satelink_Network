@@ -19,6 +19,7 @@ import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/econo
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
+import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
@@ -339,6 +340,11 @@ async function start() {
       }
     });
 
+    // Settlement anchor status — shows whether the on-chain anchor job is live
+    app.get('/system/settlement-anchor', (req, res) => {
+      res.json({ ok: true, ...anchorSchedulerStatus });
+    });
+
     // Treasury settlement status endpoint (mounted early, uses job instance later)
     app.get('/system/treasury-settlement', async (req, res) => {
       try {
@@ -473,6 +479,17 @@ async function start() {
     console.error('[BOOT] ⚠️ Treasury settlement job failed (non-fatal):', err.message);
   }
 
+  // Step 12b2: Start settlement anchor job (anchors closed epochs on-chain with tx_hash)
+  // This job existed since S7 but was never registered — root cause of
+  // 1457 closed epochs with tx_hash NULL. It no-ops loudly when the
+  // POLYGON_SIGNER_KEY env trio is missing instead of failing silently.
+  try {
+    startSettlementAnchorScheduler(pool, 10);
+    console.log('[BOOT] ✅ Settlement anchor job registered (10min interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
+  }
+
   // Step 12c: Start data retention job (cleanup old logs/metrics daily at 3 AM UTC)
   let dataRetention;
   try {
@@ -529,21 +546,31 @@ async function start() {
   }
 
   // Step 14: Self-heartbeat — the API server IS the node
+  // Must be an UPSERT: the previous UPDATE targeted a row that was never
+  // inserted, so it no-opped silently every 5 minutes and nodes_online
+  // stayed 0 forever.
   const SELF_NODE_ID = 'NODE-ap-south-1-a09becbb';
-  setInterval(async () => {
+  const SELF_NODE_WALLET = process.env.SELF_NODE_WALLET
+    || process.env.TREASURY_ADDRESS
+    || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+  const selfHeartbeat = async () => {
     try {
       const now = Math.floor(Date.now() / 1000);
       await pool.query(
-        `UPDATE registered_nodes
-         SET status = 'active', last_heartbeat_at = $1, updated_at = $1
-         WHERE node_id = $2`,
-        [now, SELF_NODE_ID]
+        `INSERT INTO registered_nodes
+           (node_id, wallet, node_type, endpoint_url, region, chain_ids, status, tier, registered_at, last_heartbeat_at, updated_at)
+         VALUES ($1, $2, 'rpc', 'https://rpc.satelink.network', 'ap-south-1', '[137]', 'active', 'bronze', $3, $3, $3)
+         ON CONFLICT (node_id) DO UPDATE
+         SET status = 'active', last_heartbeat_at = $3, updated_at = $3`,
+        [SELF_NODE_ID, SELF_NODE_WALLET, now]
       );
       console.log(`[Self-Heartbeat] ✅ ${SELF_NODE_ID} heartbeat sent`);
     } catch (err) {
       console.error('[Self-Heartbeat] ❌ Failed:', err.message);
     }
-  }, 300000); // Every 5 minutes
+  };
+  selfHeartbeat(); // register immediately at boot, not 5 minutes later
+  setInterval(selfHeartbeat, 300000); // Every 5 minutes
   console.log(`[BOOT] ✅ Self-heartbeat started for ${SELF_NODE_ID} (5min interval)`);
 
   // Step 15: Discord daily summary scheduler (8:00 AM UTC)
