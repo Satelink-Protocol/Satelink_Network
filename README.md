@@ -10,7 +10,7 @@ Node operators earn USDT on Polygon by routing real blockchain RPC traffic. Deve
 - **$0.65 USDT** in on-chain test transactions
 - **99.8% uptime** | 85ms avg latency  
 - **First settlement pending** — Chainlist listing in review
-- **On-chain contract:** [View on Polygonscan](https://polygonscan.com/...)
+- **On-chain contract:** [View on Polygonscan](https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b)
 
 ## Quick Links
 
