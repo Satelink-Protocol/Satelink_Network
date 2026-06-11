@@ -53,10 +53,25 @@ const CHAIN_HEALTH_CHECKS = {
       if (!data || typeof data !== 'object') {
         return { valid: false, reason: 'Response is not a JSON object' };
       }
-      if (typeof data.result !== 'number') {
-        return { valid: false, reason: data.error?.message || 'result is not a number' };
+      const { result } = data;
+      // getBlockHeight: a number is healthy.
+      if (typeof result === 'number') {
+        return { valid: true };
       }
-      return { valid: true };
+      // getHealth: the literal string "ok" is healthy.
+      if (result === 'ok') {
+        return { valid: true };
+      }
+      // Some providers wrap the height in an object, e.g. { value: 12345 }.
+      if (result && typeof result === 'object' && typeof result.value === 'number') {
+        return { valid: true };
+      }
+      // Ankr returns errors as a bare string ("message: ...") rather than
+      // the standard JSON-RPC { code, message } object — handle both shapes.
+      const reason = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || 'result is not a number';
+      return { valid: false, reason };
     }
   }
 };
