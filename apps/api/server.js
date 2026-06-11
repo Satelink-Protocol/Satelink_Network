@@ -19,6 +19,7 @@ import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/econo
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
+import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
@@ -339,6 +340,11 @@ async function start() {
       }
     });
 
+    // Settlement anchor status — shows whether the on-chain anchor job is live
+    app.get('/system/settlement-anchor', (req, res) => {
+      res.json({ ok: true, ...anchorSchedulerStatus });
+    });
+
     // Treasury settlement status endpoint (mounted early, uses job instance later)
     app.get('/system/treasury-settlement', async (req, res) => {
       try {
@@ -471,6 +477,17 @@ async function start() {
     console.log('[BOOT] ✅ Treasury settlement job started (5min interval)');
   } catch (err) {
     console.error('[BOOT] ⚠️ Treasury settlement job failed (non-fatal):', err.message);
+  }
+
+  // Step 12b2: Start settlement anchor job (anchors closed epochs on-chain with tx_hash)
+  // This job existed since S7 but was never registered — root cause of
+  // 1457 closed epochs with tx_hash NULL. It no-ops loudly when the
+  // POLYGON_SIGNER_KEY env trio is missing instead of failing silently.
+  try {
+    startSettlementAnchorScheduler(pool, 10);
+    console.log('[BOOT] ✅ Settlement anchor job registered (10min interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
   }
 
   // Step 12c: Start data retention job (cleanup old logs/metrics daily at 3 AM UTC)

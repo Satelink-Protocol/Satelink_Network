@@ -24,6 +24,11 @@ const ERC20_ABI = [
     'function balanceOf(address account) view returns (uint256)',
 ];
 
+// Epochs below this revenue are skipped — anchoring dust epochs costs more
+// in gas than the revenue being anchored. They stay unanchored until rolled
+// into a future batch with real revenue.
+const MIN_ANCHOR_REVENUE_USDT = parseFloat(process.env.MIN_ANCHOR_REVENUE_USDT || '1.0');
+
 export class SettlementAnchorJob {
     constructor(pool) {
         this.pool = pool;
@@ -55,11 +60,35 @@ export class SettlementAnchorJob {
         }
     }
 
+    async ensureTable() {
+        await this.pool.query(`
+            CREATE TABLE IF NOT EXISTS settlement_batches (
+                id SERIAL PRIMARY KEY,
+                batch_id TEXT UNIQUE NOT NULL,
+                epoch_id INTEGER,
+                chain_id INTEGER,
+                adapter_type TEXT,
+                total_amount_usdt NUMERIC,
+                item_count INTEGER,
+                status TEXT DEFAULT 'pending',
+                tx_hash TEXT,
+                submitted_at BIGINT,
+                confirmed_at BIGINT,
+                error_message TEXT,
+                created_at BIGINT NOT NULL
+            )
+        `);
+        await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_settlement_batches_epoch ON settlement_batches(epoch_id)`).catch(() => {});
+        await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_settlement_batches_status ON settlement_batches(status)`).catch(() => {});
+    }
+
     /**
      * Main entry point — find unanchored epochs and anchor them.
      */
     async run() {
         console.log('[SettlementAnchor] Running...');
+
+        await this.ensureTable();
 
         // 1. Find closed epochs without settlement_batches
         const result = await this.pool.query(`
@@ -68,15 +97,30 @@ export class SettlementAnchorJob {
             LEFT JOIN settlement_batches sb ON sb.epoch_id = e.id
             WHERE e.status = 'CLOSED'
               AND sb.id IS NULL
-              AND e.total_revenue_usdt > 0
+              AND e.total_revenue_usdt >= $1
             ORDER BY e.id ASC
             LIMIT 10
-        `);
+        `, [MIN_ANCHOR_REVENUE_USDT]);
         const unanchored = result.rows;
 
+        // Report dust epochs explicitly so "0 anchored" is never silent
+        const dustResult = await this.pool.query(`
+            SELECT COUNT(*)::integer AS cnt
+            FROM epochs e
+            LEFT JOIN settlement_batches sb ON sb.epoch_id = e.id
+            WHERE e.status = 'CLOSED'
+              AND sb.id IS NULL
+              AND e.total_revenue_usdt > 0
+              AND e.total_revenue_usdt < $1
+        `, [MIN_ANCHOR_REVENUE_USDT]);
+        const dustCount = dustResult.rows[0]?.cnt || 0;
+        if (dustCount > 0) {
+            console.log(`[SettlementAnchor] ${dustCount} closed epochs below ${MIN_ANCHOR_REVENUE_USDT} USDT threshold — not worth gas, skipping`);
+        }
+
         if (unanchored.length === 0) {
-            console.log('[SettlementAnchor] No unanchored epochs found');
-            return { processed: 0 };
+            console.log('[SettlementAnchor] No anchorable epochs found');
+            return { processed: 0, skipped_below_threshold: dustCount };
         }
 
         console.log(`[SettlementAnchor] Found ${unanchored.length} unanchored epochs`);
@@ -91,7 +135,7 @@ export class SettlementAnchorJob {
             }
         }
 
-        return { processed };
+        return { processed, skipped_below_threshold: dustCount };
     }
 
     /**
@@ -186,6 +230,15 @@ export class SettlementAnchorJob {
             WHERE batch_id = $6
         `, [txHash, now, confirmedAt, status, errorMessage, batchId]);
 
+        // Mirror the tx_hash into epoch_ledger so /api/settlement/history
+        // (which reads epoch_ledger) shows the epoch as settled on-chain.
+        if (status === 'confirmed' && txHash) {
+            await this.pool.query(
+                `UPDATE epoch_ledger SET tx_hash = $1 WHERE epoch_id = $2`,
+                [txHash, `epoch-${epoch.id}`]
+            ).catch(e => console.warn(`[SettlementAnchor] epoch_ledger sync failed: ${e.message}`));
+        }
+
         console.log(`[SettlementAnchor] Epoch ${epoch.id} anchored — status: ${status}, tx: ${txHash?.substring(0, 20)}...`);
 
         return { epoch_id: epoch.id, batch_id: batchId, tx_hash: txHash, status };
@@ -225,4 +278,51 @@ export class SettlementAnchorJob {
  */
 export function createSettlementAnchorJob(pool) {
     return new SettlementAnchorJob(pool);
+}
+
+export const anchorSchedulerStatus = {
+    started: false,
+    configured: false,
+    interval_minutes: null,
+    last_run_time: null,
+    last_result: null,
+    last_error: null,
+    min_anchor_revenue_usdt: MIN_ANCHOR_REVENUE_USDT
+};
+
+/**
+ * Periodic scheduler — the missing registration that left 1457 closed
+ * epochs with tx_hash NULL. Refuses to run unconfigured rather than
+ * writing simulated 0xSIM hashes into production tables.
+ */
+export function startSettlementAnchorScheduler(pool, intervalMinutes = 10) {
+    const job = new SettlementAnchorJob(pool);
+    anchorSchedulerStatus.configured = job.configured;
+    anchorSchedulerStatus.interval_minutes = intervalMinutes;
+
+    const dryRun = process.env.SETTLEMENT_DRY_RUN === '1';
+    if (!job.configured && !dryRun) {
+        console.warn('[SettlementAnchor] NOT STARTED — set POLYGON_RPC_URL, POLYGON_SIGNER_KEY and POLYGON_USDT_ADDRESS to enable on-chain epoch anchoring');
+        return { job, started: false, stop: () => {} };
+    }
+
+    const runJob = async () => {
+        anchorSchedulerStatus.last_run_time = Date.now();
+        try {
+            const result = await job.run();
+            anchorSchedulerStatus.last_result = result;
+            anchorSchedulerStatus.last_error = null;
+        } catch (e) {
+            anchorSchedulerStatus.last_error = e.message;
+            console.error('[SettlementAnchor] Scheduled run failed:', e.message);
+        }
+    };
+
+    runJob();
+    const interval = setInterval(runJob, intervalMinutes * 60 * 1000);
+    interval.unref?.();
+    anchorSchedulerStatus.started = true;
+
+    console.log(`[SettlementAnchor] Scheduler started — every ${intervalMinutes} minutes (min revenue: ${MIN_ANCHOR_REVENUE_USDT} USDT)`);
+    return { job, started: true, runNow: runJob, stop: () => clearInterval(interval) };
 }
