@@ -114,6 +114,7 @@ const nextConfig: NextConfig = {
       "protocol",
       "watchdog",
       "settlement",
+      "system",
     ];
 
     return [

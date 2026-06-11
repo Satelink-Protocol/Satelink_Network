@@ -69,9 +69,9 @@ export function Footer() {
             <h4>Platform</h4>
             <ul className="footer-links">
               <FooterLink href="/dashboard">Dashboard</FooterLink>
-              <FooterLink href="/dashboard/operator">Node Dashboard</FooterLink>
-              <FooterLink href="/dashboard/network">Network Status</FooterLink>
-              <FooterLink href="/dashboard/admin">Admin</FooterLink>
+              <FooterLink href="/dashboard">Node Dashboard</FooterLink>
+              <FooterLink href="/dashboard">Network Status</FooterLink>
+              <FooterLink href="/admin">Admin</FooterLink>
             </ul>
           </div>
 
