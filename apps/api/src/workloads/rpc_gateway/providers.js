@@ -196,14 +196,6 @@ const PROVIDER_CONFIGS = {
         type: "public",
         enabled: false, // Disabled: strict rate limits and method restrictions
       },
-      {
-        id: "solana-ankr",
-        url: ANKR_VALID ? `https://rpc.ankr.com/solana/${ANKR_KEY}` : null,
-        priority: 2,
-        rateLimit: 100,
-        type: "ankr",
-        enabled: ANKR_VALID,
-      },
     ],
   },
 };
