@@ -1,85 +1,86 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Documentation | Satelink Network",
-  description: "Satelink Network documentation — RPC endpoints, pricing, deposits, and node operation.",
+  title: "Docs | Satelink",
+  description: "Satelink documentation, API reference, and node operator guides.",
 };
 
-const WIKI = "https://github.com/Satelink-Protocol/Satelink_Network/wiki";
-const API = "https://rpc.satelink.network";
-
-const sections = [
+const LINKS = [
   {
-    title: "Guides",
-    links: [
-      { label: "Full documentation (GitHub wiki)", href: WIKI, external: true },
-      { label: "Deposit USDT for credits", href: "/satelink/os/deposit", external: false },
-      { label: "API key management", href: "/satelink/os/api-keys", external: false },
-    ],
+    title: "Documentation Wiki",
+    desc: "Full project documentation: getting started, architecture, settlement.",
+    href: "https://github.com/Satelink-Protocol/Satelink_Network/wiki",
   },
   {
-    title: "API Reference (live endpoints)",
-    links: [
-      { label: "Provider metadata — /provider.json", href: `${API}/provider.json`, external: true },
-      { label: "Pricing catalog — /api/pricing", href: `${API}/api/pricing`, external: true },
-      { label: "Network status — /api/status", href: `${API}/api/status`, external: true },
-      { label: "OpenAPI spec — /openapi.json", href: `${API}/openapi.json`, external: true },
-    ],
+    title: "API Reference",
+    desc: "RPC gateway endpoints, authentication, billing headers.",
+    href: "https://github.com/Satelink-Protocol/Satelink_Network/wiki/#api-reference",
   },
   {
-    title: "RPC Endpoints",
-    links: [
-      { label: "Polygon Mainnet — /rpc/polygon", href: `${API}/rpc/polygon`, external: true },
-      { label: "Ethereum — /rpc/ethereum", href: `${API}/rpc/ethereum`, external: true },
-      { label: "Arbitrum One — /rpc/arbitrum", href: `${API}/rpc/arbitrum`, external: true },
-      { label: "Base — /rpc/base", href: `${API}/rpc/base`, external: true },
-    ],
+    title: "Node Operators Guide",
+    desc: "Run a node, register it, and earn 50% of routed revenue in USDT.",
+    href: "https://github.com/Satelink-Protocol/Satelink_Network/wiki/#node-operators",
+  },
+  {
+    title: "GitHub Repository",
+    desc: "Full open-source codebase: gateway, contracts, frontend.",
+    href: "https://github.com/Satelink-Protocol/Satelink_Network",
   },
 ];
 
 export default function DocsPage() {
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-12 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold">Documentation</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Free tier: 500 requests/day per IP, no API key required. Paid usage settles in USDT on Polygon.
-        </p>
+    <div className="os-page">
+      <div className="os-shell" style={{ maxWidth: 800 }}>
+        <div className="os-header">
+          <div className="os-title">
+            <div className="logo-icon">S</div>
+            Satelink Docs
+          </div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <a href="/" className="btn btn-ghost">
+              Landing
+            </a>
+            <a href="/satelink/os/overview" className="btn btn-secondary">
+              Console
+            </a>
+          </div>
+        </div>
 
-        <div className="mt-8 space-y-8">
-          {sections.map((section) => (
-            <section key={section.title}>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                {section.title}
-              </h2>
-              <ul className="mt-3 divide-y divide-slate-800 rounded-lg border border-slate-800 bg-slate-900/60">
-                {section.links.map((link) => (
-                  <li key={link.href}>
-                    {link.external ? (
-                      <a
-                        href={link.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60"
-                      >
-                        {link.label} <span className="text-slate-500">↗</span>
-                      </a>
-                    ) : (
-                      <Link
-                        href={link.href}
-                        className="block px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60"
-                      >
-                        {link.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
+        <div style={{ display: "grid", gap: 20 }}>
+          {LINKS.map((l) => (
+            <a
+              key={l.href + l.title}
+              href={l.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="os-card"
+              style={{ display: "block" }}
+            >
+              <div className="proof-title">{l.title}</div>
+              <p className="proof-desc" style={{ marginBottom: 0 }}>
+                {l.desc}
+              </p>
+            </a>
           ))}
+
+          <div className="os-card">
+            <div className="os-card-title">Quick Start</div>
+            <div
+              className="os-card-endpoint"
+              style={{ marginBottom: 0, fontSize: 13, lineHeight: 1.8 }}
+            >
+              # Free tier — no key required (200 req/day)
+              <br />
+              curl -X POST https://rpc.satelink.network/rpc/polygon \
+              <br />
+              &nbsp;&nbsp;-H &quot;Content-Type: application/json&quot; \
+              <br />
+              &nbsp;&nbsp;-d &apos;{"{"}&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;method&quot;:&quot;eth_blockNumber&quot;,&quot;params&quot;:[],&quot;id&quot;:1{"}"}&apos;
+            </div>
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
