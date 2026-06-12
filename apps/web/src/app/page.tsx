@@ -214,12 +214,12 @@ export default function Home() {
                 </a>
               </li>
               <li>
-                <a href="#pricing" className="nav-link">
+                <a href="/satelink/os/deposit" className="nav-link">
                   Pricing
                 </a>
               </li>
               <li>
-                <a href="#nodes" className="nav-link">
+                <a href="/satelink/os/nodes" className="nav-link">
                   Node Operators
                 </a>
               </li>
