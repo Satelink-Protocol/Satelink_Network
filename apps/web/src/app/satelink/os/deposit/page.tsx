@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import api from "@/lib/api";
+
+const API_BASE = "https://rpc.satelink.network";
 
 interface DepositInstructions {
   revenueVaultAddress: string;
@@ -60,13 +61,16 @@ export default function DepositPage() {
     setInstructions(null);
 
     try {
-      const res = await api.get(`/credits/initiate?amount=${parsed}`);
-      setInstructions(res.data);
+      const res = await fetch(`${API_BASE}/credits/initiate?amount=${parsed}`);
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      setInstructions(body);
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        "Failed to get deposit instructions";
-      setError(msg);
+      setError(
+        e instanceof Error ? e.message : "Failed to get deposit instructions"
+      );
     } finally {
       setLoading(false);
     }
@@ -213,10 +217,10 @@ export default function DepositPage() {
                 </li>
               </ul>
               <a
-                href="/satelink/os/billing"
+                href="/satelink/os/overview"
                 className="inline-block mt-3 text-[10px] font-semibold text-[#408A71] hover:text-[#B0E4CC] transition-colors"
               >
-                Check my credit balance →
+                Open the console →
               </a>
             </div>
           </>
