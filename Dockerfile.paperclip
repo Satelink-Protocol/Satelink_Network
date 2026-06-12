@@ -5,8 +5,11 @@ COPY .npmrc ./
 COPY start-cloud.sh ./
 RUN chmod +x start-cloud.sh
 RUN npm install -g paperclipai@latest
+RUN npm install -g @anthropic-ai/claude-code
 RUN mkdir -p /app/storage
 RUN apk add --no-cache git
+# Claude Code refuses --dangerously-skip-permissions as root unless sandboxed
+ENV IS_SANDBOX=1
 RUN git clone --depth 1 https://github.com/Satelink-Protocol/Satelink_Network.git /app/satelink
 RUN mkdir -p /app/satelink/agent/memory
 COPY agent/ ./agent/
