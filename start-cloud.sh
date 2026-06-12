@@ -1,5 +1,5 @@
 #!/bin/sh
-echo "Starting Paperclip on Railway..."
+echo "Starting Paperclip on Railway... (claude-code enabled)"
 cd /app/satelink && git pull origin main 2>/dev/null || true
 cd /app
 node -e "
