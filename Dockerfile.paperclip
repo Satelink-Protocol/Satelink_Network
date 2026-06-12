@@ -6,6 +6,9 @@ COPY start-cloud.sh ./
 RUN chmod +x start-cloud.sh
 RUN npm install -g paperclipai@latest
 RUN mkdir -p /app/storage
+RUN apk add --no-cache git
+RUN git clone --depth 1 https://github.com/Satelink-Protocol/Satelink_Network.git /app/satelink
+RUN mkdir -p /app/satelink/agent/memory
 COPY agent/ ./agent/
 EXPOSE 3100
 CMD ["sh", "start-cloud.sh"]
