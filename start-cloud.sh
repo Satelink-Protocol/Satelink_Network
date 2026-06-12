@@ -1,5 +1,7 @@
 #!/bin/sh
 echo "Starting Paperclip on Railway..."
+cd /app/satelink && git pull origin main 2>/dev/null || true
+cd /app
 node -e "
 const http = require('http');
 const server = http.createServer((req, res) => {
