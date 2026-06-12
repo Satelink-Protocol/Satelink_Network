@@ -16,24 +16,6 @@
       "has": [{ "type": "host", "value": "app.satelink.network" }],
       "destination": "/satelink/os/overview",
       "permanent": false
-    },
-    {
-      "source": "/status",
-      "missing": [{ "type": "host", "value": "status.satelink.network" }],
-      "destination": "https://status.satelink.network/",
-      "permanent": true
-    },
-    {
-      "source": "/status/",
-      "missing": [{ "type": "host", "value": "status.satelink.network" }],
-      "destination": "https://status.satelink.network/",
-      "permanent": true
-    },
-    {
-      "source": "/status/:path*",
-      "missing": [{ "type": "host", "value": "status.satelink.network" }],
-      "destination": "https://status.satelink.network/:path*",
-      "permanent": true
     }
   ]
 }
