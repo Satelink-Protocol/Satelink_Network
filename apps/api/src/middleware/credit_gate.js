@@ -81,14 +81,30 @@ export function createCreditGate(db, logger) {
 
         log.warn(`${LOG_PREFIX} Payment required: wallet=${wallet} balance=${currentBalance} needed=${cost}`);
 
+        // Real deployed addresses as fallback — never tell a paying caller "not deployed yet"
+        // (the vault IS live at 0x80AF…; an unset env must not block deposits).
+        const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+        const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+        const API_BASE = process.env.API_BASE_URL || 'https://rpc.satelink.network';
+
         return res.status(402).json({
           error: 'Insufficient credits',
           balance_usdt: currentBalance,
           required_usdt: cost,
           rpc_method: method,
-          deposit_address: process.env.REVENUE_VAULT_ADDRESS || 'not deployed yet',
+          deposit_address: VAULT,
           network: 'Polygon Mainnet (chainId: 137)',
-          usdt_contract: process.env.USDT_CONTRACT_ADDRESS || 'not deployed yet',
+          usdt_contract: USDT,
+          payment: {
+            vault_address: VAULT,
+            token: 'USDT',
+            token_address: USDT,
+            chain_id: 137,
+            chain_name: 'Polygon',
+            minimum_deposit_usdt: parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50'),
+            deposit_url: `${API_BASE}/credits/initiate?amount=10`,
+            docs: 'https://docs.satelink.network/paid-tier'
+          },
           message: 'Deposit USDT to RevenueVault to continue. Low-balance auto-refill recommended.'
         });
       }

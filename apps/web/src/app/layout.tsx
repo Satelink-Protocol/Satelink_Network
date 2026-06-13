@@ -1,142 +1,79 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-
 import type { Metadata } from "next";
-import Script from "next/script";
 import "./globals.css";
-import "@/styles/satelink.css";
-import { Providers } from "@/components/providers";
+
+const FAVICON =
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23408A71' rx='18' width='100' height='100'/><text x='50' y='66' font-size='48' fill='white' text-anchor='middle' font-family='system-ui' font-weight='700'>S</text></svg>";
 
 export const metadata: Metadata = {
-  title:
-    "Satelink Network | Decentralized RPC Infrastructure for Machine Economies",
-  description:
-    "The infrastructure layer for autonomous machine economies. Decentralized RPC gateway with USDT settlement, multi-chain support, and 50% revenue share for node operators.",
-  keywords: [
-    "DePIN",
-    "decentralized RPC",
-    "blockchain infrastructure",
-    "Polygon RPC",
-    "Ethereum RPC",
-    "Arbitrum RPC",
-    "Base RPC",
-    "node operators",
-    "USDT settlement",
-    "machine economy",
-    "AI agents",
-    "DeFi bots",
-    "RPC gateway",
-  ],
-  authors: [{ name: "Satelink Network" }],
-  creator: "Satelink Network",
-  publisher: "Satelink Network",
   metadataBase: new URL("https://satelink.network"),
+  title: "Satelink - Decentralized Infrastructure Network | DePIN",
+  description:
+    "Run real workloads on distributed hardware. Developers pay per call, node operators earn USDT. On-chain settlement on Polygon.",
+  keywords:
+    "DePIN, decentralized infrastructure, RPC gateway, Polygon, USDT settlement, node operator earnings, Web3, blockchain API",
+  authors: [{ name: "Satelink Network" }],
+  robots: "index, follow",
+  alternates: { canonical: "https://satelink.network" },
+  icons: { icon: FAVICON },
   openGraph: {
-    title: "Satelink Network | Decentralized RPC Infrastructure",
-    description:
-      "Power your dApps, DeFi bots, and AI agents with decentralized RPC infrastructure. Earn USDT as a node operator.",
     type: "website",
     url: "https://satelink.network",
-    siteName: "Satelink Network",
-    locale: "en_US",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Satelink Network - Decentralized Infrastructure",
-      },
-    ],
+    title: "Satelink - Decentralized Infrastructure Network",
+    description:
+      "Monetize idle hardware with real workloads. On-chain USDT settlement on Polygon.",
+    images: ["https://satelink.network/og-image.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Satelink Network | Decentralized RPC Infrastructure",
-    description:
-      "Power your dApps, DeFi bots, and AI agents with decentralized RPC infrastructure.",
-    images: ["/og-image.png"],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
+    site: "@satelinknet",
+    title: "Satelink - Decentralized Infrastructure",
+    description: "Monetize idle hardware. Real workloads. On-chain settlement.",
   },
 };
 
-const jsonLd = {
+const ORG_JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
+  "@type": "Organization",
   name: "Satelink Network",
-  url: "https://satelink.network",
-  applicationCategory: "DeveloperApplication",
-  operatingSystem: "Web",
   description:
-    "Decentralized RPC gateway for DeFi bots, AI agents, and machine networks. USDT settlement on Polygon.",
-  offers: [
-    { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Basic", price: "10", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Pro", price: "50", priceCurrency: "USD" },
-    {
-      "@type": "Offer",
-      name: "Enterprise",
-      price: "200",
-      priceCurrency: "USD",
-    },
+    "Decentralized infrastructure platform with on-chain USDT settlement on Polygon",
+  url: "https://satelink.network",
+  logo: "https://satelink.network/logo.svg",
+  foundingDate: "2025",
+  sameAs: [
+    "https://github.com/Satelink-Protocol",
+    "https://twitter.com/satelinknet",
+    "https://discord.gg/satelink",
   ],
 };
 
+// Runs before paint to avoid a flash of the wrong theme (same logic as the
+// approved static page's initTheme()).
+const THEME_INIT = `(function(){try{var s=localStorage.getItem('satelink-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(d?'dark':'light'));}catch(e){}})();`;
+
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
-        <link rel="dns-prefetch" href="https://rpc.satelink.network" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
-        <meta name="application-name" content="Satelink Network" />
-        <meta name="theme-color" content="#2C3333" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }}
         />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
-      <body
-        className="antialiased custom-scrollbar"
-        style={{
-          background: "var(--bg-page)",
-          color: "var(--text-primary)",
-          fontFamily: "var(--font-body)",
-        }}
-      >
-        <Providers>{children}</Providers>
-
-        {/* Google Analytics */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-GS4195MH7N"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-GS4195MH7N');
-          `}
-        </Script>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
