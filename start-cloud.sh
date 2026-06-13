@@ -2,7 +2,7 @@
 echo "Starting Paperclip on Railway... (claude-code enabled)"
 cd /app/satelink && git pull origin main 2>/dev/null || true
 cd /app
-node -e "
+NODE_OPTIONS="--max-old-space-size=64" node -e "
 const http = require('http');
 const server = http.createServer((req, res) => {
   if (req.url === '/health' || req.url === '/api/health') {
@@ -18,4 +18,4 @@ const server = http.createServer((req, res) => {
 server.listen(3100, '0.0.0.0', () => console.log('[proxy] ready'));
 " &
 sleep 3
-PORT=3101 exec paperclipai onboard --yes --run
+PORT=3101 NODE_OPTIONS="--max-old-space-size=384" exec paperclipai onboard --yes --run
