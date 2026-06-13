@@ -71,9 +71,9 @@ export async function recordRpcRevenue({ pool, chain, method, apiKey, source, re
 
   try {
     await pool.query(
-      `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000)]
+      `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000), chain || null, method || null, source || null]
     );
     console.log(`[Billing] ✓ $${costUsdt}`);
 

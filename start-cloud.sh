@@ -44,7 +44,7 @@ if [ -n "${ANTHROPIC_API_KEY}" ]; then
     const settings = {
       hasCompletedOnboarding: true,
       autoUpdaterStatus: 'disabled',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       largeContextModel: 'claude-sonnet-4-6',
       smallModel: 'claude-haiku-4-5-20251001',
       theme: 'dark'
