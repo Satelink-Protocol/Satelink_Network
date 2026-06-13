@@ -97,13 +97,41 @@ export function createFreeTierGate(logger, redis) {
       log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${FREE_TIER_LIMIT}`);
 
       const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+      const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+      const MIN_DEPOSIT = parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50');
+      const API_BASE = process.env.API_BASE_URL || 'https://rpc.satelink.network';
+      const upgradeUrl = `${API_BASE}/credits/initiate?amount=10`;
 
-      return res.status(429).json({
-        error: 'rate_limit_exceeded',
-        upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
+      // 402 Payment Required (not 429): a JSON-RPC error a caller's code can act on.
+      // 429 was read by RPC clients as "rate limited, back off & retry" — which is why
+      // blocked IPs hammered the gate (counter inflated to 775k+) instead of depositing.
+      // error.code -32005 ("limit exceeded") is the convention major RPC providers use.
+      return res.status(402).json({
+        jsonrpc: '2.0',
+        id: req.body?.id ?? null,
+        error: {
+          code: -32005,
+          message: 'Free tier daily limit reached. Deposit USDT to continue.',
+          data: {
+            error_code: 'FREE_TIER_LIMIT_REACHED',
+            limit: FREE_TIER_LIMIT,
+            period: 'daily',
+            resets_at: new Date(resetAt).toISOString(),
+            payment: {
+              vault_address: VAULT,
+              token: 'USDT',
+              token_address: USDT,
+              chain_id: 137,
+              chain_name: 'Polygon',
+              minimum_deposit_usdt: MIN_DEPOSIT,
+              deposit_url: upgradeUrl,
+              docs: 'https://docs.satelink.network/paid-tier'
+            }
+          }
+        },
+        // legacy top-level fields kept for backward-compat with any existing consumer
         deposit_address: VAULT,
-        network: 'Polygon Mainnet',
-        docs: 'https://docs.satelink.network/paid-tier'
+        upgrade_url: upgradeUrl
       });
     }
 
