@@ -56,9 +56,10 @@ if [ -n "${ANTHROPIC_API_KEY}" ]; then
   " 2>&1 || echo "[satelink] WARNING: credentials write failed"
 
   # Verify claude CLI can authenticate (non-interactive test)
+  # -p print mode + text output; skip-permissions because container runs as root (IS_SANDBOX=1)
   TEST_RESULT=$(ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
     claude -p "reply with exactly: SATELINK_AUTH_OK" \
-    --no-streaming 2>&1 | head -3 || echo "CLI_TEST_FAILED")
+    --output-format text --dangerously-skip-permissions 2>&1 | head -3 || echo "CLI_TEST_FAILED")
   echo "[satelink] Claude CLI auth test: ${TEST_RESULT}"
 
   if echo "${TEST_RESULT}" | grep -q "SATELINK_AUTH_OK\|auth_ok\|OK"; then
