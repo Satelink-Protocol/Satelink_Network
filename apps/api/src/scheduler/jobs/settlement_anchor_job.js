@@ -25,9 +25,16 @@ const ERC20_ABI = [
 ];
 
 // Epochs below this revenue are skipped — anchoring dust epochs costs more
-// in gas than the revenue being anchored. They stay unanchored until rolled
-// into a future batch with real revenue.
-const MIN_ANCHOR_REVENUE_USDT = parseFloat(process.env.MIN_ANCHOR_REVENUE_USDT || '1.0');
+// in gas than the revenue being anchored.
+//
+// Default lowered 1.0 -> 0.01 (audit 2026-06-13): at 1.0, no epoch ever
+// qualified (epochs run ~0.0025 USDT each) so settlement never fired. Override
+// via the MIN_ANCHOR_REVENUE_USDT Railway env var:
+//   - testing: set 0.0001 to force settlement on a single paid call
+//   - at scale: raise to 0.50+ once gas-per-tx exceeds the per-epoch revenue
+// NOTE: 0.01 still will not catch today's ~0.0025 USDT phantom epochs; it only
+// fires once a paying wallet pushes an epoch's real revenue >= 0.01 USDT.
+const MIN_ANCHOR_REVENUE_USDT = parseFloat(process.env.MIN_ANCHOR_REVENUE_USDT || '0.01');
 
 export class SettlementAnchorJob {
     constructor(pool) {
