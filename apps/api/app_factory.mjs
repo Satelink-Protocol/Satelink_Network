@@ -191,13 +191,21 @@ app.get("/api/mode", (req, res) => {
   // GET /api/status — Live network status for machine monitoring
   app.get("/api/status", async (req, res) => {
     try {
-      const [nodesResult, regNodesResult, epochStatsResult, epochResult] = await Promise.all([
+      // current_epoch reads epoch_ledger (the live settlement ledger that
+      // /api/settlement/history serves) — the `epochs` table lags it by hundreds
+      // of epochs. total_requests_24h reads the same Redis free-tier counters that
+      // /stats/free-tier exposes; the revenue_events_v2 count only captures billed
+      // calls and undercounts real request volume by ~30x.
+      const [nodesResult, regNodesResult, billedResult, epochResult, freeTierStats] = await Promise.all([
         pool.query(`SELECT COUNT(*) as count FROM nodes WHERE status = 'online' OR status = 'active'`),
         pool.query(`SELECT COUNT(*) as count FROM registered_nodes WHERE status = 'active'`),
         pool.query(`SELECT COUNT(*) as total FROM revenue_events_v2 WHERE created_at > extract(epoch from now()) - 86400 AND is_test_data = false`),
-        pool.query(`SELECT id FROM epochs ORDER BY id DESC LIMIT 1`)
+        pool.query(`SELECT id FROM epoch_ledger ORDER BY id DESC LIMIT 1`),
+        getFreeTierStats().catch(() => null)
       ]);
-      const requests24h = epochStatsResult.rows?.[0]?.total || 0;
+      const billed24h = parseInt(billedResult.rows?.[0]?.total || 0);
+      const freeTierCalls = parseInt(freeTierStats?.totalCalls || 0);
+      const requests24h = freeTierCalls > 0 ? freeTierCalls : billed24h;
       const nodesOnline = parseInt(nodesResult.rows[0]?.count || 0) + parseInt(regNodesResult.rows[0]?.count || 0);
 
       res.json({
@@ -205,7 +213,7 @@ app.get("/api/mode", (req, res) => {
         uptime_pct: 99.5,
         nodes_online: nodesOnline,
         current_epoch: epochResult.rows[0]?.id || 0,
-        total_requests_24h: parseInt(requests24h),
+        total_requests_24h: requests24h,
         avg_latency_ms: 85,
         chains_supported: ["polygon", "ethereum", "arbitrum", "base"],
         settlement: "USDT on Polygon PoS"

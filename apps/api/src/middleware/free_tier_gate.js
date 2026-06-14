@@ -7,6 +7,9 @@
 import { createHash } from 'crypto';
 
 const FREE_TIER_LIMIT = parseInt(process.env.FREE_TIER_DAILY_LIMIT || '500');
+// Above this many calls/day an IP is treated as an automated scraper, not a
+// prospective customer, and is hard-blocked with 429 instead of billed via 402.
+const ABUSE_THRESHOLD = parseInt(process.env.ABUSE_THRESHOLD || '5000');
 const LOG_PREFIX = '[FreeTierGate]';
 
 // Module-level Redis reference — set when createFreeTierGate is called
@@ -91,6 +94,31 @@ export function createFreeTierGate(logger, redis) {
       counter.count++;
       count = counter.count;
       resetAt = counter.resetAt;
+    }
+
+    // Abuse tier: >ABUSE_THRESHOLD calls/day = automated scraper that ignores the
+    // 402 and retries. Return 429 with Retry-After so it backs off until midnight UTC
+    // instead of hammering the gate and burning Redis quota real customers need.
+    if (count > ABUSE_THRESHOLD) {
+      const secondsUntilReset = Math.max(1, Math.floor((resetAt - Date.now()) / 1000));
+      log.warn(`${LOG_PREFIX} Abuse limit exceeded: ip=${ip} count=${count} threshold=${ABUSE_THRESHOLD}`);
+
+      res.set('Retry-After', String(secondsUntilReset));
+      return res.status(429).json({
+        jsonrpc: '2.0',
+        id: req.body?.id ?? null,
+        error: {
+          code: -32029,
+          message: 'Daily request limit exceeded. Automated access detected.',
+          data: {
+            error_code: 'ABUSE_LIMIT_EXCEEDED',
+            calls_today: count,
+            limit: ABUSE_THRESHOLD,
+            resets_at: new Date(resetAt).toISOString(),
+            retry_after_seconds: secondsUntilReset
+          }
+        }
+      });
     }
 
     if (count > FREE_TIER_LIMIT) {
