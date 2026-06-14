@@ -414,7 +414,7 @@ function ChainlistStatus() {
             </td>
             <td>chainlist.org</td>
             <td>
-              <span className="os-pill pending">Pending maintainer</span>
+              <span className="os-pill bad">Closed — validation failed, needs reopen</span>
             </td>
           </tr>
         </tbody>
