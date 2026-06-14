@@ -92,12 +92,16 @@ export class SettlementAnchorJob {
 
         // 1. Find closed epochs without settlement_batches
         const result = await this.pool.query(`
-            SELECT e.id, e.total_revenue_usdt, e.platform_share_usdt, e.ends_at
-            FROM epochs e
+            SELECT e.id,
+                   e.total_revenue    AS total_revenue_usdt,
+                   e.platform_fee     AS platform_share_usdt,
+                   e.closed_at        AS ends_at
+            FROM epoch_ledger e
             LEFT JOIN settlement_batches sb ON sb.epoch_id = e.id
             WHERE e.status = 'CLOSED'
               AND sb.id IS NULL
-              AND e.total_revenue_usdt >= $1
+              AND (e.tx_hash IS NULL OR e.tx_hash = '')
+              AND e.total_revenue >= $1
             ORDER BY e.id ASC
             LIMIT 10
         `, [MIN_ANCHOR_REVENUE_USDT]);
@@ -106,12 +110,12 @@ export class SettlementAnchorJob {
         // Report dust epochs explicitly so "0 anchored" is never silent
         const dustResult = await this.pool.query(`
             SELECT COUNT(*)::integer AS cnt
-            FROM epochs e
+            FROM epoch_ledger e
             LEFT JOIN settlement_batches sb ON sb.epoch_id = e.id
             WHERE e.status = 'CLOSED'
               AND sb.id IS NULL
-              AND e.total_revenue_usdt > 0
-              AND e.total_revenue_usdt < $1
+              AND e.total_revenue > 0
+              AND e.total_revenue < $1
         `, [MIN_ANCHOR_REVENUE_USDT]);
         const dustCount = dustResult.rows[0]?.cnt || 0;
         if (dustCount > 0) {
@@ -234,8 +238,8 @@ export class SettlementAnchorJob {
         // (which reads epoch_ledger) shows the epoch as settled on-chain.
         if (status === 'confirmed' && txHash) {
             await this.pool.query(
-                `UPDATE epoch_ledger SET tx_hash = $1 WHERE epoch_id = $2`,
-                [txHash, `epoch-${epoch.id}`]
+                `UPDATE epoch_ledger SET tx_hash = $1 WHERE id = $2`,
+                [txHash, epoch.id]
             ).catch(e => console.warn(`[SettlementAnchor] epoch_ledger sync failed: ${e.message}`));
         }
 
@@ -249,8 +253,11 @@ export class SettlementAnchorJob {
      */
     async anchorEpochById(epochId) {
         const epochResult = await this.pool.query(`
-            SELECT id, total_revenue_usdt, platform_share_usdt, ends_at
-            FROM epochs WHERE id = $1 AND status = 'CLOSED'
+            SELECT id,
+                   total_revenue  AS total_revenue_usdt,
+                   platform_fee   AS platform_share_usdt,
+                   closed_at      AS ends_at
+            FROM epoch_ledger WHERE id = $1 AND status = 'CLOSED'
         `, [epochId]);
         const epoch = epochResult.rows[0];
 
