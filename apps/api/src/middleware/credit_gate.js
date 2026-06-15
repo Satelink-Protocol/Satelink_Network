@@ -5,6 +5,8 @@
 // Only activates for requests with x-wallet-address header
 // Fail-open: on DB error, request is served (never blocks on infra failure)
 
+import { paymentRequiredResponse } from '../utils/payment_required.js';
+
 const DEFAULT_COST_USDT = 0.00003; // $0.000030 — matches seed pricing
 const LOG_PREFIX = '[CreditGate]';
 
@@ -87,7 +89,7 @@ export function createCreditGate(db, logger) {
         const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
         const API_BASE = process.env.API_BASE_URL || 'https://rpc.satelink.network';
 
-        return res.status(402).json({
+        return res.status(402).json(paymentRequiredResponse({
           error: 'Insufficient credits',
           balance_usdt: currentBalance,
           required_usdt: cost,
@@ -106,7 +108,7 @@ export function createCreditGate(db, logger) {
             docs: 'https://docs.satelink.network/paid-tier'
           },
           message: 'Deposit USDT to RevenueVault to continue. Low-balance auto-refill recommended.'
-        });
+        }));
       }
 
       // Attach metadata for downstream logging

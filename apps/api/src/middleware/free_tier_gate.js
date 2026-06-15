@@ -5,6 +5,7 @@
 // Resets daily at midnight UTC. Redis-backed when available; falls back to in-memory.
 
 import { createHash } from 'crypto';
+import { paymentRequiredResponse } from '../utils/payment_required.js';
 
 const FREE_TIER_LIMIT = parseInt(process.env.FREE_TIER_DAILY_LIMIT || '500');
 // Above this many calls/day an IP is treated as an automated scraper, not a
@@ -144,7 +145,10 @@ export function createFreeTierGate(logger, redis) {
       // 429 was read by RPC clients as "rate limited, back off & retry" — which is why
       // blocked IPs hammered the gate (counter inflated to 775k+) instead of depositing.
       // error.code -32005 ("limit exceeded") is the convention major RPC providers use.
-      return res.status(402).json({
+      // Machine-readable top-level fields (ok/code/deposit/docs/notify_url) are
+      // merged in for automated payers; the JSON-RPC error object below is
+      // preserved verbatim for RPC clients that read error.code -32005.
+      return res.status(402).json(paymentRequiredResponse({
         jsonrpc: '2.0',
         id: req.body?.id ?? null,
         error: {
@@ -170,7 +174,7 @@ export function createFreeTierGate(logger, redis) {
         // legacy top-level fields kept for backward-compat with any existing consumer
         deposit_address: VAULT,
         upgrade_url: upgradeUrl
-      });
+      }));
     }
 
     // Under limit — track usage and pass through
