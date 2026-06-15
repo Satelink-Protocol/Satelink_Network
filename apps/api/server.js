@@ -21,6 +21,7 @@ import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
+import { startConversionMonitorScheduler } from "./src/jobs/conversion_monitor_job.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
@@ -489,6 +490,17 @@ async function start() {
     console.log('[BOOT] ✅ Settlement anchor job registered (10min interval)');
   } catch (err) {
     console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
+  }
+
+  // Step 12b1b: Start conversion monitor job — every 6h reads /system/free-tier,
+  // finds developer-classified IPs that hit the 402 wall, and posts Discord
+  // alerts for the warmest conversion leads. No-ops gracefully if the feed or
+  // DISCORD_WEBHOOK_URL is unavailable.
+  try {
+    startConversionMonitorScheduler(pool);
+    console.log('[BOOT] ✅ Conversion monitor job registered (6h interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Conversion monitor job failed (non-fatal):', err.message);
   }
 
   // Step 12b3: Start gas manager job — watches the settlement signer's POL
