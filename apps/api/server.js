@@ -20,6 +20,7 @@ import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
+import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
@@ -488,6 +489,16 @@ async function start() {
     console.log('[BOOT] ✅ Settlement anchor job registered (10min interval)');
   } catch (err) {
     console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
+  }
+
+  // Step 12b3: Start gas manager job — watches the settlement signer's POL
+  // balance and alerts Discord when it drops below threshold. A signer out of
+  // gas silently blocks the anchor above from submitting any on-chain tx.
+  try {
+    startGasManagerScheduler(pool, 30);
+    console.log('[BOOT] ✅ Gas manager job registered (30min interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Gas manager job failed (non-fatal):', err.message);
   }
 
   // Step 12c: Start data retention job (cleanup old logs/metrics daily at 3 AM UTC)
