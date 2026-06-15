@@ -20,6 +20,7 @@ import { createMachineAccessRouter } from "./src/machine-access/index.js";
 import { createAdminMalRouter } from "./src/routes/admin_mal_route.mjs";
 import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
+import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
@@ -384,6 +385,10 @@ app.get("/api/mode", (req, res) => {
 
   // Credits API - autonomous payer balance and deposit queries
   app.use("/credits", createCreditsRouter(pool, console));
+
+  // Deposit notify webhook - machines signal after depositing; DepositListener
+  // still owns on-chain confirmation. Closes the M2M loop from the 402 notify_url.
+  app.use("/api/deposit", createDepositNotifyRouter(pool));
 
   return app;
 }

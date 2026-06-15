@@ -1,3 +1,5 @@
+import { paymentRequiredResponse } from '../utils/payment_required.js';
+
 export function createBillingMiddleware(db) {
     return function enforceBilling(opType) {
         return (req, res, next) => {
@@ -5,7 +7,7 @@ export function createBillingMiddleware(db) {
 
             if (!apiKey) {
                 // Return 402 if no api key because we are monetizing ops now
-                return res.status(402).json({ ok: false, error: "Payment Required: Missing X-Enterprise-Key" });
+                return res.status(402).json(paymentRequiredResponse({ ok: false, error: "Payment Required: Missing X-Enterprise-Key" }));
             }
 
             try {
@@ -28,12 +30,12 @@ export function createBillingMiddleware(db) {
 
                 // Check balance
                 if (Number(client.deposit_balance) < cost) {
-                    return res.status(402).json({
+                    return res.status(402).json(paymentRequiredResponse({
                         ok: false,
                         error: "Payment Required: Insufficient deposit balance",
                         required: cost,
                         balance: client.deposit_balance
-                    });
+                    }));
                 }
 
                 // Deduct balance and record revenue event in an atomic transaction
