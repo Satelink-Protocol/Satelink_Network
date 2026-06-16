@@ -21,6 +21,7 @@
         "ioredis": "^5.10.0",
         "jsonwebtoken": "^9.0.3",
         "next": "0.4.1",
+        "node-cron": "^4.2.1",
         "node-fetch": "^3.3.2",
         "pg": "^8.20.0",
         "pino": "^10.3.1",

@@ -159,3 +159,6 @@ scripts/health_check.sh
 chainlist/
 audit/
 apps/web/node_modules/
+
+# Local-only signer refund script — never deploy; precaution even with no key hardcoded
+scripts/refund_signer.js
