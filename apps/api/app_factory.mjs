@@ -25,6 +25,8 @@ import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
+import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
+import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP)
@@ -34,6 +36,14 @@ export function createApp(pool, redis) {
   // Attach base middleware (CORS, helmet, security headers)
   attachBaseMiddleware(app);
   app.use(compression({ level: 6, threshold: 1024 }));
+
+  // Ensure Admin Command Center tables exist before routes are mounted.
+  // IF NOT EXISTS — safe on every boot. Fire-and-forget with a logged catch
+  // (same pattern as ensureWebhookTable below); the Railway Postgres host is
+  // only reachable inside Railway, so this is how the migration gets applied.
+  ensureAdminTables(pool)
+    .then(() => console.log('[Admin] Tables ensured (developer_intel, outreach_campaigns, automation_logs)'))
+    .catch(e => console.error('[Admin] Table setup failed:', e.message));
 
   // Core health endpoints
   app.get("/healthz", (req, res) => res.status(200).json({ status: "ok" }));
@@ -389,6 +399,11 @@ app.get("/api/mode", (req, res) => {
   // Deposit notify webhook - machines signal after depositing; DepositListener
   // still owns on-chain confirmation. Closes the M2M loop from the 402 notify_url.
   app.use("/api/deposit", createDepositNotifyRouter(pool));
+
+  // Admin Command Center — protected by ADMIN_SECRET_TOKEN (x-admin-token header).
+  // express.json() is applied here so the JSON-only admin routes parse bodies
+  // without forcing a parser onto the high-volume /rpc path above.
+  app.use("/admin", requireAdminAuth, express.json({ limit: '256kb' }), createAdminRouter(pool, redis));
 
   return app;
 }

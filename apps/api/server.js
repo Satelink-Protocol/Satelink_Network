@@ -22,6 +22,7 @@ import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
 import { startConversionMonitorScheduler } from "./src/jobs/conversion_monitor_job.js";
+import { startAdminCrons } from "./src/admin/cron_scheduler.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
 import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
@@ -528,6 +529,21 @@ async function start() {
     console.log('[BOOT] ✅ DB cleanup job started (daily at 3:00 UTC)');
   } catch (err) {
     console.error('[BOOT] ⚠️ DB cleanup job failed (non-fatal):', err.message);
+  }
+
+  // Step 12e: Admin Command Center crons (ip-classifier, customer-zero, outreach).
+  // Off by default — set ADMIN_CRONS_ENABLED=1 to start them. This keeps the
+  // admin API/dashboard usable (manual triggers always work) without silently
+  // starting background ip-api lookups and Discord posts on deploy.
+  if (process.env.ADMIN_CRONS_ENABLED === '1') {
+    try {
+      startAdminCrons(pool, redis);
+      console.log('[BOOT] ✅ Admin Command Center crons started');
+    } catch (err) {
+      console.error('[BOOT] ⚠️ Admin crons failed (non-fatal):', err.message);
+    }
+  } else {
+    console.log('[BOOT] ℹ️ Admin Command Center crons disabled (set ADMIN_CRONS_ENABLED=1 to enable)');
   }
 
   // Step 13: Bind to port FIRST (Railway healthcheck needs this fast)
