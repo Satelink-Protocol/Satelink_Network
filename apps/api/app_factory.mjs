@@ -26,6 +26,7 @@ import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/r
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
+import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP)
@@ -35,6 +36,14 @@ export function createApp(pool, redis) {
   // Attach base middleware (CORS, helmet, security headers)
   attachBaseMiddleware(app);
   app.use(compression({ level: 6, threshold: 1024 }));
+
+  // Ensure Admin Command Center tables exist before routes are mounted.
+  // IF NOT EXISTS — safe on every boot. Fire-and-forget with a logged catch
+  // (same pattern as ensureWebhookTable below); the Railway Postgres host is
+  // only reachable inside Railway, so this is how the migration gets applied.
+  ensureAdminTables(pool)
+    .then(() => console.log('[Admin] Tables ensured (developer_intel, outreach_campaigns, automation_logs)'))
+    .catch(e => console.error('[Admin] Table setup failed:', e.message));
 
   // Core health endpoints
   app.get("/healthz", (req, res) => res.status(200).json({ status: "ok" }));
