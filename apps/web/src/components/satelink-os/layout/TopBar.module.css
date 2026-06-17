@@ -1,0 +1,90 @@
+.bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--sat-bg-1);
+  border-bottom: 1px solid var(--sat-border);
+  flex-shrink: 0;
+}
+.brand {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--sat-text-muted);
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px;
+  min-width: 200px;
+  background: var(--sat-bg-0);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+}
+.searchIcon {
+  color: var(--sat-text-dim);
+  font-size: 12px;
+}
+.searchText {
+  flex: 1;
+  font-family: var(--sat-font-sans);
+  font-size: 12px;
+  color: var(--sat-text-dim);
+}
+.kbd {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  color: var(--sat-text-dim);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-sm);
+  padding: 1px 4px;
+}
+.spacer {
+  flex: 1;
+}
+.env,
+.stat,
+.live {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.envLabel,
+.statLabel {
+  font-family: var(--sat-font-mono);
+  font-size: 8px;
+  color: var(--sat-text-muted);
+}
+.envValue {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--sat-secondary);
+}
+.statValue {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+.statValue[data-tone='primary'] { color: var(--sat-primary); }
+.statValue[data-tone='secondary'] { color: var(--sat-secondary); }
+.statValue[data-tone='accent'] { color: var(--sat-accent); }
+.statValue[data-tone='success'] { color: var(--sat-success); }
+.statValue[data-tone='warn'] { color: var(--sat-warn); }
+.statValue[data-tone='danger'] { color: var(--sat-danger); }
+.statValue[data-tone='info'] { color: var(--sat-info); }
+.statValue[data-tone='muted'] { color: var(--sat-text-muted); }
+.divider {
+  width: 1px;
+  height: 14px;
+  background: var(--sat-border);
+}
+.time {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  color: var(--sat-text-muted);
+}

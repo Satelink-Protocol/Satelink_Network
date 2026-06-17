@@ -1,0 +1,19 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sat-space-sm);
+  padding: var(--sat-space-sm) 0;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sat-primary);
+  box-shadow: var(--sat-glow-primary);
+  animation: sat-pulse 1.4s ease-in-out infinite;
+}
+.text {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  color: var(--sat-text-muted);
+}

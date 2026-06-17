@@ -1,0 +1,17 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--sat-bg-0);
+  color: var(--sat-text);
+}
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.content {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+}

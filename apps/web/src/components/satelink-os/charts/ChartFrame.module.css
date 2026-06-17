@@ -1,0 +1,9 @@
+.frame {
+  background: var(--sat-bg-1);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  padding: 12px 14px;
+}
+.body {
+  width: 100%;
+}

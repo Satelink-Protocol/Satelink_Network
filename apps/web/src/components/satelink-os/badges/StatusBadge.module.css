@@ -1,0 +1,50 @@
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  border: 1px solid;
+  border-radius: var(--sat-radius-sm);
+}
+.badge[data-tone='primary'] {
+  color: var(--sat-primary);
+  border-color: color-mix(in srgb, var(--sat-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-primary) 9%, transparent);
+}
+.badge[data-tone='secondary'] {
+  color: var(--sat-secondary);
+  border-color: color-mix(in srgb, var(--sat-secondary) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-secondary) 9%, transparent);
+}
+.badge[data-tone='accent'] {
+  color: var(--sat-accent);
+  border-color: color-mix(in srgb, var(--sat-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-accent) 9%, transparent);
+}
+.badge[data-tone='success'] {
+  color: var(--sat-success);
+  border-color: color-mix(in srgb, var(--sat-success) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-success) 9%, transparent);
+}
+.badge[data-tone='warn'] {
+  color: var(--sat-warn);
+  border-color: color-mix(in srgb, var(--sat-warn) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-warn) 9%, transparent);
+}
+.badge[data-tone='danger'] {
+  color: var(--sat-danger);
+  border-color: color-mix(in srgb, var(--sat-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-danger) 9%, transparent);
+}
+.badge[data-tone='info'] {
+  color: var(--sat-info);
+  border-color: color-mix(in srgb, var(--sat-info) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-info) 9%, transparent);
+}
+.badge[data-tone='muted'] {
+  color: var(--sat-text-muted);
+  border-color: color-mix(in srgb, var(--sat-text-muted) 40%, transparent);
+  background: color-mix(in srgb, var(--sat-text-muted) 9%, transparent);
+}
