@@ -118,7 +118,7 @@ const Badge = ({ label, color = C.teal }) => (
 );
 
 const Panel = ({ children, style }) => (
-  <div style={{ background: C.p1, border: `1px solid ${C.border}`, padding: 16, ...style }}>{children}</div>
+  <div style={{ background: C.p1, border: `1px solid ${C.border}`, padding: "12px 14px", ...style }}>{children}</div>
 );
 
 const SectionLabel = ({ children, right }) => (
@@ -130,42 +130,42 @@ const SectionLabel = ({ children, right }) => (
   </div>
 );
 
-const Metric = ({ label, value, sub, color = C.teal, size = 22, alert }) => (
+const Metric = ({ label, value, sub, color = C.teal, size = 28, alert }) => (
   <div
     style={{
-      padding: "12px 14px",
+      padding: "10px 14px",
       background: C.p1,
       border: `1px solid ${alert ? C.red : C.border}`,
       borderTop: `2px solid ${alert ? C.red : color}`,
       position: "relative",
+      maxHeight: 72,
+      overflow: "hidden",
     }}
   >
     {alert && <span style={{ position: "absolute", top: 6, right: 8, color: C.red, fontSize: 11 }}>⚠</span>}
-    <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 2, marginBottom: 5 }}>{label}</div>
-    <div style={{ color, fontSize: size, fontWeight: 700, fontFamily: FONT.mono, lineHeight: 1 }}>{value}</div>
-    {sub && <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, marginTop: 4 }}>{sub}</div>}
+    <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 2, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
+    <div style={{ color, fontSize: size, fontWeight: 700, fontFamily: FONT.mono, lineHeight: 1, whiteSpace: "nowrap" }}>{value}</div>
+    {sub && <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, marginTop: 3 }}>{sub}</div>}
   </div>
 );
 
-// Consistent placeholder for every view that has no backend yet.
+// Missing data is a single dim line — never a full bordered panel.
 const NoBackendYet = ({ label, note }) => (
   <div
     style={{
-      background: C.p1,
-      border: `1px dashed ${C.border}`,
-      padding: 18,
+      height: 24,
       display: "flex",
-      flexDirection: "column",
+      alignItems: "center",
       gap: 6,
-      minHeight: 96,
-      justifyContent: "center",
+      borderBottom: `1px solid ${C.border}`,
+      color: C.muted,
+      fontSize: 10,
+      fontFamily: FONT.mono,
+      letterSpacing: 1,
     }}
   >
-    <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 3 }}>
-      ── {String(label).toUpperCase()}
-    </div>
-    <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT.ui, fontWeight: 600 }}>No backend yet</div>
-    {note && <div style={{ color: C.muted, fontSize: 10, fontFamily: FONT.mono, opacity: 0.7 }}>{note}</div>}
+    <span>── {String(label).toUpperCase()}</span>
+    {note && <span style={{ opacity: 0.7 }}>· {note}</span>}
   </div>
 );
 
@@ -281,8 +281,8 @@ const LiveFeed = ({ feed, feedState }) => (
 
 // ─── NOC ────────────────────────────────────────────────────────────────────────
 const NOCView = ({ status, statusErr, feed, feedState }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 12 }}>
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <Panel>
         <SectionLabel right={<Badge label="DESIGN" color={C.muted} />}>Network Architecture</SectionLabel>
         <Topology />
@@ -297,36 +297,17 @@ const NOCView = ({ status, statusErr, feed, feedState }) => (
           label="SETTLEMENT MODE"
           value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
           color={status ? (status.dryRun ? C.warn : C.red) : C.muted}
-          size={18}
           alert={status ? !status.dryRun : false}
         />
-        <Metric
-          label="SIGNER POL"
-          value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"}
-          color={C.ice}
-          size={18}
-        />
-        <Metric
-          label="ANCHOR THRESHOLD"
-          value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"}
-          sub="USDT"
-          color={C.teal}
-          size={18}
-        />
-        <Metric
-          label="SETTLED TXs"
-          value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"}
-          sub="on-chain epochs"
-          color={C.green}
-          size={18}
-        />
+        <Metric label="SIGNER POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} color={C.ice} />
+        <Metric label="ANCHOR THRESHOLD" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" color={C.teal} />
+        <Metric label="SETTLED TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" color={C.green} />
       </div>
       {statusErr && <ErrLine msg={`Could not load settlement status: ${statusErr}`} />}
 
-      <NoBackendYet label="RPC Metrics" note="req/sec · p50 · p95 · p99 · error rate — requires telemetry pipeline" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <NoBackendYet label="24h Request Volume" note="Requires time-series store" />
-        <NoBackendYet label="Provider Pool Utilization" note="Requires upstream stats endpoint" />
+      {/* RPC telemetry has no backend yet — one very dim footer note, not panels. */}
+      <div style={{ color: C.border, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 1, marginTop: 4 }}>
+        RPC METRICS · 24H VOLUME · PROVIDER POOL — requires telemetry pipeline
       </div>
     </div>
 
@@ -336,16 +317,12 @@ const NOCView = ({ status, statusErr, feed, feedState }) => (
 
 // ─── Intelligence (no backend yet) ──────────────────────────────────────────────
 const IntelView = () => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-    <div style={{ gridColumn: "1/-1" }}>
-      <NoBackendYet label="Provider Intelligence Matrix" note="latency · success% · traffic share — requires upstream telemetry" />
-    </div>
-    <NoBackendYet label="Traffic by Country" note="Requires geo aggregation endpoint" />
-    <NoBackendYet label="Top Sources / ASN / Method" note="Requires aggregation endpoint" />
-    <div style={{ gridColumn: "1/-1" }}>
-      <NoBackendYet label="Latency Distribution" note="Requires telemetry pipeline" />
-    </div>
-    <div style={{ gridColumn: "1/-1", color: C.muted, fontFamily: FONT.mono, fontSize: 10 }}>
+  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <NoBackendYet label="Provider Intelligence Matrix" note="latency · success% · traffic share" />
+    <NoBackendYet label="Traffic by Country" note="geo aggregation endpoint" />
+    <NoBackendYet label="Top Sources / ASN / Method" note="aggregation endpoint" />
+    <NoBackendYet label="Latency Distribution" note="telemetry pipeline" />
+    <div style={{ color: C.muted, fontFamily: FONT.mono, fontSize: 10, marginTop: 12 }}>
       Real per-IP classification (developer / machine leads) lives in the War Room view.
     </div>
   </div>
@@ -364,8 +341,8 @@ const WarRoomView = ({ devs, devErr, busy, advance, outreach, classify }) => {
   const maxN = Math.max(1, ...funnel.map((s) => s.n || 0));
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 12 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <Panel>
           <SectionLabel>Conversion Funnel</SectionLabel>
           {!devs && !devErr && <Loading />}
@@ -419,7 +396,7 @@ const WarRoomView = ({ devs, devErr, busy, advance, outreach, classify }) => {
                 <div
                   key={l.ip}
                   style={{
-                    padding: "10px 12px",
+                    padding: "8px 12px",
                     background: C.p2,
                     border: `1px solid ${C.border}`,
                     borderLeft: `3px solid ${STAGE_COLOR[l.status] || C.muted}`,
@@ -429,12 +406,12 @@ const WarRoomView = ({ devs, devErr, busy, advance, outreach, classify }) => {
                     flexWrap: "wrap",
                   }}
                 >
-                  <span style={{ color: C.teal, fontSize: 11, fontFamily: FONT.mono, minWidth: 120 }}>{l.ip}</span>
-                  <span style={{ color: C.muted, fontSize: 10, fontFamily: FONT.ui, minWidth: 150 }}>
+                  <span style={{ color: C.teal, fontSize: 13, fontWeight: 700, fontFamily: FONT.mono, minWidth: 130 }}>{l.ip}</span>
+                  <span style={{ color: C.muted, fontSize: 11, fontFamily: FONT.ui, minWidth: 150 }}>
                     {[l.isp, l.country].filter(Boolean).join(" · ") || "—"}
                   </span>
                   <Badge label={l.classification || "unknown"} color={l.classification === "developer" ? C.teal : C.muted} />
-                  <div style={{ flex: 1, display: "flex", gap: 16, alignItems: "center", fontFamily: FONT.mono, fontSize: 10 }}>
+                  <div style={{ flex: 1, display: "flex", gap: 16, alignItems: "center", fontFamily: FONT.mono, fontSize: 10, whiteSpace: "nowrap" }}>
                     <span style={{ color: C.text }}>{fmt.num(l.avg_daily_calls)}/day</span>
                     <span style={{ color: C.muted }}>{l.days_active ?? 0}d</span>
                     <span style={{ color: C.muted }}>score {l.score ?? 0}</span>
@@ -461,74 +438,67 @@ const WarRoomView = ({ devs, devErr, busy, advance, outreach, classify }) => {
 
 // ─── Treasury (real: settlement status + DRY_RUN control) ────────────────────────
 const TreasuryView = ({ status, statusErr, busy, toggleDryRun }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 12 }}>
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-        <Metric
-          label="SETTLEMENT MODE"
-          value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
-          sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""}
-          color={status ? (status.dryRun ? C.warn : C.red) : C.muted}
-          size={18}
-          alert={status ? !status.dryRun : false}
-        />
-        <Metric label="SIGNER POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} color={C.ice} size={18} />
-        <Metric label="ANCHOR THRESHOLD" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" color={C.teal} size={18} />
-        <Metric label="SETTLED TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" color={C.green} size={18} />
-        <Metric label="SIGNER ADDRESS" value={status ? fmt.addr(status.signerAddress) : "…"} color={C.muted} size={13} />
-        <Metric label="TREASURY ADDRESS" value={status ? fmt.addr(status.treasuryAddress) : "…"} color={C.muted} size={13} />
-      </div>
-      {statusErr && <ErrLine msg={`Could not load settlement status: ${statusErr}`} />}
-
-      <Panel>
-        <SectionLabel>Settlement Control</SectionLabel>
-        {!status && !statusErr && <Loading />}
-        {status && (
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <span style={{ color: C.muted, fontFamily: FONT.ui, fontSize: 14 }}>
-              Currently:{" "}
-              <strong style={{ color: status.dryRun ? C.warn : C.red }}>
-                {status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"}
-              </strong>
-            </span>
-            <button onClick={toggleDryRun} disabled={busy.dryRun} style={btn(status.dryRun ? C.red : C.teal)}>
-              {busy.dryRun ? "Working…" : status.dryRun ? "Enable LIVE settlement" : "Return to DRY_RUN"}
-            </button>
-            {status.dryRun && (
-              <span style={{ color: C.muted, fontSize: 12, fontFamily: FONT.ui }}>(requires typing LIVE to confirm)</span>
-            )}
-          </div>
-        )}
-      </Panel>
-
-      <NoBackendYet label="Revenue Velocity" note="metered/day · epochs open — requires billing + epoch endpoints" />
+  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+      <Metric
+        label="SETTLEMENT MODE"
+        value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
+        sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""}
+        color={status ? (status.dryRun ? C.warn : C.red) : C.muted}
+        alert={status ? !status.dryRun : false}
+      />
+      <Metric label="SIGNER POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} color={C.ice} />
+      <Metric label="ANCHOR THRESHOLD" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" color={C.teal} />
+      <Metric label="SETTLED TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" color={C.green} />
+      <Metric label="SIGNER ADDRESS" value={status ? fmt.addr(status.signerAddress) : "…"} sub="signer wallet" color={C.muted} size={15} />
+      <Metric label="TREASURY ADDRESS" value={status ? fmt.addr(status.treasuryAddress) : "…"} sub="treasury wallet" color={C.muted} size={15} />
     </div>
+    {statusErr && <ErrLine msg={`Could not load settlement status: ${statusErr}`} />}
 
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <NoBackendYet label="Epoch Detail" note="Requires epoch endpoint in admin router" />
-      <NoBackendYet label="On-chain Treasury Balance" note="Requires balance read endpoint" />
-    </div>
+    <Panel>
+      <SectionLabel>Settlement Control</SectionLabel>
+      {!status && !statusErr && <Loading />}
+      {status && (
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <span style={{ color: C.muted, fontFamily: FONT.ui, fontSize: 12 }}>
+            Currently:{" "}
+            <strong style={{ color: status.dryRun ? C.warn : C.red }}>
+              {status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"}
+            </strong>
+          </span>
+          <button onClick={toggleDryRun} disabled={busy.dryRun} style={btn(status.dryRun ? C.red : C.teal)}>
+            {busy.dryRun ? "Working…" : status.dryRun ? "Enable LIVE settlement" : "Return to DRY_RUN"}
+          </button>
+          {status.dryRun && (
+            <span style={{ color: C.muted, fontSize: 12, fontFamily: FONT.ui }}>(requires typing LIVE to confirm)</span>
+          )}
+        </div>
+      )}
+    </Panel>
+
+    {/* No-backend items as compact footer lines, not columns. */}
+    <NoBackendYet label="Revenue Velocity" note="metered/day — billing + epoch endpoints" />
+    <NoBackendYet label="Epoch Detail" note="epoch endpoint in admin router" />
+    <NoBackendYet label="On-chain Treasury Balance" note="balance read endpoint" />
   </div>
 );
 
 // ─── Security (no backend yet) ──────────────────────────────────────────────────
 const SecurityView = () => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 12 }}>
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <NoBackendYet label="SOC Metrics" note="blocked IPs · rate events · gate hits · auth failures — requires security pipeline" />
-      <NoBackendYet label="Security Event Feed" note="Requires threat-event store" />
-      <NoBackendYet label="Known Threat Patterns" note="Requires detection pipeline" />
-    </div>
-    <NoBackendYet label="Anomaly Scores" note="Requires anomaly engine" />
+  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <NoBackendYet label="SOC Metrics" note="blocked IPs · rate events · gate hits · auth failures" />
+    <NoBackendYet label="Security Event Feed" note="threat-event store" />
+    <NoBackendYet label="Known Threat Patterns" note="detection pipeline" />
+    <NoBackendYet label="Anomaly Scores" note="anomaly engine" />
   </div>
 );
 
 // ─── Operations (real: jobs + triggers; honest empties elsewhere) ────────────────
 const OpsView = ({ jobs, jobsErr, busy, trigger }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
     <Panel>
       <SectionLabel>Automation Jobs</SectionLabel>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TRIGGERABLE_JOBS.map((j) => (
           <button key={j} onClick={() => trigger(j)} disabled={busy[`job:${j}`]} style={btn(C.border)}>
             {busy[`job:${j}`] ? "Running…" : `Trigger ${j}`}
@@ -539,20 +509,25 @@ const OpsView = ({ jobs, jobsErr, busy, trigger }) => (
       {jobsErr && <ErrLine msg={`Could not load jobs: ${jobsErr}`} />}
       {jobs && jobs.length === 0 && !jobsErr && <Empty>No jobs have run yet.</Empty>}
       {jobs && jobs.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT.ui, fontSize: 13 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT.ui, fontSize: 11 }}>
           <thead>
-            <tr style={{ textAlign: "left", color: C.muted }}>
+            <tr style={{ textAlign: "left" }}>
               {["Job", "Last action", "When"].map((h) => (
-                <th key={h} style={{ padding: "8px 10px", fontWeight: 600 }}>{h}</th>
+                <th
+                  key={h}
+                  style={{ padding: "6px 10px", fontFamily: FONT.mono, fontSize: 9, letterSpacing: 2, color: C.muted, fontWeight: 600, textTransform: "uppercase" }}
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {jobs.map((j, i) => (
               <tr key={`${j.job_name}-${i}`} style={{ borderTop: `1px solid ${C.border}` }}>
-                <td style={{ padding: "8px 10px", fontFamily: FONT.mono }}>{j.job_name}</td>
-                <td style={{ padding: "8px 10px" }}>{j.action || "—"}</td>
-                <td style={{ padding: "8px 10px", fontFamily: FONT.mono, color: C.muted }}>{fmt.time(j.created_at)}</td>
+                <td style={{ padding: "6px 10px", fontFamily: FONT.mono }}>{j.job_name}</td>
+                <td style={{ padding: "6px 10px" }}>{j.action || "—"}</td>
+                <td style={{ padding: "6px 10px", fontFamily: FONT.mono, color: C.muted }}>{fmt.time(j.created_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -560,10 +535,9 @@ const OpsView = ({ jobs, jobsErr, busy, trigger }) => (
       )}
     </Panel>
 
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <NoBackendYet label="Paperclip AI Operations" note="Manage at agents.satelink.network" />
-      <NoBackendYet label="Distribution Channels" note="Requires channel-tracking endpoint" />
-    </div>
+    {/* No-backend items as compact footer lines, not a column. */}
+    <NoBackendYet label="Paperclip AI Operations" note="manage at agents.satelink.network" />
+    <NoBackendYet label="Distribution Channels" note="channel-tracking endpoint" />
   </div>
 );
 
@@ -582,8 +556,9 @@ const btn = (border, small) => ({
   color: border,
   border: `1px solid ${border}`,
   borderRadius: 6,
-  padding: small ? "3px 10px" : "8px 14px",
-  fontSize: small ? 9 : 13,
+  padding: small ? "3px 10px" : "7px 14px",
+  fontSize: small ? 9 : 10,
+  letterSpacing: 1,
   fontFamily: FONT.mono,
   cursor: "pointer",
 });
@@ -801,30 +776,36 @@ export default function AdminCommandCenter() {
         }}
       >
         <div style={{ color: C.teal, fontSize: 18, marginBottom: 16 }}>◈</div>
-        {NAV.map((n) => (
-          <button
-            key={n.id}
-            onClick={() => setView(n.id)}
-            title={n.label}
-            style={{
-              width: 44,
-              height: 44,
-              background: view === n.id ? `${C.teal}15` : "transparent",
-              border: `1px solid ${view === n.id ? C.teal + "60" : "transparent"}`,
-              color: view === n.id ? C.teal : C.muted,
-              fontSize: 16,
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 1,
-            }}
-          >
-            <span>{n.icon}</span>
-            <span style={{ fontSize: 7, fontFamily: FONT.mono, letterSpacing: 0.5 }}>{n.label.split(" ")[0].slice(0, 3)}</span>
-          </button>
-        ))}
+        {NAV.map((n) => {
+          const active = view === n.id;
+          return (
+            <button
+              key={n.id}
+              onClick={() => setView(n.id)}
+              title={n.label}
+              style={{
+                width: 48,
+                height: 46,
+                background: active ? `${C.teal}15` : "transparent",
+                border: "none",
+                borderLeft: `2px solid ${active ? C.teal : "transparent"}`,
+                color: active ? C.teal : "#4A5A72",
+                fontSize: 16,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
+              <span>{n.icon}</span>
+              <span style={{ fontSize: 8, fontFamily: FONT.mono, letterSpacing: 0.5, fontWeight: active ? 700 : 400 }}>
+                {n.label.split(" ")[0].slice(0, 3).toUpperCase()}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main */}
