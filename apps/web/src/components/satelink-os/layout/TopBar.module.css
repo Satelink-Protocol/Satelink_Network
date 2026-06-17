@@ -18,12 +18,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
-  min-width: 200px;
+  min-width: 220px;
   background: var(--sat-bg-0);
   border: 1px solid var(--sat-border);
   border-radius: var(--sat-radius-md);
+  cursor: text;
+  transition: var(--sat-transition);
+}
+.search:hover {
+  border-color: var(--sat-border-hover);
 }
 .searchIcon {
   color: var(--sat-text-dim);

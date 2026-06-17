@@ -2,11 +2,13 @@
  * Satelink-OS border + radius tokens. Mirrored as `--sat-radius-*` /
  * `--sat-border-*` in theme.css.
  */
+// Tight radii to match SigNoz (dominant 2px, then 4px) — a key "enterprise, not
+// MVP" signal. 6px reserved for the largest surfaces.
 export const radius = {
   none: 0,
-  sm: 4,
-  md: 6,
-  lg: 10,
+  sm: 2,
+  md: 4,
+  lg: 6,
   pill: 999,
 } as const;
 

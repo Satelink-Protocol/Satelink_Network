@@ -6,7 +6,7 @@
   letter-spacing: 1px;
   white-space: nowrap;
   border: 1px solid;
-  border-radius: var(--sat-radius-sm);
+  border-radius: var(--sat-radius-md);
 }
 .badge[data-tone='primary'] {
   color: var(--sat-primary);

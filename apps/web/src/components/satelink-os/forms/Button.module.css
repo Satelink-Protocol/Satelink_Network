@@ -5,6 +5,7 @@
   font-family: var(--sat-font-mono);
   letter-spacing: 1px;
   cursor: pointer;
+  transition: var(--sat-transition);
 }
 .btn[data-size='md'] {
   padding: 7px 14px;
@@ -24,7 +25,7 @@
 .btn[data-tone='muted'] { color: var(--sat-text-muted); border-color: var(--sat-border-strong); }
 
 .btn:hover:not(:disabled) {
-  opacity: 0.85;
+  background: var(--sat-hover-strong);
 }
 .btn:disabled {
   opacity: 0.5;

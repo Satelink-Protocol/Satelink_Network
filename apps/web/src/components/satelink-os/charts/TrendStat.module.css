@@ -1,7 +1,9 @@
 .card {
-  padding: 10px 14px;
+  padding: 10px 12px;
   background: var(--sat-bg-1);
   border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sat-text) 3%, transparent);
 }
 .label {
   font-family: var(--sat-font-mono);
