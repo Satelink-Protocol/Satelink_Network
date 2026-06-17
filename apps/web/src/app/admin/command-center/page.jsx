@@ -1,62 +1,100 @@
 "use client";
 
 /**
- * SATELINK INFRASTRUCTURE COMMAND CENTER — v2 (Tier A)
- * NOC · Intelligence · War Room · Treasury · Security · Operations
+ * SATELINK COMMAND CENTER — rebuilt on the Satelink-OS design system.
  *
- * HONESTY CONTRACT (do not break):
- *   1. Every displayed value comes from a real /admin/* API call, or shows an
- *      explicit "—" / <NoBackendYet>. No hardcoded metric constants, no random
- *      generators, no jitter().
- *   2. Every operator control makes a real API call and confirms success or
- *      surfaces an error. React state is updated only AFTER the API responds.
- *   3. There is no fabricated settled-tx count. totalSettlements is whatever the
- *      API returns (currently 0).
+ * This page is composition + business logic only. ALL presentation comes from
+ * `@/components/satelink-os` (no inline styles, no local design primitives).
  *
- * All calls go through the server-side proxy at /api/admin-proxy, which injects
- * x-admin-token server-side. No NEXT_PUBLIC_* tokens, nothing secret in browser.
+ * Business logic preserved verbatim from the v2 page:
+ *   - adminFetch() → /api/admin-proxy (token injected server-side)
+ *   - SSE live feed via EventSource('/api/admin-proxy?stream=live/feed')
+ *   - loaders: settlement/status, intel/developers, jobs/status
+ *   - actions: dry-run toggle (typed LIVE), lead stage PATCH, Discord outreach,
+ *     job trigger, IP classifier
  *
- * The NOC topology SVG is decorative architecture art ("Network Architecture"),
- * not a data display — it carries no numeric metrics.
+ * Honest-data policy (Phases 7 & 10): no fabricated metrics/revenue/settlements/
+ * threats/providers. Missing backends render professional empty states.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { useCallback, useEffect, useState } from "react";
 
-// ─── Design System ────────────────────────────────────────────────────────────
-const C = {
-  bg: "#050816",
-  p1: "#0E1628",
-  p2: "#121C33",
-  p3: "#0A1422",
-  border: "#1A2F50",
-  teal: "#5EEAD4",
-  ice: "#7DD3FC",
-  green: "#34D399",
-  warn: "#F59E0B",
-  red: "#EF4444",
-  text: "#E5EEF8",
-  muted: "#94A3B8",
-  dim: "rgba(94,234,212,0.06)",
+import {
+  AppShell,
+  Button,
+  DataTable,
+  DonutChart,
+  EmptyState,
+  EventStream,
+  Inline,
+  MetricCard,
+  MetricGrid,
+  Notice,
+  Panel,
+  SectionLabel,
+  SeriesChart,
+  Split,
+  Stack,
+  StatusBadge,
+  TopologyDiagram,
+} from "@/components/satelink-os";
+
+// ── Static config ─────────────────────────────────────────────────────────────
+const NAV = [
+  { id: "network", icon: "◈", label: "Network Ops" },
+  { id: "intel", icon: "◉", label: "Intelligence" },
+  { id: "revenue", icon: "⊕", label: "Revenue Ops" },
+  { id: "treasury", icon: "◎", label: "Treasury" },
+  { id: "agents", icon: "◐", label: "Agent Ops" },
+  { id: "security", icon: "⊗", label: "Security" },
+];
+
+const HEADERS = {
+  network: { icon: "◈", title: "Network Operations", subtitle: "Gateway architecture & live event stream" },
+  intel: { icon: "◉", title: "Intelligence", subtitle: "Traffic, providers & geo — telemetry pending" },
+  revenue: { icon: "⊕", title: "Revenue Operations", subtitle: "Lead pipeline, conversion & outreach" },
+  treasury: { icon: "◎", title: "Treasury", subtitle: "Settlement control & on-chain status" },
+  agents: { icon: "◐", title: "Agent Operations", subtitle: "Automation jobs & agent fleet" },
+  security: { icon: "⊗", title: "Security", subtitle: "SOC posture — telemetry pending" },
 };
 
-// Geist only. UI/labels/tables → Sans. Metrics/logs/data → Mono.
-const FONT = { ui: GeistSans.style.fontFamily, mono: GeistMono.style.fontFamily };
+// Structural architecture model (Phase 8: data-driven, no providers/metrics).
+const ARCH_TOPOLOGY = {
+  width: 680,
+  height: 220,
+  nodes: [
+    { id: "clients", label: "CLIENTS", x: 340, y: 20, kind: "source" },
+    { id: "gate", label: "FREE-TIER GATE", x: 340, y: 64, kind: "edge" },
+    { id: "gateway", label: "RPC GATEWAY", sub: "rpc.satelink.network", x: 340, y: 108, kind: "gateway" },
+    { id: "u1", label: "UPSTREAM", x: 150, y: 162, kind: "edge" },
+    { id: "u2", label: "UPSTREAM", x: 280, y: 162, kind: "edge" },
+    { id: "u3", label: "UPSTREAM", x: 400, y: 162, kind: "edge" },
+    { id: "u4", label: "UPSTREAM", x: 530, y: 162, kind: "edge" },
+    { id: "settle", label: "BILLING · EPOCH", x: 340, y: 200, kind: "sink" },
+  ],
+  links: [
+    { from: "clients", to: "gate", tone: "primary", dur: "1.4s" },
+    { from: "gate", to: "gateway", tone: "info", dur: "1.5s" },
+    { from: "gateway", to: "u1", tone: "info", dur: "1.9s" },
+    { from: "gateway", to: "u2", tone: "info", dur: "1.7s" },
+    { from: "gateway", to: "u3", tone: "info", dur: "1.8s" },
+    { from: "gateway", to: "u4", tone: "info", dur: "2.1s" },
+    { from: "u1", to: "settle", tone: "success", dur: "2.0s" },
+    { from: "u4", to: "settle", tone: "success", dur: "2.0s" },
+  ],
+};
 
-// ─── API ──────────────────────────────────────────────────────────────────────
-// adminFetch('/intel/developers')                            -> GET  /admin/intel/developers
-// adminFetch('/jobs/trigger/ip-classifier', {method:'POST'}) -> POST /admin/jobs/trigger/ip-classifier
-async function adminFetch(path, opts = {}) {
-  const res = await fetch("/api/admin-proxy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, method: opts.method || "GET", body: opts.body }),
-  });
-  return res.json();
-}
+const TEMPLATES = [
+  { id: "erpc-provider", label: "erpc provider intro" },
+  { id: "followup-72h", label: "72h follow-up" },
+];
+const TRIGGERABLE_JOBS = ["ip-classifier", "customer-zero", "outreach"];
+const NEXT_STAGE = { identified: "contacted", contacted: "deposited", deposited: "paid" };
+const STAGE_BTN = { contacted: "Mark Contacted", deposited: "Mark Deposited", paid: "Mark Paid" };
+const stageTone = (s) =>
+  ({ identified: "info", contacted: "warn", deposited: "primary", paid: "success" }[s] || "muted");
 
-// ─── Formatting (real values only; null/undefined → "—") ────────────────────────
+// ── Formatting (real values only; null/undefined → "—") ────────────────────────
 const fmt = {
   num: (n) =>
     n == null || Number.isNaN(Number(n))
@@ -75,496 +113,19 @@ const fmt = {
   },
 };
 
-const TEMPLATES = [
-  { id: "erpc-provider", label: "erpc provider intro" },
-  { id: "followup-72h", label: "72h follow-up" },
-];
-const TRIGGERABLE_JOBS = ["ip-classifier", "customer-zero", "outreach"];
-const NEXT_STAGE = { identified: "contacted", contacted: "deposited", deposited: "paid" };
-const STAGE_BTN = { contacted: "Mark Contacted", deposited: "Mark Deposited", paid: "Mark Paid" };
-const STAGE_COLOR = { identified: C.ice, contacted: C.warn, deposited: C.teal, paid: C.green };
-
-// ─── Atoms ──────────────────────────────────────────────────────────────────────
-const Pulse = ({ color = C.green, size = 8 }) => (
-  <span style={{ position: "relative", display: "inline-block", width: size, height: size }}>
-    <span
-      style={{
-        position: "absolute",
-        inset: 0,
-        borderRadius: "50%",
-        background: color,
-        boxShadow: `0 0 ${size * 1.5}px ${color}`,
-        animation: "pulse 2s ease-in-out infinite",
-      }}
-    />
-  </span>
-);
-
-const Badge = ({ label, color = C.teal }) => (
-  <span
-    style={{
-      padding: "2px 7px",
-      fontSize: 9,
-      fontFamily: FONT.mono,
-      letterSpacing: 1,
-      background: `${color}18`,
-      border: `1px solid ${color}40`,
-      color,
-      whiteSpace: "nowrap",
-    }}
-  >
-    {String(label).toUpperCase()}
-  </span>
-);
-
-const Panel = ({ children, style }) => (
-  <div style={{ background: C.p1, border: `1px solid ${C.border}`, padding: "12px 14px", ...style }}>{children}</div>
-);
-
-const SectionLabel = ({ children, right }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-    <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 3 }}>
-      ── {String(children).toUpperCase()}
-    </div>
-    {right && <div>{right}</div>}
-  </div>
-);
-
-const Metric = ({ label, value, sub, color = C.teal, size = 28, alert }) => (
-  <div
-    style={{
-      padding: "10px 14px",
-      background: C.p1,
-      border: `1px solid ${alert ? C.red : C.border}`,
-      borderTop: `2px solid ${alert ? C.red : color}`,
-      position: "relative",
-      maxHeight: 72,
-      overflow: "hidden",
-    }}
-  >
-    {alert && <span style={{ position: "absolute", top: 6, right: 8, color: C.red, fontSize: 11 }}>⚠</span>}
-    <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 2, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-    <div style={{ color, fontSize: size, fontWeight: 700, fontFamily: FONT.mono, lineHeight: 1, whiteSpace: "nowrap" }}>{value}</div>
-    {sub && <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, marginTop: 3 }}>{sub}</div>}
-  </div>
-);
-
-// Missing data is a single dim line — never a full bordered panel.
-const NoBackendYet = ({ label, note }) => (
-  <div
-    style={{
-      height: 24,
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      borderBottom: `1px solid ${C.border}`,
-      color: C.muted,
-      fontSize: 10,
-      fontFamily: FONT.mono,
-      letterSpacing: 1,
-    }}
-  >
-    <span>── {String(label).toUpperCase()}</span>
-    {note && <span style={{ opacity: 0.7 }}>· {note}</span>}
-  </div>
-);
-
-const Loading = () => <span style={{ color: C.muted, fontFamily: FONT.mono, fontSize: 11 }}>Loading…</span>;
-const Empty = ({ children }) => <span style={{ color: C.muted, fontFamily: FONT.ui, fontSize: 13 }}>{children}</span>;
-const ErrLine = ({ msg }) => (
-  <p style={{ color: C.red, margin: "6px 0 0", fontSize: 12, fontFamily: FONT.mono }}>{msg}</p>
-);
-
-// ─── Decorative topology (architecture art — NO numbers) ────────────────────────
-const Topology = () => {
-  const W = 680, H = 215;
-  const nodes = [
-    { id: "clients", x: 340, y: 20, label: "CLIENTS" },
-    { id: "gate", x: 340, y: 64, label: "FREE-TIER GATE" },
-    { id: "gateway", x: 340, y: 108, label: "RPC GATEWAY", sub: "rpc.satelink.network" },
-    { id: "u1", x: 150, y: 160, label: "UPSTREAM" },
-    { id: "u2", x: 280, y: 160, label: "UPSTREAM" },
-    { id: "u3", x: 400, y: 160, label: "UPSTREAM" },
-    { id: "u4", x: 530, y: 160, label: "UPSTREAM" },
-    { id: "settle", x: 340, y: 200, label: "BILLING · EPOCH" },
-  ];
-  const paths = [
-    { id: "a", d: "M340,30 L340,54", color: C.teal, dur: "1.4s" },
-    { id: "b", d: "M340,74 L340,98", color: C.ice, dur: "1.5s" },
-    { id: "g1", d: "M330,118 C250,138 175,144 158,152", color: C.ice, dur: "1.9s" },
-    { id: "g2", d: "M336,118 C312,138 286,146 284,152", color: C.ice, dur: "1.7s" },
-    { id: "g3", d: "M344,118 C368,138 398,146 400,152", color: C.ice, dur: "1.8s" },
-    { id: "g4", d: "M350,118 C440,138 515,144 526,152", color: C.ice, dur: "2.1s" },
-    { id: "s1", d: "M158,170 C210,192 300,194 332,194", color: C.green, dur: "2.0s" },
-    { id: "s4", d: "M526,170 C470,192 380,194 348,194", color: C.green, dur: "2.0s" },
-  ];
-  const offsets = ["0%", "33%", "66%"];
-  return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible" }}>
-      <defs>
-        {paths.map((p) => (
-          <path key={p.id} id={`tp_${p.id}`} d={p.d} fill="none" />
-        ))}
-        <filter id="tpGlow">
-          <feGaussianBlur stdDeviation="2" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      {paths.map((p) => (
-        <use key={`l_${p.id}`} href={`#tp_${p.id}`} stroke={p.color} strokeWidth="1" strokeOpacity="0.22" />
-      ))}
-      {paths.map((p) =>
-        offsets.map((_, i) => (
-          <circle key={`${p.id}-${i}`} r="2.5" fill={p.color} filter="url(#tpGlow)" opacity="0.9">
-            <animateMotion dur={p.dur} repeatCount="indefinite" begin={`${i * parseFloat(p.dur) * 0.33}s`}>
-              <mpath href={`#tp_${p.id}`} />
-            </animateMotion>
-          </circle>
-        ))
-      )}
-      {nodes.map((n) => {
-        const accent = n.id === "gateway" ? C.teal : n.id === "settle" ? C.green : C.ice;
-        return (
-          <g key={n.id}>
-            <circle cx={n.x} cy={n.y} r={n.id === "gateway" ? 10 : 8} fill={C.p2} stroke={accent} strokeWidth={n.id === "gateway" ? 2 : 1} />
-            <circle cx={n.x} cy={n.y} r={n.id === "gateway" ? 4 : 3} fill={accent} opacity="0.9">
-              {n.id === "gateway" && <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />}
-            </circle>
-            <text x={n.x} y={n.y - 14} textAnchor="middle" style={{ fill: C.text, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 1 }}>
-              {n.label}
-            </text>
-            {n.sub && (
-              <text x={n.x} y={n.y + 22} textAnchor="middle" style={{ fill: C.muted, fontSize: 8, fontFamily: FONT.mono }}>
-                {n.sub}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-};
-
-// ─── Live feed (real SSE through the proxy) ─────────────────────────────────────
-const LiveFeed = ({ feed, feedState }) => (
-  <Panel style={{ overflowY: "auto", maxHeight: 620 }}>
-    <SectionLabel
-      right={<Pulse color={feedState === "live" ? C.green : feedState === "error" ? C.red : C.warn} />}
-    >
-      Live Event Stream
-    </SectionLabel>
-    {feed.length === 0 && feedState !== "error" && (
-      <div style={{ color: C.muted, fontFamily: FONT.mono, fontSize: 11 }}>Connecting…</div>
-    )}
-    {feed.length === 0 && feedState === "error" && (
-      <div style={{ color: C.muted, fontFamily: FONT.mono, fontSize: 11 }}>
-        Live feed unavailable. It will reconnect automatically.
-      </div>
-    )}
-    <div>
-      {feed.map((e, i) => (
-        <div
-          key={e.id ?? i}
-          style={{ display: "flex", gap: 8, padding: "4px 0", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT.mono, fontSize: 10 }}
-        >
-          <span style={{ color: C.muted, minWidth: 64 }}>{fmt.time(e.created_at)}</span>
-          <span style={{ color: C.ice, minWidth: 110 }}>[{e.job_name || "log"}]</span>
-          <span style={{ color: C.text }}>{e.action || "—"}</span>
-        </div>
-      ))}
-    </div>
-  </Panel>
-);
-
-// ─── NOC ────────────────────────────────────────────────────────────────────────
-const NOCView = ({ status, statusErr, feed, feedState }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 8 }}>
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <Panel>
-        <SectionLabel right={<Badge label="DESIGN" color={C.muted} />}>Network Architecture</SectionLabel>
-        <Topology />
-        <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, marginTop: 8 }}>
-          Structural diagram — not a live data feed.
-        </div>
-      </Panel>
-
-      {/* Real settlement/status cards (replaces the old jitter()-driven p50/p95/rps) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-        <Metric
-          label="SETTLEMENT MODE"
-          value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
-          color={status ? (status.dryRun ? C.warn : C.red) : C.muted}
-          alert={status ? !status.dryRun : false}
-        />
-        <Metric label="SIGNER POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} color={C.ice} />
-        <Metric label="ANCHOR THRESHOLD" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" color={C.teal} />
-        <Metric label="SETTLED TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" color={C.green} />
-      </div>
-      {statusErr && <ErrLine msg={`Could not load settlement status: ${statusErr}`} />}
-
-      {/* RPC telemetry has no backend yet — one very dim footer note, not panels. */}
-      <div style={{ color: C.border, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 1, marginTop: 4 }}>
-        RPC METRICS · 24H VOLUME · PROVIDER POOL — requires telemetry pipeline
-      </div>
-    </div>
-
-    <LiveFeed feed={feed} feedState={feedState} />
-  </div>
-);
-
-// ─── Intelligence (no backend yet) ──────────────────────────────────────────────
-const IntelView = () => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-    <NoBackendYet label="Provider Intelligence Matrix" note="latency · success% · traffic share" />
-    <NoBackendYet label="Traffic by Country" note="geo aggregation endpoint" />
-    <NoBackendYet label="Top Sources / ASN / Method" note="aggregation endpoint" />
-    <NoBackendYet label="Latency Distribution" note="telemetry pipeline" />
-    <div style={{ color: C.muted, fontFamily: FONT.mono, fontSize: 10, marginTop: 12 }}>
-      Real per-IP classification (developer / machine leads) lives in the War Room view.
-    </div>
-  </div>
-);
-
-// ─── War Room (real: leads, funnel-by-status, stage, outreach, classify) ─────────
-const WarRoomView = ({ devs, devErr, busy, advance, outreach, classify }) => {
-  const counts = (devs || []).reduce((a, d) => ((a[d.status] = (a[d.status] || 0) + 1), a), {});
-  const funnel = [
-    { label: "Classified leads", n: devs ? devs.length : null, color: C.muted },
-    { label: "Identified", n: devs ? counts.identified || 0 : null, color: C.ice },
-    { label: "Contacted", n: devs ? counts.contacted || 0 : null, color: C.warn },
-    { label: "Deposited", n: devs ? counts.deposited || 0 : null, color: C.teal },
-    { label: "Paid", n: devs ? counts.paid || 0 : null, color: C.green },
-  ];
-  const maxN = Math.max(1, ...funnel.map((s) => s.n || 0));
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 8 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <Panel>
-          <SectionLabel>Conversion Funnel</SectionLabel>
-          {!devs && !devErr && <Loading />}
-          {devs &&
-            funnel.map((s) => (
-              <div key={s.label} style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                  <span style={{ color: C.text, fontSize: 10, fontFamily: FONT.mono }}>{s.label}</span>
-                  <span style={{ color: s.color, fontSize: 10, fontFamily: FONT.mono, fontWeight: 700 }}>{fmt.num(s.n)}</span>
-                </div>
-                <div style={{ height: 6, background: C.p3 }}>
-                  <div style={{ height: "100%", width: `${((s.n || 0) / maxN) * 100}%`, background: s.color, opacity: s.n ? 0.85 : 0.2 }} />
-                </div>
-              </div>
-            ))}
-          <div style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, marginTop: 8, opacity: 0.8 }}>
-            Counts are real, derived from classified leads. Upstream stages (active IPs → free-limit hits) require a
-            telemetry pipeline — not shown to avoid estimates.
-          </div>
-        </Panel>
-
-        <Panel>
-          <SectionLabel>IP Classifier</SectionLabel>
-          <button onClick={classify} disabled={busy.classify} style={btn(busy.classify ? C.border : C.teal)}>
-            {busy.classify ? "Running…" : "Run IP Classifier"}
-          </button>
-        </Panel>
-
-        <Panel>
-          <SectionLabel>Outreach</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {TEMPLATES.map((t) => (
-              <button key={t.id} onClick={() => outreach(t.id)} disabled={busy[`outreach:${t.id}`]} style={btn(C.ice)}>
-                {busy[`outreach:${t.id}`] ? "Sending…" : `Send: ${t.label}`}
-              </button>
-            ))}
-          </div>
-        </Panel>
-      </div>
-
-      <Panel>
-        <SectionLabel right={<Badge label={`${devs ? devs.length : 0} leads`} color={C.ice} />}>Lead Pipeline</SectionLabel>
-        {!devs && !devErr && <Loading />}
-        {devErr && <ErrLine msg={`Could not load leads: ${devErr}`} />}
-        {devs && devs.length === 0 && !devErr && <Empty>No leads classified yet</Empty>}
-        {devs && devs.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {devs.map((l) => {
-              const next = NEXT_STAGE[l.status];
-              return (
-                <div
-                  key={l.ip}
-                  style={{
-                    padding: "8px 12px",
-                    background: C.p2,
-                    border: `1px solid ${C.border}`,
-                    borderLeft: `3px solid ${STAGE_COLOR[l.status] || C.muted}`,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ color: C.teal, fontSize: 13, fontWeight: 700, fontFamily: FONT.mono, minWidth: 130 }}>{l.ip}</span>
-                  <span style={{ color: C.muted, fontSize: 11, fontFamily: FONT.ui, minWidth: 150 }}>
-                    {[l.isp, l.country].filter(Boolean).join(" · ") || "—"}
-                  </span>
-                  <Badge label={l.classification || "unknown"} color={l.classification === "developer" ? C.teal : C.muted} />
-                  <div style={{ flex: 1, display: "flex", gap: 16, alignItems: "center", fontFamily: FONT.mono, fontSize: 10, whiteSpace: "nowrap" }}>
-                    <span style={{ color: C.text }}>{fmt.num(l.avg_daily_calls)}/day</span>
-                    <span style={{ color: C.muted }}>{l.days_active ?? 0}d</span>
-                    <span style={{ color: C.muted }}>score {l.score ?? 0}</span>
-                  </div>
-                  <Badge label={l.status} color={STAGE_COLOR[l.status] || C.muted} />
-                  {next && (
-                    <button
-                      onClick={() => advance(l.ip, next)}
-                      disabled={busy[`stage:${l.ip}`]}
-                      style={btn(STAGE_COLOR[next] || C.ice, true)}
-                    >
-                      {busy[`stage:${l.ip}`] ? "Saving…" : STAGE_BTN[next]}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Panel>
-    </div>
-  );
-};
-
-// ─── Treasury (real: settlement status + DRY_RUN control) ────────────────────────
-const TreasuryView = ({ status, statusErr, busy, toggleDryRun }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-      <Metric
-        label="SETTLEMENT MODE"
-        value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
-        sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""}
-        color={status ? (status.dryRun ? C.warn : C.red) : C.muted}
-        alert={status ? !status.dryRun : false}
-      />
-      <Metric label="SIGNER POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} color={C.ice} />
-      <Metric label="ANCHOR THRESHOLD" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" color={C.teal} />
-      <Metric label="SETTLED TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" color={C.green} />
-      <Metric label="SIGNER ADDRESS" value={status ? fmt.addr(status.signerAddress) : "…"} sub="signer wallet" color={C.muted} size={15} />
-      <Metric label="TREASURY ADDRESS" value={status ? fmt.addr(status.treasuryAddress) : "…"} sub="treasury wallet" color={C.muted} size={15} />
-    </div>
-    {statusErr && <ErrLine msg={`Could not load settlement status: ${statusErr}`} />}
-
-    <Panel>
-      <SectionLabel>Settlement Control</SectionLabel>
-      {!status && !statusErr && <Loading />}
-      {status && (
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <span style={{ color: C.muted, fontFamily: FONT.ui, fontSize: 12 }}>
-            Currently:{" "}
-            <strong style={{ color: status.dryRun ? C.warn : C.red }}>
-              {status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"}
-            </strong>
-          </span>
-          <button onClick={toggleDryRun} disabled={busy.dryRun} style={btn(status.dryRun ? C.red : C.teal)}>
-            {busy.dryRun ? "Working…" : status.dryRun ? "Enable LIVE settlement" : "Return to DRY_RUN"}
-          </button>
-          {status.dryRun && (
-            <span style={{ color: C.muted, fontSize: 12, fontFamily: FONT.ui }}>(requires typing LIVE to confirm)</span>
-          )}
-        </div>
-      )}
-    </Panel>
-
-    {/* No-backend items as compact footer lines, not columns. */}
-    <NoBackendYet label="Revenue Velocity" note="metered/day — billing + epoch endpoints" />
-    <NoBackendYet label="Epoch Detail" note="epoch endpoint in admin router" />
-    <NoBackendYet label="On-chain Treasury Balance" note="balance read endpoint" />
-  </div>
-);
-
-// ─── Security (no backend yet) ──────────────────────────────────────────────────
-const SecurityView = () => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-    <NoBackendYet label="SOC Metrics" note="blocked IPs · rate events · gate hits · auth failures" />
-    <NoBackendYet label="Security Event Feed" note="threat-event store" />
-    <NoBackendYet label="Known Threat Patterns" note="detection pipeline" />
-    <NoBackendYet label="Anomaly Scores" note="anomaly engine" />
-  </div>
-);
-
-// ─── Operations (real: jobs + triggers; honest empties elsewhere) ────────────────
-const OpsView = ({ jobs, jobsErr, busy, trigger }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-    <Panel>
-      <SectionLabel>Automation Jobs</SectionLabel>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        {TRIGGERABLE_JOBS.map((j) => (
-          <button key={j} onClick={() => trigger(j)} disabled={busy[`job:${j}`]} style={btn(C.border)}>
-            {busy[`job:${j}`] ? "Running…" : `Trigger ${j}`}
-          </button>
-        ))}
-      </div>
-      {!jobs && !jobsErr && <Loading />}
-      {jobsErr && <ErrLine msg={`Could not load jobs: ${jobsErr}`} />}
-      {jobs && jobs.length === 0 && !jobsErr && <Empty>No jobs have run yet.</Empty>}
-      {jobs && jobs.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT.ui, fontSize: 11 }}>
-          <thead>
-            <tr style={{ textAlign: "left" }}>
-              {["Job", "Last action", "When"].map((h) => (
-                <th
-                  key={h}
-                  style={{ padding: "6px 10px", fontFamily: FONT.mono, fontSize: 9, letterSpacing: 2, color: C.muted, fontWeight: 600, textTransform: "uppercase" }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((j, i) => (
-              <tr key={`${j.job_name}-${i}`} style={{ borderTop: `1px solid ${C.border}` }}>
-                <td style={{ padding: "6px 10px", fontFamily: FONT.mono }}>{j.job_name}</td>
-                <td style={{ padding: "6px 10px" }}>{j.action || "—"}</td>
-                <td style={{ padding: "6px 10px", fontFamily: FONT.mono, color: C.muted }}>{fmt.time(j.created_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Panel>
-
-    {/* No-backend items as compact footer lines, not a column. */}
-    <NoBackendYet label="Paperclip AI Operations" note="manage at agents.satelink.network" />
-    <NoBackendYet label="Distribution Channels" note="channel-tracking endpoint" />
-  </div>
-);
-
-// ─── Shell ──────────────────────────────────────────────────────────────────────
-const NAV = [
-  { id: "noc", icon: "◈", label: "NOC" },
-  { id: "intel", icon: "◉", label: "Intelligence" },
-  { id: "war", icon: "⊕", label: "War Room" },
-  { id: "treas", icon: "◎", label: "Treasury" },
-  { id: "sec", icon: "⊗", label: "Security" },
-  { id: "ops", icon: "◐", label: "Operations" },
-];
-
-const btn = (border, small) => ({
-  background: "transparent",
-  color: border,
-  border: `1px solid ${border}`,
-  borderRadius: 6,
-  padding: small ? "3px 10px" : "7px 14px",
-  fontSize: small ? 9 : 10,
-  letterSpacing: 1,
-  fontFamily: FONT.mono,
-  cursor: "pointer",
-});
+// ── API client (unchanged) ─────────────────────────────────────────────────────
+async function adminFetch(path, opts = {}) {
+  const res = await fetch("/api/admin-proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, method: opts.method || "GET", body: opts.body }),
+  });
+  return res.json();
+}
 
 export default function AdminCommandCenter() {
-  const [view, setView] = useState("noc");
+  const [view, setView] = useState("network");
+  const [collapsed, setCollapsed] = useState(false);
   const [now, setNow] = useState("");
 
   const [status, setStatus] = useState(null);
@@ -578,7 +139,7 @@ export default function AdminCommandCenter() {
   const [notice, setNotice] = useState(null);
 
   const [feed, setFeed] = useState([]);
-  const [feedState, setFeedState] = useState("connecting"); // connecting | live | error
+  const [feedState, setFeedState] = useState("connecting");
 
   const setBusyFor = (k, v) => setBusy((b) => ({ ...b, [k]: v }));
   const flash = (msg) => {
@@ -586,13 +147,12 @@ export default function AdminCommandCenter() {
     setTimeout(() => setNotice(null), 6000);
   };
 
-  // Clock (display only, not a metric)
   useEffect(() => {
     const t = setInterval(() => setNow(new Date().toLocaleTimeString("en-US", { hour12: false })), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // ── Loaders ────────────────────────────────────────────────────────────────
+  // ── Loaders ──────────────────────────────────────────────────────────────────
   const loadStatus = useCallback(async () => {
     setStatusErr(null);
     try {
@@ -628,13 +188,17 @@ export default function AdminCommandCenter() {
     }
   }, []);
 
-  useEffect(() => {
+  const refreshAll = useCallback(() => {
     loadStatus();
     loadDevs();
     loadJobs();
   }, [loadStatus, loadDevs, loadJobs]);
 
-  // ── Real SSE live feed via the proxy (token injected server-side) ────────────
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
+
+  // ── Real SSE live feed (token injected by the proxy) ─────────────────────────
   useEffect(() => {
     let es;
     try {
@@ -665,7 +229,7 @@ export default function AdminCommandCenter() {
     };
   }, []);
 
-  // ── Actions (every one awaits the API before touching React state) ───────────
+  // ── Actions (each awaits the API before touching React state) ────────────────
   const toggleDryRun = async () => {
     if (!status) return;
     const goingLive = status.dryRun === true;
@@ -678,7 +242,6 @@ export default function AdminCommandCenter() {
     }
     setBusyFor("dryRun", true);
     try {
-      // `enabled` IS the dryRun value: enabled=false turns LIVE on.
       const r = await adminFetch("/settlement/dry-run", { method: "POST", body: { enabled: !status.dryRun } });
       if (!r.ok) throw new Error(r.error || "toggle failed");
       const persistNote = r.persistent === false ? " Change is in-process only — set RAILWAY_TOKEN for a persistent Railway update." : "";
@@ -696,7 +259,7 @@ export default function AdminCommandCenter() {
     try {
       const r = await adminFetch(`/intel/developer/${ip}/stage`, { method: "PATCH", body: { stage } });
       if (!r.ok) throw new Error(r.error || "stage update failed");
-      setDevs((ds) => (ds || []).map((d) => (d.ip === ip ? { ...d, status: stage } : d))); // only after 200
+      setDevs((ds) => (ds || []).map((d) => (d.ip === ip ? { ...d, status: stage } : d)));
       flash(`${ip} → ${stage}`);
     } catch (e) {
       flash(`Stage update failed: ${e.message}`);
@@ -747,141 +310,271 @@ export default function AdminCommandCenter() {
     }
   };
 
-  const current = NAV.find((n) => n.id === view);
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  const feedEvents = feed.map((e, i) => ({
+    id: e.id ?? i,
+    time: fmt.time(e.created_at),
+    source: e.job_name || "log",
+    message: e.action || "—",
+  }));
+
+  const statusCards = (
+    <>
+      <MetricCard
+        label="Settlement mode"
+        value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
+        tone={status ? (status.dryRun ? "warn" : "danger") : "muted"}
+        alert={status ? !status.dryRun : false}
+      />
+      <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} tone="info" />
+      <MetricCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" tone="primary" />
+      <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
+    </>
+  );
+
+  const leadColumns = [
+    { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
+    { key: "loc", header: "ISP / Country", render: (d) => [d.isp, d.country].filter(Boolean).join(" · ") || "—" },
+    {
+      key: "class",
+      header: "Class",
+      render: (d) => <StatusBadge label={d.classification || "unknown"} tone={d.classification === "developer" ? "primary" : "muted"} />,
+    },
+    { key: "calls", header: "Calls/day", mono: true, render: (d) => fmt.num(d.avg_daily_calls) },
+    { key: "days", header: "Days", mono: true, muted: true, render: (d) => String(d.days_active ?? 0) },
+    { key: "score", header: "Score", mono: true, render: (d) => String(d.score ?? 0) },
+    { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
+    {
+      key: "action",
+      header: "",
+      render: (d) => {
+        const next = NEXT_STAGE[d.status];
+        if (!next) return null;
+        return (
+          <Button size="sm" tone={stageTone(next)} disabled={busy[`stage:${d.ip}`]} onClick={() => advance(d.ip, next)}>
+            {busy[`stage:${d.ip}`] ? "Saving…" : STAGE_BTN[next]}
+          </Button>
+        );
+      },
+    },
+  ];
+
+  const jobColumns = [
+    { key: "job_name", header: "Job", mono: true },
+    { key: "action", header: "Last action", render: (j) => j.action || "—" },
+    { key: "created_at", header: "When", mono: true, muted: true, render: (j) => fmt.time(j.created_at) },
+  ];
+
+  // Funnel counts — real, derived from lead statuses
+  const counts = (devs || []).reduce((a, d) => ((a[d.status] = (a[d.status] || 0) + 1), a), {});
+
+  // ── Header status chip per view ──────────────────────────────────────────────
+  const headerStatus =
+    view === "treasury" && status ? (
+      <StatusBadge label={status.dryRun ? "DRY_RUN" : "LIVE"} tone={status.dryRun ? "warn" : "danger"} />
+    ) : view === "revenue" ? (
+      <StatusBadge label={`${devs ? devs.length : 0} leads`} tone="info" />
+    ) : view === "security" ? (
+      <StatusBadge label="telemetry pending" tone="muted" />
+    ) : null;
+
+  const H = HEADERS[view];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT.ui }}>
-      <style>{`
-        @keyframes pulse { 0%,100% { opacity:0.6; transform:scale(1); } 50% { opacity:1; transform:scale(1.15); } }
-        * { box-sizing:border-box; margin:0; padding:0; }
-        ::-webkit-scrollbar { width:4px; height:4px; }
-        ::-webkit-scrollbar-track { background:${C.bg}; }
-        ::-webkit-scrollbar-thumb { background:${C.border}; }
-        button:hover:not(:disabled) { opacity:0.85; }
-        button:disabled { opacity:0.5; cursor:default; }
-      `}</style>
-
-      {/* Sidebar */}
-      <div
-        style={{
-          width: 60,
-          background: C.p1,
-          borderRight: `1px solid ${C.border}`,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "12px 0",
-          gap: 4,
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ color: C.teal, fontSize: 18, marginBottom: 16 }}>◈</div>
-        {NAV.map((n) => {
-          const active = view === n.id;
-          return (
-            <button
-              key={n.id}
-              onClick={() => setView(n.id)}
-              title={n.label}
-              style={{
-                width: 48,
-                height: 46,
-                background: active ? `${C.teal}15` : "transparent",
-                border: "none",
-                borderLeft: `2px solid ${active ? C.teal : "transparent"}`,
-                color: active ? C.teal : "#4A5A72",
-                fontSize: 16,
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
-              }}
-            >
-              <span>{n.icon}</span>
-              <span style={{ fontSize: 8, fontFamily: FONT.mono, letterSpacing: 0.5, fontWeight: active ? 700 : 400 }}>
-                {n.label.split(" ")[0].slice(0, 3).toUpperCase()}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Main */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Top bar — real settlement status only */}
-        <div
-          style={{
-            height: 30,
-            background: C.p1,
-            borderBottom: `1px solid ${C.border}`,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 16px",
-            gap: 24,
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono, letterSpacing: 3 }}>SATELINK COMMAND CENTER</span>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-            <span style={{ color: C.muted, fontSize: 8, fontFamily: FONT.mono }}>SETTLEMENT</span>
-            <span style={{ color: status ? (status.dryRun ? C.warn : C.red) : C.muted, fontSize: 9, fontFamily: FONT.mono, fontWeight: 700 }}>
-              {status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…"}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-            <span style={{ color: C.muted, fontSize: 8, fontFamily: FONT.mono }}>SETTLED</span>
-            <span style={{ color: C.green, fontSize: 9, fontFamily: FONT.mono, fontWeight: 700 }}>
-              {status ? fmt.num(status.totalSettlements ?? 0) : "…"}
-            </span>
-          </div>
-          <div style={{ width: 1, height: 14, background: C.border }} />
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <Pulse color={feedState === "live" ? C.green : feedState === "error" ? C.red : C.warn} />
-            <span style={{ color: C.muted, fontSize: 9, fontFamily: FONT.mono }}>{now}</span>
-          </div>
-        </div>
-
-        {/* Section header */}
-        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}20`, display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ color: C.teal, fontSize: 13, fontFamily: FONT.mono }}>{current?.icon}</span>
-          <span style={{ color: C.text, fontSize: 12, fontFamily: FONT.mono, fontWeight: 600, letterSpacing: 2 }}>
-            {current?.label.toUpperCase()}
-          </span>
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={() => {
-              loadStatus();
-              loadDevs();
-              loadJobs();
-            }}
-            style={btn(C.border, true)}
-          >
+    <AppShell
+      nav={{ items: NAV, activeId: view, onSelect: setView, collapsed, onToggleCollapse: () => setCollapsed((c) => !c) }}
+      topbar={{
+        brand: "SATELINK COMMAND CENTER",
+        searchPlaceholder: "Search operations…",
+        environment: "production",
+        status: [
+          { label: "SETTLEMENT", value: status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…", tone: status ? (status.dryRun ? "warn" : "danger") : "muted" },
+          { label: "SETTLED", value: status ? fmt.num(status.totalSettlements ?? 0) : "…", tone: "success" },
+        ],
+        live: feedState === "live",
+        liveTone: feedState === "live" ? "success" : feedState === "error" ? "danger" : "warn",
+        time: now,
+        onRefresh: refreshAll,
+      }}
+      header={{
+        icon: H.icon,
+        title: H.title,
+        subtitle: H.subtitle,
+        breadcrumb: ["Admin", "Command Center"],
+        status: headerStatus,
+        actions: (
+          <Button size="sm" onClick={refreshAll}>
             Refresh all
-          </button>
-        </div>
+          </Button>
+        ),
+      }}
+    >
+      <Stack gap="sm">
+        {notice ? <Notice>{notice}</Notice> : null}
 
-        {/* Notice */}
-        {notice && (
-          <div style={{ margin: "12px 16px 0", padding: "10px 16px", background: C.p1, border: `1px solid ${C.teal}`, color: C.teal, fontFamily: FONT.mono, fontSize: 12 }}>
-            {notice}
-          </div>
+        {/* ── NETWORK OPS ─────────────────────────────────────────────── */}
+        {view === "network" && (
+          <Split
+            asideWidth="sm"
+            asidePosition="right"
+            aside={<EventStream title="Live Event Stream" state={feedState} events={feedEvents} />}
+          >
+            <Stack gap="sm">
+              <Panel>
+                <SectionLabel right={<StatusBadge label="DESIGN" tone="muted" />}>Network Architecture</SectionLabel>
+                <TopologyDiagram model={ARCH_TOPOLOGY} caption="Structural diagram — not a live data feed." />
+              </Panel>
+              <MetricGrid columns={4}>{statusCards}</MetricGrid>
+              {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
+              <EmptyState variant="line" label="RPC Metrics · 24h Volume · Provider Pool" note="requires telemetry pipeline" />
+            </Stack>
+          </Split>
         )}
 
-        {/* Content */}
-        <div style={{ flex: 1, padding: 14, overflowY: "auto" }}>
-          {view === "noc" && <NOCView status={status} statusErr={statusErr} feed={feed} feedState={feedState} />}
-          {view === "intel" && <IntelView />}
-          {view === "war" && (
-            <WarRoomView devs={devs} devErr={devErr} busy={busy} advance={advance} outreach={outreach} classify={classify} />
-          )}
-          {view === "treas" && <TreasuryView status={status} statusErr={statusErr} busy={busy} toggleDryRun={toggleDryRun} />}
-          {view === "sec" && <SecurityView />}
-          {view === "ops" && <OpsView jobs={jobs} jobsErr={jobsErr} busy={busy} trigger={trigger} />}
-        </div>
-      </div>
-    </div>
+        {/* ── INTELLIGENCE (telemetry pending) ────────────────────────── */}
+        {view === "intel" && (
+          <Split asideWidth="sm" asidePosition="right" aside={<DonutChart title="Traffic by Country" data={null} />}>
+            <Stack gap="sm">
+              <SeriesChart title="Latency Distribution" type="bar" data={null} />
+              <EmptyState label="Provider Intelligence Matrix" message="Telemetry backend not yet implemented" note="latency · success% · traffic share" />
+              <EmptyState variant="line" label="Top Sources / ASN / Method" note="aggregation endpoint" />
+              <EmptyState variant="line" label="Real per-IP classification" note="see Revenue Ops → Lead Pipeline" />
+            </Stack>
+          </Split>
+        )}
+
+        {/* ── REVENUE OPS (leads, conversion, outreach) ───────────────── */}
+        {view === "revenue" && (
+          <Split
+            asideWidth="md"
+            asidePosition="left"
+            aside={
+              <Stack gap="sm">
+                <Panel>
+                  <SectionLabel>Conversion Funnel</SectionLabel>
+                  {devs ? (
+                    <MetricGrid columns={2}>
+                      <MetricCard label="Classified" value={fmt.num(devs.length)} tone="muted" size="sm" />
+                      <MetricCard label="Identified" value={fmt.num(counts.identified || 0)} tone="info" size="sm" />
+                      <MetricCard label="Contacted" value={fmt.num(counts.contacted || 0)} tone="warn" size="sm" />
+                      <MetricCard label="Deposited" value={fmt.num(counts.deposited || 0)} tone="primary" size="sm" />
+                      <MetricCard label="Paid" value={fmt.num(counts.paid || 0)} tone="success" size="sm" />
+                    </MetricGrid>
+                  ) : (
+                    <EmptyState variant="line" label="funnel" note="loading…" />
+                  )}
+                  <EmptyState variant="line" label="Upstream funnel (active IPs → free-limit)" note="requires telemetry" />
+                </Panel>
+                <Panel>
+                  <SectionLabel>IP Classifier</SectionLabel>
+                  <Button tone="primary" disabled={busy.classify} onClick={classify}>
+                    {busy.classify ? "Running…" : "Run IP Classifier"}
+                  </Button>
+                </Panel>
+                <Panel>
+                  <SectionLabel>Outreach</SectionLabel>
+                  <Stack gap="sm">
+                    {TEMPLATES.map((t) => (
+                      <Button key={t.id} tone="info" disabled={busy[`outreach:${t.id}`]} onClick={() => outreach(t.id)}>
+                        {busy[`outreach:${t.id}`] ? "Sending…" : `Send: ${t.label}`}
+                      </Button>
+                    ))}
+                  </Stack>
+                </Panel>
+              </Stack>
+            }
+          >
+            <Panel>
+              <SectionLabel right={<StatusBadge label={`${devs ? devs.length : 0} leads`} tone="info" />}>Lead Pipeline</SectionLabel>
+              <DataTable
+                columns={leadColumns}
+                rows={devs}
+                getRowKey={(d) => d.ip}
+                error={devErr}
+                emptyLabel="lead pipeline"
+                emptyMessage="No leads classified yet"
+                emptyNote="run the IP classifier to populate"
+              />
+            </Panel>
+          </Split>
+        )}
+
+        {/* ── TREASURY (settlement control) ───────────────────────────── */}
+        {view === "treasury" && (
+          <Stack gap="sm">
+            <MetricGrid columns={4}>
+              <MetricCard
+                label="Settlement mode"
+                value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
+                sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""}
+                tone={status ? (status.dryRun ? "warn" : "danger") : "muted"}
+                alert={status ? !status.dryRun : false}
+              />
+              <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} tone="info" />
+              <MetricCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" tone="primary" />
+              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
+              <MetricCard label="Signer address" value={status ? fmt.addr(status.signerAddress) : "…"} sub="signer wallet" tone="muted" size="sm" />
+              <MetricCard label="Treasury address" value={status ? fmt.addr(status.treasuryAddress) : "…"} sub="treasury wallet" tone="muted" size="sm" />
+            </MetricGrid>
+            {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
+
+            <Panel>
+              <SectionLabel>Settlement Control</SectionLabel>
+              {!status && !statusErr ? (
+                <EmptyState variant="line" label="control" note="loading…" />
+              ) : status ? (
+                <Inline gap="md">
+                  <StatusBadge label={status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"} tone={status.dryRun ? "warn" : "danger"} />
+                  <Button tone={status.dryRun ? "danger" : "primary"} disabled={busy.dryRun} onClick={toggleDryRun}>
+                    {busy.dryRun ? "Working…" : status.dryRun ? "Enable LIVE settlement" : "Return to DRY_RUN"}
+                  </Button>
+                </Inline>
+              ) : null}
+            </Panel>
+
+            <EmptyState variant="line" label="Revenue Velocity" note="metered/day — billing + epoch endpoints" />
+            <EmptyState variant="line" label="Epoch Detail" note="epoch endpoint in admin router" />
+            <EmptyState variant="line" label="On-chain Treasury Balance" note="balance read endpoint" />
+          </Stack>
+        )}
+
+        {/* ── AGENT OPS (jobs + fleet) ────────────────────────────────── */}
+        {view === "agents" && (
+          <Stack gap="sm">
+            <Panel>
+              <SectionLabel>Automation Jobs</SectionLabel>
+              <Inline gap="sm">
+                {TRIGGERABLE_JOBS.map((j) => (
+                  <Button key={j} tone="muted" disabled={busy[`job:${j}`]} onClick={() => trigger(j)}>
+                    {busy[`job:${j}`] ? "Running…" : `Trigger ${j}`}
+                  </Button>
+                ))}
+              </Inline>
+              <DataTable
+                columns={jobColumns}
+                rows={jobs}
+                getRowKey={(j, i) => `${j.job_name}-${i}`}
+                error={jobsErr}
+                emptyLabel="automation jobs"
+                emptyMessage="No jobs have run yet"
+                emptyNote="trigger a job above"
+              />
+            </Panel>
+            <EmptyState variant="line" label="Paperclip AI Operations" note="manage at agents.satelink.network" />
+            <EmptyState variant="line" label="Distribution Channels" note="channel-tracking endpoint" />
+          </Stack>
+        )}
+
+        {/* ── SECURITY (telemetry pending) ────────────────────────────── */}
+        {view === "security" && (
+          <Stack gap="sm">
+            <EmptyState label="SOC Metrics" message="Telemetry backend not yet implemented" note="blocked IPs · rate events · gate hits · auth failures" />
+            <EmptyState variant="line" label="Security Event Feed" note="threat-event store" />
+            <EmptyState variant="line" label="Known Threat Patterns" note="detection pipeline" />
+            <EmptyState variant="line" label="Anomaly Scores" note="anomaly engine" />
+          </Stack>
+        )}
+      </Stack>
+    </AppShell>
   );
 }

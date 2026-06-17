@@ -18,6 +18,7 @@ export interface DataTableProps<T> {
   getRowKey: (row: T, index: number) => string;
   error?: string | null;
   emptyLabel?: string;
+  emptyMessage?: string;
   emptyNote?: string;
 }
 
@@ -28,6 +29,7 @@ export function DataTable<T>({
   getRowKey,
   error,
   emptyLabel = 'No data',
+  emptyMessage,
   emptyNote,
 }: DataTableProps<T>): JSX.Element {
   return (
@@ -36,6 +38,7 @@ export function DataTable<T>({
       error={error ?? null}
       empty={rows !== null && rows.length === 0}
       emptyLabel={emptyLabel}
+      emptyMessage={emptyMessage}
       emptyNote={emptyNote}
     >
       {() => (

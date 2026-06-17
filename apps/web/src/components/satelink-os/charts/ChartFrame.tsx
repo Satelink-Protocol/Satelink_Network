@@ -16,7 +16,15 @@ export interface ChartFrameProps {
  * endpoint, charts render the empty state — never fabricated series (Phase 9).
  */
 export function ChartFrame({ title, hasData, emptyNote, children }: ChartFrameProps): JSX.Element {
-  if (!hasData) return <EmptyState variant="block" label={title} note={emptyNote} />;
+  if (!hasData)
+    return (
+      <EmptyState
+        variant="block"
+        label={title}
+        message="Telemetry backend not yet implemented"
+        note={emptyNote}
+      />
+    );
   return (
     <div className={styles.frame}>
       <SectionLabel>{title}</SectionLabel>

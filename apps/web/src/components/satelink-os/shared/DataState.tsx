@@ -9,6 +9,7 @@ export interface DataStateProps {
   error?: string | null;
   empty?: boolean;
   emptyLabel?: string;
+  emptyMessage?: string;
   emptyNote?: string;
   loadingLabel?: string;
   /** Rendered only when not loading/error/empty. */
@@ -25,12 +26,14 @@ export function DataState({
   error,
   empty,
   emptyLabel = 'No data',
+  emptyMessage,
   emptyNote,
   loadingLabel,
   children,
 }: DataStateProps): JSX.Element {
   if (loading) return <Spinner label={loadingLabel} />;
   if (error) return <div className={styles.error}>Error: {error}</div>;
-  if (empty) return <EmptyState variant="block" label={emptyLabel} note={emptyNote} />;
+  if (empty)
+    return <EmptyState variant="block" label={emptyLabel} message={emptyMessage} note={emptyNote} />;
   return <>{children()}</>;
 }

@@ -1,0 +1,16 @@
+.notice {
+  padding: 10px 16px;
+  background: var(--sat-bg-1);
+  border: 1px solid;
+  border-radius: var(--sat-radius-md);
+  font-family: var(--sat-font-mono);
+  font-size: 12px;
+}
+.notice[data-tone='primary'] {
+  border-color: var(--sat-primary);
+  color: var(--sat-primary);
+}
+.notice[data-tone='danger'] {
+  border-color: var(--sat-danger);
+  color: var(--sat-danger);
+}

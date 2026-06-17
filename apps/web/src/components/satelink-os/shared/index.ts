@@ -3,3 +3,4 @@ export * from './SectionLabel';
 export * from './EmptyState';
 export * from './DataState';
 export * from './Spinner';
+export * from './Notice';

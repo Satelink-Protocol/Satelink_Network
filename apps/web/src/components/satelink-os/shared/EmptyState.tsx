@@ -4,7 +4,10 @@ import styles from './EmptyState.module.css';
 
 export interface EmptyStateProps {
   label: string;
-  /** Short note, e.g. the missing backend. */
+  /** Main message. Default "No data yet"; pass "Telemetry backend not yet
+   * implemented" for genuinely-missing backends. */
+  message?: string;
+  /** Short note, e.g. what the surface needs. */
   note?: string;
   /**
    * `block` = professional empty panel (default; Phase 7 honest-data state).
@@ -19,6 +22,7 @@ export interface EmptyStateProps {
  */
 export function EmptyState({
   label,
+  message = 'No data yet',
   note,
   variant = 'block',
 }: EmptyStateProps): JSX.Element {
@@ -33,7 +37,7 @@ export function EmptyState({
   return (
     <div className={clsx(styles.block)}>
       <div className={styles.blockLabel}>{label.toUpperCase()}</div>
-      <div className={styles.blockTitle}>Telemetry backend not yet implemented</div>
+      <div className={styles.blockTitle}>{message}</div>
       {note ? <div className={styles.blockNote}>{note}</div> : null}
     </div>
   );
