@@ -1,0 +1,88 @@
+.nav {
+  width: 212px;
+  flex-shrink: 0;
+  background: var(--sat-bg-1);
+  border-right: 1px solid var(--sat-border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  gap: 1px;
+  transition: width 0.12s ease;
+}
+.collapsed {
+  width: 54px;
+}
+.brand {
+  color: var(--sat-primary);
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 34px;
+  padding: 0 14px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: var(--sat-text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--sat-transition);
+}
+.item:hover {
+  background: var(--sat-hover);
+  color: var(--sat-text);
+}
+.active {
+  background: color-mix(in srgb, var(--sat-primary) 8%, transparent);
+  border-left-color: var(--sat-primary);
+  color: var(--sat-primary);
+}
+.active:hover {
+  background: color-mix(in srgb, var(--sat-primary) 12%, transparent);
+  color: var(--sat-primary);
+}
+.icon {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.label {
+  font-family: var(--sat-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+.collapsed .label {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+.active .label {
+  font-weight: 600;
+}
+.collapseBtn {
+  margin: 10px 12px 0;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-sm);
+  color: var(--sat-text-muted);
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--sat-transition);
+}
+.collapseBtn:hover {
+  background: var(--sat-hover);
+  border-color: var(--sat-border-hover);
+  color: var(--sat-text);
+}

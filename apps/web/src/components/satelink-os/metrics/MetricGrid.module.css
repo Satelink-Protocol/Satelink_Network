@@ -1,0 +1,15 @@
+.grid {
+  display: grid;
+  gap: 8px;
+}
+.grid[data-cols='2'] { grid-template-columns: repeat(2, 1fr); }
+.grid[data-cols='3'] { grid-template-columns: repeat(3, 1fr); }
+.grid[data-cols='4'] { grid-template-columns: repeat(4, 1fr); }
+.grid[data-cols='6'] { grid-template-columns: repeat(6, 1fr); }
+
+@media (max-width: 900px) {
+  .grid[data-cols='4'],
+  .grid[data-cols='6'] {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

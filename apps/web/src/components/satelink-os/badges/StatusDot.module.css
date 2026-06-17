@@ -1,0 +1,21 @@
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot[data-tone='primary'] { background: var(--sat-primary); }
+.dot[data-tone='secondary'] { background: var(--sat-secondary); }
+.dot[data-tone='accent'] { background: var(--sat-accent); }
+.dot[data-tone='success'] { background: var(--sat-success); }
+.dot[data-tone='warn'] { background: var(--sat-warn); }
+.dot[data-tone='danger'] { background: var(--sat-danger); }
+.dot[data-tone='info'] { background: var(--sat-info); }
+.dot[data-tone='muted'] { background: var(--sat-text-muted); }
+
+.dot[data-pulse='1'] {
+  animation: sat-pulse 2s ease-in-out infinite;
+}
+.dot[data-pulse='1'][data-tone='success'] { box-shadow: var(--sat-glow-primary); }
+.dot[data-pulse='1'][data-tone='danger'] { box-shadow: var(--sat-glow-danger); }

@@ -1,0 +1,6 @@
+.error {
+  font-family: var(--sat-font-mono);
+  font-size: 12px;
+  color: var(--sat-danger);
+  padding: var(--sat-space-sm) 0;
+}

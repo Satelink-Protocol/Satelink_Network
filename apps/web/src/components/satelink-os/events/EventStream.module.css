@@ -1,0 +1,38 @@
+.wrap {
+  background: var(--sat-bg-1);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  padding: 12px 14px;
+  overflow-y: auto;
+  max-height: 620px;
+}
+.note {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  color: var(--sat-text-muted);
+}
+.row {
+  display: flex;
+  gap: 8px;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sat-border) 50%, transparent);
+  font-family: var(--sat-font-mono);
+  font-size: 10px;
+  border-radius: var(--sat-radius-sm);
+  transition: var(--sat-transition);
+}
+.row:hover {
+  background: var(--sat-hover);
+}
+.time {
+  color: var(--sat-text-muted);
+  min-width: 64px;
+}
+.source {
+  color: var(--sat-info);
+  min-width: 110px;
+}
+.msg {
+  color: var(--sat-text);
+}
