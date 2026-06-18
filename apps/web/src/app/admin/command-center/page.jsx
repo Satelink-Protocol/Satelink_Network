@@ -32,6 +32,7 @@ import {
   Notice,
   Panel,
   SectionLabel,
+  SparkArea,
   Split,
   Stack,
   StatusBadge,
@@ -372,6 +373,11 @@ export default function AdminCommandCenter() {
       render: (d) => <StatusBadge label={d.classification || "unknown"} tone={d.classification === "developer" ? "primary" : "muted"} />,
     },
     { key: "calls", header: "Calls/day", mono: true, render: (d) => fmt.num(d.avg_daily_calls) },
+    {
+      key: "trend",
+      header: "Trend",
+      render: (d) => <SparkArea data={[d.avg_daily_calls]} ariaLabel={`${d.ip} calls/day`} />,
+    },
     { key: "days", header: "Days", mono: true, muted: true, render: (d) => String(d.days_active ?? 0) },
     { key: "score", header: "Score", mono: true, render: (d) => String(d.score ?? 0) },
     { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
@@ -406,6 +412,11 @@ export default function AdminCommandCenter() {
   // Overview · Customer Zero Countdown — top demand leads.
   const czColumns = [
     { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
+    {
+      key: "trend",
+      header: "Trend",
+      render: (d) => <SparkArea data={[d.avg_daily_calls]} ariaLabel={`${d.ip} calls/day`} />,
+    },
     { key: "isp", header: "ISP", render: (d) => d.isp || "—" },
     { key: "calls", header: "Calls/day", mono: true, render: (d) => fmt.num(d.avg_daily_calls) },
     { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
@@ -507,7 +518,7 @@ export default function AdminCommandCenter() {
                   />
                   {topLeads.length > 0 ? (
                     <Notice>
-                      {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active`}
+                      {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active. Live trend available after RPC metrics pipeline.`}
                     </Notice>
                   ) : null}
                 </Panel>

@@ -24,6 +24,10 @@
 .tr:last-child {
   border-bottom: none;
 }
+/* Zebra striping for readability — kept above :hover so hover always wins. */
+.tr:nth-child(even) {
+  background: color-mix(in srgb, var(--sat-text) 2%, transparent);
+}
 .tr:hover {
   background: color-mix(in srgb, var(--sat-primary) 5%, transparent);
 }
