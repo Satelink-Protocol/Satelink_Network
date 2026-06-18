@@ -9,7 +9,8 @@
  * satelink :root theme (see globals.css). Data is real, from /admin/intel/developers.
  */
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -70,17 +71,27 @@ export function CustomerZeroCard({
             <p className="text-muted-foreground text-sm">No leads classified yet.</p>
           ) : (
             <ChartContainer config={chartConfig} className="h-[200px] w-full">
-              <BarChart data={data} margin={{ left: 12, right: 12, top: 8 }}>
+
+
+              <AreaChart data={data} margin={{ left: 12, right: 12, top: 8 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="lead" tickLine={false} axisLine={false} tickMargin={8} />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} width={40} />
                 <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
-                <Bar
+                <defs>
+                  <linearGradient id="fillCalls" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-calls)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--color-calls)" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <Area
                   dataKey="calls"
-                  fill="var(--color-calls)"
-                  radius={[4, 4, 0, 0]}
+                  type="monotone"
+                  fill="url(#fillCalls)"
+                  stroke="var(--color-calls)"
+                  strokeWidth={2}
                 />
-              </BarChart>
+              </AreaChart>
+
             </ChartContainer>
           )}
         </CardContent>
