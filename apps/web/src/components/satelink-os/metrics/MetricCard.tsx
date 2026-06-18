@@ -13,6 +13,8 @@ export interface MetricCardProps {
   alert?: boolean;
   /** `lg` = headline metric (28px), `sm` = compact (15px, e.g. addresses). */
   size?: 'lg' | 'sm';
+  /** Small tone-colored square glyph badge, top-left (Gentelella tile style). */
+  icon?: ReactNode;
 }
 
 /** Single KPI tile, capped height, value + sublabel only. */
@@ -23,11 +25,19 @@ export function MetricCard({
   tone = 'primary',
   alert,
   size = 'lg',
+  icon,
 }: MetricCardProps): JSX.Element {
   return (
     <div className={clsx(styles.card, alert && styles.alert)} data-tone={tone}>
       {alert ? <span className={styles.warnGlyph}>⚠</span> : null}
-      <div className={styles.label}>{label}</div>
+      <div className={styles.head}>
+        {icon != null ? (
+          <span className={styles.icon} data-tone={tone} aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
+        <div className={styles.label}>{label}</div>
+      </div>
       <div className={styles.value} data-size={size}>
         {value}
       </div>
