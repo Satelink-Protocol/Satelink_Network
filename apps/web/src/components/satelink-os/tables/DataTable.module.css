@@ -31,6 +31,11 @@
 .tr:hover {
   background: color-mix(in srgb, var(--sat-primary) 5%, transparent);
 }
+/* #1 lead accent — amber left bar + tint. Last rule so it wins over zebra/hover. */
+.tr[data-accent='1'] {
+  background: color-mix(in srgb, var(--sat-warn) 4%, transparent);
+  box-shadow: inset 3px 0 0 var(--sat-warn);
+}
 .td {
   padding: 12px 16px;
   font-size: 13px;

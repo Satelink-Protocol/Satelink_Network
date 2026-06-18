@@ -20,6 +20,8 @@ export interface DataTableProps<T> {
   emptyLabel?: string;
   emptyMessage?: string;
   emptyNote?: string;
+  /** Row key (per getRowKey) to highlight with an amber accent (e.g. the #1 lead). */
+  accentRowKey?: string;
 }
 
 /** Typed table with built-in loading / error / empty states. */
@@ -31,6 +33,7 @@ export function DataTable<T>({
   emptyLabel = 'No data',
   emptyMessage,
   emptyNote,
+  accentRowKey,
 }: DataTableProps<T>): JSX.Element {
   return (
     <DataState
@@ -53,8 +56,14 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {(rows ?? []).map((row, i) => (
-              <tr key={getRowKey(row, i)} className={styles.tr}>
+            {(rows ?? []).map((row, i) => {
+              const rowKey = getRowKey(row, i);
+              return (
+              <tr
+                key={rowKey}
+                className={styles.tr}
+                data-accent={accentRowKey != null && rowKey === accentRowKey ? '1' : undefined}
+              >
                 {columns.map((c) => (
                   <td
                     key={c.key}
@@ -68,7 +77,8 @@ export function DataTable<T>({
                   </td>
                 ))}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}
