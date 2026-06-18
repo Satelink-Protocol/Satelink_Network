@@ -26,6 +26,7 @@ import {
   EmptyState,
   EventStream,
   Inline,
+  Input,
   MetricCard,
   MetricGrid,
   Notice,
@@ -35,12 +36,8 @@ import {
   Stack,
   StatusBadge,
   StatusDot,
-  tokens,
   TopologyDiagram,
 } from "@/components/satelink-os";
-
-const { colors: C } = tokens;
-const MONO = "var(--sat-font-mono, ui-monospace, monospace)";
 
 // ── Static config ─────────────────────────────────────────────────────────────
 const NAV = [
@@ -397,6 +394,27 @@ export default function AdminCommandCenter() {
     { key: "created_at", header: "When", mono: true, muted: true, render: (j) => fmt.time(j.created_at) },
   ];
 
+  // Overview · Automation Health — job freshness via StatusDot.
+  const healthColumns = [
+    { key: "dot", header: "", render: (j) => <StatusDot tone={jobDotTone(j)} pulse={jobDotTone(j) === "success"} /> },
+    { key: "job_name", header: "Job", mono: true },
+    { key: "created_at", header: "Last run", mono: true, muted: true, render: (j) => fmt.time(j.created_at) },
+  ];
+
+  // Overview · Customer Zero Countdown — top demand leads.
+  const czColumns = [
+    { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
+    { key: "isp", header: "ISP", render: (d) => d.isp || "—" },
+    { key: "calls", header: "Calls/day", mono: true, render: (d) => fmt.num(d.avg_daily_calls) },
+    { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
+  ];
+
+  // Settings — static config reference rows rendered through DataTable.
+  const kvColumns = [
+    { key: "k", header: "Key", mono: true, muted: true },
+    { key: "v", header: "Value", mono: true },
+  ];
+
   // Funnel counts — real, derived from lead statuses
   const counts = (devs || []).reduce((a, d) => ((a[d.status] = (a[d.status] || 0) + 1), a), {});
 
@@ -476,44 +494,33 @@ export default function AdminCommandCenter() {
               <Split asideWidth="md" asidePosition="right" aside={
                 <Panel>
                   <SectionLabel right={<StatusBadge label={czHit ? "HIT" : "WAITING"} tone={czHit ? "success" : "warn"} />}>Customer Zero Countdown</SectionLabel>
-                  {devs == null ? (
-                    <EmptyState variant="line" label="leads" note="loading…" />
-                  ) : topLeads.length === 0 ? (
-                    <EmptyState label="leads" message="No leads classified yet" note="IP classifier runs every 15min" />
-                  ) : (
-                    <Stack gap="sm">
-                      {topLeads.map((d) => (
-                        <Inline key={d.ip} gap="sm" wrap={false}>
-                          <span style={{ fontFamily: MONO, fontSize: 12, color: C.text }}>{d.ip}</span>
-                          <span style={{ fontSize: 12, color: C.textMuted }}>{d.isp || "—"}</span>
-                          <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 12, color: C.text }}>{fmt.num(d.avg_daily_calls)}/day</span>
-                          <StatusBadge label={d.status} tone={stageTone(d.status)} />
-                        </Inline>
-                      ))}
-                      <Notice>
-                        {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active`}
-                      </Notice>
-                    </Stack>
-                  )}
+                  <DataTable
+                    columns={czColumns}
+                    rows={devs == null ? null : topLeads}
+                    getRowKey={(d) => d.ip}
+                    error={devErr}
+                    emptyLabel="leads"
+                    emptyMessage="No leads classified yet"
+                    emptyNote="IP classifier runs every 15min"
+                  />
+                  {topLeads.length > 0 ? (
+                    <Notice>
+                      {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active`}
+                    </Notice>
+                  ) : null}
                 </Panel>
               }>
                 <Panel>
                   <SectionLabel right={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>Automation Health</SectionLabel>
-                  {jobs == null ? (
-                    <EmptyState variant="line" label="jobs" note="loading…" />
-                  ) : jobs.length === 0 ? (
-                    <EmptyState label="automation jobs" message="No job history yet" note="trigger a job in Agents" />
-                  ) : (
-                    <Stack gap="sm">
-                      {jobs.map((j, i) => (
-                        <Inline key={`${j.job_name}-${i}`} gap="sm" wrap={false}>
-                          <StatusDot tone={jobDotTone(j)} pulse={jobDotTone(j) === "success"} />
-                          <span style={{ fontFamily: MONO, fontSize: 12, color: C.text }}>{j.job_name}</span>
-                          <span style={{ marginLeft: "auto", fontSize: 12, color: C.textMuted }}>{fmt.time(j.created_at)}</span>
-                        </Inline>
-                      ))}
-                    </Stack>
-                  )}
+                  <DataTable
+                    columns={healthColumns}
+                    rows={jobs}
+                    getRowKey={(j, i) => `${j.job_name}-${i}`}
+                    error={jobsErr}
+                    emptyLabel="automation jobs"
+                    emptyMessage="No job history yet"
+                    emptyNote="trigger a job in Agents"
+                  />
                 </Panel>
               </Split>
 
@@ -635,22 +642,13 @@ export default function AdminCommandCenter() {
                   </Inline>
                   {status.dryRun && showLiveConfirm ? (
                     <Inline gap="sm">
-                      <input
+                      <Input
                         value={confirmLive}
-                        onChange={(e) => setConfirmLive(e.target.value)}
+                        onChange={setConfirmLive}
                         placeholder="type LIVE to confirm"
-                        aria-label="type LIVE to confirm"
-                        style={{
-                          background: C.bg0,
-                          border: `1px solid ${C.borderStrong}`,
-                          borderRadius: 4,
-                          color: C.text,
-                          padding: "6px 10px",
-                          fontFamily: MONO,
-                          fontSize: 13,
-                          outline: "none",
-                          minWidth: 200,
-                        }}
+                        ariaLabel="type LIVE to confirm"
+                        disabled={busy.dryRun}
+                        mono
                       />
                       <Button tone="danger" disabled={busy.dryRun || confirmLive !== "LIVE"} onClick={toggleDryRun}>
                         {busy.dryRun ? "Working…" : "Confirm LIVE"}
@@ -682,25 +680,11 @@ export default function AdminCommandCenter() {
 
             <Panel>
               <SectionLabel right={<StatusDot tone="success" pulse />}>Revenue Pipeline</SectionLabel>
-              <Inline gap="sm" wrap>
+              <MetricGrid columns={6}>
                 {pipeline.map((s) => (
-                  <div
-                    key={s.k}
-                    style={{
-                      flex: "1 1 150px",
-                      minWidth: 150,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 6,
-                      padding: "10px 12px",
-                      background: C.bg1,
-                    }}
-                  >
-                    <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: 1 }}>{s.k}</div>
-                    <div style={{ fontSize: 13, color: C.text, margin: "6px 0" }}>{s.detail}</div>
-                    <StatusBadge label={s.badge} tone={s.tone} />
-                  </div>
+                  <MetricCard key={s.k} label={s.k} value={s.detail} sub={s.badge} tone={s.tone} size="sm" />
                 ))}
-              </Inline>
+              </MetricGrid>
             </Panel>
 
             <Panel>
@@ -751,60 +735,60 @@ export default function AdminCommandCenter() {
           <Stack gap="sm">
             <Panel>
               <SectionLabel>Environment</SectionLabel>
-              {[
-                ["API_BASE", "rpc.satelink.network"],
-                ["DATABASE_URL", "postgres://••••••@railway"],
-                ["REDIS", "managed (Railway)"],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
-                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
-                  <span style={{ color: C.text, fontFamily: MONO }}>{v}</span>
-                </div>
-              ))}
+              <DataTable
+                columns={kvColumns}
+                rows={[
+                  { k: "API_BASE", v: "rpc.satelink.network" },
+                  { k: "DATABASE_URL", v: "postgres://••••••@railway" },
+                  { k: "REDIS", v: "managed (Railway)" },
+                ]}
+                getRowKey={(r) => r.k}
+                emptyLabel="environment"
+              />
             </Panel>
 
             <Panel>
               <SectionLabel>Thresholds</SectionLabel>
-              {[
-                ["MIN_ANCHOR_REVENUE_USDT", status ? String(status.threshold ?? "0.5") : "…"],
-                ["SETTLEMENT_DRY_RUN", status ? (status.dryRun ? "1 (simulated)" : "0 (live)") : "…"],
-                ["SIGNER_WALLET", status ? fmt.addr(status.signerAddress) : "…"],
-                ["TREASURY_WALLET", status ? fmt.addr(status.treasuryAddress) : "…"],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
-                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
-                  <span style={{ color: C.text, fontFamily: MONO }}>{v}</span>
-                </div>
-              ))}
+              <DataTable
+                columns={kvColumns}
+                rows={[
+                  { k: "MIN_ANCHOR_REVENUE_USDT", v: status ? String(status.threshold ?? "0.5") : "…" },
+                  { k: "SETTLEMENT_DRY_RUN", v: status ? (status.dryRun ? "1 (simulated)" : "0 (live)") : "…" },
+                  { k: "SIGNER_WALLET", v: status ? fmt.addr(status.signerAddress) : "…" },
+                  { k: "TREASURY_WALLET", v: status ? fmt.addr(status.treasuryAddress) : "…" },
+                ]}
+                getRowKey={(r) => r.k}
+                emptyLabel="thresholds"
+              />
             </Panel>
 
             <Panel>
               <SectionLabel>External Services</SectionLabel>
-              {[
-                ["Discord webhook", "configured (server-side env)"],
-                ["erpc Discussion", "github.com/erpc/erpc/discussions/943"],
-                ["Chainlist PR", "github.com/ethereum-lists/chains/pull/8314"],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13, gap: 16 }}>
-                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
-                  <span style={{ color: C.text, fontFamily: MONO, textAlign: "right" }}>{v}</span>
-                </div>
-              ))}
+              <DataTable
+                columns={kvColumns}
+                rows={[
+                  { k: "Discord webhook", v: "configured (server-side env)" },
+                  { k: "erpc Discussion", v: "github.com/erpc/erpc/discussions/943" },
+                  { k: "Chainlist PR", v: "github.com/ethereum-lists/chains/pull/8314" },
+                ]}
+                getRowKey={(r) => r.k}
+                emptyLabel="external services"
+              />
             </Panel>
 
             <Panel>
               <SectionLabel>Paperclip</SectionLabel>
-              {[
-                ["Company ID", "2fb13f91-fa14-4a2f-9497-6601e9a171d9"],
-                ["Agents URL", "agents.satelink.network"],
-                ["Model", "claude-haiku"],
-                ["Count", "12"],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13, gap: 16 }}>
-                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
-                  <span style={{ color: C.text, fontFamily: MONO, textAlign: "right" }}>{v}</span>
-                </div>
-              ))}
+              <DataTable
+                columns={kvColumns}
+                rows={[
+                  { k: "Company ID", v: "2fb13f91-fa14-4a2f-9497-6601e9a171d9" },
+                  { k: "Agents URL", v: "agents.satelink.network" },
+                  { k: "Model", v: "claude-haiku" },
+                  { k: "Count", v: "12" },
+                ]}
+                getRowKey={(r) => r.k}
+                emptyLabel="paperclip"
+              />
             </Panel>
           </Stack>
         )}
