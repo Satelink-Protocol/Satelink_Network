@@ -54,6 +54,7 @@ import {
   StatusDot,
   TopologyDiagram,
 } from "@/components/satelink-os";
+import { CustomerZeroCard } from "@/components/shadcn-trial/CustomerZeroCard";
 
 // ── Static config ─────────────────────────────────────────────────────────────
 const NAV = [
@@ -469,19 +470,6 @@ export default function AdminCommandCenter() {
     { key: "created_at", header: "Last run", mono: true, muted: true, render: (j) => fmt.time(j.created_at) },
   ];
 
-  // Overview · Customer Zero Countdown — top demand leads.
-  const czColumns = [
-    { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
-    {
-      key: "trend",
-      header: "Trend",
-      render: (d) => <SparkArea data={[d.avg_daily_calls]} ariaLabel={`${d.ip} calls/day`} />,
-    },
-    { key: "isp", header: "ISP", render: (d) => d.isp || "—" },
-    { key: "calls", header: "Calls/day", mono: true, render: (d) => fmt.num(d.avg_daily_calls) },
-    { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
-  ];
-
   // Settings — static config reference rows rendered through DataTable.
   const kvColumns = [
     { key: "k", header: "Key", mono: true, muted: true },
@@ -576,23 +564,8 @@ export default function AdminCommandCenter() {
               {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
 
               <Split asideWidth="md" asidePosition="right" aside={
-                <Panel>
-                  <SectionLabel right={<StatusBadge label={czHit ? "HIT" : "WAITING"} tone={czHit ? "success" : "warn"} />}>Customer Zero Countdown</SectionLabel>
-                  <DataTable
-                    columns={czColumns}
-                    rows={devs == null ? null : topLeads}
-                    getRowKey={(d) => d.ip}
-                    error={devErr}
-                    emptyLabel="leads"
-                    emptyMessage="No leads classified yet"
-                    emptyNote="IP classifier runs every 15min"
-                  />
-                  {topLeads.length > 0 ? (
-                    <Notice>
-                      {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active. Live trend available after RPC metrics pipeline.`}
-                    </Notice>
-                  ) : null}
-                </Panel>
+                /* shadcn/ui trial — only this panel is migrated; all others stay satelink-os. */
+                <CustomerZeroCard leads={devs == null ? null : topLeads} czHit={czHit} />
               }>
                 <Stack gap="sm">
                   <Panel>
