@@ -7,11 +7,11 @@
 }
 .label {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
-  letter-spacing: 2px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--sat-text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .row {
   display: flex;
@@ -20,13 +20,13 @@
 }
 .value {
   font-family: var(--sat-font-mono);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--sat-text);
 }
 .delta {
   font-family: var(--sat-font-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 .delta[data-dir='up'] { color: var(--sat-success); }
 .delta[data-dir='down'] { color: var(--sat-danger); }

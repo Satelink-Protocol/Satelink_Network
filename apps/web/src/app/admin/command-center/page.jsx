@@ -349,7 +349,7 @@ export default function AdminCommandCenter() {
   // settlement API provides them (threshold, dry-run); no fabricated throughput.
   const pipeline = [
     { k: "USAGE", detail: "Gateway routing", badge: "ACTIVE", tone: "primary" },
-    { k: "METERING", detail: "$0.00001 / call", badge: "ACTIVE", tone: "primary" },
+    { k: "METERING", detail: "$0.00003 / call", badge: "ACTIVE", tone: "primary" },
     { k: "EPOCH", detail: "Accumulating", badge: "OPEN", tone: "warn" },
     { k: "ANCHOR", detail: `Threshold: ${status?.threshold ?? "—"} USDT`, badge: "PENDING", tone: "warn" },
     {

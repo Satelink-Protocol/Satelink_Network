@@ -2,15 +2,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   /* SigNoz card headers carry a hairline divider */
   border-bottom: 1px solid color-mix(in srgb, var(--sat-border) 70%, transparent);
 }
 .label {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
-  letter-spacing: 2.5px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--sat-text-muted);
+  color: var(--sat-text-secondary);
 }

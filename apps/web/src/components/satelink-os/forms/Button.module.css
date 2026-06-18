@@ -8,12 +8,12 @@
   transition: var(--sat-transition);
 }
 .btn[data-size='md'] {
-  padding: 7px 14px;
-  font-size: 10px;
+  padding: 8px 16px;
+  font-size: 12px;
 }
 .btn[data-size='sm'] {
-  padding: 3px 10px;
-  font-size: 9px;
+  padding: 5px 12px;
+  font-size: 11px;
 }
 .btn[data-tone='primary'] { color: var(--sat-primary); border-color: var(--sat-primary); }
 .btn[data-tone='secondary'] { color: var(--sat-secondary); border-color: var(--sat-secondary); }
