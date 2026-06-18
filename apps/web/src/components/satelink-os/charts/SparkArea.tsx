@@ -59,7 +59,7 @@ export function SparkArea({
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={0.4} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.05} />
         </linearGradient>
       </defs>
       {/* Floor the fill at zero so a flat line reads as a filled level, not a sliver. */}

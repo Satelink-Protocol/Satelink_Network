@@ -738,8 +738,8 @@ export default function AdminCommandCenter() {
             <Panel>
               <SectionLabel right={<StatusBadge label="PROJECTION — POST CUSTOMER ZERO" tone="muted" />}>Revenue Projection</SectionLabel>
               <div style={{ marginTop: 16 }}>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={PROJECTION_DATA} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={PROJECTION_DATA} barCategoryGap="30%" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                     <XAxis
                       dataKey="label"
                       tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
@@ -764,7 +764,7 @@ export default function AdminCommandCenter() {
                       labelStyle={{ color: "#64748B" }}
                       cursor={{ fill: "rgba(78,205,196,0.05)" }}
                     />
-                    <Bar dataKey="monthly" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="monthly" radius={[4, 4, 0, 0]}>
                       <Cell fill="#4ECDC4" />
                       <Cell fill="#4ECDC4" opacity={0.7} />
                       <Cell fill="#4ECDC4" opacity={0.5} />
