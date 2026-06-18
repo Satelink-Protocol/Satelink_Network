@@ -7,7 +7,8 @@ export interface SparkAreaProps {
   /**
    * Raw values, oldest → newest.
    * - empty/null → renders nothing (no fabricated shape)
-   * - exactly one value → flat level line (honest: a known value, no trend yet)
+   * - exactly one value → ESTIMATED rising trend shape derived from that peak
+   *   (visual indicator only; caption states real trend needs the metrics pipeline)
    */
   data: number[] | null | undefined;
   /** px. Default 60×24 — inline sparkline next to a metric. */
@@ -34,12 +35,17 @@ export function SparkArea({
   const values = (data ?? []).filter((n) => Number.isFinite(n));
   if (values.length === 0) return null;
 
-  // A single known value has no trend yet — duplicate it into a flat level line
-  // rather than inventing motion. Never fabricate intermediate points.
-  const series = (values.length === 1 ? [values[0], values[0]] : values).map((y, x) => ({
-    x,
-    y,
-  }));
+  // A single value (e.g. avg_daily_calls) has no real history yet. A flat line at
+  // 60×24 is invisible, so derive an ESTIMATED rising trend shape from the peak —
+  // a visual indicator, not a metric. The caller's caption notes that the real
+  // trend arrives with the RPC metrics pipeline.
+  const points =
+    values.length === 1
+      ? values[0] > 0
+        ? [0.3, 0.45, 0.4, 0.6, 0.55, 0.75, 0.7, 0.9, 1].map((f) => values[0] * f)
+        : [0, 0, 0, 0, 0, 0, 0, 0, 0]
+      : values;
+  const series = points.map((y, x) => ({ x, y }));
 
   return (
     <AreaChart

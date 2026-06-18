@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
   AppShell,
@@ -64,6 +65,12 @@ const PROJECTIONS = [
   { daily: "$0.50/day", who: "1 paying customer", monthly: "$15/month" },
   { daily: "$1.50/day", who: "3 paying customers", monthly: "$45/month" },
   { daily: "$5.00/day", who: "7 paying customers", monthly: "$150/month" },
+];
+// Same projection, numeric, for the bar chart.
+const PROJECTION_DATA = [
+  { label: "1 customer", daily: 0.5, monthly: 15 },
+  { label: "3 customers", daily: 1.5, monthly: 45 },
+  { label: "7 customers", daily: 5.0, monthly: 150 },
 ];
 
 // Structural architecture model (Phase 8: data-driven, no providers/metrics).
@@ -364,8 +371,35 @@ export default function AdminCommandCenter() {
     { k: "TREASURY", detail: "$0.00 external", badge: "WAITING", tone: "muted" },
   ];
 
+  const topLeadIp = topLeads[0]?.ip;
   const leadColumns = [
-    { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
+    {
+      key: "ip",
+      header: "IP",
+      mono: true,
+      render: (d) => (
+        <>
+          {d.ip}
+          {d.ip === topLeadIp ? (
+            <span
+              style={{
+                marginLeft: 6,
+                padding: "1px 5px",
+                fontSize: 9,
+                fontFamily: "JetBrains Mono",
+                background: "rgba(245,158,11,0.15)",
+                border: "1px solid rgba(245,158,11,0.4)",
+                color: "#F59E0B",
+                borderRadius: 2,
+                letterSpacing: "0.08em",
+              }}
+            >
+              #1
+            </span>
+          ) : null}
+        </>
+      ),
+    },
     { key: "loc", header: "ISP / Country", render: (d) => [d.isp, d.country].filter(Boolean).join(" · ") || "—" },
     {
       key: "class",
@@ -604,6 +638,7 @@ export default function AdminCommandCenter() {
                 columns={leadColumns}
                 rows={devs == null ? null : radarFilter === "all" ? devs : devs.filter((d) => d.status === radarFilter)}
                 getRowKey={(d) => d.ip}
+                accentRowKey={topLeadIp}
                 error={devErr}
                 emptyLabel="lead pipeline"
                 emptyMessage="No leads classified yet"
@@ -702,6 +737,52 @@ export default function AdminCommandCenter() {
 
             <Panel>
               <SectionLabel right={<StatusBadge label="PROJECTION — POST CUSTOMER ZERO" tone="muted" />}>Revenue Projection</SectionLabel>
+              <div style={{ marginTop: 16 }}>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={PROJECTION_DATA} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#0C1120",
+                        border: "1px solid #1A2840",
+                        borderRadius: 4,
+                        fontFamily: "JetBrains Mono",
+                        fontSize: 12,
+                      }}
+                      formatter={(value) => [`$${value}/mo`, "Monthly"]}
+                      labelStyle={{ color: "#64748B" }}
+                      cursor={{ fill: "rgba(78,205,196,0.05)" }}
+                    />
+                    <Bar dataKey="monthly" radius={[3, 3, 0, 0]}>
+                      <Cell fill="#4ECDC4" />
+                      <Cell fill="#4ECDC4" opacity={0.7} />
+                      <Cell fill="#4ECDC4" opacity={0.5} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#64748B",
+                    fontFamily: "JetBrains Mono",
+                    marginTop: 4,
+                    textAlign: "right",
+                  }}
+                >
+                  PROJECTION — POST CUSTOMER ZERO
+                </div>
+              </div>
               <DataTable
                 columns={[
                   { key: "daily", header: "Daily", mono: true },
