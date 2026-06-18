@@ -1,0 +1,8 @@
+Always use TypeScript.
+Always use Tailwind CSS v4 (CSS-based @import, no tailwind.config.js).
+Never install @tremor/react — incompatible with Tailwind v4, confirmed.
+Never install Bootstrap, jQuery, or any vanilla-JS template (e.g. Gentelella).
+shadcn/ui is allowed but must be scoped under a .theme-shadcn class wrapper — never write tokens to :root.
+Charts: use recharts only, already installed. No new charting library.
+Never fabricate data. No hardcoded fallback numbers on API error — use 0 or explicit error states.
+Read ANTIGRAVITY_BRIEFING.md in full before proposing any change.
