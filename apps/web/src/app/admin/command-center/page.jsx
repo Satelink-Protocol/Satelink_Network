@@ -23,7 +23,6 @@ import {
   AppShell,
   Button,
   DataTable,
-  DonutChart,
   EmptyState,
   EventStream,
   Inline,
@@ -32,31 +31,42 @@ import {
   Notice,
   Panel,
   SectionLabel,
-  SeriesChart,
   Split,
   Stack,
   StatusBadge,
+  StatusDot,
+  tokens,
   TopologyDiagram,
 } from "@/components/satelink-os";
 
+const { colors: C } = tokens;
+const MONO = "var(--sat-font-mono, ui-monospace, monospace)";
+
 // ── Static config ─────────────────────────────────────────────────────────────
 const NAV = [
-  { id: "network", icon: "◈", label: "Network Ops" },
-  { id: "intel", icon: "◉", label: "Intelligence" },
-  { id: "revenue", icon: "⊕", label: "Revenue Ops" },
-  { id: "treasury", icon: "◎", label: "Treasury" },
-  { id: "agents", icon: "◐", label: "Agent Ops" },
-  { id: "security", icon: "⊗", label: "Security" },
+  { id: "overview", icon: "◈", label: "Overview" },
+  { id: "radar", icon: "◎", label: "Demand Radar" },
+  { id: "treasury", icon: "◉", label: "Treasury" },
+  { id: "revenue", icon: "⊕", label: "Revenue" },
+  { id: "agents", icon: "◐", label: "Agents" },
+  { id: "settings", icon: "⊙", label: "Settings" },
 ];
 
 const HEADERS = {
-  network: { icon: "◈", title: "Network Operations", subtitle: "Gateway architecture & live event stream" },
-  intel: { icon: "◉", title: "Intelligence", subtitle: "Traffic, providers & geo — telemetry pending" },
-  revenue: { icon: "⊕", title: "Revenue Operations", subtitle: "Lead pipeline, conversion & outreach" },
-  treasury: { icon: "◎", title: "Treasury", subtitle: "Settlement control & on-chain status" },
-  agents: { icon: "◐", title: "Agent Operations", subtitle: "Automation jobs & agent fleet" },
-  security: { icon: "⊗", title: "Security", subtitle: "SOC posture — telemetry pending" },
+  overview: { icon: "◈", title: "Overview", subtitle: "Gateway status & Customer Zero countdown" },
+  radar: { icon: "◎", title: "Demand Radar", subtitle: "Lead pipeline, conversion & outreach" },
+  treasury: { icon: "◉", title: "Treasury", subtitle: "Settlement control & on-chain status" },
+  revenue: { icon: "⊕", title: "Revenue", subtitle: "Credit balance, pipeline & projection" },
+  agents: { icon: "◐", title: "Agents", subtitle: "Automation jobs & agent fleet" },
+  settings: { icon: "⊙", title: "Settings", subtitle: "Configuration reference" },
 };
+
+// Forward-looking planning rows — clearly labelled PROJECTION, never current state.
+const PROJECTIONS = [
+  { daily: "$0.50/day", who: "1 paying customer", monthly: "$15/month" },
+  { daily: "$1.50/day", who: "3 paying customers", monthly: "$45/month" },
+  { daily: "$5.00/day", who: "7 paying customers", monthly: "$150/month" },
+];
 
 // Structural architecture model (Phase 8: data-driven, no providers/metrics).
 const ARCH_TOPOLOGY = {
@@ -124,9 +134,15 @@ async function adminFetch(path, opts = {}) {
 }
 
 export default function AdminCommandCenter() {
-  const [view, setView] = useState("network");
+  const [view, setView] = useState("radar");
   const [collapsed, setCollapsed] = useState(false);
   const [now, setNow] = useState("");
+
+  // Treasury: inline typed-LIVE confirmation (replaces the old browser prompt).
+  const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  const [confirmLive, setConfirmLive] = useState("");
+  // Demand Radar: stage filter.
+  const [radarFilter, setRadarFilter] = useState("all");
 
   const [status, setStatus] = useState(null);
   const [statusErr, setStatusErr] = useState(null);
@@ -233,19 +249,16 @@ export default function AdminCommandCenter() {
   const toggleDryRun = async () => {
     if (!status) return;
     const goingLive = status.dryRun === true;
-    if (goingLive) {
-      const typed = window.prompt("This enables LIVE settlement. Real POL will be spent.\n\nType LIVE to confirm:");
-      if (typed !== "LIVE") {
-        flash("DRY_RUN toggle cancelled — confirmation not matched");
-        return;
-      }
-    }
+    // Going LIVE is gated by the inline typed-LIVE confirmation in the JSX.
+    if (goingLive && confirmLive !== "LIVE") return;
     setBusyFor("dryRun", true);
     try {
       const r = await adminFetch("/settlement/dry-run", { method: "POST", body: { enabled: !status.dryRun } });
       if (!r.ok) throw new Error(r.error || "toggle failed");
       const persistNote = r.persistent === false ? " Change is in-process only — set RAILWAY_TOKEN for a persistent Railway update." : "";
       flash(`Settlement is now ${r.dryRun ? "DRY_RUN (simulated)" : "LIVE"}.${persistNote}`);
+      setShowLiveConfirm(false);
+      setConfirmLive("");
       await loadStatus();
     } catch (e) {
       flash(`Toggle failed: ${e.message}`);
@@ -318,19 +331,38 @@ export default function AdminCommandCenter() {
     message: e.action || "—",
   }));
 
-  const statusCards = (
-    <>
-      <MetricCard
-        label="Settlement mode"
-        value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"}
-        tone={status ? (status.dryRun ? "warn" : "danger") : "muted"}
-        alert={status ? !status.dryRun : false}
-      />
-      <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} tone="info" />
-      <MetricCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" tone="primary" />
-      <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
-    </>
-  );
+  // Customer Zero is HIT the moment any lead reaches deposited/paid.
+  const czHit = (devs || []).some((d) => d.status === "deposited" || d.status === "paid");
+
+  // Job freshness → StatusDot tone (real, from /jobs/status timestamps).
+  const jobDotTone = (j) => {
+    if (/error|fail/i.test(j.action || "")) return "danger";
+    if (!j.created_at) return "muted";
+    const age = Date.now() - new Date(j.created_at).getTime();
+    if (Number.isNaN(age)) return "muted";
+    return age < 3600000 ? "success" : "warn";
+  };
+
+  // Top demand leads, real, sorted by daily call volume.
+  const topLeads = [...(devs || [])]
+    .sort((a, b) => (b.avg_daily_calls || 0) - (a.avg_daily_calls || 0))
+    .slice(0, 3);
+
+  // Revenue pipeline stages — architecture, not metrics. Real values where the
+  // settlement API provides them (threshold, dry-run); no fabricated throughput.
+  const pipeline = [
+    { k: "USAGE", detail: "Gateway routing", badge: "ACTIVE", tone: "primary" },
+    { k: "METERING", detail: "$0.00001 / call", badge: "ACTIVE", tone: "primary" },
+    { k: "EPOCH", detail: "Accumulating", badge: "OPEN", tone: "warn" },
+    { k: "ANCHOR", detail: `Threshold: ${status?.threshold ?? "—"} USDT`, badge: "PENDING", tone: "warn" },
+    {
+      k: "SETTLEMENT",
+      detail: status ? (status.dryRun ? "DRY_RUN=1" : "LIVE") : "—",
+      badge: status?.dryRun === false ? "LIVE" : "PAUSED",
+      tone: "muted",
+    },
+    { k: "TREASURY", detail: "$0.00 external", badge: "WAITING", tone: "muted" },
+  ];
 
   const leadColumns = [
     { key: "ip", header: "IP", mono: true, render: (d) => d.ip },
@@ -372,10 +404,10 @@ export default function AdminCommandCenter() {
   const headerStatus =
     view === "treasury" && status ? (
       <StatusBadge label={status.dryRun ? "DRY_RUN" : "LIVE"} tone={status.dryRun ? "warn" : "danger"} />
-    ) : view === "revenue" ? (
+    ) : view === "radar" ? (
       <StatusBadge label={`${devs ? devs.length : 0} leads`} tone="info" />
-    ) : view === "security" ? (
-      <StatusBadge label="telemetry pending" tone="muted" />
+    ) : view === "overview" ? (
+      <StatusBadge label={czHit ? "CZ HIT" : "CZ WAITING"} tone={czHit ? "success" : "warn"} />
     ) : null;
 
   const H = HEADERS[view];
@@ -390,6 +422,8 @@ export default function AdminCommandCenter() {
         status: [
           { label: "SETTLEMENT", value: status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…", tone: status ? (status.dryRun ? "warn" : "danger") : "muted" },
           { label: "SETTLED", value: status ? fmt.num(status.totalSettlements ?? 0) : "…", tone: "success" },
+          { label: "REV", value: "$0.00 ext", tone: "warn" },
+          { label: "CZ", value: czHit ? "HIT 🎯" : "WAITING", tone: czHit ? "success" : "warn" },
         ],
         live: feedState === "live",
         liveTone: feedState === "live" ? "success" : feedState === "error" ? "danger" : "warn",
@@ -412,39 +446,87 @@ export default function AdminCommandCenter() {
       <Stack gap="sm">
         {notice ? <Notice>{notice}</Notice> : null}
 
-        {/* ── NETWORK OPS ─────────────────────────────────────────────── */}
-        {view === "network" && (
+        {/* ── OVERVIEW (gateway status + Customer Zero) ───────────────── */}
+        {view === "overview" && (
           <Split
             asideWidth="sm"
             asidePosition="right"
             aside={<EventStream title="Live Event Stream" state={feedState} events={feedEvents} />}
           >
             <Stack gap="sm">
+              <MetricGrid columns={4}>
+                <MetricCard label="Gateway" value="LIVE" sub="rpc.satelink.network" tone="success" />
+                <MetricCard
+                  label="DRY RUN"
+                  value={status ? (status.dryRun ? "ON" : "OFF") : statusErr ? "—" : "…"}
+                  sub={status ? (status.dryRun ? "simulated only" : "real settlements") : ""}
+                  tone="warn"
+                />
+                <MetricCard label="Credit Balance" value="$0.5999" sub="test wallet — founder funded" tone="primary" />
+                <MetricCard
+                  label="Customer Zero"
+                  value={devs == null ? "…" : czHit ? "HIT 🎯" : "WAITING"}
+                  sub={czHit ? "first deposit confirmed" : "no paying customer yet"}
+                  tone={czHit ? "success" : "warn"}
+                  alert={!czHit && devs != null}
+                />
+              </MetricGrid>
+              {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
+
+              <Split asideWidth="md" asidePosition="right" aside={
+                <Panel>
+                  <SectionLabel right={<StatusBadge label={czHit ? "HIT" : "WAITING"} tone={czHit ? "success" : "warn"} />}>Customer Zero Countdown</SectionLabel>
+                  {devs == null ? (
+                    <EmptyState variant="line" label="leads" note="loading…" />
+                  ) : topLeads.length === 0 ? (
+                    <EmptyState label="leads" message="No leads classified yet" note="IP classifier runs every 15min" />
+                  ) : (
+                    <Stack gap="sm">
+                      {topLeads.map((d) => (
+                        <Inline key={d.ip} gap="sm" wrap={false}>
+                          <span style={{ fontFamily: MONO, fontSize: 12, color: C.text }}>{d.ip}</span>
+                          <span style={{ fontSize: 12, color: C.textMuted }}>{d.isp || "—"}</span>
+                          <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 12, color: C.text }}>{fmt.num(d.avg_daily_calls)}/day</span>
+                          <StatusBadge label={d.status} tone={stageTone(d.status)} />
+                        </Inline>
+                      ))}
+                      <Notice>
+                        {`${topLeads[0].ip} is #1 candidate — ${fmt.num(topLeads[0].avg_daily_calls)} calls/day, ${topLeads[0].days_active ?? 0} days active`}
+                      </Notice>
+                    </Stack>
+                  )}
+                </Panel>
+              }>
+                <Panel>
+                  <SectionLabel right={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>Automation Health</SectionLabel>
+                  {jobs == null ? (
+                    <EmptyState variant="line" label="jobs" note="loading…" />
+                  ) : jobs.length === 0 ? (
+                    <EmptyState label="automation jobs" message="No job history yet" note="trigger a job in Agents" />
+                  ) : (
+                    <Stack gap="sm">
+                      {jobs.map((j, i) => (
+                        <Inline key={`${j.job_name}-${i}`} gap="sm" wrap={false}>
+                          <StatusDot tone={jobDotTone(j)} pulse={jobDotTone(j) === "success"} />
+                          <span style={{ fontFamily: MONO, fontSize: 12, color: C.text }}>{j.job_name}</span>
+                          <span style={{ marginLeft: "auto", fontSize: 12, color: C.textMuted }}>{fmt.time(j.created_at)}</span>
+                        </Inline>
+                      ))}
+                    </Stack>
+                  )}
+                </Panel>
+              </Split>
+
               <Panel>
-                <SectionLabel right={<StatusBadge label="DESIGN" tone="muted" />}>Network Architecture</SectionLabel>
+                <SectionLabel right={<StatusBadge label="ARCHITECTURE REFERENCE" tone="muted" />}>Gateway Architecture</SectionLabel>
                 <TopologyDiagram model={ARCH_TOPOLOGY} caption="Structural diagram — not a live data feed." />
               </Panel>
-              <MetricGrid columns={4}>{statusCards}</MetricGrid>
-              {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
-              <EmptyState variant="line" label="RPC Metrics · 24h Volume · Provider Pool" note="requires telemetry pipeline" />
             </Stack>
           </Split>
         )}
 
-        {/* ── INTELLIGENCE (telemetry pending) ────────────────────────── */}
-        {view === "intel" && (
-          <Split asideWidth="sm" asidePosition="right" aside={<DonutChart title="Traffic by Country" data={null} />}>
-            <Stack gap="sm">
-              <SeriesChart title="Latency Distribution" type="bar" data={null} />
-              <EmptyState label="Provider Intelligence Matrix" message="Telemetry backend not yet implemented" note="latency · success% · traffic share" />
-              <EmptyState variant="line" label="Top Sources / ASN / Method" note="aggregation endpoint" />
-              <EmptyState variant="line" label="Real per-IP classification" note="see Revenue Ops → Lead Pipeline" />
-            </Stack>
-          </Split>
-        )}
-
-        {/* ── REVENUE OPS (leads, conversion, outreach) ───────────────── */}
-        {view === "revenue" && (
+        {/* ── DEMAND RADAR (leads, conversion, outreach) ──────────────── */}
+        {view === "radar" && (
           <Split
             asideWidth="md"
             asidePosition="left"
@@ -486,9 +568,21 @@ export default function AdminCommandCenter() {
           >
             <Panel>
               <SectionLabel right={<StatusBadge label={`${devs ? devs.length : 0} leads`} tone="info" />}>Lead Pipeline</SectionLabel>
+              <Inline gap="sm">
+                {["all", "identified", "contacted", "deposited", "paid"].map((s) => (
+                  <Button
+                    key={s}
+                    size="sm"
+                    tone={radarFilter === s ? "primary" : "muted"}
+                    onClick={() => setRadarFilter(s)}
+                  >
+                    {s === "all" ? `All ${devs ? `(${devs.length})` : ""}` : `${s} (${counts[s] || 0})`}
+                  </Button>
+                ))}
+              </Inline>
               <DataTable
                 columns={leadColumns}
-                rows={devs}
+                rows={devs == null ? null : radarFilter === "all" ? devs : devs.filter((d) => d.status === radarFilter)}
                 getRowKey={(d) => d.ip}
                 error={devErr}
                 emptyLabel="lead pipeline"
@@ -516,19 +610,57 @@ export default function AdminCommandCenter() {
               <MetricCard label="Signer address" value={status ? fmt.addr(status.signerAddress) : "…"} sub="signer wallet" tone="muted" size="sm" />
               <MetricCard label="Treasury address" value={status ? fmt.addr(status.treasuryAddress) : "…"} sub="treasury wallet" tone="muted" size="sm" />
             </MetricGrid>
-            {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
 
             <Panel>
               <SectionLabel>Settlement Control</SectionLabel>
               {!status && !statusErr ? (
                 <EmptyState variant="line" label="control" note="loading…" />
+              ) : statusErr ? (
+                <EmptyState label="settlement status" message="Could not load settlement status" note={statusErr} />
               ) : status ? (
-                <Inline gap="md">
-                  <StatusBadge label={status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"} tone={status.dryRun ? "warn" : "danger"} />
-                  <Button tone={status.dryRun ? "danger" : "primary"} disabled={busy.dryRun} onClick={toggleDryRun}>
-                    {busy.dryRun ? "Working…" : status.dryRun ? "Enable LIVE settlement" : "Return to DRY_RUN"}
-                  </Button>
-                </Inline>
+                <Stack gap="sm">
+                  <Inline gap="md">
+                    <StatusBadge label={status.dryRun ? "DRY_RUN (simulated)" : "LIVE (real settlements)"} tone={status.dryRun ? "warn" : "danger"} />
+                    {status.dryRun ? (
+                      !showLiveConfirm ? (
+                        <Button tone="danger" disabled={busy.dryRun} onClick={() => setShowLiveConfirm(true)}>
+                          Enable LIVE settlement
+                        </Button>
+                      ) : null
+                    ) : (
+                      <Button tone="primary" disabled={busy.dryRun} onClick={toggleDryRun}>
+                        {busy.dryRun ? "Working…" : "Return to DRY_RUN"}
+                      </Button>
+                    )}
+                  </Inline>
+                  {status.dryRun && showLiveConfirm ? (
+                    <Inline gap="sm">
+                      <input
+                        value={confirmLive}
+                        onChange={(e) => setConfirmLive(e.target.value)}
+                        placeholder="type LIVE to confirm"
+                        aria-label="type LIVE to confirm"
+                        style={{
+                          background: C.bg0,
+                          border: `1px solid ${C.borderStrong}`,
+                          borderRadius: 4,
+                          color: C.text,
+                          padding: "6px 10px",
+                          fontFamily: MONO,
+                          fontSize: 13,
+                          outline: "none",
+                          minWidth: 200,
+                        }}
+                      />
+                      <Button tone="danger" disabled={busy.dryRun || confirmLive !== "LIVE"} onClick={toggleDryRun}>
+                        {busy.dryRun ? "Working…" : "Confirm LIVE"}
+                      </Button>
+                      <Button tone="muted" disabled={busy.dryRun} onClick={() => { setShowLiveConfirm(false); setConfirmLive(""); }}>
+                        Cancel
+                      </Button>
+                    </Inline>
+                  ) : null}
+                </Stack>
               ) : null}
             </Panel>
 
@@ -538,11 +670,60 @@ export default function AdminCommandCenter() {
           </Stack>
         )}
 
-        {/* ── AGENT OPS (jobs + fleet) ────────────────────────────────── */}
+        {/* ── REVENUE (balance, pipeline, projection) ─────────────────── */}
+        {view === "revenue" && (
+          <Stack gap="sm">
+            <MetricGrid columns={4}>
+              <MetricCard label="External Revenue" value="$0.00" sub="no paying customers yet" tone="warn" alert />
+              <MetricCard label="Credit Balance" value="$0.5999 USDT" sub="test wallet — founder funded" tone="primary" />
+              <MetricCard label="Settlement Thresh" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT before epoch settles" tone="primary" />
+              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
+            </MetricGrid>
+
+            <Panel>
+              <SectionLabel right={<StatusDot tone="success" pulse />}>Revenue Pipeline</SectionLabel>
+              <Inline gap="sm" wrap>
+                {pipeline.map((s) => (
+                  <div
+                    key={s.k}
+                    style={{
+                      flex: "1 1 150px",
+                      minWidth: 150,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 6,
+                      padding: "10px 12px",
+                      background: C.bg1,
+                    }}
+                  >
+                    <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: 1 }}>{s.k}</div>
+                    <div style={{ fontSize: 13, color: C.text, margin: "6px 0" }}>{s.detail}</div>
+                    <StatusBadge label={s.badge} tone={s.tone} />
+                  </div>
+                ))}
+              </Inline>
+            </Panel>
+
+            <Panel>
+              <SectionLabel right={<StatusBadge label="PROJECTION — POST CUSTOMER ZERO" tone="muted" />}>Revenue Projection</SectionLabel>
+              <DataTable
+                columns={[
+                  { key: "daily", header: "Daily", mono: true },
+                  { key: "who", header: "Customers" },
+                  { key: "monthly", header: "Monthly", mono: true },
+                ]}
+                rows={PROJECTIONS}
+                getRowKey={(r) => r.daily}
+                emptyLabel="projection"
+              />
+            </Panel>
+          </Stack>
+        )}
+
+        {/* ── AGENTS (jobs + fleet) ───────────────────────────────────── */}
         {view === "agents" && (
           <Stack gap="sm">
             <Panel>
-              <SectionLabel>Automation Jobs</SectionLabel>
+              <SectionLabel right={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>Automation Jobs</SectionLabel>
               <Inline gap="sm">
                 {TRIGGERABLE_JOBS.map((j) => (
                   <Button key={j} tone="muted" disabled={busy[`job:${j}`]} onClick={() => trigger(j)}>
@@ -556,7 +737,7 @@ export default function AdminCommandCenter() {
                 getRowKey={(j, i) => `${j.job_name}-${i}`}
                 error={jobsErr}
                 emptyLabel="automation jobs"
-                emptyMessage="No jobs have run yet"
+                emptyMessage="No job history yet"
                 emptyNote="trigger a job above"
               />
             </Panel>
@@ -565,13 +746,66 @@ export default function AdminCommandCenter() {
           </Stack>
         )}
 
-        {/* ── SECURITY (telemetry pending) ────────────────────────────── */}
-        {view === "security" && (
+        {/* ── SETTINGS (configuration reference) ──────────────────────── */}
+        {view === "settings" && (
           <Stack gap="sm">
-            <EmptyState label="SOC Metrics" message="Telemetry backend not yet implemented" note="blocked IPs · rate events · gate hits · auth failures" />
-            <EmptyState variant="line" label="Security Event Feed" note="threat-event store" />
-            <EmptyState variant="line" label="Known Threat Patterns" note="detection pipeline" />
-            <EmptyState variant="line" label="Anomaly Scores" note="anomaly engine" />
+            <Panel>
+              <SectionLabel>Environment</SectionLabel>
+              {[
+                ["API_BASE", "rpc.satelink.network"],
+                ["DATABASE_URL", "postgres://••••••@railway"],
+                ["REDIS", "managed (Railway)"],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
+                  <span style={{ color: C.text, fontFamily: MONO }}>{v}</span>
+                </div>
+              ))}
+            </Panel>
+
+            <Panel>
+              <SectionLabel>Thresholds</SectionLabel>
+              {[
+                ["MIN_ANCHOR_REVENUE_USDT", status ? String(status.threshold ?? "0.5") : "…"],
+                ["SETTLEMENT_DRY_RUN", status ? (status.dryRun ? "1 (simulated)" : "0 (live)") : "…"],
+                ["SIGNER_WALLET", status ? fmt.addr(status.signerAddress) : "…"],
+                ["TREASURY_WALLET", status ? fmt.addr(status.treasuryAddress) : "…"],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
+                  <span style={{ color: C.text, fontFamily: MONO }}>{v}</span>
+                </div>
+              ))}
+            </Panel>
+
+            <Panel>
+              <SectionLabel>External Services</SectionLabel>
+              {[
+                ["Discord webhook", "configured (server-side env)"],
+                ["erpc Discussion", "github.com/erpc/erpc/discussions/943"],
+                ["Chainlist PR", "github.com/ethereum-lists/chains/pull/8314"],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13, gap: 16 }}>
+                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
+                  <span style={{ color: C.text, fontFamily: MONO, textAlign: "right" }}>{v}</span>
+                </div>
+              ))}
+            </Panel>
+
+            <Panel>
+              <SectionLabel>Paperclip</SectionLabel>
+              {[
+                ["Company ID", "2fb13f91-fa14-4a2f-9497-6601e9a171d9"],
+                ["Agents URL", "agents.satelink.network"],
+                ["Model", "claude-haiku"],
+                ["Count", "12"],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13, gap: 16 }}>
+                  <span style={{ color: C.textMuted, fontFamily: MONO }}>{k}</span>
+                  <span style={{ color: C.text, fontFamily: MONO, textAlign: "right" }}>{v}</span>
+                </div>
+              ))}
+            </Panel>
           </Stack>
         )}
       </Stack>

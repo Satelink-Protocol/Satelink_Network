@@ -3,10 +3,10 @@
  *
  * Corrected vs the original design doc:
  *   - `pool` is a pg Pool: pool.query() returns { rows }
- *   - getTotalSettlements() returns the REAL count, or 0 on error. The original
- *     returned a hardcoded 1878 on failure — but docs/audit-2026-06-13 found
- *     every epoch has tx_hash NULL (0 on-chain settlements have ever occurred).
- *     A fabricated fallback would display settlements that never happened.
+ *   - getTotalSettlements() returns the REAL count, or 0 on error. An earlier
+ *     version returned a hardcoded baseline on failure — but docs/audit-2026-06-13
+ *     found every epoch has tx_hash NULL (0 on-chain settlements have ever
+ *     occurred). A fabricated fallback would display settlements that never happened.
  *   - No refundSigner() here. Signer refunds are a one-time manual CLI command
  *     (scripts/refund_signer.js) so a private key never lives server-side.
  */
