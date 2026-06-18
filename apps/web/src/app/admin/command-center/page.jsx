@@ -18,7 +18,21 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Funnel,
+  FunnelChart,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   AppShell,
@@ -353,6 +367,18 @@ export default function AdminCommandCenter() {
     .sort((a, b) => (b.avg_daily_calls || 0) - (a.avg_daily_calls || 0))
     .slice(0, 3);
 
+  // "Live now" count — automation jobs that ran within the last hour (real, from /jobs/status).
+  const liveJobs = (jobs || []).filter((j) => jobDotTone(j) === "success").length;
+
+  // Demand-by-lead series — REAL classified leads, sorted by tenure (oldest → newest).
+  // Not a time series: each point is one lead's avg_daily_calls. X = IP last octet.
+  const demandByLead = [...(devs || [])]
+    .sort((a, b) => (a.days_active || 0) - (b.days_active || 0))
+    .map((d) => ({
+      label: String(d.ip || "").split(".").pop() || "?",
+      calls: d.avg_daily_calls || 0,
+    }));
+
   // Revenue pipeline stages — architecture, not metrics. Real values where the
   // settlement API provides them (threshold, dry-run); no fabricated throughput.
   const pipeline = [
@@ -465,6 +491,15 @@ export default function AdminCommandCenter() {
   // Funnel counts — real, derived from lead statuses
   const counts = (devs || []).reduce((a, d) => ((a[d.status] = (a[d.status] || 0) + 1), a), {});
 
+  // Conversion funnel series — real lead counts per stage.
+  const funnelData = [
+    { name: "Classified", value: (devs || []).length, fill: "#4ECDC4" },
+    { name: "Identified", value: counts.identified || 0, fill: "#7DD3FC" },
+    { name: "Contacted", value: counts.contacted || 0, fill: "#F59E0B" },
+    { name: "Deposited", value: counts.deposited || 0, fill: "#34D399" },
+    { name: "Paid", value: counts.paid || 0, fill: "#10B981" },
+  ];
+
   // ── Header status chip per view ──────────────────────────────────────────────
   const headerStatus =
     view === "treasury" && status ? (
@@ -520,20 +555,22 @@ export default function AdminCommandCenter() {
           >
             <Stack gap="sm">
               <MetricGrid columns={4}>
-                <MetricCard label="Gateway" value="LIVE" sub="rpc.satelink.network" tone="success" />
+                <MetricCard label="Gateway" value="LIVE" sub="rpc.satelink.network" tone="success" icon="◉" />
                 <MetricCard
                   label="DRY RUN"
                   value={status ? (status.dryRun ? "ON" : "OFF") : statusErr ? "—" : "…"}
                   sub={status ? (status.dryRun ? "simulated only" : "real settlements") : ""}
                   tone="warn"
+                  icon="◑"
                 />
-                <MetricCard label="Credit Balance" value="$0.5999" sub="test wallet — founder funded" tone="primary" />
+                <MetricCard label="Credit Balance" value="$0.5999" sub="test wallet — founder funded" tone="primary" icon="$" />
                 <MetricCard
                   label="Customer Zero"
                   value={devs == null ? "…" : czHit ? "HIT 🎯" : "WAITING"}
                   sub={czHit ? "first deposit confirmed" : "no paying customer yet"}
                   tone={czHit ? "success" : "warn"}
                   alert={!czHit && devs != null}
+                  icon="◎"
                 />
               </MetricGrid>
               {statusErr ? <EmptyState variant="line" label="settlement status" note={statusErr} /> : null}
@@ -557,18 +594,67 @@ export default function AdminCommandCenter() {
                   ) : null}
                 </Panel>
               }>
-                <Panel>
-                  <SectionLabel right={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>Automation Health</SectionLabel>
-                  <DataTable
-                    columns={healthColumns}
-                    rows={jobs}
-                    getRowKey={(j, i) => `${j.job_name}-${i}`}
-                    error={jobsErr}
-                    emptyLabel="automation jobs"
-                    emptyMessage="No job history yet"
-                    emptyNote="trigger a job in Agents"
-                  />
-                </Panel>
+                <Stack gap="sm">
+                  <Panel>
+                    <SectionLabel
+                      right={
+                        <Inline gap="sm">
+                          <StatusDot tone="success" pulse />
+                          <StatusBadge label="LIVE" tone="success" />
+                        </Inline>
+                      }
+                    >
+                      Live Now
+                    </SectionLabel>
+                    <Stack gap="sm">
+                      <MetricCard
+                        label="Active Automation Jobs"
+                        value={jobs == null ? "…" : String(liveJobs)}
+                        sub="ran in the last hour"
+                        tone="success"
+                        icon="◐"
+                      />
+                      <MetricGrid columns={2}>
+                        <MetricCard
+                          label="Leads Identified"
+                          value={devs == null ? "…" : fmt.num(devs.length)}
+                          tone="info"
+                          size="sm"
+                        />
+                        <MetricCard
+                          label="Top Lead Calls/Day"
+                          value={topLeads[0] ? fmt.num(topLeads[0].avg_daily_calls) : "—"}
+                          tone="primary"
+                          size="sm"
+                        />
+                        <MetricCard
+                          label="Customer Zero"
+                          value={devs == null ? "…" : czHit ? "HIT" : "WAITING"}
+                          tone={czHit ? "success" : "warn"}
+                          size="sm"
+                        />
+                        <MetricCard
+                          label="Settlement"
+                          value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…"}
+                          tone={status?.dryRun ? "warn" : "success"}
+                          size="sm"
+                        />
+                      </MetricGrid>
+                    </Stack>
+                  </Panel>
+                  <Panel>
+                    <SectionLabel right={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>Automation Health</SectionLabel>
+                    <DataTable
+                      columns={healthColumns}
+                      rows={jobs}
+                      getRowKey={(j, i) => `${j.job_name}-${i}`}
+                      error={jobsErr}
+                      emptyLabel="automation jobs"
+                      emptyMessage="No job history yet"
+                      emptyNote="trigger a job in Agents"
+                    />
+                  </Panel>
+                </Stack>
               </Split>
 
               <Panel>
@@ -588,6 +674,23 @@ export default function AdminCommandCenter() {
               <Stack gap="sm">
                 <Panel>
                   <SectionLabel>Conversion Funnel</SectionLabel>
+                  {devs && devs.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <FunnelChart>
+                        <Tooltip
+                          contentStyle={{
+                            background: "#0C1120",
+                            border: "1px solid #1A2840",
+                            fontSize: 11,
+                            fontFamily: "JetBrains Mono",
+                          }}
+                        />
+                        <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                          <LabelList position="right" fill="#E2EAF4" stroke="none" dataKey="name" fontSize={11} />
+                        </Funnel>
+                      </FunnelChart>
+                    </ResponsiveContainer>
+                  ) : null}
                   {devs ? (
                     <MetricGrid columns={2}>
                       <MetricCard label="Classified" value={fmt.num(devs.length)} tone="muted" size="sm" />
@@ -733,6 +836,59 @@ export default function AdminCommandCenter() {
                   <MetricCard key={s.k} label={s.k} value={s.detail} sub={s.badge} tone={s.tone} size="sm" />
                 ))}
               </MetricGrid>
+            </Panel>
+
+            <Panel>
+              <SectionLabel right={<StatusBadge label="REAL LEADS" tone="info" />}>DEMAND BY LEAD — sorted by tenure</SectionLabel>
+              {devs == null ? (
+                <EmptyState variant="line" label="demand" note="loading…" />
+              ) : demandByLead.length === 0 ? (
+                <EmptyState variant="line" label="demand" note="no classified leads yet" />
+              ) : (
+                <div style={{ marginTop: 16 }}>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <AreaChart data={demandByLead} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="demandFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#4ECDC4" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="#4ECDC4" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        width={48}
+                        tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => fmt.num(v)}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#0C1120",
+                          border: "1px solid #1A2840",
+                          borderRadius: 4,
+                          fontFamily: "JetBrains Mono",
+                          fontSize: 12,
+                        }}
+                        formatter={(value) => [`${fmt.num(value)}/day`, "Calls"]}
+                        labelFormatter={(l) => `…${l}`}
+                        labelStyle={{ color: "#64748B" }}
+                        cursor={{ stroke: "rgba(78,205,196,0.3)" }}
+                      />
+                      <Area type="monotone" dataKey="calls" stroke="#4ECDC4" strokeWidth={2} fill="url(#demandFill)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <div style={{ fontSize: 10, color: "#64748B", fontFamily: "JetBrains Mono", marginTop: 4 }}>
+                    Real classified leads, not time-series (no RPC metrics pipeline yet)
+                  </div>
+                </div>
+              )}
             </Panel>
 
             <Panel>

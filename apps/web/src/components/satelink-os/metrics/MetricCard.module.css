@@ -35,13 +35,39 @@
   font-size: 13px;
 }
 
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--sat-radius-sm, 4px);
+  font-size: 12px;
+  line-height: 1;
+  background: color-mix(in srgb, var(--sat-text-muted) 16%, transparent);
+  color: var(--sat-text-muted);
+}
+.icon[data-tone='primary'] { background: color-mix(in srgb, var(--sat-primary) 16%, transparent); color: var(--sat-primary); }
+.icon[data-tone='secondary'] { background: color-mix(in srgb, var(--sat-secondary) 16%, transparent); color: var(--sat-secondary); }
+.icon[data-tone='accent'] { background: color-mix(in srgb, var(--sat-accent) 16%, transparent); color: var(--sat-accent); }
+.icon[data-tone='success'] { background: color-mix(in srgb, var(--sat-success) 16%, transparent); color: var(--sat-success); }
+.icon[data-tone='warn'] { background: color-mix(in srgb, var(--sat-warn) 16%, transparent); color: var(--sat-warn); }
+.icon[data-tone='danger'] { background: color-mix(in srgb, var(--sat-danger) 16%, transparent); color: var(--sat-danger); }
+.icon[data-tone='info'] { background: color-mix(in srgb, var(--sat-info) 16%, transparent); color: var(--sat-info); }
+
 .label {
   font-family: var(--sat-font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--sat-text-muted);
-  margin-bottom: 8px;
 }
 .value {
   font-family: var(--sat-font-mono);
