@@ -9,6 +9,7 @@
  * satelink :root theme (see globals.css). Data is real, from /admin/intel/developers.
  */
 
+
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,8 @@ export function CustomerZeroCard({
             <p className="text-muted-foreground text-sm">No leads classified yet.</p>
           ) : (
             <ChartContainer config={chartConfig} className="h-[200px] w-full">
+
+
               <AreaChart data={data} margin={{ left: 12, right: 12, top: 8 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="lead" tickLine={false} axisLine={false} tickMargin={8} />
@@ -88,6 +91,7 @@ export function CustomerZeroCard({
                   strokeWidth={2}
                 />
               </AreaChart>
+
             </ChartContainer>
           )}
         </CardContent>
