@@ -1,8 +1,8 @@
 .bar {
-  height: 44px;
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   padding: 0 16px;
   background: var(--sat-bg-1);
   border-bottom: 1px solid var(--sat-border);
@@ -10,8 +10,8 @@
 }
 .brand {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
-  letter-spacing: 3px;
+  font-size: 11px;
+  letter-spacing: 2px;
   color: var(--sat-text-muted);
 }
 .search {
@@ -42,7 +42,7 @@
 }
 .kbd {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--sat-text-dim);
   border: 1px solid var(--sat-border);
   border-radius: var(--sat-radius-sm);
@@ -61,18 +61,18 @@
 .envLabel,
 .statLabel {
   font-family: var(--sat-font-mono);
-  font-size: 8px;
+  font-size: 11px;
   color: var(--sat-text-muted);
 }
 .envValue {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--sat-secondary);
 }
 .statValue {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 .statValue[data-tone='primary'] { color: var(--sat-primary); }
@@ -90,6 +90,6 @@
 }
 .time {
   font-family: var(--sat-font-mono);
-  font-size: 9px;
+  font-size: 11px;
   color: var(--sat-text-muted);
 }

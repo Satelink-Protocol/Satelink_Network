@@ -2,9 +2,9 @@
   display: flex;
   flex-direction: column;
 }
-.stack[data-gap='sm'] { gap: 8px; }
-.stack[data-gap='md'] { gap: 12px; }
-.stack[data-gap='lg'] { gap: 16px; }
+.stack[data-gap='sm'] { gap: 12px; }
+.stack[data-gap='md'] { gap: 16px; }
+.stack[data-gap='lg'] { gap: 20px; }
 
 .inline {
   display: flex;

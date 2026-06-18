@@ -12,7 +12,7 @@ export interface SectionLabelProps {
 export function SectionLabel({ children, right }: SectionLabelProps): JSX.Element {
   return (
     <div className={styles.row}>
-      <div className={styles.label}>── {children.toUpperCase()}</div>
+      <div className={styles.label}>{children.toUpperCase()}</div>
       {right ? <div>{right}</div> : null}
     </div>
   );

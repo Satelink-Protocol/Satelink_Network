@@ -13,12 +13,12 @@
 }
 .row {
   display: flex;
-  gap: 8px;
-  padding: 5px 6px;
+  gap: 10px;
+  padding: 8px 6px;
   margin: 0 -6px;
   border-bottom: 1px solid color-mix(in srgb, var(--sat-border) 50%, transparent);
   font-family: var(--sat-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   border-radius: var(--sat-radius-sm);
   transition: var(--sat-transition);
 }
