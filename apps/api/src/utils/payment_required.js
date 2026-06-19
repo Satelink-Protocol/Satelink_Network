@@ -24,6 +24,10 @@ export function paymentRequiredFields() {
                 '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
             chain_id: 137,
             network: 'Polygon',
+            // Human-clickable self-service deposit page (machine fields above/below
+            // stay as-is). A developer hitting this 402 in their terminal/logs can
+            // open this to deposit without already having a wallet-signing tool wired.
+            deposit_page: 'https://app.satelink.network/satelink/os/deposit',
             minimum_usdt: '1.00',
             free_tier_limit: 500,
             free_tier_resets_at: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString()
