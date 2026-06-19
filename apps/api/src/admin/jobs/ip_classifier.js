@@ -140,17 +140,41 @@ export class IpClassifier {
         const calls = parseInt(await this.redis.get(key) || '0');
 
         const rows = await this.q(
-          `SELECT id, days_active, avg_daily_calls FROM developer_intel WHERE ip = $1`,
+          `SELECT id, days_active, avg_daily_calls, calls_today, updated_at FROM developer_intel WHERE ip = $1`,
           [ip]
         );
 
         if (rows.length > 0) {
           const existing = rows[0];
-          const newAvg = Math.round(((existing.avg_daily_calls || 0) + calls) / 2);
-          await this.q(
-            `UPDATE developer_intel SET calls_today = $1, avg_daily_calls = $2, last_seen = NOW(), updated_at = NOW() WHERE ip = $3`,
-            [calls, newAvg, ip]
-          );
+          const today = new Date().toISOString().slice(0, 10);
+          const lastSeenDay = existing.updated_at
+            ? new Date(existing.updated_at).toISOString().slice(0, 10)
+            : null;
+
+          if (lastSeenDay === today) {
+            // Same UTC day as last update — just refresh the live counter.
+            // Do NOT touch avg_daily_calls; it must stay stable intraday so the
+            // value never chases the monotonically-climbing ft:<ip> counter.
+            await this.q(
+              `UPDATE developer_intel SET calls_today = $1, last_seen = NOW(), updated_at = NOW() WHERE ip = $2`,
+              [calls, ip]
+            );
+          } else {
+            // New UTC day — fold YESTERDAY's final calls_today into a proper running
+            // mean, weighted by days_active so one new day doesn't overweight a long
+            // history. `calls` here is the fresh (small) counter for the new day and is
+            // only used as the new calls_today, NOT folded into newAvg.
+            const priorCallsToday = existing.calls_today || 0;
+            const priorDaysActive = existing.days_active || 1;
+            const newAvg = Math.round(
+              ((existing.avg_daily_calls || 0) * priorDaysActive + priorCallsToday)
+              / (priorDaysActive + 1)
+            );
+            await this.q(
+              `UPDATE developer_intel SET avg_daily_calls = $1, calls_today = $2, days_active = days_active + 1, last_seen = NOW(), updated_at = NOW() WHERE ip = $3`,
+              [newAvg, calls, ip]
+            );
+          }
         } else {
           const info = await this.lookupIP(ip);
           const classification = this.classify(info, calls);
