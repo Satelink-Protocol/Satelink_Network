@@ -107,10 +107,15 @@ export function createFreeTierGate(logger, redis) {
       resetAt = counter.resetAt;
     }
 
-    // Abuse tier: >ABUSE_THRESHOLD calls/day = automated scraper that ignores the
-    // 402 and retries. Return 429 with Retry-After so it backs off until midnight UTC
-    // instead of hammering the gate and burning Redis quota real customers need.
-    if (count > ABUSE_THRESHOLD) {
+    const isDeveloper = classifyUserAgent(userAgent) === 'developer';
+
+    // Abuse tier: >ABUSE_THRESHOLD calls/day from automated, non-developer traffic =
+    // a scraper that ignores the 402 and retries. Return 429 with Retry-After so it
+    // backs off until midnight UTC instead of hammering the gate and burning Redis
+    // quota real customers need. Developer-SDK UAs are exempt — high daily volume is
+    // exactly the signal a real paying-intent developer produces, so they fall through
+    // to the 402 payment path below at any count.
+    if (count > ABUSE_THRESHOLD && !isDeveloper) {
       const secondsUntilReset = Math.max(1, Math.floor((resetAt - Date.now()) / 1000));
       log.warn(`${LOG_PREFIX} Abuse limit exceeded: ip=${ip} count=${count} threshold=${ABUSE_THRESHOLD}`);
 
