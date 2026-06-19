@@ -106,24 +106,26 @@ export default function AdminCommandCenter() {
           <Split aside={<LiveEventStream title="Live Event Stream" state={feedState} events={feedEvents} />} asidePosition="right" asideWidth="sm">
             <Stack gap="sm">
               <MetricGrid columns={4}>
-                <MetricCard label="Gateway" value="LIVE" sub="rpc.satelink.network" tone="success" />
-                <MetricCard label="DRY RUN" value={status ? (status.dryRun ? "ON" : "OFF") : statusErr ? "—" : "…"} sub={status ? (status.dryRun ? "simulated only" : "real settlements") : ""} tone="warn" />
-                <MetricCard label="Credit Balance" value="$0.5999" sub="test wallet — founder funded" tone="primary" />
-                <MetricCard label="Customer Zero" value={devs == null ? "…" : czHit ? "HIT 🎯" : "WAITING"} sub={czHit ? "first deposit confirmed" : "no paying customer yet"} tone={czHit ? "success" : "warn"} alert={!czHit && devs != null} />
+                <MetricCard label="Gateway Rate Limit" value="500/day" sub="Daily limit per IP" tone="primary" />
+                <MetricCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} sub={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} tone="warn" />
+                <MetricCard label="Live Hot Signer Address" value={status ? fmt.addr(status.signerAddress) : "…"} sub="On-chain hot signer wallet" tone="info" />
+                <MetricCard label="Converted Customer Zero" value={czHit ? "1" : "0"} sub={czHit ? "Paying customer active" : "0 converted leads"} tone={czHit ? "success" : "warn"} alert={!czHit && devs != null} />
               </MetricGrid>
+              
+              <MetricGrid columns={4}>
+                <MetricCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} sub="EVM gas hot balance" tone="info" />
+                <MetricCard label="Accumulator Threshold" value={status ? `${status.threshold} USDT` : "…"} sub="Accumulated balance trigger" tone="primary" />
+                <MetricCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} sub="Total settlements on-chain" tone="success" />
+                <MetricCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Active jobs (last hour)" tone="success" />
+              </MetricGrid>
+
               <Split aside={<CustomerZeroPanel leads={devs == null ? null : topLeads} czHit={czHit} />} asidePosition="right" asideWidth="md">
                 <Stack gap="sm">
-                  <Panel title="Live Now" headerRight={<Inline gap="sm"><StatusDot tone="success" pulse /><StatusBadge label="LIVE" tone="success" /></Inline>}>
-                    <MetricCard label="Active Automation Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="ran in the last hour" tone="success" />
-                  </Panel>
-                  <Panel title="Automation Health" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
+                  <Panel title="Automation Scheduler Health" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
                     <AutomationHealth jobs={jobs} jobsErr={jobsErr} jobDotTone={jobDotTone} />
                   </Panel>
                 </Stack>
               </Split>
-              <Panel title="Gateway Architecture" headerRight={<StatusBadge label="ARCHITECTURE REFERENCE" tone="muted" />}>
-                <TopologyDiagram model={ARCH_TOPOLOGY} caption="Structural diagram — not a live data feed." />
-              </Panel>
             </Stack>
           </Split>
         )}
