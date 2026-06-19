@@ -172,6 +172,9 @@ export function createFreeTierGate(logger, redis) {
               chain_name: 'Polygon',
               minimum_deposit_usdt: MIN_DEPOSIT,
               deposit_url: upgradeUrl,
+              // Human-clickable self-service deposit page, alongside the machine
+              // deposit_url above (kept as-is for clients already parsing it).
+              deposit_page: 'https://app.satelink.network/satelink/os/deposit',
               docs: 'https://docs.satelink.network/paid-tier'
             }
           }
