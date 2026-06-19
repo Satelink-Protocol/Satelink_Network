@@ -72,6 +72,8 @@ export default function AdminCommandCenter() {
   const jobDotTone = (j) => /error|fail/i.test(j.action || "") ? "danger" : j.created_at && (Date.now() - new Date(j.created_at).getTime()) < 3600000 ? "success" : "warn";
   const topLeads = [...(devs || [])].sort((a, b) => (b.avg_daily_calls || 0) - (a.avg_daily_calls || 0)).slice(0, 3);
   const liveJobs = (jobs || []).filter((j) => jobDotTone(j) === "success").length;
+  const failedJobs = (jobs || []).filter((j) => jobDotTone(j) === "danger").length;
+  const staleJobs = (jobs || []).filter((j) => jobDotTone(j) === "warn").length;
   const demandByLead = [...(devs || [])].sort((a, b) => (a.days_active || 0) - (b.days_active || 0)).map((d) => ({ label: String(d.ip || "").split(".").pop() || "?", calls: d.avg_daily_calls || 0 }));
   const pipeline = [
     { k: "USAGE", detail: "Gateway routing", badge: "ACTIVE", tone: "primary" }, { k: "METERING", detail: "$0.00003 / call", badge: "ACTIVE", tone: "primary" },
@@ -106,17 +108,17 @@ export default function AdminCommandCenter() {
           <Split aside={<LiveEventStream title="Live Event Stream" state={feedState} events={feedEvents} />} asidePosition="right" asideWidth="sm">
             <Stack gap="sm">
               <MetricGrid columns={4}>
-                <MetricCard label="Gateway Rate Limit" value="500/day" sub="Daily limit per IP" tone="primary" />
-                <MetricCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} sub={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} tone="warn" />
+                <MetricCard label="Gateway Rate Limit" value="500/day" sub="Daily limit per IP" tone="primary" delta="stable" deltaDir="neutral" />
+                <MetricCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} sub={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} tone="warn" delta={status?.dryRun ? "safe" : "live!"} deltaDir={status?.dryRun ? "neutral" : "down"} />
                 <MetricCard label="Live Hot Signer Address" value={status ? fmt.addr(status.signerAddress) : "…"} sub="On-chain hot signer wallet" tone="info" />
-                <MetricCard label="Converted Customer Zero" value={czHit ? "1" : "0"} sub={czHit ? "Paying customer active" : "0 converted leads"} tone={czHit ? "success" : "warn"} alert={!czHit && devs != null} />
+                <MetricCard label="Converted Customer Zero" value={czHit ? "1" : "0"} sub={czHit ? "Paying customer active" : "0 converted leads"} tone={czHit ? "success" : "warn"} alert={!czHit && devs != null} delta={czHit ? "converted" : "pending"} deltaDir={czHit ? "up" : "neutral"} />
               </MetricGrid>
               
               <MetricGrid columns={4}>
-                <MetricCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} sub="EVM gas hot balance" tone="info" />
+                <MetricCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} sub="EVM gas hot balance" tone="info" delta={status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "funded" : "low"} deltaDir={status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "up" : "down"} />
                 <MetricCard label="Accumulator Threshold" value={status ? `${status.threshold} USDT` : "…"} sub="Accumulated balance trigger" tone="primary" />
-                <MetricCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} sub="Total settlements on-chain" tone="success" />
-                <MetricCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Active jobs (last hour)" tone="success" />
+                <MetricCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} sub="Total settlements on-chain" tone="success" delta={status?.totalSettlements ? `${status.totalSettlements} total` : "0 yet"} deltaDir={status?.totalSettlements > 0 ? "up" : "neutral"} />
+                <MetricCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Active jobs (last hour)" tone="success" delta={jobs == null ? "…" : `${liveJobs}/${(jobs || []).length} active`} deltaDir={liveJobs > 0 ? "up" : "neutral"} />
               </MetricGrid>
 
               <Split aside={<CustomerZeroPanel leads={devs == null ? null : topLeads} czHit={czHit} />} asidePosition="right" asideWidth="md">
@@ -190,10 +192,10 @@ export default function AdminCommandCenter() {
         {view === "treasury" && (
           <Stack gap="sm">
             <MetricGrid columns={4}>
-              <MetricCard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} tone={status ? (status.dryRun ? "warn" : "danger") : "muted"} alert={status ? !status.dryRun : false} />
-              <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} tone="info" />
+              <MetricCard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} tone={status ? (status.dryRun ? "warn" : "danger") : "muted"} alert={status ? !status.dryRun : false} delta={status?.dryRun ? "simulated" : "live"} deltaDir={status?.dryRun ? "neutral" : "down"} />
+              <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} tone="info" delta={status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "funded" : "⚠ low") : "—"} deltaDir={status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "up" : "down") : "neutral"} />
               <MetricCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" tone="primary" />
-              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
+              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" delta={status?.totalSettlements > 0 ? `${status.totalSettlements} epochs` : "none yet"} deltaDir={status?.totalSettlements > 0 ? "up" : "neutral"} />
             </MetricGrid>
             <Panel title="Settlement Control">
               {status && <Stack gap="sm">
@@ -207,6 +209,27 @@ export default function AdminCommandCenter() {
                   <Button tone="muted" disabled={busy.dryRun} onClick={() => { setShowLiveConfirm(false); setConfirmLive(""); }}>Cancel</Button>
                 </Inline>}
               </Stack>}
+            </Panel>
+            <Panel title="Settlement Log" headerRight={<StatusBadge label={`${status?.totalSettlements ?? 0} epochs`} tone="success" />}>
+              <DataTable
+                columns={[
+                  { key: "field", header: "Parameter", mono: true, muted: true },
+                  { key: "value", header: "Value", mono: true },
+                  { key: "note", header: "Note" },
+                ]}
+                rows={status ? [
+                  { field: "mode", value: status.dryRun ? "DRY_RUN" : "LIVE", note: status.dryRun ? "Simulated — no real TXs" : "Real on-chain settlements" },
+                  { field: "signer", value: status.signerAddress ? fmt.addr(status.signerAddress) : "—", note: "Hot signer address" },
+                  { field: "signer_balance", value: status.signerBalance != null ? `${fmt.bal(status.signerBalance)} POL` : "—", note: "Available gas balance" },
+                  { field: "threshold", value: status.threshold != null ? `${status.threshold} USDT` : "—", note: "Min accumulation before epoch settles" },
+                  { field: "total_settlements", value: String(status.totalSettlements ?? 0), note: "On-chain settled epochs (all-time)" },
+                ] : null}
+                getRowKey={(r) => r.field}
+                error={statusErr}
+                emptyLabel="settlement log"
+                emptyMessage="No settlement data available"
+                emptyNote="check API connectivity"
+              />
             </Panel>
           </Stack>
         )}
@@ -246,6 +269,11 @@ export default function AdminCommandCenter() {
 
         {view === "agents" && (
           <Stack gap="sm">
+            <MetricGrid columns={3}>
+              <MetricCard label="Active Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Ran in last hour" tone="success" delta={jobs?.length ? `${liveJobs}/${jobs.length}` : "—"} deltaDir={liveJobs > 0 ? "up" : "neutral"} />
+              <MetricCard label="Stale Jobs" value={jobs == null ? "…" : String(staleJobs)} sub="No run in 1h+" tone="warn" delta={staleJobs > 0 ? "needs attention" : "all current"} deltaDir={staleJobs > 0 ? "down" : "up"} />
+              <MetricCard label="Failed Jobs" value={jobs == null ? "…" : String(failedJobs)} sub="Error / failure" tone={failedJobs > 0 ? "danger" : "muted"} alert={failedJobs > 0} delta={failedJobs > 0 ? `${failedJobs} failed` : "none"} deltaDir={failedJobs > 0 ? "down" : "up"} />
+            </MetricGrid>
             <Panel title="Automation Jobs" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
               <Inline gap="sm" style={{ marginBottom: "12px" }}>
                 {TRIGGERABLE_JOBS.map((j) => (

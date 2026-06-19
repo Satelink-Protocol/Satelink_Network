@@ -15,9 +15,13 @@ export interface MetricCardProps {
   size?: 'lg' | 'sm';
   /** Small tone-colored square glyph badge, top-left. */
   icon?: ReactNode;
+  /** Trend percentage string, e.g. "+12%" or "-3%". Renders as a pill below the value. */
+  delta?: string;
+  /** Direction of the trend — controls pill color. 'up' = green, 'down' = red, 'neutral' = muted. */
+  deltaDir?: 'up' | 'down' | 'neutral';
 }
 
-/** SigNoz-style metric widget: label top, value center-left, sub footer. */
+/** SigNoz-style metric widget: label top, value center-left, sub footer, optional delta trend. */
 export function MetricCard({
   label,
   value,
@@ -25,6 +29,8 @@ export function MetricCard({
   tone = 'primary',
   alert,
   size = 'lg',
+  delta,
+  deltaDir = 'neutral',
 }: MetricCardProps): JSX.Element {
   return (
     <div className={clsx(styles.card, alert && styles.alert)} data-tone={tone}>
@@ -39,8 +45,16 @@ export function MetricCard({
         </span>
       </div>
       <div className={styles.content}>
-        <div className={styles.value} data-size={size}>
-          {value}
+        <div className={styles.valueRow}>
+          <div className={styles.value} data-size={size}>
+            {value}
+          </div>
+          {delta ? (
+            <span className={styles.delta} data-dir={deltaDir}>
+              {deltaDir === 'up' ? '↑' : deltaDir === 'down' ? '↓' : '→'}
+              {' '}{delta}
+            </span>
+          ) : null}
         </div>
         {sub ? <div className={styles.sub}>{sub}</div> : null}
       </div>
