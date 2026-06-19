@@ -1,6 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Button,
+  Input,
+  Inline,
+  Stack,
+  Panel,
+  SectionLabel,
+  Notice,
+  MetricCard,
+  MetricGrid,
+  StatusBadge,
+  StatusDot,
+} from "@/components/satelink-os";
 
 const API_BASE = "https://rpc.satelink.network";
 
@@ -16,6 +29,10 @@ interface DepositInstructions {
   polygonscan: string;
 }
 
+/**
+ * Copy-to-clipboard field — label + monospace value + copy button.
+ * Restyled onto Satelink-OS theme tokens; the copy control is the shared Button.
+ */
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -26,20 +43,31 @@ function CopyField({ label, value }: { label: string; value: string }) {
   };
 
   return (
-    <div className="space-y-1">
-      <p className="text-[10px] text-[#285A48] uppercase tracking-wider">{label}</p>
-      <div className="flex items-start gap-2">
-        <code className="flex-1 bg-[#091413] border border-[#1a3028] rounded px-3 py-2 font-mono text-[11px] text-[#B0E4CC] break-all">
+    <Stack gap="sm">
+      <SectionLabel>{label}</SectionLabel>
+      <div style={{ display: "flex", alignItems: "stretch", gap: "8px" }}>
+        <code
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: "var(--sat-bg-0)",
+            border: "1px solid var(--sat-border)",
+            borderRadius: "var(--sat-radius-md)",
+            padding: "8px 10px",
+            fontFamily: "var(--sat-font-mono)",
+            fontSize: "11px",
+            lineHeight: 1.5,
+            color: "var(--sat-text-secondary)",
+            wordBreak: "break-all",
+          }}
+        >
           {value}
         </code>
-        <button
-          onClick={handleCopy}
-          className="shrink-0 px-3 py-2 bg-[#1a3028] hover:bg-[#285A48] text-[#408A71] hover:text-[#B0E4CC] text-[10px] font-semibold rounded transition-colors"
-        >
+        <Button tone={copied ? "success" : "muted"} size="sm" onClick={handleCopy}>
           {copied ? "Copied" : "Copy"}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Stack>
   );
 }
 
@@ -77,155 +105,241 @@ export default function DepositPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#091413] font-['Inter',sans-serif] text-[#B0E4CC]">
-      {/* TOP BAR */}
-      <div className="sticky top-0 z-50 flex items-center h-12 px-4 gap-4 border-b border-[#1a3028] bg-[#091413]/95 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-[13px] font-semibold">
-          <div className="w-2 h-2 rounded-full bg-[#00D1FF] animate-pulse" />
-          DEPOSIT USDT
-        </div>
-        <div className="ml-auto">
-          <span className="text-[9px] px-2 py-0.5 rounded border border-[#00D1FF] text-[#00D1FF] font-mono">
-            POLYGON 137
-          </span>
-        </div>
-      </div>
-
-      <div className="p-5 max-w-2xl space-y-4">
-        {/* AMOUNT INPUT */}
-        <div className="bg-[#0c1a17] border border-[#1a3028] rounded-md p-4">
-          <label className="text-[10px] text-[#285A48] uppercase tracking-wider block mb-2">
-            USDT Amount
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleGetInstructions()}
-              placeholder="e.g. 10.00"
-              className="flex-1 bg-[#091413] border border-[#1a3028] rounded px-3 py-2 font-mono text-[13px] text-[#B0E4CC] focus:border-[#408A71] focus:outline-none"
-            />
-            <button
-              onClick={handleGetInstructions}
-              disabled={loading}
-              className="px-4 py-2 bg-[#285A48] hover:bg-[#408A71] disabled:bg-[#1a3028] disabled:text-[#285A48] text-[#091413] text-[11px] font-semibold rounded transition-colors"
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "var(--sat-bg-0)",
+        padding: "32px 20px",
+      }}
+    >
+      <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+        <Stack gap="md">
+          {/* HEADER */}
+          <Inline gap="sm">
+            <StatusDot tone="info" pulse />
+            <span
+              style={{
+                fontSize: "15px",
+                fontWeight: 600,
+                color: "var(--sat-text)",
+                letterSpacing: "0.5px",
+              }}
             >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 border-2 border-[#091413]/40 border-t-[#091413] rounded-full animate-spin" />
-                  Loading...
-                </span>
-              ) : (
-                "Get deposit instructions"
-              )}
-            </button>
-          </div>
-          {error && (
-            <p className="mt-2 text-[11px] text-[#c04040]">{error}</p>
+              Deposit USDT
+            </span>
+            <span style={{ marginLeft: "auto" }}>
+              <StatusBadge label="Polygon 137" tone="info" />
+            </span>
+          </Inline>
+
+          {/* AMOUNT INPUT */}
+          <Panel title="Amount">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleGetInstructions();
+              }}
+            >
+              <Stack gap="sm">
+                <SectionLabel>USDT Amount</SectionLabel>
+                <Inline gap="sm">
+                  <Input
+                    mono
+                    value={amount}
+                    onChange={setAmount}
+                    placeholder="e.g. 10.00"
+                    ariaLabel="USDT amount"
+                    disabled={loading}
+                  />
+                  <Button
+                    tone="primary"
+                    onClick={handleGetInstructions}
+                    disabled={loading}
+                  >
+                    {loading ? "Loading…" : "Get deposit instructions"}
+                  </Button>
+                </Inline>
+                {error && <Notice tone="danger">{error}</Notice>}
+              </Stack>
+            </form>
+          </Panel>
+
+          {/* DEPOSIT INSTRUCTIONS */}
+          {instructions && (
+            <>
+              {/* SUMMARY */}
+              <MetricGrid columns={2}>
+                <MetricCard
+                  label="Chain"
+                  value={`Polygon (${instructions.chainId})`}
+                  sub="Polygon PoS Mainnet"
+                  tone="info"
+                  size="sm"
+                />
+                <MetricCard
+                  label="Deposit Amount"
+                  value={`${instructions.amountUsdt} USDT`}
+                  sub="To RevenueVault"
+                  tone="primary"
+                  size="sm"
+                />
+              </MetricGrid>
+
+              {/* ADDRESSES */}
+              <Panel title="Contract Addresses">
+                <Stack gap="md">
+                  <CopyField
+                    label="RevenueVault Address"
+                    value={instructions.revenueVaultAddress}
+                  />
+                  <CopyField
+                    label="USDT Contract Address"
+                    value={instructions.usdtAddress}
+                  />
+                </Stack>
+              </Panel>
+
+              {/* STEP 1 */}
+              <Panel
+                title="Step 1 — Approve USDT to RevenueVault"
+                headerRight={<StatusBadge label="Step 1" tone="muted" />}
+              >
+                <Stack gap="sm">
+                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                    Send to:{" "}
+                    <span
+                      style={{
+                        fontFamily: "var(--sat-font-mono)",
+                        color: "var(--sat-text-secondary)",
+                      }}
+                    >
+                      {instructions.usdtAddress}
+                    </span>
+                  </p>
+                  <CopyField label="Approve Calldata" value={instructions.approveCalldata} />
+                </Stack>
+              </Panel>
+
+              {/* STEP 2 */}
+              <Panel
+                title="Step 2 — Deposit USDT into RevenueVault"
+                headerRight={<StatusBadge label="Step 2" tone="primary" />}
+              >
+                <Stack gap="sm">
+                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                    Send to:{" "}
+                    <span
+                      style={{
+                        fontFamily: "var(--sat-font-mono)",
+                        color: "var(--sat-text-secondary)",
+                      }}
+                    >
+                      {instructions.revenueVaultAddress}
+                    </span>
+                  </p>
+                  <CopyField label="Deposit Calldata" value={instructions.depositCalldata} />
+                </Stack>
+              </Panel>
+
+              {/* HOW TO EXECUTE */}
+              <Panel title="How to execute">
+                <Stack gap="sm">
+                  <p style={{ fontSize: "12px", color: "var(--sat-text-secondary)", margin: 0 }}>
+                    Use any EVM wallet or web3 tool to execute these two transactions.
+                  </p>
+                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                    After both transactions confirm, your credits will be available. Add{" "}
+                    <code
+                      style={{
+                        fontFamily: "var(--sat-font-mono)",
+                        background: "var(--sat-bg-0)",
+                        padding: "1px 5px",
+                        borderRadius: "var(--sat-radius-sm)",
+                        color: "var(--sat-secondary)",
+                      }}
+                    >
+                      X-Wallet-Address: &lt;your-wallet&gt;
+                    </code>{" "}
+                    to your RPC calls to claim earnings.
+                  </p>
+                  <div>
+                    <a
+                      href={instructions.polygonscan}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--sat-primary)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "2px",
+                      }}
+                    >
+                      View vault on Polygonscan →
+                    </a>
+                  </div>
+                </Stack>
+              </Panel>
+
+              {/* WHAT HAPPENS NEXT */}
+              <Panel title="What happens next">
+                <Stack gap="sm">
+                  <ol
+                    style={{
+                      margin: 0,
+                      paddingLeft: "18px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      fontSize: "12px",
+                      color: "var(--sat-text-secondary)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <li>
+                      Credits appear automatically within{" "}
+                      <strong style={{ color: "var(--sat-success)" }}>~30 seconds</strong> of
+                      transaction confirmation (2 Polygon blocks).
+                    </li>
+                    <li>
+                      Add{" "}
+                      <code
+                        style={{
+                          fontFamily: "var(--sat-font-mono)",
+                          background: "var(--sat-bg-0)",
+                          padding: "1px 5px",
+                          borderRadius: "var(--sat-radius-sm)",
+                          color: "var(--sat-secondary)",
+                        }}
+                      >
+                        X-Wallet-Address: &lt;your-wallet&gt;
+                      </code>{" "}
+                      to every RPC request so calls are billed to your balance.
+                    </li>
+                    <li>
+                      Each call costs{" "}
+                      <strong style={{ color: "var(--sat-success)" }}>$0.00003 USDT</strong> —
+                      33,333 calls per $1 deposited.
+                    </li>
+                  </ol>
+                  <div>
+                    <a
+                      href="/satelink/os/overview"
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--sat-primary)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Open the console →
+                    </a>
+                  </div>
+                </Stack>
+              </Panel>
+            </>
           )}
-        </div>
-
-        {/* DEPOSIT INSTRUCTIONS */}
-        {instructions && (
-          <>
-            {/* ADDRESSES */}
-            <div className="bg-[#0c1a17] border border-[#1a3028] rounded-md p-4 space-y-4">
-              <p className="text-[10px] text-[#285A48] uppercase tracking-wider font-semibold">
-                Contract Addresses
-              </p>
-              <CopyField label="RevenueVault Address" value={instructions.revenueVaultAddress} />
-              <CopyField label="USDT Contract Address" value={instructions.usdtAddress} />
-              <div className="flex gap-6 pt-1 text-[10px]">
-                <div>
-                  <span className="text-[#285A48]">Chain</span>
-                  <span className="ml-2 font-mono text-[#00D1FF]">Polygon ({instructions.chainId})</span>
-                </div>
-                <div>
-                  <span className="text-[#285A48]">Amount</span>
-                  <span className="ml-2 font-mono text-[#B0E4CC]">{instructions.amountUsdt} USDT</span>
-                </div>
-              </div>
-            </div>
-
-            {/* STEP 1 */}
-            <div className="bg-[#0c1a17] border border-[#1a3028] rounded-md p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] px-2 py-0.5 rounded bg-[#1a3028] text-[#408A71] font-mono font-semibold">
-                  STEP 1
-                </span>
-                <p className="text-[12px] font-medium text-[#B0E4CC]">Approve USDT to RevenueVault</p>
-              </div>
-              <p className="text-[10px] text-[#285A48]">
-                Send to: <span className="font-mono text-[#408A71]">{instructions.usdtAddress}</span>
-              </p>
-              <CopyField label="Approve Calldata" value={instructions.approveCalldata} />
-            </div>
-
-            {/* STEP 2 */}
-            <div className="bg-[#0c1a17] border border-[#285A48] rounded-md p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] px-2 py-0.5 rounded bg-[#285A48] text-[#091413] font-mono font-semibold">
-                  STEP 2
-                </span>
-                <p className="text-[12px] font-medium text-[#B0E4CC]">Deposit USDT into RevenueVault</p>
-              </div>
-              <p className="text-[10px] text-[#285A48]">
-                Send to: <span className="font-mono text-[#408A71]">{instructions.revenueVaultAddress}</span>
-              </p>
-              <CopyField label="Deposit Calldata" value={instructions.depositCalldata} />
-            </div>
-
-            {/* INSTRUCTIONS */}
-            <div className="bg-[#0c1a17] border border-[#1a3028] rounded-md p-4">
-              <p className="text-[11px] text-[#408A71]">
-                Use any EVM wallet or web3 tool to execute these two transactions
-              </p>
-              <p className="text-[10px] text-[#285A48] mt-2">
-                After both transactions confirm, your credits will be available.
-                Add <code className="font-mono bg-[#091413] px-1 rounded">X-Wallet-Address: &lt;your-wallet&gt;</code> to your RPC calls to claim earnings.
-              </p>
-              <a
-                href={instructions.polygonscan}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-3 text-[10px] text-[#285A48] hover:text-[#408A71] underline underline-offset-2"
-              >
-                View vault on Polygonscan →
-              </a>
-            </div>
-
-            {/* WHAT HAPPENS NEXT */}
-            <div className="bg-[#0c2219] border border-[#285A48] rounded-md p-4">
-              <p className="text-[11px] font-semibold text-[#B0E4CC] mb-2">
-                What happens next
-              </p>
-              <ul className="space-y-1.5 text-[10px] text-[#285A48]">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#408A71] mt-0.5">1.</span>
-                  <span>Credits appear automatically within <strong className="text-[#408A71]">~30 seconds</strong> of transaction confirmation (2 Polygon blocks).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#408A71] mt-0.5">2.</span>
-                  <span>Add <code className="font-mono bg-[#091413] px-1 rounded text-[#00D1FF]">X-Wallet-Address: &lt;your-wallet&gt;</code> to every RPC request so calls are billed to your balance.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#408A71] mt-0.5">3.</span>
-                  <span>Each call costs <strong className="text-[#408A71]">$0.00003 USDT</strong> — 33,333 calls per $1 deposited.</span>
-                </li>
-              </ul>
-              <a
-                href="/satelink/os/overview"
-                className="inline-block mt-3 text-[10px] font-semibold text-[#408A71] hover:text-[#B0E4CC] transition-colors"
-              >
-                Open the console →
-              </a>
-            </div>
-          </>
-        )}
+        </Stack>
       </div>
-    </div>
+    </main>
   );
 }
