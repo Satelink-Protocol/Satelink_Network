@@ -2,10 +2,93 @@
   background: var(--sat-bg-1);
   border: 1px solid var(--sat-border);
   border-radius: var(--sat-radius-md);
-  padding: 16px 20px;
-  /* subtle top highlight gives SigNoz card depth without a heavy shadow */
+  /* subtle inner top edge — gives depth */
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sat-text) 3%, transparent);
+  overflow: hidden;
 }
-.flush {
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--sat-border);
+  background: var(--sat-bg-2);
+  min-height: 40px;
+}
+.panelTitle {
+  font-family: var(--sat-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sat-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--sat-text);
   padding: 0;
+  text-align: left;
+}
+.panelTitle:hover {
+  color: var(--sat-text);
+}
+.chevron {
+  color: var(--sat-text-dim);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.chevron.open {
+  transform: rotate(0deg);
+}
+.chevron.closed {
+  transform: rotate(-90deg);
+}
+.panelRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.panelDotsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: var(--sat-radius-sm);
+  color: var(--sat-text-dim);
+  cursor: pointer;
+  transition: var(--sat-transition);
+  font-size: 14px;
+}
+.panelDotsBtn:hover {
+  background: var(--sat-hover);
+  color: var(--sat-text-muted);
+}
+.body {
+  padding: 16px;
+}
+.flush .body {
+  padding: 0;
+}
+.collapsing {
+  overflow: hidden;
+  animation: collapse-out 0.15s ease forwards;
+}
+.expanding {
+  overflow: hidden;
+  animation: expand-in 0.15s ease forwards;
+}
+@keyframes expand-in {
+  from { max-height: 0; opacity: 0.5; }
+  to { max-height: 9999px; opacity: 1; }
+}
+@keyframes collapse-out {
+  from { max-height: 9999px; opacity: 1; }
+  to { max-height: 0; opacity: 0.5; }
 }

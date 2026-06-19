@@ -1,4 +1,3 @@
-import { SectionLabel } from '../shared/SectionLabel';
 import { StatusDot } from '../badges/StatusDot';
 import type { Tone } from '../shared/types';
 import styles from './EventStream.module.css';
@@ -19,19 +18,27 @@ export interface EventStreamProps {
   events: StreamEvent[];
 }
 
-/** Live log/event feed. Driven entirely by real events passed in (e.g. SSE). */
+/** SigNoz log-explorer-style live event feed. Driven entirely by real SSE events. */
 export function EventStream({ title, state, events }: EventStreamProps): JSX.Element {
   const dotTone: Tone = state === 'live' ? 'success' : state === 'error' ? 'danger' : 'warn';
   return (
     <div className={styles.wrap}>
-      <SectionLabel right={<StatusDot tone={dotTone} pulse />}>{title}</SectionLabel>
-      {events.length === 0 && state !== 'error' ? (
-        <div className={styles.note}>Connecting…</div>
-      ) : null}
-      {events.length === 0 && state === 'error' ? (
-        <div className={styles.note}>Live feed unavailable. It will reconnect automatically.</div>
-      ) : null}
-      <div>
+      <div className={styles.header}>
+        <span className={styles.title}>{title}</span>
+        <div className={styles.headerRight}>
+          <StatusDot tone={dotTone} pulse />
+          <span className={styles.stateLabel} data-state={state}>
+            {state === 'live' ? 'LIVE' : state === 'error' ? 'ERROR' : 'CONNECTING'}
+          </span>
+        </div>
+      </div>
+      <div className={styles.feed}>
+        {events.length === 0 && state !== 'error' ? (
+          <div className={styles.note}>Waiting for events…</div>
+        ) : null}
+        {events.length === 0 && state === 'error' ? (
+          <div className={styles.note} data-err="1">Live feed unavailable. Reconnecting…</div>
+        ) : null}
         {events.map((e, i) => (
           <div key={e.id ?? i} className={styles.row}>
             <span className={styles.time}>{e.time}</span>

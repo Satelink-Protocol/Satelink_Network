@@ -6,31 +6,31 @@
  */
 .sat-os {
   /* Brand */
-  --sat-primary: #5eead4;
+  --sat-primary: #4e9eff;
   --sat-secondary: #00c8ff;
   --sat-accent: #0090ff;
 
-  /* Semantic */
-  --sat-success: #34d399;
-  --sat-warn: #f59e0b;
-  --sat-danger: #ef4444;
-  --sat-info: #7dd3fc;
+  /* Semantic — SigNoz-exact tone palette */
+  --sat-success: #32d583;
+  --sat-warn: #f5a623;
+  --sat-danger: #f04438;
+  --sat-info: #53b1fd;
 
-  /* Dark surface hierarchy */
-  --sat-bg-0: #050816;
-  --sat-bg-1: #0e1628;
-  --sat-bg-2: #121c33;
-  --sat-bg-3: #1a2740;
+  /* Dark surface hierarchy — SigNoz uses #1a1a2e style deep navy */
+  --sat-bg-0: #121317;
+  --sat-bg-1: #1a1d27;
+  --sat-bg-2: #1f2232;
+  --sat-bg-3: #252840;
 
   /* Lines */
-  --sat-border: #1a2f50;
-  --sat-border-strong: #26406b;
+  --sat-border: #252838;
+  --sat-border-strong: #30344a;
 
   /* Text */
-  --sat-text: #e5eef8;
-  --sat-text-secondary: #c2cee0;
-  --sat-text-muted: #94a3b8;
-  --sat-text-dim: #4a5a72;
+  --sat-text: #e0e4ef;
+  --sat-text-secondary: #b4bcd0;
+  --sat-text-muted: #7c85a2;
+  --sat-text-dim: #444860;
 
   /* Fonts — bound to geist variables by the route layout; safe fallbacks here */
   --sat-font-sans: var(--font-geist-sans), Inter, system-ui, sans-serif;
@@ -58,8 +58,8 @@
   /* Elevation */
   --sat-elev-raised: 0 1px 0 rgba(255, 255, 255, 0.02), 0 2px 8px rgba(0, 0, 0, 0.35);
   --sat-elev-overlay: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --sat-glow-primary: 0 0 12px rgba(94, 234, 212, 0.25);
-  --sat-glow-danger: 0 0 12px rgba(239, 68, 68, 0.25);
+  --sat-glow-primary: 0 0 12px rgba(78, 158, 255, 0.25);
+  --sat-glow-danger: 0 0 12px rgba(240, 68, 56, 0.25);
 
   /* Base surface */
   background: var(--sat-bg-0);

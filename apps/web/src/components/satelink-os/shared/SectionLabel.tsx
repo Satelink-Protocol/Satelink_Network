@@ -8,11 +8,11 @@ export interface SectionLabelProps {
   right?: ReactNode;
 }
 
-/** Mono uppercase section heading row. */
+/** Redesigned to match SigNoz panel titles (Screenshot 2). */
 export function SectionLabel({ children, right }: SectionLabelProps): JSX.Element {
   return (
     <div className={styles.row}>
-      <div className={styles.label}>{children.toUpperCase()}</div>
+      <div className={styles.label}>{children}</div>
       {right ? <div>{right}</div> : null}
     </div>
   );
