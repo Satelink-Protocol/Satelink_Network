@@ -19,6 +19,7 @@ import { Router } from 'express';
 import { ethers } from 'ethers';
 
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
+const METERING_RATE_USDT = 0.00003; // confirmed production rate: $0.00003 / RPC call
 
 export function createDepositEconomicsRouter(pool, logger = console) {
   const router = Router();
@@ -31,7 +32,7 @@ export function createDepositEconomicsRouter(pool, logger = console) {
     }
     try {
       const result = await pool.query(
-        `SELECT wallet_address, balance_usdt, last_deposit_at
+        `SELECT wallet_address, balance_usdt, total_spent, last_deposit_at
            FROM credit_balances
           WHERE lower(wallet_address) = $1`,
         [wallet]
@@ -43,15 +44,22 @@ export function createDepositEconomicsRouter(pool, logger = console) {
         return res.status(200).json({
           wallet,
           creditsUsdt: 0,
+          consumedUsdt: 0,
+          estimatedRemainingCalls: 0,
           lastDepositAt: null,
           pendingDeposits: 0,
         });
       }
 
       const row = rows[0];
+      const creditsUsdt = parseFloat(row.balance_usdt) || 0;
       return res.status(200).json({
         wallet: row.wallet_address,
-        creditsUsdt: parseFloat(row.balance_usdt) || 0,
+        creditsUsdt,
+        // total_spent is the authoritative per-wallet consumption (credit_gate.js deducts
+        // into it on each billed call) — billing_events does not exist in this schema.
+        consumedUsdt: parseFloat(row.total_spent) || 0,
+        estimatedRemainingCalls: Math.floor(creditsUsdt / METERING_RATE_USDT),
         lastDepositAt: row.last_deposit_at,
         // No pending-deposit state exists in the schema (deposits are written only once
         // confirmed on-chain), so this is always 0 rather than a fabricated count.
@@ -63,30 +71,38 @@ export function createDepositEconomicsRouter(pool, logger = console) {
     }
   });
 
-  // GET /history/:wallet → DepositRecord[]
+  // GET /history/:wallet?page=&limit= → paginated { deposits, page, limit, total, hasMore }
   router.get('/history/:wallet', async (req, res) => {
     const wallet = (req.params.wallet || '').toLowerCase();
     if (!WALLET_RE.test(wallet)) {
       return res.status(400).json({ error: 'invalid wallet address' });
     }
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const offset = (page - 1) * limit;
     try {
       const result = await pool.query(
-        `SELECT tx_hash, amount_usdt, confirmed_at
+        `SELECT tx_hash, amount_usdt, confirmed_at, COUNT(*) OVER() AS total_count
            FROM credit_deposits
           WHERE lower(wallet_address) = $1
           ORDER BY confirmed_at DESC
-          LIMIT 50`,
-        [wallet]
+          LIMIT $2 OFFSET $3`,
+        [wallet, limit, offset]
       );
       const rows = result.rows || result;
-      return res.status(200).json(
-        rows.map((r) => ({
+      const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      return res.status(200).json({
+        deposits: rows.map((r) => ({
           txHash: r.tx_hash,
           amountUsdt: parseFloat(r.amount_usdt) || 0,
           status: 'CONFIRMED', // credit_deposits only stores confirmed on-chain deposits
           createdAt: r.confirmed_at,
-        }))
-      );
+        })),
+        page,
+        limit,
+        total,
+        hasMore: offset + rows.length < total,
+      });
     } catch (err) {
       logger.error('[DepositEconomics] history error:', err.message);
       return res.status(500).json({ error: 'internal_error' });

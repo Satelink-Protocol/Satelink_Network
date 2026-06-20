@@ -41,6 +41,8 @@ export interface NetworkStats {
 export interface CreditBalance {
   wallet: string;
   creditsUsdt: number;
+  consumedUsdt: number;
+  estimatedRemainingCalls: number;
   lastDepositAt: string | null;
   pendingDeposits: number;
 }
@@ -50,6 +52,14 @@ export interface DepositRecord {
   amountUsdt: number;
   status: 'PENDING' | 'CONFIRMED' | 'FAILED';
   createdAt: string;
+}
+
+export interface DepositHistoryPage {
+  deposits: DepositRecord[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface VaultProof {
@@ -127,8 +137,10 @@ export async function getCreditBalance(wallet: string) {
   return safeGet<CreditBalance>(`${API_BASE}/v1/credits/balance/${wallet}`);
 }
 
-export async function getDepositHistory(wallet: string) {
-  return safeGet<DepositRecord[]>(`${API_BASE}/v1/credits/history/${wallet}`);
+export async function getDepositHistory(wallet: string, page = 1, limit = 20) {
+  return safeGet<DepositHistoryPage>(
+    `${API_BASE}/v1/credits/history/${wallet}?page=${page}&limit=${limit}`
+  );
 }
 
 export async function getVaultProof() {

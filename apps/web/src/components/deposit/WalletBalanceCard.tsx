@@ -69,6 +69,15 @@ export function WalletBalanceCard({ wallet }: { wallet: string | null }) {
             color={TOKENS.teal}
           />
           <MetricRow
+            label="Consumed"
+            value={`$${state.data.consumedUsdt.toFixed(6)}`}
+          />
+          <MetricRow
+            label="Est. Remaining Calls"
+            value={state.data.estimatedRemainingCalls.toLocaleString()}
+            hint="at $0.00003 / RPC call"
+          />
+          <MetricRow
             label="Pending Deposits"
             value={String(state.data.pendingDeposits)}
           />

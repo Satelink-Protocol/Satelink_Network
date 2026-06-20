@@ -22,6 +22,10 @@ import { RevenueVaultProofCard } from "@/components/deposit/RevenueVaultProofCar
 import { PricingEconomicsCard } from "@/components/deposit/PricingEconomicsCard";
 import { NetworkStatsWidget } from "@/components/deposit/NetworkStatsWidget";
 import { DepositHistory } from "@/components/deposit/DepositHistory";
+import { FundingWorkflow } from "@/components/deposit/FundingWorkflow";
+import { WalletProvider } from "@/components/deposit/wallet/WalletProvider";
+import { ConnectWalletButton } from "@/components/deposit/wallet/ConnectWalletButton";
+import { useAccount } from "wagmi";
 
 const API_BASE = "https://rpc.satelink.network";
 
@@ -80,13 +84,22 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 export default function DepositPage() {
+  return (
+    <WalletProvider>
+      <DepositPageInner />
+    </WalletProvider>
+  );
+}
+
+function DepositPageInner() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [instructions, setInstructions] = useState<DepositInstructions | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // P0 panels: no wallet-connect on this page yet, so wallet stays null →
+  // Wallet address from the injected connector — null when disconnected, which makes
   // WalletBalanceCard / DepositHistory render their honest "not connected" states.
-  const [wallet] = useState<string | null>(null);
+  const { address } = useAccount();
+  const wallet = address ?? null;
 
   const handleGetInstructions = async () => {
     const parsed = parseFloat(amount);
@@ -139,9 +152,36 @@ export default function DepositPage() {
               Deposit USDT
             </span>
             <span style={{ marginLeft: "auto" }}>
-              <StatusBadge label="Polygon 137" tone="info" />
+              <Inline gap="sm">
+                <StatusBadge label="Polygon 137" tone="info" />
+                <ConnectWalletButton />
+              </Inline>
             </span>
           </Inline>
+
+          {/* Value proposition (copy only) */}
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              fontSize: 12,
+              color: "var(--sat-text-secondary)",
+              lineHeight: 1.5,
+            }}
+          >
+            <li>Pay-as-you-go — buy exactly the capacity you need</li>
+            <li>No subscriptions</li>
+            <li>No monthly commitments</li>
+            <li>Credits never expire</li>
+            <li>Machine-to-machine billing — per-call, fully programmatic</li>
+            <li>On-chain USDT settlement on Polygon</li>
+          </ul>
+
+          {/* P0 — funding lifecycle (static, above the fold) */}
+          <FundingWorkflow />
 
           {/* P0 — capacity estimator (shares the amount state with the deposit flow below) */}
           <CreditEstimator
