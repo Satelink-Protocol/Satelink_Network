@@ -2,10 +2,16 @@
 
 ## Branch Strategy
 
-- `main` — production (protected, auto-deploys to Railway/Vercel)
-- `develop` — integration branch
-- `feature/*` — new features
-- `hotfix/*` — emergency fixes
+- `main` — the **only** integration branch (protected, auto-deploys to Railway/Vercel).
+  There is no `develop` — do not create PRs against it or assume it exists.
+- `feat/*`, `fix/*`, `chore/*`, `docs/*` — short-lived branches off `main`.
+- **Delete feature branches immediately after merge.** "Automatically delete head
+  branches" is enabled in Settings → General, so merged branches are removed
+  automatically; this (not periodic manual cleanup) is what keeps branches from
+  piling up.
+- **Dependabot branches:** leave them alone — auto-delete-on-merge handles them.
+- **Protected:** `add-satelink-polygon-rpc` (Chainlist submission) — never
+  force-push or delete.
 
 ## Commit Format
 
@@ -19,11 +25,11 @@ test(task-id): test additions
 
 ## Pull Request Process
 
-1. Branch from `develop`
+1. Branch from `main`
 2. Run tests: `npm test`
 3. Run lint: `npm run lint`
-4. Create PR to `develop`
-5. Merge after CI passes
+4. Create PR to `main`
+5. Merge after CI passes (the head branch auto-deletes on merge)
 
 ## Security
 
