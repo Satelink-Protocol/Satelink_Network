@@ -70,11 +70,16 @@ export function WalletBalanceCard({ wallet }: { wallet: string | null }) {
           />
           <MetricRow
             label="Consumed"
-            value={`$${state.data.consumedUsdt.toFixed(6)}`}
+            value={`$${(state.data.consumedUsdt ?? 0).toFixed(6)}`}
           />
           <MetricRow
             label="Est. Remaining Calls"
-            value={state.data.estimatedRemainingCalls.toLocaleString()}
+            // Tolerate a backend that predates these fields (deploy-order window):
+            // remaining is derivable from the balance, consumed falls back to 0.
+            value={(
+              state.data.estimatedRemainingCalls ??
+              Math.floor((state.data.creditsUsdt || 0) / 0.00003)
+            ).toLocaleString()}
             hint="at $0.00003 / RPC call"
           />
           <MetricRow
