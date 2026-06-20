@@ -21,6 +21,7 @@ import { createAdminMalRouter } from "./src/routes/admin_mal_route.mjs";
 import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
+import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
@@ -345,6 +346,12 @@ app.get("/api/mode", (req, res) => {
 
   // MEV Private Relay (S3-001) — 10x pricing, requires API key
   app.use("/rpc/mev", createMevRelayRouter(pool, redis));
+
+  // Deposit-page P0 backend — credit balance/history (path-param) + on-chain vault
+  // balance. Mounted BEFORE the "/v1" ai-gateway so /v1/credits and /v1/vault are not
+  // shadowed by it. Schema verified via psql against production Postgres.
+  app.use("/v1/credits", createDepositEconomicsRouter(pool, console));
+  app.use("/v1/vault", createVaultRouter(console));
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
