@@ -15,6 +15,14 @@ import {
   StatusDot,
 } from "@/components/satelink-os";
 
+// P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
+import { CreditEstimator } from "@/components/deposit/CreditEstimator";
+import { WalletBalanceCard } from "@/components/deposit/WalletBalanceCard";
+import { RevenueVaultProofCard } from "@/components/deposit/RevenueVaultProofCard";
+import { PricingEconomicsCard } from "@/components/deposit/PricingEconomicsCard";
+import { NetworkStatsWidget } from "@/components/deposit/NetworkStatsWidget";
+import { DepositHistory } from "@/components/deposit/DepositHistory";
+
 const API_BASE = "https://rpc.satelink.network";
 
 interface DepositInstructions {
@@ -76,6 +84,9 @@ export default function DepositPage() {
   const [loading, setLoading] = useState(false);
   const [instructions, setInstructions] = useState<DepositInstructions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // P0 panels: no wallet-connect on this page yet, so wallet stays null →
+  // WalletBalanceCard / DepositHistory render their honest "not connected" states.
+  const [wallet] = useState<string | null>(null);
 
   const handleGetInstructions = async () => {
     const parsed = parseFloat(amount);
@@ -131,6 +142,18 @@ export default function DepositPage() {
               <StatusBadge label="Polygon 137" tone="info" />
             </span>
           </Inline>
+
+          {/* P0 — capacity estimator (shares the amount state with the deposit flow below) */}
+          <CreditEstimator
+            amount={parseFloat(amount) || 0}
+            onAmountChange={(n) => setAmount(Number.isFinite(n) ? String(n) : "")}
+          />
+
+          {/* P0 — trust + economics panels */}
+          <WalletBalanceCard wallet={wallet} />
+          <RevenueVaultProofCard />
+          <PricingEconomicsCard />
+          <NetworkStatsWidget />
 
           {/* AMOUNT INPUT */}
           <Panel title="Amount">
@@ -338,6 +361,9 @@ export default function DepositPage() {
               </Panel>
             </>
           )}
+
+          {/* P0 — deposit history (renders only when a wallet is connected; null here = honest empty) */}
+          <DepositHistory wallet={wallet} />
         </Stack>
       </div>
     </main>
