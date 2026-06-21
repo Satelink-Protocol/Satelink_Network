@@ -73,3 +73,44 @@ export const billingLimiter = rateLimit({
     validate: false,
     message: { ok: false, error: 'Billed endpoint rate limit exceeded' }
 });
+
+// ---------------------------------------------------------------------------
+// /api/keys surface (apps/api/src/billing/api_keys_route.mjs).
+// The API key is a bearer secret carried in the X-API-Key header; bucket on it
+// so one key can't exhaust shared IP budget, falling back to IP when absent.
+const apiKeyBucket = (req) => req.get('X-API-Key') || req.ip;
+
+// Free-tier key creation is unauthenticated — throttle hard per IP to stop
+// mass key-minting / DB bloat.
+export const apiKeyCreateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => req.ip,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    message: { ok: false, error: 'Too many key creation requests' }
+});
+
+// Deposit verification triggers an external Polygon RPC call and moves credit
+// — the tightest bucket on the surface.
+export const apiKeyDepositLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 10,
+    keyGenerator: apiKeyBucket,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    message: { ok: false, error: 'Deposit rate limit exceeded' }
+});
+
+// Financial read endpoints (usage summary, balance, deposit/usage history).
+export const apiKeyReadLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 60,
+    keyGenerator: apiKeyBucket,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    message: { ok: false, error: 'Rate limit exceeded' }
+});
