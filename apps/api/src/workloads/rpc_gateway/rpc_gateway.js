@@ -8,6 +8,13 @@ import { createHealthEndpoint, startHealthMonitor } from './health_monitor.js';
 import { createMetricsRouter } from './metrics.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
+import { authorizeAndMeter } from '../../billing/credit_service.mjs';
+
+// Customer Zero P0 recovery: when CREDIT_CANONICAL=true, authenticated callers
+// (X-API-Key or x-wallet-address) are authorized + metered + deducted against
+// api_credits via creditService — the single source of truth. When false, the
+// legacy Redis rate-limit + credit_balances path runs unchanged.
+const CREDIT_CANONICAL = () => process.env.CREDIT_CANONICAL === 'true';
 
 const SUPPORTED_CHAINS = new Set([...getSupportedChains(), ...Object.keys(CHAIN_ALIASES)]);
 
@@ -176,37 +183,12 @@ export function createRpcGateway(db) {
         const startTime = Date.now();
         const { chain } = req.params;
         const apiKey = req.headers['x-api-key'];
+        const walletHdr = req.headers['x-wallet-address'];
         const clientIp = getClientIp(req);
+        const canonical = CREDIT_CANONICAL();
 
-        // Rate limiting with 500ms timeout - fail open if slow
-        let rateCheck = { allowed: true, tier: 'free', remaining: 500, limit: 500 };
-        try {
-            const ratePromise = checkRateLimit(apiKey, clientIp);
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Rate limit timeout')), 500)
-            );
-            rateCheck = await Promise.race([ratePromise, timeoutPromise]);
-        } catch (err) {
-            console.warn('[RPC Gateway] Rate check skipped (timeout)');
-        }
-
-        res.set({
-            'X-RateLimit-Limit': rateCheck.limit,
-            'X-RateLimit-Remaining': rateCheck.remaining,
-            'X-RateLimit-Tier': rateCheck.tier
-        });
-
-        if (!rateCheck.allowed) {
-            res.set('X-RateLimit-Reset', rateCheck.resetAt);
-            return res.status(429).json({
-                error: 'rate_limit_exceeded',
-                upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
-                deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
-                network: 'Polygon Mainnet',
-                docs: 'https://docs.satelink.network/paid-tier'
-            });
-        }
-
+        // Validate chain + JSON-RPC body BEFORE any billing so an invalid
+        // request is never charged or metered.
         if (!SUPPORTED_CHAINS.has(chain)) {
             return res.status(400).json({
                 ok: false,
@@ -224,8 +206,71 @@ export function createRpcGateway(db) {
             return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC method' });
         }
 
-        // Usage tracking - fire and forget (non-blocking)
-        incrementUsage(apiKey, clientIp).catch(() => {});
+        // ── AUTHORIZE + METER ────────────────────────────────────────────────
+        if (canonical && (apiKey || walletHdr)) {
+            // CANONICAL: api_credits is authoritative. One atomic call does the
+            // daily-limit gate (429), balance deduct (402), and usage metering.
+            // No Redis, no credit_balances, no anonymous downgrade (unknown key → 401).
+            let verdict;
+            try {
+                verdict = await authorizeAndMeter(db, { apiKey, wallet: walletHdr });
+            } catch (err) {
+                console.error('[RPC Gateway] creditService error (fail-open + alert):', err.message);
+                verdict = { ok: true, tier: 'unknown', remaining: null, limit: null, balanceAfter: null, degraded: true };
+            }
+            res.set('X-Credit-Source', 'api_credits');
+            if (!verdict.ok) {
+                const payload = { ok: false, error: verdict.code, message: verdict.message };
+                if (verdict.http === 402) {
+                    payload.payment = {
+                        vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                        token: 'USDT',
+                        token_address: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+                        chain_id: 137,
+                        deposit_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/api/keys/deposit-info`
+                    };
+                }
+                return res.status(verdict.http || 402).json(payload);
+            }
+            res.set({
+                'X-RateLimit-Limit': verdict.limit ?? '',
+                'X-RateLimit-Remaining': verdict.remaining ?? '',
+                'X-RateLimit-Tier': verdict.tier,
+                'X-Credit-Balance': verdict.balanceAfter ?? ''
+            });
+        } else {
+            // LEGACY: Redis rate-limit (flag off, or anonymous public traffic).
+            let rateCheck = { allowed: true, tier: 'free', remaining: 500, limit: 500 };
+            try {
+                const ratePromise = checkRateLimit(apiKey, clientIp);
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Rate limit timeout')), 500)
+                );
+                rateCheck = await Promise.race([ratePromise, timeoutPromise]);
+            } catch (err) {
+                console.warn('[RPC Gateway] Rate check skipped (timeout)');
+            }
+
+            res.set({
+                'X-RateLimit-Limit': rateCheck.limit,
+                'X-RateLimit-Remaining': rateCheck.remaining,
+                'X-RateLimit-Tier': rateCheck.tier
+            });
+
+            if (!rateCheck.allowed) {
+                res.set('X-RateLimit-Reset', rateCheck.resetAt);
+                return res.status(429).json({
+                    error: 'rate_limit_exceeded',
+                    upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
+                    deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                    network: 'Polygon Mainnet',
+                    docs: 'https://docs.satelink.network/paid-tier'
+                });
+            }
+
+            // Usage tracking - fire and forget (non-blocking)
+            incrementUsage(apiKey, clientIp).catch(() => {});
+        }
 
         const request_id = `rpc_${crypto.randomUUID()}`;
         const method = body.method;

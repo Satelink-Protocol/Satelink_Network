@@ -42,6 +42,11 @@ export function createCreditGate(db, logger) {
   }
 
   return async function creditGate(req, res, next) {
+    // Customer Zero P0 recovery: when api_credits is canonical, the serving
+    // handler authorizes + deducts via creditService. This legacy wallet gate
+    // MUST step aside to avoid a double deduction (credit_balances + api_credits).
+    if (process.env.CREDIT_CANONICAL === 'true') return next();
+
     // Only gate wallet-authenticated requests
     const rawWallet = req.headers['x-wallet-address'];
     if (!rawWallet) return next(); // public/unauthenticated — pass through
