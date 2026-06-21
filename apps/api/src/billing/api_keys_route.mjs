@@ -1,8 +1,13 @@
 /**
  * Simple API Key Management
- * POST /api/keys — Create free tier key (no auth required)
- * GET /api/keys/:key/usage — Check usage
- * POST /api/keys/:key/deposit — Verify USDT deposit and upgrade tier
+ * The API key is a bearer secret — pass it in the X-API-Key header (never the
+ * URL path) for every key-scoped endpoint.
+ * POST /api/keys              — Create free tier key (no auth required, rate-limited)
+ * GET  /api/keys/usage        — Check usage           (X-API-Key header)
+ * GET  /api/keys/deposit-info — Deposit instructions  (X-API-Key header)
+ * POST /api/keys/deposit      — Verify USDT deposit + upgrade tier (X-API-Key header)
+ * GET  /api/keys/deposits     — Deposit history       (X-API-Key header)
+ * GET  /api/keys/usage-history— Daily usage history   (X-API-Key header)
  */
 
 import { Router } from 'express';
@@ -14,6 +19,19 @@ import {
   TIERS
 } from './credit_system.mjs';
 import { discord } from '../services/discord_notify.mjs';
+import {
+  apiKeyCreateLimiter,
+  apiKeyDepositLimiter,
+  apiKeyReadLimiter
+} from '../security/middleware/rate_limits.js';
+import {
+  extractApiKey,
+  isValidKeyFormat,
+  checkDepositOwnership,
+  hasEnoughConfirmations,
+  confirmationCount,
+  MIN_CONFIRMATIONS
+} from './deposit_validation.mjs';
 
 const TREASURY = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
 const USDT_POLYGON = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
@@ -37,7 +55,7 @@ export function createSimpleApiKeysRouter(pool) {
 
   ensureCreditTables(pool);
 
-  router.post('/', async (req, res) => {
+  router.post('/', apiKeyCreateLimiter, async (req, res) => {
     const { tier = 'free', wallet_address } = req.body || {};
 
     if (!TIERS[tier]) {
@@ -74,10 +92,10 @@ export function createSimpleApiKeysRouter(pool) {
     }
   });
 
-  router.get('/:key/usage', async (req, res) => {
-    const { key } = req.params;
+  router.get('/usage', apiKeyReadLimiter, async (req, res) => {
+    const key = extractApiKey(req);
 
-    if (!key || (!key.startsWith('sk_free') && !key.startsWith('sk_basic') && !key.startsWith('sk_pro') && !key.startsWith('sk_ent') && !key.startsWith('sk_live'))) {
+    if (!isValidKeyFormat(key)) {
       return res.status(400).json({ ok: false, error: 'Invalid API key format' });
     }
 
@@ -115,10 +133,14 @@ export function createSimpleApiKeysRouter(pool) {
     });
   });
 
-  // POST /api/keys/:key/deposit — Verify USDT deposit by TX hash
-  router.post('/:key/deposit', async (req, res) => {
-    const { key } = req.params;
+  // POST /api/keys/deposit — Verify USDT deposit by TX hash (key via X-API-Key header)
+  router.post('/deposit', apiKeyDepositLimiter, async (req, res) => {
+    const key = extractApiKey(req);
     const { tx_hash, tier } = req.body || {};
+
+    if (!isValidKeyFormat(key)) {
+      return res.status(400).json({ ok: false, error: 'Invalid API key format' });
+    }
 
     if (!tx_hash || !tx_hash.startsWith('0x') || tx_hash.length !== 66) {
       return res.status(400).json({
@@ -179,6 +201,29 @@ export function createSimpleApiKeysRouter(pool) {
         });
       }
 
+      // Require sufficient confirmation depth before crediting irreversible
+      // balance — a shallow tx can still be reorged out on Polygon.
+      let currentBlock;
+      try {
+        currentBlock = await provider.getBlockNumber();
+      } catch (e) {
+        return res.status(503).json({
+          ok: false,
+          error: 'confirmation_check_failed',
+          message: 'Unable to verify confirmation depth right now. Please retry shortly.',
+        });
+      }
+      if (!hasEnoughConfirmations(currentBlock, receipt.blockNumber)) {
+        const have = Math.max(0, confirmationCount(currentBlock, receipt.blockNumber));
+        return res.status(400).json({
+          ok: false,
+          error: 'insufficient_confirmations',
+          message: `Transaction needs at least ${MIN_CONFIRMATIONS} confirmations before it can be credited (currently ${have}).`,
+          required: MIN_CONFIRMATIONS,
+          confirmations: have,
+        });
+      }
+
       // Parse USDT transfer amount from logs
       const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
       const usdtInterface = new ethers.Interface([
@@ -207,6 +252,19 @@ export function createSimpleApiKeysRouter(pool) {
           error: 'no_usdt_received',
           message: `No USDT found sent to treasury (${TREASURY}) in this transaction`,
           tx_hash,
+        });
+      }
+
+      // OWNERSHIP BINDING (P0): the on-chain sender must exactly match the
+      // wallet registered to this API key, and a registered wallet is
+      // mandatory. Prevents deposit hijacking where any treasury-bound
+      // transaction is claimed by an unrelated key.
+      const ownership = checkDepositOwnership(fromAddress, keyRow.rows[0].wallet_address);
+      if (!ownership.ok) {
+        return res.status(403).json({
+          ok: false,
+          error: ownership.code,
+          message: ownership.error,
         });
       }
 
@@ -281,13 +339,17 @@ export function createSimpleApiKeysRouter(pool) {
 
     } catch (err) {
       console.error('[DEPOSIT] Error:', err.message);
-      return res.status(500).json({ ok: false, error: err.message });
+      return res.status(500).json({ ok: false, error: 'Deposit processing failed' });
     }
   });
 
-  // GET /api/keys/:key/deposit-info — Get deposit instructions
-  router.get('/:key/deposit-info', async (req, res) => {
-    const { key } = req.params;
+  // GET /api/keys/deposit-info — Get deposit instructions (key via X-API-Key header)
+  router.get('/deposit-info', apiKeyReadLimiter, async (req, res) => {
+    const key = extractApiKey(req);
+
+    if (!isValidKeyFormat(key)) {
+      return res.status(400).json({ ok: false, error: 'Invalid API key format' });
+    }
 
     try {
       const keyRow = await pool.query(
@@ -318,14 +380,51 @@ export function createSimpleApiKeysRouter(pool) {
           enterprise: { price: TIER_PRICES.enterprise, limit: TIER_LIMITS.enterprise },
         },
         instructions: [
-          `1. Send USDT to ${TREASURY} on Polygon network`,
+          `1. Send USDT to ${TREASURY} on Polygon network from your registered wallet`,
           '2. Copy your transaction hash after confirmation',
-          `3. POST /api/keys/${key}/deposit with {"tx_hash":"0x...","tier":"pro"}`,
-          '4. Your API key will be upgraded immediately'
+          '3. POST /api/keys/deposit with header X-API-Key: <your key> and body {"tx_hash":"0x...","tier":"pro"}',
+          '4. Your API key will be upgraded once the deposit reaches the required confirmation depth'
         ]
       });
     } catch (err) {
-      return res.status(500).json({ ok: false, error: err.message });
+      console.error('[ApiKeys] deposit-info failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'Failed to load deposit info' });
+    }
+  });
+
+  // GET /api/keys/deposits — Fetch deposit history (key via X-API-Key header)
+  router.get('/deposits', apiKeyReadLimiter, async (req, res) => {
+    const key = extractApiKey(req);
+    if (!isValidKeyFormat(key)) {
+      return res.status(400).json({ ok: false, error: 'Invalid API key format', deposits: [] });
+    }
+    try {
+      const result = await pool.query(
+        'SELECT tx_hash, amount_usdt, created_at FROM api_deposits WHERE api_key = $1 ORDER BY created_at DESC LIMIT 100',
+        [key]
+      );
+      return res.json({ ok: true, deposits: result.rows });
+    } catch (err) {
+      console.error('[ApiKeys] deposits fetch failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'Failed to fetch deposits', deposits: [] });
+    }
+  });
+
+  // GET /api/keys/usage-history — Fetch daily usage history (key via X-API-Key header)
+  router.get('/usage-history', apiKeyReadLimiter, async (req, res) => {
+    const key = extractApiKey(req);
+    if (!isValidKeyFormat(key)) {
+      return res.status(400).json({ ok: false, error: 'Invalid API key format', usage: [] });
+    }
+    try {
+      const result = await pool.query(
+        'SELECT date::text as date, request_count, usdt_spent FROM api_usage_daily WHERE api_key = $1 ORDER BY date DESC LIMIT 30',
+        [key]
+      );
+      return res.json({ ok: true, usage: result.rows });
+    } catch (err) {
+      console.error('[ApiKeys] usage-history fetch failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'Failed to fetch usage history', usage: [] });
     }
   });
 
