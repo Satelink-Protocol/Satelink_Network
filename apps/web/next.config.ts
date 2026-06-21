@@ -8,6 +8,9 @@ const API_BASE =
     : "http://localhost:8080");
 
 const nextConfig: NextConfig = {
+  // Transpile the @satelink/ui design-system package (ships raw TSX from src).
+  transpilePackages: ["@satelink/ui"],
+
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -98,7 +101,9 @@ const nextConfig: NextConfig = {
       "network-stats",
       "partners",
       "__test",
-      "api",
+      // "api" handled explicitly below so /api/grafana/* reaches the embed BFF
+      // route handler instead of being proxied to the backend (afterFiles
+      // rewrites otherwise shadow the dynamic [...path] route handler).
       "v1",
       "rpc",
       "node",
@@ -122,6 +127,13 @@ const nextConfig: NextConfig = {
         source: `/${prefix}/:path*`,
         destination: `${API_BASE}/${prefix}/:path*`,
       })),
+
+      // Proxy /api/* to the backend EXCEPT /api/grafana/* (served by the
+      // embedded-Grafana BFF route handler at apps/web/src/app/api/grafana).
+      {
+        source: "/api/:path((?!grafana(?:/|$)).*)",
+        destination: `${API_BASE}/api/:path`,
+      },
 
       {
         source: "/health",
