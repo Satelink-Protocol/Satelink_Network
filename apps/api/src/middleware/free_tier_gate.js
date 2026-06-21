@@ -60,9 +60,14 @@ export function createFreeTierGate(logger, redis) {
   if (redis) _redis = redis;
 
   return async function freeTierGate(req, res, next) {
-    // Wallet-authenticated → skip IP gate entirely, go to creditGate
+    // Authenticated callers (bound wallet OR API key) skip the per-IP free-tier
+    // gate entirely and are handled by creditService (authorizeAndMeter):
+    // per-key daily limit, balance deduction, and metering. The credit system is
+    // api_credits-keyed, so an X-API-Key caller must NOT be IP-rate-limited as
+    // anonymous free traffic — otherwise a funded key is 402'd before deduction.
     const walletHeader = req.headers['x-wallet-address'];
-    if (walletHeader) return next();
+    const apiKeyHeader = req.headers['x-api-key'];
+    if (walletHeader || apiKeyHeader) return next();
 
     // Get real IP (Railway proxies requests)
     const ip =
