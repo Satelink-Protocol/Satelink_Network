@@ -29,8 +29,18 @@ function getRedis() {
   return getSharedRedis();
 }
 
-export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId }) {
-  const costUsdt = CHAIN_PRICING_USDT[chain] || DEFAULT_RPC_COST_USDT;
+export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId, amountUsdt }) {
+  // Customer Zero Phase 6 — phantom-billing elimination:
+  // A revenue event is created ONLY for traffic that produced an ACTUAL credit
+  // deduction. `amountUsdt` is the real amount deducted by creditService on the
+  // canonical path. Free-tier (cost 0), anonymous, and exhausted (402, never
+  // reaches here) traffic pass amountUsdt <= 0 → NO revenue event, NO revenue
+  // counter. This guarantees settlement totals == collected credits.
+  const billed = Number(amountUsdt);
+  if (!Number.isFinite(billed) || billed <= 0) {
+    return { recorded: false, reason: 'no_deduction' };
+  }
+  const costUsdt = billed; // record the ACTUAL deducted amount, not list price
   const clientId = apiKey || 'public';
   const now = Math.floor(Date.now() / 1000);
   const today = new Date().toISOString().split('T')[0];

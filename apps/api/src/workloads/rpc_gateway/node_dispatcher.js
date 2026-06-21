@@ -219,25 +219,33 @@ export async function forwardToNode(node, rpcRequest) {
 /**
  * Records successful RPC call - attributes revenue to node
  */
-export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, method, apiKey, requestId }) {
-  const usdtValue = METHOD_PRICING[method] || DEFAULT_METHOD_PRICE;
+export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, method, apiKey, requestId, billedUsdt }) {
   const now = Math.floor(Date.now() / 1000);
 
+  // Phase 6: only an ACTUAL deduction creates a revenue event. Node stats
+  // (requests served, latency, reputation) still update for every served call —
+  // serving free traffic is real work — but it produces NO revenue row.
+  const billed = Number(billedUsdt);
+  const isPaid = Number.isFinite(billed) && billed > 0;
+  const usdtValue = isPaid ? billed : 0;
+
   try {
-    // 1. Write to revenue_events_v2 WITH node_id attribution
-    await pool.query(`
-      INSERT INTO revenue_events_v2
-        (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [
-      `rpc_${method}`,
-      nodeId,
-      apiKey || 'public',
-      usdtValue,
-      'completed',
-      requestId || `${nodeId}-${now}`,
-      now
-    ]);
+    // 1. Write to revenue_events_v2 WITH node_id attribution — paid traffic only
+    if (isPaid) {
+      await pool.query(`
+        INSERT INTO revenue_events_v2
+          (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        `rpc_${method}`,
+        nodeId,
+        apiKey || 'public',
+        usdtValue,
+        'completed',
+        requestId || `${nodeId}-${now}`,
+        now
+      ]);
+    }
 
     // 2. Update node stats:
     //    - Increment total_requests_served
@@ -256,17 +264,19 @@ export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, meth
       WHERE node_id = $3
     `, [latencyMs, now, nodeId]);
 
-    // 3. Broadcast revenue event
-    broadcaster.publish('revenue:event', {
-      amount_usdt: usdtValue,
-      method,
-      chain_id: chainId,
-      node_id: nodeId,
-      latency_ms: latencyMs,
-      timestamp: new Date().toISOString()
-    });
+    // 3. Broadcast revenue event — paid traffic only
+    if (isPaid) {
+      broadcaster.publish('revenue:event', {
+        amount_usdt: usdtValue,
+        method,
+        chain_id: chainId,
+        node_id: nodeId,
+        latency_ms: latencyMs,
+        timestamp: new Date().toISOString()
+      });
+    }
 
-    console.log(`[NodeDispatcher] ✓ ${nodeId} served ${method} ($${usdtValue}) ${latencyMs}ms`);
+    console.log(`[NodeDispatcher] ✓ ${nodeId} served ${method} (${isPaid ? '$' + usdtValue : 'free'}) ${latencyMs}ms`);
 
   } catch (err) {
     console.error('[NodeDispatcher] recordNodeSuccess error:', err.message);
