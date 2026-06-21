@@ -207,6 +207,9 @@ export function createRpcGateway(db) {
         }
 
         // ── AUTHORIZE + METER ────────────────────────────────────────────────
+        // Phase 6: a revenue event is created ONLY for an actual deduction. This
+        // holds the real amount deducted (0 for free/anonymous → no revenue event).
+        let billedUsdt = 0;
         if (canonical && (apiKey || walletHdr)) {
             // CANONICAL: api_credits is authoritative. One atomic call does the
             // daily-limit gate (429), balance deduct (402), and usage metering.
@@ -238,6 +241,8 @@ export function createRpcGateway(db) {
                 'X-RateLimit-Tier': verdict.tier,
                 'X-Credit-Balance': verdict.balanceAfter ?? ''
             });
+            // Only a real deduction (paid tier, cost > 0) bills revenue.
+            billedUsdt = Number(verdict.cost) > 0 ? Number(verdict.cost) : 0;
         } else {
             // LEGACY: Redis rate-limit (flag off, or anonymous public traffic).
             let rateCheck = { allowed: true, tier: 'free', remaining: 500, limit: 500 };
@@ -288,21 +293,23 @@ export function createRpcGateway(db) {
             }
 
             if (cachedResponse) {
-                // Billing - fire and forget
+                // Billing - fire and forget (only when a real deduction occurred)
                 recordRpcRevenue({
                     pool: db,
                     chain,
                     method,
                     apiKey,
                     source: 'edge_cache',
-                    requestId: request_id
+                    requestId: request_id,
+                    amountUsdt: billedUsdt
                 }).catch(() => {});
                 return res.status(200).json(cachedResponse);
             }
 
             const routeResult = await routeRpcRequest(chain, method, params, body.id, {
                 apiKey,
-                requestId: request_id
+                requestId: request_id,
+                billedUsdt
             });
 
             if (!routeResult.success) {
@@ -323,7 +330,8 @@ export function createRpcGateway(db) {
                     method,
                     apiKey,
                     source: routeResult.provider || 'external_provider',
-                    requestId: request_id
+                    requestId: request_id,
+                    amountUsdt: billedUsdt
                 }).catch(() => {});
             }
 

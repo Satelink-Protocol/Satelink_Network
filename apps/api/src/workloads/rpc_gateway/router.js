@@ -157,7 +157,7 @@ const EMERGENCY_FALLBACKS = {
 };
 
 export async function routeRpcRequest(chain, method, params, id, options = {}) {
-  const { apiKey, requestId } = options;
+  const { apiKey, requestId, billedUsdt } = options;
 
   const chainConfig = getChainConfig(chain);
   if (!chainConfig) {
@@ -202,7 +202,8 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
                 chainId,
                 method,
                 apiKey,
-                requestId
+                requestId,
+                billedUsdt
               }).catch(() => {});
             });
 
