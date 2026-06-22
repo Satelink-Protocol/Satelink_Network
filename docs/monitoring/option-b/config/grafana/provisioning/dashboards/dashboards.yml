@@ -1,0 +1,27 @@
+# DESIGN ARTIFACT — folder/provider mapping so dashboards-as-code (JSON in
+# ../dashboards/<persona>/) load into per-persona folders. Folders map 1:1 to
+# Grafana teams; the embed proxy grants a persona only its own folder.
+
+apiVersion: 1
+
+providers:
+  - name: platform-admin
+    folder: Admin
+    type: file
+    options: { path: /var/lib/grafana/dashboards/admin }
+  - name: developer
+    folder: Developer
+    type: file
+    options: { path: /var/lib/grafana/dashboards/developer }
+  - name: node-operator
+    folder: Node Operator
+    type: file
+    options: { path: /var/lib/grafana/dashboards/node-operator }
+  - name: distributor
+    folder: Distributor
+    type: file
+    options: { path: /var/lib/grafana/dashboards/distributor }
+  - name: enterprise
+    folder: Enterprise
+    type: file
+    options: { path: /var/lib/grafana/dashboards/enterprise }

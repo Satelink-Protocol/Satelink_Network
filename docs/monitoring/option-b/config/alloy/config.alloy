@@ -1,0 +1,80 @@
+// DESIGN ARTIFACT — Grafana Alloy pipeline.
+// Single collector: receives OTLP traces, scrapes Prometheus targets, ingests
+// logs, attaches tenant labels, fans out to Prometheus / Loki / Tempo.
+// Runs as a Railway sidecar (close to apps/api) and/or on the Hetzner box.
+
+//////////////////// TRACES (OTLP in → Tempo) ////////////////////
+otelcol.receiver.otlp "in" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output { traces = [otelcol.processor.tail_sampling.policy.input] }
+}
+
+// 100% errors + slow, sampled tail otherwise.
+otelcol.processor.tail_sampling "policy" {
+  policy { name = "errors"  type = "status_code"  status_code { status_codes = ["ERROR"] } }
+  policy { name = "slow"    type = "latency"      latency { threshold_ms = 1500 } }
+  policy { name = "tail"    type = "probabilistic" probabilistic { sampling_percentage = 10 } }
+  output { traces = [otelcol.exporter.otlp.tempo.input] }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = sys.env("TEMPO_OTLP_ENDPOINT")
+    tls { insecure = true }   // private network; use mTLS across hosts
+  }
+}
+
+//////////////////// METRICS (scrape → Prometheus) ////////////////////
+prometheus.scrape "api" {
+  targets = [
+    { __address__ = sys.env("API_SCRAPE_TARGET"), __scheme__ = "https", __metrics_path__ = "/metrics", service = "api" },
+    { __address__ = sys.env("API_SCRAPE_TARGET"), __scheme__ = "https", __metrics_path__ = "/rpc/metrics/prometheus", service = "rpc_gateway" },
+  ]
+  scrape_interval = "15s"
+  forward_to = [prometheus.relabel.tenant.receiver]
+}
+
+// Attach/normalize low-cardinality labels; drop unbounded ones defensively.
+prometheus.relabel "tenant" {
+  rule {
+    action       = "labeldrop"
+    regex        = "api_key|wallet|raw_.*"   // never let raw identity become a series label
+  }
+  forward_to = [prometheus.remote_write.store.receiver]
+}
+
+prometheus.remote_write "store" {
+  endpoint { url = sys.env("PROM_REMOTE_WRITE_URL") }
+}
+
+//////////////////// LOGS (drain → Loki) ////////////////////
+// Railway forwards stdout via an HTTP log drain to this loki.source.api endpoint,
+// OR node-agents push directly. pino JSON is parsed; identity stays as fields.
+loki.source.api "drain" {
+  http { listen_address = "0.0.0.0", listen_port = 3500 }
+  forward_to = [loki.process.pino.receiver]
+}
+
+loki.process "pino" {
+  stage.json {
+    expressions = {
+      level = "level", service = "source", route = "route",
+      request_id = "request_id", trace_id = "trace_id",
+      api_key_hash = "api_key_hash", node_id = "node_id",
+    }
+  }
+  // Only low-cardinality keys become stream labels.
+  stage.labels { values = { service = "", level = "", route_class = "" } }
+  forward_to = [loki.write.store.receiver]
+}
+
+loki.write "store" {
+  endpoint { url = sys.env("LOKI_PUSH_URL") }
+}
