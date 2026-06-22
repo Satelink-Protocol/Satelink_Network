@@ -12,7 +12,6 @@ import {
   MetricCard,
   MetricGrid,
   StatusBadge,
-  StatusDot,
 } from "@/components/satelink-os";
 
 // P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
@@ -129,28 +128,16 @@ function DepositPageInner() {
   };
 
   return (
-    <main
+    <div
       style={{
-        minHeight: "100vh",
         background: "var(--sat-bg-0)",
-        padding: "32px 20px",
+        padding: "24px 20px",
       }}
     >
       <div style={{ maxWidth: "720px", margin: "0 auto" }}>
         <Stack gap="md">
-          {/* HEADER */}
+          {/* Wallet action row — page title/chrome now provided by the OS DashboardShell header */}
           <Inline gap="sm">
-            <StatusDot tone="info" pulse />
-            <span
-              style={{
-                fontSize: "15px",
-                fontWeight: 600,
-                color: "var(--sat-text)",
-                letterSpacing: "0.5px",
-              }}
-            >
-              Deposit USDT
-            </span>
             <span style={{ marginLeft: "auto" }}>
               <Inline gap="sm">
                 <StatusBadge label="Polygon 137" tone="info" />
@@ -406,6 +393,6 @@ function DepositPageInner() {
           <DepositHistory wallet={wallet} />
         </Stack>
       </div>
-    </main>
+    </div>
   );
 }
