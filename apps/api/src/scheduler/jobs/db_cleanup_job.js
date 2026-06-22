@@ -2,20 +2,23 @@
  * DB Cleanup Job — runs daily at 3:00 AM UTC
  * Prunes old rows from high-volume tables to control Postgres volume growth.
  * Protected tables (never touched): credit_deposits, credit_balances,
- * auth_nonces, auth_users, epoch_earnings, registered_nodes.
+ * auth_nonces, auth_users, epoch_earnings, registered_nodes,
+ * and everything in FINANCIAL_TABLES (revenue_events_v2, etc.).
  */
+
+import { blockIfFinancial } from '../../utils/financial_tables_guard.js';
 
 export async function runDbCleanup(pool) {
   const client = await pool.connect();
   const deleted = {};
 
   try {
-    // revenue_events_v2 — keep 30 days
-    const rev = await client.query(
-      `DELETE FROM revenue_events_v2
-       WHERE created_at < NOW() - INTERVAL '30 days'`
-    );
-    deleted.revenue_events_v2 = rev.rowCount;
+    // revenue_events_v2 is a financial ledger — NEVER prune it (guarded).
+    // NOTE: created_at is stored as bigint epoch-seconds, so the old
+    // `NOW() - INTERVAL '30 days'` comparison was also type-mismatched.
+    if (blockIfFinancial('revenue_events_v2', 'DbCleanup')) {
+      deleted.revenue_events_v2 = 0;
+    }
 
     // api_usage_daily — keep 30 days
     let usageRows = 0;

@@ -6,6 +6,8 @@
  * Safe to delete this file after verifying data_retention_job.mjs is running.
  */
 
+import { blockIfFinancial } from './financial_tables_guard.js';
+
 /**
  * Retention Cleaner - Keeps the DB lean and fast
  *
@@ -107,6 +109,11 @@ export class RetentionCleaner {
 
     async _prune(table, timeCol, cutoff, statKey, statsObj) {
         try {
+            // Never prune financial ledger / balance tables.
+            if (blockIfFinancial(table, 'Retention')) {
+                statsObj[statKey] = 'blocked';
+                return;
+            }
             await this.db.prepare(`DELETE FROM ${table} WHERE ${timeCol} < ?`).run([cutoff]);
             statsObj[statKey] = 'executed';
         } catch (e) {
