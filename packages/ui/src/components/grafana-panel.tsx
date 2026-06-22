@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { RefreshCw, ExternalLink, AlertTriangle } from "lucide-react";
+import { RefreshCw, ExternalLink, AreaChart } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import { Card, CardHeader, CardTitle, CardAction, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
+import { EmptyState } from "./empty-state";
 
 export interface GrafanaPanelProps {
   /** Embed URL — typically a BFF path like `/api/grafana/d-solo/<uid>?panelId=1`. */
@@ -30,11 +31,17 @@ function withTheme(src: string, theme: "dark" | "light"): string {
   return src + (src.includes("?") ? "&" : "?") + "theme=" + theme;
 }
 
+type PanelStatus = "loading" | "ready" | "unconfigured";
+
 /**
  * Embeds a single Grafana panel/dashboard inside the Satelink OS shell via an
- * iframe pointed at the server-side BFF (never Grafana directly). Owns its own
- * loading and error states so a missing/unconfigured monitoring backend
- * degrades to an honest message instead of a blank frame.
+ * iframe pointed at the server-side BFF (never Grafana directly).
+ *
+ * The BFF answers with a JSON error (HTTP 503) when Grafana isn't configured,
+ * and an iframe's `onLoad` fires for *any* status — so naively mounting the
+ * iframe would paint raw JSON into the panel. To avoid that, we first probe the
+ * BFF: only a real Grafana document (non-JSON, 2xx) gets an iframe; anything
+ * else degrades to a clean "Monitoring Coming Soon" empty state.
  */
 export function GrafanaPanel({
   src,
@@ -46,10 +53,8 @@ export function GrafanaPanel({
   allowOpen = true,
   className,
 }: GrafanaPanelProps) {
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">(
-    "loading"
-  );
-  // Bumping the key forces the iframe to remount on refresh.
+  const [status, setStatus] = React.useState<PanelStatus>("loading");
+  // Bumping the nonce re-probes and remounts the iframe on refresh.
   const [nonce, setNonce] = React.useState(0);
   const resolvedSrc = withTheme(src, theme);
 
@@ -57,6 +62,35 @@ export function GrafanaPanel({
     setStatus("loading");
     setNonce((n) => n + 1);
   }, []);
+
+  // Probe the embed proxy before rendering an iframe. A configured Grafana
+  // returns an HTML document; an unconfigured/unreachable backend returns a
+  // JSON error — never let that JSON reach the iframe.
+  React.useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+
+    fetch(resolvedSrc, { headers: { Accept: "text/html" } })
+      .then((res) => {
+        if (cancelled) return;
+        const contentType = res.headers.get("content-type") || "";
+        const isJson = contentType.includes("application/json");
+        if (!res.ok || isJson) {
+          setStatus("unconfigured");
+        } else {
+          setStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("unconfigured");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSrc, nonce]);
+
+  const configured = status === "ready";
 
   return (
     <Card data-slot="grafana-panel" className={cn("overflow-hidden", className)}>
@@ -79,7 +113,7 @@ export function GrafanaPanel({
                   <RefreshCw className="size-3.5" />
                 </Button>
               ) : null}
-              {allowOpen ? (
+              {allowOpen && configured ? (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -102,41 +136,24 @@ export function GrafanaPanel({
             <Skeleton className="absolute inset-0 size-full rounded-none" />
           ) : null}
 
-          {status === "error" ? (
-            <div
-              role="alert"
-              className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center"
-            >
-              <div className="flex size-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <AlertTriangle className="size-4" />
-              </div>
-              <p className="text-sm font-medium text-foreground">
-                Panel unavailable
-              </p>
-              <p className="max-w-sm text-xs text-muted-foreground">
-                The monitoring backend isn&apos;t reachable. Confirm Grafana is
-                deployed and the embed proxy is configured.
-              </p>
-              {refresh ? (
-                <Button size="sm" variant="outline" onClick={reload} className="mt-1">
-                  Retry
-                </Button>
-              ) : null}
+          {status === "unconfigured" ? (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <EmptyState
+                icon={AreaChart}
+                title="Monitoring Coming Soon"
+                description="Connect Grafana to see live charts. Native metrics are available above."
+                className="w-full border-0"
+              />
             </div>
-          ) : (
+          ) : status === "ready" ? (
             <iframe
               key={nonce}
               src={resolvedSrc}
               title={title ?? "Grafana panel"}
-              className={cn(
-                "size-full border-0 transition-opacity",
-                status === "ready" ? "opacity-100" : "opacity-0"
-              )}
+              className="size-full border-0"
               loading="lazy"
-              onLoad={() => setStatus("ready")}
-              onError={() => setStatus("error")}
             />
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>
