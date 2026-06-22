@@ -6,7 +6,17 @@
  * 2. Aggregates by hour/client/method/chain into rpc_usage_hourly
  * 3. Deletes aggregated raw rows
  * 4. Enforces 24-hour max retention on revenue_events_v2
+ *
+ * WARNING: this job DELETES from revenue_events_v2, which is a financial ledger.
+ * It is intentionally NOT scheduled anywhere. The delete steps below are guarded
+ * by PRUNE_FINANCIAL_LEDGER so they no-op by default; do not enable pruning of
+ * the revenue ledger without an archival/rollup-preserving redesign.
  */
+
+import { isFinancialTable } from '../utils/financial_tables_guard.js';
+
+// Hard off-switch: revenue_events_v2 is financial; never delete it during aggregation.
+const PRUNE_FINANCIAL_LEDGER = false;
 
 const AGGREGATION_DELAY_MS = 60 * 60 * 1000; // 1 hour - only aggregate rows older than this
 const MAX_RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours - hard delete cutoff
@@ -83,24 +93,30 @@ export class RpcAggregationJob {
 
       results.rowsAggregated = aggregateResult.rowCount || 0;
 
-      // Step 2: Delete aggregated rows (older than 1 hour)
-      const deleteResult = await this.pool.query(`
-        DELETE FROM revenue_events_v2
-        WHERE created_at < $1
-          AND op_type = 'rpc_call'
-      `, [aggregateCutoffSec]);
+      // Steps 2 & 3 DELETE from revenue_events_v2 (a financial ledger). Guarded off
+      // by default — pruning the revenue ledger destroys revenue history.
+      if (PRUNE_FINANCIAL_LEDGER && !isFinancialTable('revenue_events_v2')) {
+        // Step 2: Delete aggregated rows (older than 1 hour)
+        const deleteResult = await this.pool.query(`
+          DELETE FROM revenue_events_v2
+          WHERE created_at < $1
+            AND op_type = 'rpc_call'
+        `, [aggregateCutoffSec]);
 
-      results.rowsDeleted = deleteResult.rowCount || 0;
+        results.rowsDeleted = deleteResult.rowCount || 0;
 
-      // Step 3: Hard delete any remaining rows older than 24 hours (safety net)
-      const hardDeleteResult = await this.pool.query(`
-        DELETE FROM revenue_events_v2
-        WHERE created_at < $1
-      `, [deleteCutoffSec]);
+        // Step 3: Hard delete any remaining rows older than 24 hours (safety net)
+        const hardDeleteResult = await this.pool.query(`
+          DELETE FROM revenue_events_v2
+          WHERE created_at < $1
+        `, [deleteCutoffSec]);
 
-      if (hardDeleteResult.rowCount > 0) {
-        results.rowsDeleted += hardDeleteResult.rowCount;
-        console.log(`[RpcAggregation] Hard-deleted ${hardDeleteResult.rowCount} rows older than 24h`);
+        if (hardDeleteResult.rowCount > 0) {
+          results.rowsDeleted += hardDeleteResult.rowCount;
+          console.log(`[RpcAggregation] Hard-deleted ${hardDeleteResult.rowCount} rows older than 24h`);
+        }
+      } else {
+        console.warn('[RpcAggregation] Ledger prune skipped — revenue_events_v2 is a protected financial table');
       }
 
       // Count distinct hours processed
