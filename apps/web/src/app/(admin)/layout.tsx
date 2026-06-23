@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Trophy,
   Satellite,
+  Radar,
 } from "lucide-react";
 import { DashboardShell, type ShellNavGroup } from "@satelink/ui";
 
@@ -46,6 +47,7 @@ const NAV: ShellNavGroup[] = [
     items: [
       { id: "admin/security", icon: Shield, label: "Security Alerts" },
       { id: "admin/security/audit", icon: ScrollText, label: "Audit Log" },
+      { id: "admin/abuse", icon: Radar, label: "Abuse Monitor" },
     ],
   },
   {
@@ -68,6 +70,7 @@ const HEADERS: Record<string, { title: string; subtitle: string; crumb: string }
   "admin/ledger": { title: "Ledger", subtitle: "Distribution runs", crumb: "Ledger" },
   "admin/security": { title: "Security", subtitle: "Recent security alerts", crumb: "Security" },
   "admin/security/audit": { title: "Audit Log", subtitle: "Full admin action history", crumb: "Audit Log" },
+  "admin/abuse": { title: "Abuse Monitor", subtitle: "Live traffic classification and abuse pattern detection", crumb: "Abuse Monitor" },
   "admin/settings": { title: "Settings", subtitle: "Feature flags and rate limits", crumb: "Settings" },
   "admin/diagnostics/self-tests": { title: "Self-Tests", subtitle: "Backend health checks", crumb: "Self-Tests" },
   "admin/diagnostics/incidents": { title: "Incidents", subtitle: "Incident bundles", crumb: "Incidents" },

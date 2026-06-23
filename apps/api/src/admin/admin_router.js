@@ -17,6 +17,24 @@ import { OutreachEngine }       from './jobs/outreach_engine.js';
 import { SettlementControl }    from './jobs/settlement_control.js';
 import { CustomerZeroDetector } from './jobs/customer_zero_detector.js';
 
+// Mirrors BAD_ASNS in apps/api/src/middleware/free_tier_gate.js — kept as a
+// separate literal here rather than imported so the admin router has no
+// runtime dependency on the rate-limit middleware module.
+const BAD_ASNS = new Set(['AS135905', 'AS63737', 'AS135464']);
+
+// Safe Redis key scan (SCAN cursor, never KEYS) — same pattern as
+// ip_classifier.js's scanRedisKeys.
+async function scanKeys(redis, pattern) {
+  const keys = [];
+  let cursor = '0';
+  do {
+    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = result[0];
+    keys.push(...result[1]);
+  } while (cursor !== '0');
+  return keys;
+}
+
 export function requireAdminAuth(req, res, next) {
   const expected = process.env.ADMIN_SECRET_TOKEN;
   if (!expected) {
@@ -56,6 +74,95 @@ export function createAdminRouter(pool, redis) {
       const result = await new IpClassifier(pool, redis).run();
       await log('ip-classifier', 'manual trigger', result);
       res.json({ ok: true, ...result });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  router.get('/intel/abuse-overview', async (req, res) => {
+    try {
+      const summaryRows = await q(
+        `SELECT classification, COUNT(*)::int AS count FROM developer_intel GROUP BY classification`
+      );
+      const summary = { total_classified: 0, developers: 0, machines: 0, scanners: 0, unknown: 0 };
+      for (const row of summaryRows) {
+        summary.total_classified += row.count;
+        if (row.classification === 'developer') summary.developers = row.count;
+        else if (row.classification === 'machine') summary.machines = row.count;
+        else if (row.classification === 'scanner') summary.scanners = row.count;
+        else if (row.classification === 'unknown') summary.unknown = row.count;
+      }
+
+      const top_abusers = await q(
+        `SELECT ip, user_agent, classification, score, calls_today, avg_daily_calls, country, isp
+         FROM developer_intel
+         WHERE classification != 'developer' AND calls_today > 100
+         ORDER BY calls_today DESC LIMIT 20`
+      );
+
+      const developer_leads = await q(
+        `SELECT ip, user_agent, classification, score, calls_today, avg_daily_calls, country, isp, first_seen
+         FROM developer_intel
+         WHERE classification = 'developer'
+         ORDER BY calls_today DESC LIMIT 20`
+      );
+
+      const subnet_hotspots = await q(
+        `SELECT
+           CONCAT(split_part(ip,'.',1),'.',split_part(ip,'.',2),'.',split_part(ip,'.',3),'.0/24') AS subnet,
+           COUNT(DISTINCT ip)::int AS ip_count,
+           SUM(calls_today)::int AS total_calls_today
+         FROM developer_intel
+         WHERE calls_today > 0
+         GROUP BY subnet
+         ORDER BY total_calls_today DESC
+         LIMIT 10`
+      );
+
+      // Redis: active UA-cluster blocks (Layer 3) + ASN-blocklist hits (Layer 1)
+      // from the free-tier gate. Both are best-effort — Redis errors degrade to
+      // empty/zero rather than failing the whole overview.
+      let cluster_blocks = [];
+      let asn_blocks = 0;
+      if (redis) {
+        try {
+          const clusterKeys = await scanKeys(redis, 'cluster_block:*');
+          if (clusterKeys.length) {
+            const values = await redis.mget(...clusterKeys);
+            const ttls = await Promise.all(clusterKeys.map((k) => redis.ttl(k)));
+            cluster_blocks = clusterKeys.map((k, i) => ({
+              ua_slug: k.slice('cluster_block:'.length),
+              ip_count: parseInt(values[i], 10) || 0,
+              ttl_seconds: ttls[i],
+            }));
+          }
+        } catch { /* non-critical */ }
+
+        try {
+          const asnKeys = await scanKeys(redis, 'asn:*');
+          if (asnKeys.length) {
+            const values = await redis.mget(...asnKeys);
+            asn_blocks = values.filter((v) => {
+              const match = /^AS\d+/.exec(v || '');
+              return match && BAD_ASNS.has(match[0]);
+            }).length;
+          }
+        } catch { /* non-critical */ }
+      }
+
+      res.json({
+        ok: true,
+        summary: {
+          ...summary,
+          blocked_asns: BAD_ASNS.size,
+          blocked_clusters: cluster_blocks.length,
+        },
+        top_abusers,
+        developer_leads,
+        subnet_hotspots,
+        recent_blocks: {
+          asn_blocks,
+          cluster_blocks,
+        },
+      });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
 
