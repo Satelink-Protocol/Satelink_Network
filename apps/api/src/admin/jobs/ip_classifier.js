@@ -146,6 +146,15 @@ export class IpClassifier {
           userAgent = await this.redis.get(`ftua:${ip}`) || '';
         } catch { /* non-critical */ }
 
+        // Ground-truth first-seen timestamp, written at request time by
+        // free_tier_gate.js (`fs:<ip>`, NX). Used for accurate first_seen/days_active
+        // instead of the classifier's own run time.
+        let realFirstSeen = null;
+        try {
+          const fsTs = await this.redis.get(`fs:${ip}`);
+          if (fsTs) realFirstSeen = new Date(parseInt(fsTs));
+        } catch { /* non-critical */ }
+
         const rows = await this.q(
           `SELECT id, days_active, avg_daily_calls, calls_today, updated_at FROM developer_intel WHERE ip = $1`,
           [ip]
@@ -153,6 +162,16 @@ export class IpClassifier {
 
         if (rows.length > 0) {
           const existing = rows[0];
+
+          // Backfill first_seen if Redis has an earlier ground-truth timestamp
+          // than what's currently stored (e.g. row was created before fs:<ip> existed).
+          if (realFirstSeen) {
+            await this.q(
+              `UPDATE developer_intel SET first_seen = LEAST(first_seen, $1) WHERE ip = $2 AND first_seen > $1`,
+              [realFirstSeen, ip]
+            );
+          }
+
           const today = new Date().toISOString().slice(0, 10);
           const lastSeenDay = existing.updated_at
             ? new Date(existing.updated_at).toISOString().slice(0, 10)
@@ -185,14 +204,18 @@ export class IpClassifier {
         } else {
           const info = await this.lookupIP(ip);
           const classification = this.classify({ ua: userAgent }, calls);
-          const score = this.computeScore({ user_agent: userAgent, days_active: 1, avg_daily_calls: calls });
+          // Real days_active from the ground-truth first_seen, not a hardcoded 1.
+          const daysActive = realFirstSeen
+            ? Math.max(1, Math.floor((Date.now() - realFirstSeen.getTime()) / 86400000))
+            : 1;
+          const score = this.computeScore({ user_agent: userAgent, days_active: daysActive, avg_daily_calls: calls });
 
           await this.q(
             `INSERT INTO developer_intel
-               (ip, asn, isp, country, city, user_agent, classification, score, calls_today, avg_daily_calls, days_active)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1)
+               (ip, asn, isp, country, city, user_agent, classification, score, calls_today, avg_daily_calls, days_active, first_seen)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10,$11)
              ON CONFLICT (ip) DO UPDATE SET calls_today = $9, last_seen = NOW()`,
-            [ip, info.asn, info.isp, info.country, info.city, userAgent, classification, score, calls]
+            [ip, info.asn, info.isp, info.country, info.city, userAgent, classification, score, calls, daysActive, realFirstSeen ?? new Date()]
           );
 
           results.newIPs++;
@@ -206,8 +229,16 @@ export class IpClassifier {
       }
     }
 
+    // Recompute days_active from real first_seen instead of incrementing by 1 every
+    // run (this job runs every 15min, which was inflating days_active ~96x/day).
     await this.q(
-      `UPDATE developer_intel SET days_active = days_active + 1 WHERE last_seen >= NOW() - INTERVAL '25 hours'`
+      `UPDATE developer_intel di
+       SET days_active = GREATEST(1,
+         EXTRACT(DAY FROM (NOW() - di.first_seen))::int
+       )
+       WHERE di.last_seen >= NOW() - INTERVAL '25 hours'
+         AND di.first_seen IS NOT NULL
+         AND di.first_seen > '2026-01-24'`
     );
 
     const allDevs = await this.q(`SELECT ip, user_agent, days_active, avg_daily_calls FROM developer_intel`);
