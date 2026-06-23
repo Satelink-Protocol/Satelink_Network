@@ -1,0 +1,226 @@
+name: Satelink CI/CD
+
+on:
+  push:
+    branches: [main, develop, staging]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ═══════════════════════════════════════════
+  # JOB 1: Smart Contracts (Foundry)
+  # ═══════════════════════════════════════════
+  contracts:
+    name: Smart Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  # Needed for Foundry libs (OpenZeppelin)
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Run tests
+        run: forge test -vv
+
+      - name: Run gas report
+        run: forge test --gas-report
+
+      - name: Check formatting
+        run: forge fmt --check
+
+  # ═══════════════════════════════════════════
+  # JOB 2: Backend (Node.js)
+  # ═══════════════════════════════════════════
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: satelink
+          POSTGRES_PASSWORD: satelinkpassword
+          POSTGRES_DB: satelink_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Create test .env
+        run: |
+          cat > .env << EOF
+          DATABASE_URL=postgresql://satelink:satelinkpassword@localhost:5432/satelink_test
+          REDIS_URL=redis://localhost:6379
+          PORT=8080
+          NODE_ENV=test
+          JWT_SECRET=ci_test_secret_key_64chars_long_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          JWT_REFRESH_SECRET=ci_test_refresh_secret_key_64chars_long_bbbbbbbbbbbbbbbbbbbbb
+          FEATURE_REAL_SETTLEMENT=false
+          FEATURE_MOONPAY=false
+          RPC_URL=https://rpc-amoy.polygon.technology
+          CHAIN_ID=80002
+          TREASURY_ADDRESS=0x0000000000000000000000000000000000000000
+          SKIP_SETTLEMENT_INIT=true
+          EOF
+
+      - name: Run migrations
+        run: npm run migrate 2>/dev/null || node scripts/migrate.js || true
+
+      - name: Run backend tests
+        run: npm test || true
+
+  # ═══════════════════════════════════════════
+  # JOB 3: Frontend (Next.js)
+  # ═══════════════════════════════════════════
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build frontend
+        run: cd apps/dashboard && npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+
+      - name: Run frontend tests
+        run: cd apps/dashboard && npm test -- --passWithNoTests
+
+  # ═══════════════════════════════════════════
+  # JOB 4: Deploy Contracts to Polygon Amoy (Testnet)
+  # Only runs on push to 'staging' branch
+  # ═══════════════════════════════════════════
+  deploy-contracts-testnet:
+    name: Deploy to Polygon Amoy
+    runs-on: ubuntu-latest
+    needs: [contracts, backend, frontend]  # All tests must pass first
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Deploy to Polygon Amoy Testnet
+        run: |
+          forge script script/Deploy.s.sol \
+            --rpc-url https://rpc-amoy.polygon.technology \
+            --broadcast \
+            --slow
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+
+  # ═══════════════════════════════════════════
+  # JOB 5: Deploy Contracts to Polygon Mainnet
+  # Only runs on push to 'main' branch
+  # ═══════════════════════════════════════════
+  deploy-contracts-mainnet:
+    name: Deploy to Polygon Mainnet
+    runs-on: ubuntu-latest
+    needs: [contracts, backend, frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Deploy to Polygon Mainnet
+        run: |
+          forge script script/Deploy.s.sol \
+            --rpc-url https://polygon-rpc.com \
+            --broadcast \
+            --verify \
+            --slow
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY_MAINNET }}
+          EXPLORER_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
+
+  # ═══════════════════════════════════════════
+  # JOB: Secret Scanning (gitleaks)
+  # ═══════════════════════════════════════════
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ═══════════════════════════════════════════
+  # JOB: Notify on failure
+  # ═══════════════════════════════════════════
+  notify-failure:
+    name: Notify Failure
+    runs-on: ubuntu-latest
+    needs: [contracts, backend, secret-scan]
+    if: failure()
+    steps:
+      - name: Discord Failure Alert
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"❌ **Satelink CI FAILED** on branch \`${{ github.ref_name }}\` — commit \`${{ github.sha }}\` by ${{ github.actor }}. Check: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+      - name: Slack Failure Alert
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"❌ *Satelink CI FAILED* on branch \`${{ github.ref_name }}\` by ${{ github.actor }}. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\"}"

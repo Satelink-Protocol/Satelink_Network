@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Type Check + Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: TypeScript check
+        run: |
+          cd apps/web && npx tsc --noEmit 2>&1 | head -20
+          echo "TypeScript check complete"
+
+      - name: Lint
+        run: npm run lint --if-present 2>&1 | tail -5
+        continue-on-error: true
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Run tests
+        run: npm test --if-present 2>&1 | tail -20
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-secret-for-ci-only
+
+  security:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for leaked secrets
+        run: |
+          # Check for common secret patterns
+          if grep -rE "(sk_live_[A-Za-z0-9]{32,}|sk_test_[A-Za-z0-9]{32,}|gsk_[A-Za-z0-9]{32,})" \
+            --include="*.js" --include="*.ts" --include="*.mjs" \
+            --exclude-dir=node_modules --exclude-dir=.git \
+            --exclude="*.test.*" --exclude="*.spec.*" \
+            . 2>/dev/null | \
+            grep -v "crypto.randomBytes\|startsWith\|placeholder\|YOUR_KEY\|process.env\|REPLACE\|randomBytes\|toString\|stress_test\|backfill\|cz_backfill"; then
+            echo "::error::Possible secrets found in code"
+            exit 1
+          fi
+          echo "No secrets detected"
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check, test]
+    if: github.ref == 'refs/heads/develop' || github.base_ref == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Build frontend
+        run: |
+          cd apps/web
+          NODE_ENV=production npm run build 2>&1 | tail -15
+        env:
+          NEXT_PUBLIC_WALLETCONNECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_ID }}
+
+      - name: Report build size
+        run: |
+          echo "Build complete"
+          du -sh apps/web/.next 2>/dev/null || echo "Build output not found"

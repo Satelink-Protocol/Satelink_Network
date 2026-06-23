@@ -1,0 +1,44 @@
+name: Security Gate
+
+on:
+  push:
+    branches: [main, develop, staging]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  security-gates:
+    name: Security Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gate 1 — Hardcoded Secrets
+        run: bash scripts/security/check-secrets.sh
+
+      - name: Gate 2 — Test Endpoints
+        run: bash scripts/security/check-test-endpoints.sh
+
+      - name: Gate 3 — SQLite Usage
+        run: bash scripts/security/check-sqlite.sh
+
+      - name: Gate 4 — Auth Middleware
+        run: bash scripts/security/check-auth-middleware.sh
+
+      - name: Gate 5 — Hardcoded API Keys
+        run: bash scripts/security/check-hardcoded-keys.sh
+
+      - name: Gate 6 — JWT Fallback
+        run: bash scripts/security/check-jwt-fallback.sh
+
+      - name: Notify security failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"🚨 **SECURITY GATE FAILED** on \`${{ github.ref_name }}\` by ${{ github.actor }} — MERGE BLOCKED. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"🚨 *SECURITY GATE FAILED* on \`${{ github.ref_name }}\` by ${{ github.actor }} — MERGE BLOCKED.\"}"

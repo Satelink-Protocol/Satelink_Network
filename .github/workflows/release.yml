@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          echo "Previous tag: $PREV_TAG"
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log ${PREV_TAG}..HEAD --oneline --no-merges | head -20)
+          else
+            COMMITS=$(git log --oneline --no-merges | head -20)
+          fi
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Satelink ${{ github.ref_name }}
+          body: |
+            ## Satelink ${{ github.ref_name }}
+
+            ### Changes
+            ${{ steps.changelog.outputs.commits }}
+
+            ### Infrastructure
+            - RPC: https://rpc.satelink.network
+            - App: https://app.satelink.network
+            - Chain: Polygon 137
+
+            ### Verification
+            Verify deployment: `curl https://rpc.satelink.network/health`
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
