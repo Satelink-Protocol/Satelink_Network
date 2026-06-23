@@ -1,0 +1,45 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm install --legacy-peer-deps
+
+      - name: Create test .env
+        run: |
+          cat > .env << 'EOF'
+          PORT=8080
+          NODE_ENV=test
+          JWT_SECRET=ci_e2e_secret_key_64chars_long_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          JWT_REFRESH_SECRET=ci_e2e_refresh_secret_key_64chars_long_bbbbbbbbbbbbbbbbbbbbbbb
+          SQLITE_PATH=./test_e2e.db
+          FEATURE_REAL_SETTLEMENT=false
+          FEATURE_MOONPAY=false
+          EOF
+
+      - name: Run E2E
+        run: |
+          chmod +x scripts/test.sh || true
+          if [ -f scripts/test.sh ]; then
+            ./scripts/test.sh
+          else
+            npm test
+          fi

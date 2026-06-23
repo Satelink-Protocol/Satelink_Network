@@ -1,0 +1,31 @@
+name: Auto Merge
+
+# Enables auto-merge on a PR when:
+#   - it is NOT a draft
+#   - it carries the `auto-merge` label (opt-in safety)
+# GitHub will then merge it automatically once required checks pass.
+#
+# Repo prerequisite: Settings → General → "Allow auto-merge" must be ON
+# (verified ON for satelinkinternet-collab/Satelink_Network on 2026-04-08).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    if: >-
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'auto-merge')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (squash)
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash

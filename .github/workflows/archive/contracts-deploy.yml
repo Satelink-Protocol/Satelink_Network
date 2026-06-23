@@ -1,0 +1,44 @@
+name: contracts-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to deploy to'
+        required: true
+        default: 'fuse_sparknet'
+        type: choice
+        options:
+          - fuse_sparknet
+          - fuse_mainnet
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Deploy contracts
+        run: |
+          if [ "${{ inputs.network }}" = "fuse_mainnet" ]; then
+            forge script script/Deploy.s.sol \
+              --rpc-url https://rpc.fuse.io \
+              --broadcast --slow
+          else
+            forge script script/Deploy.s.sol \
+              --rpc-url https://rpc.fusespark.io \
+              --broadcast --slow
+          fi
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}

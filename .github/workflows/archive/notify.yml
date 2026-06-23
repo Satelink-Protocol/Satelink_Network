@@ -1,0 +1,57 @@
+name: Satelink Notifications
+
+on:
+  workflow_run:
+    workflows: ["Satelink CI/CD"]
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'  # RPC health check every 15 min
+
+jobs:
+  notify-ci-result:
+    name: CI Result Notification
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run'
+    steps:
+      - name: Notify Success
+        if: github.event.workflow_run.conclusion == 'success'
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ **Satelink CI PASSED** — branch \`${{ github.event.workflow_run.head_branch }}\` | commit \`${{ github.event.workflow_run.head_sha }}\`\"}"
+
+      - name: Notify Failure
+        if: github.event.workflow_run.conclusion == 'failure'
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"❌ **Satelink CI FAILED** — branch \`${{ github.event.workflow_run.head_branch }}\` | <${{ github.event.workflow_run.html_url }}|View Run>\"}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"❌ *CI FAILED* on \`${{ github.event.workflow_run.head_branch }}\` <${{ github.event.workflow_run.html_url }}|View>\"}"
+
+  rpc-health-check:
+    name: Polygon RPC Health
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Check Polygon Amoy RPC
+        run: |
+          RESULT=$(curl -s -X POST https://rpc-amoy.polygon.technology \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | jq -r .result)
+          if [ -z "$RESULT" ] || [ "$RESULT" = "null" ]; then
+            echo "RPC_FAIL=true" >> $GITHUB_ENV
+          else
+            echo "RPC_BLOCK=$RESULT" >> $GITHUB_ENV
+          fi
+
+      - name: Alert on RPC failure
+        if: env.RPC_FAIL == 'true'
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **Polygon Amoy RPC OFFLINE** — scheduled health check failed. Investigate immediately.\"}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"⚠️ *Polygon Amoy RPC OFFLINE* — health check failed.\"}"
