@@ -94,6 +94,13 @@ export function createFreeTierGate(logger, redis) {
           await redis.expire(key, ttl);
           // First-seen UA for this IP today, same daily TTL as the counter
           await redis.set(`ftua:${ip}`, userAgent, 'EX', ttl);
+
+          // Record true first-seen timestamp — NX means only sets if key doesn't exist.
+          // Ground truth for ip_classifier.js; 90-day TTL outlives the daily ft:/ftua: keys,
+          // so this is written once per IP ever (until the 90d window lapses).
+          try {
+            await redis.set(`fs:${ip}`, Date.now().toString(), 'EX', 7776000, 'NX');
+          } catch (_) { /* non-critical */ }
         }
         resetAt = getMidnightUTC();
       } catch (err) {
