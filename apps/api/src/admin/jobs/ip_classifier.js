@@ -102,7 +102,14 @@ export class IpClassifier {
     if (ua.includes('ethers'))      score += 20;
     if (ua.includes('web3.js'))     score += 18;
     if (ua.includes('viem'))        score += 18;
-    if (ua.includes('curl'))        score -= 10;
+    if (ua.includes('python-requests')) score += 15;
+    if (ua.includes('aiohttp'))         score += 15;
+    if (ua.includes('httpx'))           score += 15;
+    if (ua.includes('axios'))           score += 12;
+    if (ua.includes('bun/'))            score += 12;
+    if (ua.includes('go-http-client'))  score += 8;
+    if (ua.includes('okhttp'))          score += 10;
+    if (ua.includes('curl'))            score -= 10;
     if (dev.days_active >= 5)       score += 20;
     else if (dev.days_active >= 3)  score += 10;
     if (dev.avg_daily_calls >= 400) score += 15;
@@ -114,7 +121,9 @@ export class IpClassifier {
 
   classify(info, calls) {
     const ua = (info.ua || '').toLowerCase();
-    if (ua.includes('erpc') || ua.includes('web3.py') || ua.includes('ethers') || ua.includes('viem')) {
+    if (ua.includes('erpc') || ua.includes('web3.py') || ua.includes('ethers') || ua.includes('viem') ||
+        ua.includes('web3.js') || ua.includes('python-requests') || ua.includes('aiohttp') ||
+        ua.includes('httpx') || ua.includes('axios') || ua.includes('bun/') || ua.includes('okhttp')) {
       return 'developer';
     }
     if (ua.includes('masscan') || ua.includes('zgrab') || ua.includes('shodan')) {
