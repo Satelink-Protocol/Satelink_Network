@@ -121,7 +121,9 @@ export class IpClassifier {
     else if (dev.days_active >= 3)  score += 10;
     if (dev.avg_daily_calls >= 400) score += 15;
     else if (dev.avg_daily_calls >= 100) score += 8;
-    if (ua.includes('masscan') || ua.includes('zgrab')) score -= 50;
+    if (ua.includes('masscan') || ua.includes('zgrab') ||
+        ua.includes('scanner') || ua.includes('rpc-health') ||
+        ua.includes('health-check')) score -= 50;
     if (ua.includes('bot') || ua.includes('crawler'))   score -= 40;
     return Math.max(0, Math.min(100, score));
   }
@@ -133,7 +135,8 @@ export class IpClassifier {
         ua.includes('httpx') || ua.includes('axios') || ua.includes('bun/') || ua.includes('okhttp')) {
       return 'developer';
     }
-    if (ua.includes('masscan') || ua.includes('zgrab') || ua.includes('shodan')) {
+    if (ua.includes('masscan') || ua.includes('zgrab') || ua.includes('shodan') ||
+        ua.includes('scanner') || ua.includes('rpc-health') || ua.includes('health-check')) {
       return 'scanner';
     }
     if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider')) {
