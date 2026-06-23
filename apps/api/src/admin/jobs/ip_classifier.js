@@ -87,6 +87,13 @@ export class IpClassifier {
         ua: '',
       };
       await this.redis.setex(cacheKey, 604800, JSON.stringify(info));
+      // Feeds free_tier_gate.js's bad-ASN blocklist (Layer 1) — 7d TTL matches
+      // the ip_info: cache above so both expire together.
+      try {
+        if (info.asn) {
+          await this.redis.set(`asn:${ip}`, info.asn, 'EX', 604800);
+        }
+      } catch (_) { /* non-critical */ }
       return info;
     } catch (e) {
       console.warn(`[IpClassifier] ip-api.com lookup failed for ${ip}: ${e.message}`);
