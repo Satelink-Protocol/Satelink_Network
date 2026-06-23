@@ -139,6 +139,13 @@ export class IpClassifier {
         const ip = key.slice(3); // strip 'ft:'
         const calls = parseInt(await this.redis.get(key) || '0');
 
+        // ip-api.com (lookupIP) is a geo lookup, not a UA source — the real UA is
+        // written by free_tier_gate.js to `ftua:<ip>` with the same daily TTL as `ft:<ip>`.
+        let userAgent = '';
+        try {
+          userAgent = await this.redis.get(`ftua:${ip}`) || '';
+        } catch { /* non-critical */ }
+
         const rows = await this.q(
           `SELECT id, days_active, avg_daily_calls, calls_today, updated_at FROM developer_intel WHERE ip = $1`,
           [ip]
@@ -156,8 +163,8 @@ export class IpClassifier {
             // Do NOT touch avg_daily_calls; it must stay stable intraday so the
             // value never chases the monotonically-climbing ft:<ip> counter.
             await this.q(
-              `UPDATE developer_intel SET calls_today = $1, last_seen = NOW(), updated_at = NOW() WHERE ip = $2`,
-              [calls, ip]
+              `UPDATE developer_intel SET calls_today = $1, user_agent = $2, last_seen = NOW(), updated_at = NOW() WHERE ip = $3`,
+              [calls, userAgent, ip]
             );
           } else {
             // New UTC day — fold YESTERDAY's final calls_today into a proper running
@@ -171,21 +178,21 @@ export class IpClassifier {
               / (priorDaysActive + 1)
             );
             await this.q(
-              `UPDATE developer_intel SET avg_daily_calls = $1, calls_today = $2, days_active = days_active + 1, last_seen = NOW(), updated_at = NOW() WHERE ip = $3`,
-              [newAvg, calls, ip]
+              `UPDATE developer_intel SET avg_daily_calls = $1, calls_today = $2, user_agent = $3, days_active = days_active + 1, last_seen = NOW(), updated_at = NOW() WHERE ip = $4`,
+              [newAvg, calls, userAgent, ip]
             );
           }
         } else {
           const info = await this.lookupIP(ip);
-          const classification = this.classify(info, calls);
-          const score = this.computeScore({ user_agent: info.ua, days_active: 1, avg_daily_calls: calls });
+          const classification = this.classify({ ua: userAgent }, calls);
+          const score = this.computeScore({ user_agent: userAgent, days_active: 1, avg_daily_calls: calls });
 
           await this.q(
             `INSERT INTO developer_intel
                (ip, asn, isp, country, city, user_agent, classification, score, calls_today, avg_daily_calls, days_active)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1)
              ON CONFLICT (ip) DO UPDATE SET calls_today = $9, last_seen = NOW()`,
-            [ip, info.asn, info.isp, info.country, info.city, info.ua, classification, score, calls]
+            [ip, info.asn, info.isp, info.country, info.city, userAgent, classification, score, calls]
           );
 
           results.newIPs++;
