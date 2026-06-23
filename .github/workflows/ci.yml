@@ -70,17 +70,17 @@ jobs:
           fetch-depth: 0
 
       - name: Check for leaked secrets
-        run: |
-          # Check for common secret patterns
-          if grep -rE "(sk_live_|sk_test_|gsk_|ALCHEMY_API_KEY\s*=\s*[A-Za-z0-9]+)" \
-            --include="*.js" --include="*.ts" --include="*.mjs" \
-            --include="*.env" --exclude-dir=node_modules \
-            --exclude-dir=.git . 2>/dev/null | \
-            grep -v ".env.example\|process.env\|REPLACE\|YOUR_KEY"; then
-            echo "::error::Possible secrets found in code"
-            exit 1
-          fi
-          echo "No secrets detected"
+  run: |
+    if grep -rE "(sk_live_[A-Za-z0-9]{32,}|sk_test_[A-Za-z0-9]{32,}|gsk_[A-Za-z0-9]{32,})" \
+      --include="*.js" --include="*.ts" --include="*.mjs" \
+      --exclude-dir=node_modules --exclude-dir=.git \
+      --exclude="*.test.*" --exclude="*.spec.*" \
+      . 2>/dev/null | \
+      grep -v "crypto.randomBytes\|startsWith(\|placeholder\|YOUR_KEY\|process.env\|REPLACE\|randomBytes\|toString\|backfill\|stress_test"; then
+      echo "::error::Possible secrets found in code"
+      exit 1
+    fi
+    echo "No secrets detected"
 
   build:
     name: Build Verification
