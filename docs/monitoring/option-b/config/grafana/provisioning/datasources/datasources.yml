@@ -1,0 +1,44 @@
+# DESIGN ARTIFACT — Grafana datasource provisioning. Wires the three LGTM stores
+# with cross-correlation (exemplars metric→trace, trace→logs, logs→trace).
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: satelink-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: satelink-tempo
+
+  - name: Loki
+    uid: satelink-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: trace_id
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '$${__value.raw}'
+          datasourceUid: satelink-tempo
+
+  - name: Tempo
+    uid: satelink-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: satelink-loki
+        filterByTraceID: true
+        tags: [{ key: 'service.name', value: 'service' }]
+      serviceMap:
+        datasourceUid: satelink-prometheus
+      nodeGraph:
+        enabled: true

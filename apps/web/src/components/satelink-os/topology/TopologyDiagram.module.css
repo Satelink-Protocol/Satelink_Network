@@ -1,0 +1,53 @@
+.svg {
+  width: 100%;
+  overflow: visible;
+}
+.link {
+  fill: none;
+  stroke-width: 1;
+  stroke-opacity: 0.22;
+}
+.link[data-tone='primary'] { stroke: var(--sat-primary); }
+.link[data-tone='secondary'] { stroke: var(--sat-secondary); }
+.link[data-tone='success'] { stroke: var(--sat-success); }
+.link[data-tone='info'] { stroke: var(--sat-info); }
+
+.packet {
+  opacity: 0.9;
+}
+.packet[data-tone='primary'] { fill: var(--sat-primary); }
+.packet[data-tone='secondary'] { fill: var(--sat-secondary); }
+.packet[data-tone='success'] { fill: var(--sat-success); }
+.packet[data-tone='info'] { fill: var(--sat-info); }
+
+.nodeRing {
+  fill: var(--sat-bg-2);
+  stroke-width: 1;
+}
+.nodeRing[data-kind='gateway'] { stroke: var(--sat-primary); stroke-width: 2; }
+.nodeRing[data-kind='source'] { stroke: var(--sat-info); }
+.nodeRing[data-kind='edge'] { stroke: var(--sat-info); }
+.nodeRing[data-kind='sink'] { stroke: var(--sat-success); }
+
+.nodeCore[data-kind='gateway'] { fill: var(--sat-primary); }
+.nodeCore[data-kind='source'] { fill: var(--sat-info); }
+.nodeCore[data-kind='edge'] { fill: var(--sat-info); }
+.nodeCore[data-kind='sink'] { fill: var(--sat-success); }
+
+.nodeLabel {
+  fill: var(--sat-text);
+  font-size: 9px;
+  font-family: var(--sat-font-mono);
+  letter-spacing: 1px;
+}
+.nodeSub {
+  fill: var(--sat-text-muted);
+  font-size: 8px;
+  font-family: var(--sat-font-mono);
+}
+.caption {
+  margin-top: 8px;
+  font-size: 9px;
+  font-family: var(--sat-font-mono);
+  color: var(--sat-text-muted);
+}

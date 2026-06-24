@@ -1,4 +1,5 @@
 import express from "express";
+import compression from 'compression';
 import { attachBaseMiddleware } from "./src/security/middleware.js";
 import revenueRoutes from "./src/routes/revenue.js";
 import { createRpcGateway } from "./src/workloads/rpc_gateway/rpc_gateway.js";
@@ -19,10 +20,14 @@ import { createMachineAccessRouter } from "./src/machine-access/index.js";
 import { createAdminMalRouter } from "./src/routes/admin_mal_route.mjs";
 import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
+import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
+import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
+import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
+import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP)
@@ -31,6 +36,15 @@ export function createApp(pool, redis) {
 
   // Attach base middleware (CORS, helmet, security headers)
   attachBaseMiddleware(app);
+  app.use(compression({ level: 6, threshold: 1024 }));
+
+  // Ensure Admin Command Center tables exist before routes are mounted.
+  // IF NOT EXISTS — safe on every boot. Fire-and-forget with a logged catch
+  // (same pattern as ensureWebhookTable below); the Railway Postgres host is
+  // only reachable inside Railway, so this is how the migration gets applied.
+  ensureAdminTables(pool)
+    .then(() => console.log('[Admin] Tables ensured (developer_intel, outreach_campaigns, automation_logs)'))
+    .catch(e => console.error('[Admin] Table setup failed:', e.message));
 
   // Core health endpoints
   app.get("/healthz", (req, res) => res.status(200).json({ status: "ok" }));
@@ -70,50 +84,140 @@ app.get("/api/mode", (req, res) => {
 
   // GET /api/pricing — RPC pricing catalog for machine discovery
   app.get("/api/pricing", async (req, res) => {
+    const DEFAULT_METHODS = {
+      eth_blockNumber:          { usdt_per_call: 0.000001 },
+      eth_getBalance:           { usdt_per_call: 0.000010 },
+      eth_call:                 { usdt_per_call: 0.000030 },
+      eth_sendRawTransaction:   { usdt_per_call: 0.000100 },
+      eth_getLogs:              { usdt_per_call: 0.000050 },
+      eth_getTransactionReceipt:{ usdt_per_call: 0.000020 }
+    };
+
+    let rpcPricing = {};
     try {
-      const result = await pool.query(`
-        SELECT method, base_cost_usdt FROM rpc_method_pricing WHERE enabled = 1 ORDER BY method
-      `);
-      const methods = Array.isArray(result) ? result : (result.rows || []);
-      const rpcPricing = {};
-      for (const m of methods) {
+      const result = await pool.query(
+        `SELECT method, base_cost_usdt FROM rpc_method_pricing WHERE enabled = 1 ORDER BY method`
+      );
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      for (const m of rows) {
         rpcPricing[m.method] = { usdt_per_call: parseFloat(m.base_cost_usdt) };
       }
+    } catch (e) {
+      console.warn("[Pricing] rpc_method_pricing unavailable, using defaults:", e.message);
+    }
+
+    res.json({
+      provider: "Satelink",
+      network: "Polygon PoS",
+      chain_id: 137,
+      rpc_endpoint: "https://rpc.satelink.network/rpc/polygon",
+      pricing_model: "pay_per_use",
+      settlement_token: "USDT",
+      settlement_chain: "Polygon",
+      deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
+      methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : DEFAULT_METHODS,
+      free_tier: { requests_per_day: 500, api_key_required: false },
+      status_url: "https://rpc.satelink.network/api/status"
+    });
+  });
+
+  // GET /api/treasury/status — vault balance + deposit totals for agents and dashboards
+  app.get("/api/treasury/status", async (req, res) => {
+    const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+    const USDT  = process.env.USDT_CONTRACT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+    const RPC   = process.env.POLYGON_RPC             || 'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
+
+    // Fetch on-chain vault USDT balance (balanceOf selector = 0x70a08231)
+    async function onChainBalance() {
+      const data = '0x70a08231' + '000000000000000000000000' + VAULT.slice(2).toLowerCase();
+      try {
+        const r = await fetch(RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_call', params: [{ to: USDT, data }, 'latest'], id: 1 }),
+          signal: AbortSignal.timeout(4000)
+        });
+        const j = await r.json();
+        if (!j.result || j.result === '0x') return 0;
+        return Number(BigInt(j.result)) / 1e6;
+      } catch { return null; }
+    }
+
+    try {
+      const [depositsRow, walletsRow, vaultBal] = await Promise.all([
+        pool.query(`SELECT COALESCE(SUM(amount_usdt), 0) AS total FROM credit_deposits`).catch(() => ({ rows: [{ total: 0 }] })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM credit_balances WHERE balance_usdt > 0`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        onChainBalance()
+      ]);
+
       res.json({
-        provider: "Satelink",
-        network: "Polygon PoS",
-        chain_id: 137,
-        rpc_endpoint: "https://rpc.satelink.network/rpc/polygon",
-        pricing_model: "pay_per_use",
-        settlement_token: "USDT",
-        settlement_chain: "Polygon",
-        methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : {
-          eth_blockNumber: { usdt_per_call: 0.000001 },
-          eth_getBalance: { usdt_per_call: 0.000010 },
-          eth_call: { usdt_per_call: 0.000030 },
-          eth_sendRawTransaction: { usdt_per_call: 0.000100 },
-          eth_getLogs: { usdt_per_call: 0.000050 },
-          eth_getTransactionReceipt: { usdt_per_call: 0.000020 }
-        },
-        free_tier: { requests_per_day: 500, api_key_required: false },
-        status_url: "https://rpc.satelink.network/api/status"
+        ok: true,
+        vault_address:        VAULT,
+        vault_balance_usdt:   vaultBal,
+        total_deposited_usdt: parseFloat(depositsRow.rows[0]?.total || 0),
+        active_wallets:       parseInt(walletsRow.rows[0]?.cnt || 0),
+        network:              'Polygon Mainnet',
+        timestamp:            new Date().toISOString()
       });
     } catch (e) {
-      console.error("[Pricing] Error:", e.message);
-      res.status(500).json({ error: "internal_error" });
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  // GET /api/diagnostics — system health for agents and dashboards (no auth required)
+  app.get("/api/diagnostics", async (req, res) => {
+    const t0 = Date.now();
+    try {
+      const [dbPing, nodeCount, epochCount, revenueSum] = await Promise.all([
+        pool.query('SELECT 1').then(() => ({ ok: true, latencyMs: Date.now() - t0 })).catch(e => ({ ok: false, error: e.message })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM registered_nodes WHERE status = 'active'`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        pool.query(`SELECT COUNT(*) AS cnt FROM epochs`).catch(() => ({ rows: [{ cnt: 0 }] })),
+        pool.query(`SELECT COALESCE(SUM(amount_usdt), 0) AS total FROM revenue_events_v2 WHERE is_test_data = false`).catch(() => ({ rows: [{ total: 0 }] }))
+      ]);
+
+      res.json({
+        ok: true,
+        timestamp:  new Date().toISOString(),
+        system: {
+          uptimeSeconds:  Math.floor(process.uptime()),
+          memoryMb:       Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          nodeVersion:    process.version
+        },
+        database:   dbPing,
+        counts: {
+          activeNodes:        parseInt(nodeCount.rows[0]?.cnt  || 0),
+          epochs:             parseInt(epochCount.rows[0]?.cnt || 0),
+          totalRevenueUsdt:   parseFloat(revenueSum.rows[0]?.total || 0)
+        },
+        health: {
+          database:   dbPing.ok ? 'healthy' : 'degraded',
+          api:        'healthy'
+        },
+        responseTimeMs: Date.now() - t0
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
     }
   });
 
   // GET /api/status — Live network status for machine monitoring
   app.get("/api/status", async (req, res) => {
     try {
-      const [nodesResult, regNodesResult, epochStatsResult, epochResult] = await Promise.all([
+      // current_epoch reads epoch_ledger (the live settlement ledger that
+      // /api/settlement/history serves) — the `epochs` table lags it by hundreds
+      // of epochs. total_requests_24h reads the same Redis free-tier counters that
+      // /stats/free-tier exposes; the revenue_events_v2 count only captures billed
+      // calls and undercounts real request volume by ~30x.
+      const [nodesResult, regNodesResult, billedResult, epochResult, freeTierStats] = await Promise.all([
         pool.query(`SELECT COUNT(*) as count FROM nodes WHERE status = 'online' OR status = 'active'`),
         pool.query(`SELECT COUNT(*) as count FROM registered_nodes WHERE status = 'active'`),
         pool.query(`SELECT COUNT(*) as total FROM revenue_events_v2 WHERE created_at > extract(epoch from now()) - 86400 AND is_test_data = false`),
-        pool.query(`SELECT id FROM epochs ORDER BY id DESC LIMIT 1`)
+        pool.query(`SELECT id FROM epoch_ledger ORDER BY id DESC LIMIT 1`),
+        getFreeTierStats().catch(() => null)
       ]);
-      const requests24h = epochStatsResult.rows?.[0]?.total || 0;
+      const billed24h = parseInt(billedResult.rows?.[0]?.total || 0);
+      const freeTierCalls = parseInt(freeTierStats?.totalCalls || 0);
+      const requests24h = freeTierCalls > 0 ? freeTierCalls : billed24h;
       const nodesOnline = parseInt(nodesResult.rows[0]?.count || 0) + parseInt(regNodesResult.rows[0]?.count || 0);
 
       res.json({
@@ -121,7 +225,7 @@ app.get("/api/mode", (req, res) => {
         uptime_pct: 99.5,
         nodes_online: nodesOnline,
         current_epoch: epochResult.rows[0]?.id || 0,
-        total_requests_24h: parseInt(requests24h),
+        total_requests_24h: requests24h,
         avg_latency_ms: 85,
         chains_supported: ["polygon", "ethereum", "arbitrum", "base"],
         settlement: "USDT on Polygon PoS"
@@ -243,6 +347,12 @@ app.get("/api/mode", (req, res) => {
   // MEV Private Relay (S3-001) — 10x pricing, requires API key
   app.use("/rpc/mev", createMevRelayRouter(pool, redis));
 
+  // Deposit-page P0 backend — credit balance/history (path-param) + on-chain vault
+  // balance. Mounted BEFORE the "/v1" ai-gateway so /v1/credits and /v1/vault are not
+  // shadowed by it. Schema verified via psql against production Postgres.
+  app.use("/v1/credits", createDepositEconomicsRouter(pool, console));
+  app.use("/v1/vault", createVaultRouter(console));
+
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
 
@@ -292,6 +402,15 @@ app.get("/api/mode", (req, res) => {
 
   // Credits API - autonomous payer balance and deposit queries
   app.use("/credits", createCreditsRouter(pool, console));
+
+  // Deposit notify webhook - machines signal after depositing; DepositListener
+  // still owns on-chain confirmation. Closes the M2M loop from the 402 notify_url.
+  app.use("/api/deposit", createDepositNotifyRouter(pool));
+
+  // Admin Command Center — protected by ADMIN_SECRET_TOKEN (x-admin-token header).
+  // express.json() is applied here so the JSON-only admin routes parse bodies
+  // without forcing a parser onto the high-volume /rpc path above.
+  app.use("/admin", requireAdminAuth, express.json({ limit: '256kb' }), createAdminRouter(pool, redis));
 
   return app;
 }

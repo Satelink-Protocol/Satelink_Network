@@ -9,6 +9,8 @@
  * Executes VACUUM ANALYZE after cleanup to reclaim space.
  */
 
+import { blockIfFinancial } from '../utils/financial_tables_guard.js';
+
 const RETENTION_RPC_LOGS_DAYS = 7;
 const RETENTION_METRICS_DAYS = 30;
 
@@ -90,6 +92,13 @@ export class DataRetentionJob {
         }
       }
 
+      // Clean revenue_events_v2 by closed epochs
+      const revenueDeleted = await this.cleanRevenueEventsByEpoch(results.errors);
+      if (revenueDeleted > 0) {
+        results.metrics.deleted += revenueDeleted;
+        results.metrics.tables.push({ table: 'revenue_events_v2', deleted: revenueDeleted });
+      }
+
       results.durationMs = Date.now() - startTime;
       this.lastRun = new Date().toISOString();
       this.lastResult = results;
@@ -116,6 +125,11 @@ export class DataRetentionJob {
 
   async deleteOldRecords(table, timestampCol, cutoff, errors) {
     try {
+      // Never prune financial ledger / balance tables.
+      if (blockIfFinancial(table, 'DataRetention')) {
+        return 0;
+      }
+
       const tableExists = await this.pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables
@@ -146,6 +160,18 @@ export class DataRetentionJob {
     } catch (e) {
       results.errors.push(`VACUUM ${table}: ${e.message}`);
     }
+  }
+
+  /**
+   * DISABLED — this method previously deleted every revenue_events_v2 row whose
+   * epoch had CLOSED. Because epochs close continuously (29k+ closed vs 1 open),
+   * it wiped the entire revenue ledger daily (40,748 rows -> ~0). revenue_events_v2
+   * is a financial audit record and must never be pruned by retention. Kept as a
+   * guarded no-op so any stray caller is blocked and logged rather than deleting.
+   */
+  async cleanRevenueEventsByEpoch(errors) {
+    blockIfFinancial('revenue_events_v2', 'DataRetention');
+    return 0;
   }
 
   getStatus() {

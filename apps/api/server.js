@@ -1,3 +1,5 @@
+process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=400';
+
 import express from "express";
 import { createPhase3Router } from "./src/gateway/routes/api_phase3.js";
 import { createServer } from 'http';
@@ -17,7 +19,12 @@ import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/econo
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
+import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
+import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
+import { startConversionMonitorScheduler } from "./src/jobs/conversion_monitor_job.js";
+import { startAdminCrons } from "./src/admin/cron_scheduler.js";
 import { startDataRetentionScheduler } from "./src/jobs/data_retention_job.mjs";
+import { startDbCleanupScheduler } from "./src/scheduler/jobs/db_cleanup_job.js";
 import { discord } from "./src/services/discord_notify.mjs";
 import { DepositListener } from "./src/services/deposit_listener.js";
 import pkg from "pg";
@@ -161,6 +168,39 @@ async function ensureBillingTables(pool) {
     await pool.query(`ALTER TABLE registered_nodes ADD COLUMN IF NOT EXISTS last_failure_reason TEXT DEFAULT NULL`).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_nodes_dispatch ON registered_nodes(status, node_type, last_heartbeat_at) WHERE status = 'active'`).catch(() => {});
 
+    // auth_users + user_roles — email/password auth and RBAC
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_users (
+        email         TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'node_operator',
+        created_at    BIGINT NOT NULL
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        wallet     TEXT PRIMARY KEY,
+        role       TEXT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )
+    `);
+
+    // auth_nonces — wallet-based auth handshake
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_nonces (
+        address    TEXT   NOT NULL,
+        nonce      TEXT   NOT NULL,
+        expires_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        used_at    BIGINT,
+        PRIMARY KEY (address, nonce)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address)`).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires ON auth_nonces(expires_at)`).catch(() => {});
+    // wallet_auth.js uses ON CONFLICT (address) — requires unique constraint on address alone
+    await pool.query(`ALTER TABLE auth_nonces ADD CONSTRAINT auth_nonces_address_unique UNIQUE (address)`).catch(() => {});
+
     console.log('[STARTUP] Billing tables ensured');
   } catch (err) {
     console.error('[STARTUP] Billing migration failed:', err.message);
@@ -175,6 +215,7 @@ async function start() {
   try {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      max: 10,
       ssl: process.env.NODE_ENV === "production"
         ? { rejectUnauthorized: false }
         : false,
@@ -300,6 +341,11 @@ async function start() {
       } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
       }
+    });
+
+    // Settlement anchor status — shows whether the on-chain anchor job is live
+    app.get('/system/settlement-anchor', (req, res) => {
+      res.json({ ok: true, ...anchorSchedulerStatus });
     });
 
     // Treasury settlement status endpoint (mounted early, uses job instance later)
@@ -436,6 +482,38 @@ async function start() {
     console.error('[BOOT] ⚠️ Treasury settlement job failed (non-fatal):', err.message);
   }
 
+  // Step 12b2: Start settlement anchor job (anchors closed epochs on-chain with tx_hash)
+  // This job existed since S7 but was never registered — root cause of
+  // 1457 closed epochs with tx_hash NULL. It no-ops loudly when the
+  // POLYGON_SIGNER_KEY env trio is missing instead of failing silently.
+  try {
+    startSettlementAnchorScheduler(pool, 10);
+    console.log('[BOOT] ✅ Settlement anchor job registered (10min interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Settlement anchor job failed (non-fatal):', err.message);
+  }
+
+  // Step 12b1b: Start conversion monitor job — every 6h reads /system/free-tier,
+  // finds developer-classified IPs that hit the 402 wall, and posts Discord
+  // alerts for the warmest conversion leads. No-ops gracefully if the feed or
+  // DISCORD_WEBHOOK_URL is unavailable.
+  try {
+    startConversionMonitorScheduler(pool);
+    console.log('[BOOT] ✅ Conversion monitor job registered (6h interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Conversion monitor job failed (non-fatal):', err.message);
+  }
+
+  // Step 12b3: Start gas manager job — watches the settlement signer's POL
+  // balance and alerts Discord when it drops below threshold. A signer out of
+  // gas silently blocks the anchor above from submitting any on-chain tx.
+  try {
+    startGasManagerScheduler(pool, 30);
+    console.log('[BOOT] ✅ Gas manager job registered (30min interval)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Gas manager job failed (non-fatal):', err.message);
+  }
+
   // Step 12c: Start data retention job (cleanup old logs/metrics daily at 3 AM UTC)
   let dataRetention;
   try {
@@ -443,6 +521,29 @@ async function start() {
     console.log('[BOOT] ✅ Data retention job started (daily at 3:00 UTC)');
   } catch (err) {
     console.error('[BOOT] ⚠️ Data retention job failed (non-fatal):', err.message);
+  }
+
+  // Step 12d: DB volume cleanup (revenue_events_v2, epochs, epoch_ledger, node_health_logs)
+  try {
+    startDbCleanupScheduler(pool);
+    console.log('[BOOT] ✅ DB cleanup job started (daily at 3:00 UTC)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ DB cleanup job failed (non-fatal):', err.message);
+  }
+
+  // Step 12e: Admin Command Center crons (ip-classifier, customer-zero, outreach).
+  // Off by default — set ADMIN_CRONS_ENABLED=1 to start them. This keeps the
+  // admin API/dashboard usable (manual triggers always work) without silently
+  // starting background ip-api lookups and Discord posts on deploy.
+  if (process.env.ADMIN_CRONS_ENABLED === '1') {
+    try {
+      startAdminCrons(pool, redis);
+      console.log('[BOOT] ✅ Admin Command Center crons started');
+    } catch (err) {
+      console.error('[BOOT] ⚠️ Admin crons failed (non-fatal):', err.message);
+    }
+  } else {
+    console.log('[BOOT] ℹ️ Admin Command Center crons disabled (set ADMIN_CRONS_ENABLED=1 to enable)');
   }
 
   // Step 13: Bind to port FIRST (Railway healthcheck needs this fast)
@@ -484,21 +585,31 @@ async function start() {
   }
 
   // Step 14: Self-heartbeat — the API server IS the node
+  // Must be an UPSERT: the previous UPDATE targeted a row that was never
+  // inserted, so it no-opped silently every 5 minutes and nodes_online
+  // stayed 0 forever.
   const SELF_NODE_ID = 'NODE-ap-south-1-a09becbb';
-  setInterval(async () => {
+  const SELF_NODE_WALLET = process.env.SELF_NODE_WALLET
+    || process.env.TREASURY_ADDRESS
+    || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+  const selfHeartbeat = async () => {
     try {
       const now = Math.floor(Date.now() / 1000);
       await pool.query(
-        `UPDATE registered_nodes
-         SET status = 'active', last_heartbeat_at = $1, updated_at = $1
-         WHERE node_id = $2`,
-        [now, SELF_NODE_ID]
+        `INSERT INTO registered_nodes
+           (node_id, wallet, node_type, endpoint_url, region, chain_ids, status, tier, registered_at, last_heartbeat_at, updated_at)
+         VALUES ($1, $2, 'rpc', 'https://rpc.satelink.network', 'ap-south-1', '[137]', 'active', 'bronze', $3, $3, $3)
+         ON CONFLICT (node_id) DO UPDATE
+         SET status = 'active', last_heartbeat_at = $3, updated_at = $3`,
+        [SELF_NODE_ID, SELF_NODE_WALLET, now]
       );
       console.log(`[Self-Heartbeat] ✅ ${SELF_NODE_ID} heartbeat sent`);
     } catch (err) {
       console.error('[Self-Heartbeat] ❌ Failed:', err.message);
     }
-  }, 300000); // Every 5 minutes
+  };
+  selfHeartbeat(); // register immediately at boot, not 5 minutes later
+  setInterval(selfHeartbeat, 300000); // Every 5 minutes
   console.log(`[BOOT] ✅ Self-heartbeat started for ${SELF_NODE_ID} (5min interval)`);
 
   // Step 15: Discord daily summary scheduler (8:00 AM UTC)

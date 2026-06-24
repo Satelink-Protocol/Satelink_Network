@@ -8,7 +8,7 @@ import crypto from 'crypto';
 const PRICE_PER_CALL_USDT = 0.000030;
 
 const TIERS = {
-  free:       { daily_limit: 200,       price_usdt: 0 },
+  free:       { daily_limit: 500,       price_usdt: 0 },
   basic:      { daily_limit: 10000,     price_usdt: 9 },
   pro:        { daily_limit: 100000,    price_usdt: 49 },
   enterprise: { daily_limit: 1000000,   price_usdt: 199 },
@@ -30,7 +30,7 @@ export async function ensureCreditTables(pool) {
         id              SERIAL PRIMARY KEY,
         api_key         VARCHAR(100) UNIQUE NOT NULL,
         tier            VARCHAR(20) DEFAULT 'free',
-        daily_limit     INTEGER DEFAULT 200,
+        daily_limit     INTEGER DEFAULT 500,
         credits_usdt    NUMERIC(18,6) DEFAULT 0,
         total_deposited NUMERIC(18,6) DEFAULT 0,
         total_spent     NUMERIC(18,6) DEFAULT 0,
@@ -52,8 +52,25 @@ export async function ensureCreditTables(pool) {
       )
     `);
 
+    // Deposit ledger — ensured at startup so GET /api/keys/deposits never 500s
+    // on a DB that has not yet recorded a deposit (was previously created lazily
+    // inside POST /deposit only).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS api_deposits (
+        id          SERIAL PRIMARY KEY,
+        api_key     VARCHAR(100) NOT NULL,
+        tx_hash     VARCHAR(66) UNIQUE NOT NULL,
+        amount_usdt NUMERIC(18,6) NOT NULL,
+        from_address VARCHAR(42),
+        tier_before VARCHAR(20),
+        tier_after  VARCHAR(20),
+        created_at  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_credits_key ON api_credits(api_key)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_usage_key_date ON api_usage_daily(api_key, date)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_deposits_key ON api_deposits(api_key)`);
 
     console.log('[CreditSystem] Tables ensured');
   } catch (err) {

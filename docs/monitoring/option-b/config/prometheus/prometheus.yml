@@ -1,0 +1,53 @@
+# DESIGN ARTIFACT — Prometheus scrape config for Satelink LGTM stack.
+# Most scraping is delegated to Alloy (relabel + remote_write); these static jobs
+# are the fallback/direct path and the exporter scrapes co-located on Hetzner.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: satelink
+    env: production
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # apps/api — shared prom-client registry (GET /metrics) + RPC snapshot.
+  - job_name: satelink-api
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets: ["rpc.satelink.network"]
+        labels: { service: api }
+    # If /metrics becomes auth-gated, supply a bearer via Alloy instead.
+
+  - job_name: satelink-rpc-snapshot
+    metrics_path: /rpc/metrics/prometheus
+    scheme: https
+    static_configs:
+      - targets: ["rpc.satelink.network"]
+        labels: { service: rpc_gateway }
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels: { service: postgres }
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels: { service: redis }
+
+  # Node-agents register themselves; in production use HTTP SD or a file_sd
+  # generated from the node_registry. Placeholder static block shown.
+  - job_name: node-agents
+    metrics_path: /metrics
+    http_sd_configs:
+      - url: https://rpc.satelink.network/api/nodes/prometheus-sd
+        refresh_interval: 60s

@@ -6,7 +6,7 @@ Satelink offers simple, transparent pricing with pay-per-use USDT settlement on 
 
 | Tier | Daily Limit | Monthly Price | Per-Call Rate |
 |------|-------------|---------------|---------------|
-| **Free** | 200/day | $0 | $0 |
+| **Free** | 500/day | $0 | $0 |
 | **Basic** | 10,000/day | $9 | $0.000030 |
 | **Pro** | 100,000/day | $49 | $0.000016 |
 | **Enterprise** | 1,000,000/day | $199 | $0.0000066 |
@@ -33,7 +33,7 @@ Different RPC methods have different costs based on compute requirements:
 
 ## Free Tier Details
 
-- **200 requests per day** (resets at midnight UTC)
+- **500 requests per day** (resets at midnight UTC)
 - All RPC methods supported
 - All chains supported (Polygon, Ethereum, Arbitrum, Base)
 - No credit card required
@@ -51,7 +51,7 @@ Returns:
 ```json
 {
   "deposit": {
-    "address": "0x966E1Ae22996545015b1414B35234b10719d7Ad4",
+    "address": "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
     "network": "Polygon (ChainId 137)",
     "token": "USDT"
   }
@@ -108,7 +108,7 @@ All payments settle on Polygon mainnet:
 
 - **Token:** USDT (0xc2132D05D31c914a87C6611C10748AEb04B58e8F)
 - **Chain:** Polygon PoS (chainId 137)
-- **Treasury:** 0x966E1Ae22996545015b1414B35234b10719d7Ad4
+- **Treasury:** 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3
 - **ClaimsContract:** 0x6987921e2453f360e314e4424F6c2789F10a1CC9
 
 ## Revenue Distribution
@@ -149,7 +149,7 @@ A: All chains (Polygon, Ethereum, Arbitrum, Base) are included in every tier.
 
 | Provider | Free Tier | Paid Starting |
 |----------|-----------|---------------|
-| **Satelink** | 200/day | $9/month |
+| **Satelink** | 500/day | $9/month |
 | Alchemy | 300M CU/month | $49/month |
 | Infura | 100K/day | $50/month |
 | QuickNode | None | $49/month |

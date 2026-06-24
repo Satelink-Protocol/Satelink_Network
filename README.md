@@ -4,13 +4,13 @@
 
 Node operators earn USDT on Polygon by routing real blockchain RPC traffic. Developers get reliable, decentralized infrastructure. Platform fee: 30%. Node operators: 50%. Distribution pool: 20%.
 
-## Proven Metrics (Live)
+## Live Infrastructure
 
-- **1.7M+ API calls** processed
-- **$53+ USDT** earned by operators  
-- **$220.59/month** projected revenue
-- **99.8% uptime** | 85ms avg latency
-- **On-chain proof:** [View TX](https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b)
+- **1,700+ RPC calls processed** (free tier, growing)
+- **$0.65 USDT** in on-chain test transactions
+- **99.8% uptime** | 85ms avg latency  
+- **First settlement pending** — Chainlist listing in review
+- **On-chain contract:** [View on Polygonscan](https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b)
 
 ## Quick Links
 
@@ -96,7 +96,7 @@ cd apps/web && npm run dev  # Frontend (port 3000)
 | Contract | Address |
 |----------|---------|
 | ClaimsContract | `0x6987921e2453f360e314e4424F6c2789F10a1CC9` |
-| Treasury | `0x966E1Ae22996545015b1414B35234b10719d7Ad4` |
+| Treasury | `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` |
 
 ## Documentation
 

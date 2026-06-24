@@ -97,13 +97,6 @@ const PROVIDER_CONFIGS = {
         enabled: false,
       },
       {
-        id: "llamarpc-polygon",
-        url: "https://polygon.llamarpc.com",
-        priority: 4,
-        rateLimit: 100,
-        type: "public",
-      },
-      {
         id: "drpc-polygon",
         url: process.env.DRPC_POLYGON_URL || "https://polygon.drpc.org",
         priority: 4,
@@ -117,13 +110,6 @@ const PROVIDER_CONFIGS = {
     chainId: 1,
     name: "Ethereum Mainnet",
     providers: [
-      {
-        id: "llamarpc-eth",
-        url: "https://eth.llamarpc.com",
-        priority: 1,
-        rateLimit: 100,
-        type: "public",
-      },
       {
         id: "alchemy-eth",
         url:
@@ -143,13 +129,6 @@ const PROVIDER_CONFIGS = {
         rateLimit: 100,
         type: "ankr",
         enabled: ANKR_VALID || !!process.env.ANKR_ETH_URL,
-      },
-      {
-        id: "cloudflare-eth",
-        url: "https://cloudflare-eth.com",
-        priority: 4,
-        rateLimit: 100,
-        type: "public",
       },
       {
         id: "drpc-eth",
@@ -216,14 +195,6 @@ const PROVIDER_CONFIGS = {
         rateLimit: 40,
         type: "public",
         enabled: false, // Disabled: strict rate limits and method restrictions
-      },
-      {
-        id: "solana-ankr",
-        url: ANKR_VALID ? `https://rpc.ankr.com/solana/${ANKR_KEY}` : null,
-        priority: 2,
-        rateLimit: 100,
-        type: "ankr",
-        enabled: ANKR_VALID,
       },
     ],
   },

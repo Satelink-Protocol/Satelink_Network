@@ -1,6 +1,16 @@
 /**
+ * DEAD CODE — DO NOT USE
+ * This file uses SQLite db.prepare() syntax which is incompatible
+ * with the PostgreSQL pool used in production.
+ * Retention logic is handled by: apps/api/src/jobs/data_retention_job.mjs
+ * Safe to delete this file after verifying data_retention_job.mjs is running.
+ */
+
+import { blockIfFinancial } from './financial_tables_guard.js';
+
+/**
  * Retention Cleaner - Keeps the DB lean and fast
- * 
+ *
  * Prunes old data from high-volume tables to prevent unbounded growth.
  * Scheduled to run daily (or more frequent in high-load envs).
  * 
@@ -99,6 +109,11 @@ export class RetentionCleaner {
 
     async _prune(table, timeCol, cutoff, statKey, statsObj) {
         try {
+            // Never prune financial ledger / balance tables.
+            if (blockIfFinancial(table, 'Retention')) {
+                statsObj[statKey] = 'blocked';
+                return;
+            }
             await this.db.prepare(`DELETE FROM ${table} WHERE ${timeCol} < ?`).run([cutoff]);
             statsObj[statKey] = 'executed';
         } catch (e) {

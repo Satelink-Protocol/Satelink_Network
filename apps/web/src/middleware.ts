@@ -1,67 +1,23 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Next.js Edge Middleware — server-side route protection.
+ * Redirect the admin subdomain root to the command center.
+ * admin.satelink.network/  ->  admin.satelink.network/admin/command-center
  *
- * Protected dashboard routes require a `satelink_token` cookie or
- * `Authorization: Bearer` header. If neither is present, the user
- * is redirected to /login.
- *
- * This is a first-pass guard. The client-side AuthProvider performs
- * the definitive /auth/me check; this middleware prevents flicker by
- * redirecting unauthenticated users before the page even loads.
+ * Only runs on "/" (see config.matcher), so it never interferes with other routes.
  */
-
-const PROTECTED_PREFIXES = [
-    '/admin',
-    '/node',
-    '/builder',
-    '/distributor',
-    '/enterprise/dashboard',
-    '/account',
-];
-
 export function middleware(request: NextRequest) {
-    const { pathname } = request.nextUrl;
-    const hostname = request.headers.get('host') || '';
+  const hostname = (request.headers.get("host") ?? "").split(":")[0];
 
-    // Protect /_status: only accessible from status.satelink.network
-    if (pathname.startsWith('/_status')) {
-        if (!hostname.includes('status.satelink.network')) {
-            return NextResponse.redirect(new URL('/', request.url));
-        }
-        return NextResponse.next();
-    }
+  if (hostname.startsWith("admin.") && request.nextUrl.pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/command-center";
+    return NextResponse.redirect(url);
+  }
 
-    const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p));
-    if (!isProtected) return NextResponse.next();
-
-    // Check for auth token in cookie or header
-    const cookieToken = request.cookies.get('satelink_session')?.value;
-    const localToken = request.cookies.get('satelink_token')?.value;
-    const authHeader = request.headers.get('authorization');
-    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-    const hasToken = !!(cookieToken || localToken || bearerToken);
-
-    if (!hasToken) {
-        const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('redirect', pathname);
-        return NextResponse.redirect(loginUrl);
-    }
-
-    return NextResponse.next();
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: [
-        '/_status/:path*',
-        '/admin/:path*',
-        '/node/:path*',
-        '/builder/:path*',
-        '/distributor/:path*',
-        '/enterprise/dashboard/:path*',
-        '/account/:path*',
-    ],
+  matcher: "/",
 };

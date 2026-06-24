@@ -1,0 +1,54 @@
+# DESIGN ARTIFACT — Tempo single-binary, blocks → S3. Receives OTLP from Alloy.
+# Sampling is applied UPSTREAM (OTel SDK / Alloy tail sampling): 100% errors +
+# slow(>p95), 5–10% tail. Metrics-generator emits span RED + service graph to
+# Prometheus for exemplar / RED-by-service panels.
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 336h   # 14d
+
+storage:
+  trace:
+    backend: s3
+    s3:
+      endpoint: ${S3_ENDPOINT}
+      bucket: ${S3_BUCKET_TEMPO}
+      access_key: ${S3_ACCESS_KEY}
+      secret_key: ${S3_SECRET_KEY}
+      forcepathstyle: true
+    wal:
+      path: /var/tempo/wal
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: satelink
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

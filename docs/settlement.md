@@ -100,7 +100,7 @@ Every epoch:
 
 ## Treasury Management
 
-**Treasury wallet:** `0x966E1Ae22996545015b1414B35234b10719d7Ad4`
+**Treasury wallet:** `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3`
 
 Revenue flows:
 1. Developers deposit USDT → treasury
@@ -183,7 +183,7 @@ USDT arrives in your wallet within 1 block (~2 seconds).
 | TX | [0x814d348d...](https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b) |
 | Date | 2026-05-17 |
 | Node | NODE-ap-south-1-a09becbb |
-| Wallet | 0x966E1Ae22996545015b1414B35234b10719d7Ad4 |
+| Wallet | 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3 |
 
 Fully verified. Provably real.
 

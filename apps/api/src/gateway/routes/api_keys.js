@@ -14,7 +14,7 @@ import crypto from 'crypto';
 import { getSharedRedis } from '../../workloads/rpc_gateway/shared_redis.js';
 
 const PLAN_LIMITS = {
-  free: { limit: 200, tier: 'free' },
+  free: { limit: 500, tier: 'free' },
   basic: { limit: 10000, tier: 'basic' },
   pro: { limit: 100000, tier: 'pro' },
   enterprise: { limit: 1000000, tier: 'enterprise' }

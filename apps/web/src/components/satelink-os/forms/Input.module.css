@@ -1,0 +1,26 @@
+.input {
+  background: var(--sat-bg-0);
+  border: 1px solid var(--sat-border-strong);
+  border-radius: var(--sat-radius-md);
+  color: var(--sat-text);
+  font-family: var(--sat-font-sans);
+  font-size: 13px;
+  padding: 6px 10px;
+  min-width: 200px;
+  outline: none;
+  transition: var(--sat-transition);
+}
+.input[data-mono='1'] {
+  font-family: var(--sat-font-mono);
+  letter-spacing: 1px;
+}
+.input::placeholder {
+  color: var(--sat-text-dim);
+}
+.input:focus:not(:disabled) {
+  border-color: var(--sat-primary);
+}
+.input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

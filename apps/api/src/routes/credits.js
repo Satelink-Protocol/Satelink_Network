@@ -126,6 +126,32 @@ export function createCreditsRouter(db, logger) {
       amountRaw,
       approveCalldata,
       depositCalldata,
+      transactions: [
+        {
+          step: 1,
+          description: 'Approve USDT spending',
+          to: usdtAddress,
+          data: approveCalldata,
+          value: '0x0',
+          chainId: 137,
+          gas: '0x186a0'
+        },
+        {
+          step: 2,
+          description: 'Deposit USDT to RevenueVault',
+          to: vaultAddress,
+          data: depositCalldata,
+          value: '0x0',
+          chainId: 137,
+          gas: '0x186a0'
+        }
+      ],
+      integration: {
+        header: 'X-Wallet-Address',
+        usage: 'Add this header with your wallet address to all RPC calls after deposit',
+        balance_endpoint: 'https://rpc.satelink.network/credits/balance?wallet=YOUR_WALLET',
+        rpc_endpoint: 'https://rpc.satelink.network/rpc/polygon'
+      },
       instructions: [
         'Step 1: Call USDT.approve(revenueVaultAddress, amountRaw) on Polygon',
         'Step 2: Call RevenueVault.deposit(amountRaw) on Polygon',
@@ -284,6 +310,9 @@ export function createCreditsRouter(db, logger) {
       polygonscan: `https://polygonscan.com/address/${REVENUE_VAULT_ADDRESS}`
     });
   });
+
+  // Alias: GET /credits/:wallet → /credits/balance?wallet=:wallet
+  router.get('/:wallet', (req, res) => res.redirect(`/credits/balance?wallet=${req.params.wallet}`));
 
   return router;
 }

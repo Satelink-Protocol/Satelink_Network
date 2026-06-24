@@ -19,6 +19,87 @@ const ALERT_COOLDOWN_MS = 300_000;
 const providerHealth = new Map();
 const lastAlertTime = new Map();
 
+// Chain-aware health check definitions, grouped by chain family.
+// To support a new chain family, add an entry here with the chains it
+// covers, the JSON-RPC payload to send, and a validator for the response.
+const CHAIN_HEALTH_CHECKS = {
+  evm: {
+    chains: ['ethereum', 'polygon', 'polygon-amoy', 'arbitrum', 'base'],
+    buildPayload: () => ({
+      jsonrpc: '2.0',
+      method: 'eth_blockNumber',
+      params: [],
+      id: 1
+    }),
+    validate: (data) => {
+      if (!data || typeof data !== 'object') {
+        return { valid: false, reason: 'Response is not a JSON object' };
+      }
+      if (data.result === undefined || data.result === null) {
+        return { valid: false, reason: data.error?.message || 'Missing result field' };
+      }
+      return { valid: true };
+    }
+  },
+  solana: {
+    chains: ['solana'],
+    buildPayload: () => ({
+      jsonrpc: '2.0',
+      method: 'getBlockHeight',
+      params: [],
+      id: 1
+    }),
+    validate: (data) => {
+      if (!data || typeof data !== 'object') {
+        return { valid: false, reason: 'Response is not a JSON object' };
+      }
+      const { result } = data;
+      // getBlockHeight: a number is healthy.
+      if (typeof result === 'number') {
+        return { valid: true };
+      }
+      // getHealth: the literal string "ok" is healthy.
+      if (result === 'ok') {
+        return { valid: true };
+      }
+      // Some providers wrap the height in an object, e.g. { value: 12345 }.
+      if (result && typeof result === 'object' && typeof result.value === 'number') {
+        return { valid: true };
+      }
+      // Ankr returns errors as a bare string ("message: ...") rather than
+      // the standard JSON-RPC { code, message } object — handle both shapes.
+      const reason = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || 'result is not a number';
+      return { valid: false, reason };
+    }
+  }
+};
+
+// Chains not listed in any family above fall back to the EVM check —
+// preserves current behavior for any chain added to PROVIDER_CONFIGS
+// without a matching health-check entry.
+const DEFAULT_CHAIN_FAMILY = 'evm';
+
+const CHAIN_TO_FAMILY = Object.entries(CHAIN_HEALTH_CHECKS).reduce((map, [family, cfg]) => {
+  for (const chain of cfg.chains) map[chain] = family;
+  return map;
+}, {});
+
+function getChainFamily(chain) {
+  return CHAIN_TO_FAMILY[chain] || DEFAULT_CHAIN_FAMILY;
+}
+
+export function buildHealthCheckPayload(chain) {
+  const family = getChainFamily(chain);
+  return CHAIN_HEALTH_CHECKS[family].buildPayload();
+}
+
+export function validateHealthResponse(chain, data) {
+  const family = getChainFamily(chain);
+  return CHAIN_HEALTH_CHECKS[family].validate(data);
+}
+
 function initializeHealthState() {
   for (const chain of Object.keys(PROVIDER_CONFIGS)) {
     for (const provider of PROVIDER_CONFIGS[chain].providers) {
@@ -52,12 +133,7 @@ async function checkProvider(chain, provider) {
     const response = await fetch(provider.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_blockNumber',
-        params: [],
-        id: 1
-      }),
+      body: JSON.stringify(buildHealthCheckPayload(chain)),
       signal: controller.signal
     });
 
@@ -66,16 +142,19 @@ async function checkProvider(chain, provider) {
     const latency = Date.now() - startTime;
     const data = await response.json();
 
-    if (data.result) {
-      health.checks++;
-      health.successes++;
-      health.totalLatency += latency;
-      health.lastCheck = new Date().toISOString();
-      health.status = 'healthy';
-      return { success: true, latency };
-    } else {
-      throw new Error(data.error?.message || 'Invalid response');
+    const validation = validateHealthResponse(chain, data);
+    if (!validation.valid) {
+      console.error(`[Health Monitor] Validation failed for ${key}: ${validation.reason}`);
+      throw new Error(data.error?.message || validation.reason);
     }
+
+    health.checks++;
+    health.successes++;
+    health.totalLatency += latency;
+    health.lastCheck = new Date().toISOString();
+    health.lastError = null;
+    health.status = 'healthy';
+    return { success: true, latency };
   } catch (err) {
     const latency = Date.now() - startTime;
     health.checks++;
@@ -84,6 +163,7 @@ async function checkProvider(chain, provider) {
     health.lastCheck = new Date().toISOString();
     health.lastError = err.message;
     health.status = 'unhealthy';
+    console.error(`[Health Monitor] Check failed: chain=${chain} provider=${provider.id} error=${err.message}`);
     return { success: false, latency, error: err.message };
   }
 }

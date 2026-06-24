@@ -13,24 +13,24 @@ import crypto from 'crypto';
 import { CHAIN_ALIASES } from './providers.js';
 
 const METHOD_TTL = {
-  'eth_blockNumber': 5,
-  'eth_chainId': 3600,
-  'eth_gasPrice': 5,
-  'eth_getBalance': 10,
-  'eth_call': 3,
+  'eth_blockNumber': 3,          // Polygon 2s block time — 1 cache hit per block
+  'eth_chainId': 86400,          // immutable on Polygon
+  'eth_gasPrice': 10,
+  'eth_getBalance': 5,
   'eth_getCode': 300,
-  'eth_getLogs': 30,
   'eth_getBlockByNumber': 60,
   'eth_getBlockByHash': 3600,
   'eth_getTransactionByHash': 3600,
-  'eth_getTransactionReceipt': 3600,
-  'net_version': 3600,
+  'eth_getTransactionReceipt': 300, // receipts are immutable once confirmed
+  'net_version': 86400,          // immutable on Polygon
   'web3_clientVersion': 3600
 };
 
 const NEVER_CACHE = new Set([
   'eth_sendRawTransaction',
   'eth_sendTransaction',
+  'eth_call',                    // results depend on block state and calldata
+  'eth_getLogs',                 // results depend on block range and filter params
   'eth_estimateGas',
   'eth_sign',
   'personal_sign',

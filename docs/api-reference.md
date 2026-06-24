@@ -113,7 +113,7 @@ Get USDT deposit instructions to upgrade tier.
   "ok": true,
   "current_tier": "free",
   "deposit": {
-    "address": "0x966E1Ae22996545015b1414B35234b10719d7Ad4",
+    "address": "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
     "network": "Polygon (ChainId 137)",
     "token": "USDT",
     "token_address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"

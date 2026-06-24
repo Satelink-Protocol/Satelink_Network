@@ -1,0 +1,111 @@
+/*
+ * Satelink-OS theme — CSS variables.
+ * Mirrors theme/*.ts. Scoped under `.sat-os` so it never bleeds into the
+ * landing site. The route layout binds `--sat-font-*` to the geist font vars.
+ * Every satelink-os *.module.css references only these variables.
+ */
+.sat-os {
+  /* Brand */
+  --sat-primary: #4e9eff;
+  --sat-secondary: #00c8ff;
+  --sat-accent: #0090ff;
+
+  /* Semantic — SigNoz-exact tone palette */
+  --sat-success: #32d583;
+  --sat-warn: #f5a623;
+  --sat-danger: #f04438;
+  --sat-info: #53b1fd;
+
+  /* Dark surface hierarchy — SigNoz uses #1a1a2e style deep navy */
+  --sat-bg-0: #121317;
+  --sat-bg-1: #1a1d27;
+  --sat-bg-2: #1f2232;
+  --sat-bg-3: #252840;
+
+  /* Lines */
+  --sat-border: #252838;
+  --sat-border-strong: #30344a;
+
+  /* Text */
+  --sat-text: #e0e4ef;
+  --sat-text-secondary: #b4bcd0;
+  --sat-text-muted: #7c85a2;
+  --sat-text-dim: #444860;
+
+  /* Fonts — bound to geist variables by the route layout; safe fallbacks here */
+  --sat-font-sans: var(--font-geist-sans), Inter, system-ui, sans-serif;
+  --sat-font-mono: 'JetBrains Mono', var(--font-geist-mono), 'Fira Code', monospace;
+
+  /* Spacing */
+  --sat-space-xs: 4px;
+  --sat-space-sm: 8px;
+  --sat-space-md: 12px;
+  --sat-space-lg: 16px;
+  --sat-space-xl: 24px;
+
+  /* Radius — SigNoz-tight (2/4/6) */
+  --sat-radius-sm: 2px;
+  --sat-radius-md: 4px;
+  --sat-radius-lg: 6px;
+  --sat-radius-pill: 999px;
+
+  /* Interaction — SigNoz uses quick 0.08s transitions + a 5% foreground hover tint */
+  --sat-transition: all 0.08s ease;
+  --sat-hover: color-mix(in srgb, var(--sat-text) 5%, transparent);
+  --sat-hover-strong: color-mix(in srgb, var(--sat-text) 8%, transparent);
+  --sat-border-hover: color-mix(in srgb, var(--sat-text) 16%, var(--sat-border));
+
+  /* Elevation */
+  --sat-elev-raised: 0 1px 0 rgba(255, 255, 255, 0.02), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --sat-elev-overlay: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --sat-glow-primary: 0 0 12px rgba(78, 158, 255, 0.25);
+  --sat-glow-danger: 0 0 12px rgba(240, 68, 56, 0.25);
+
+  /* Base surface */
+  background: var(--sat-bg-0);
+  color: var(--sat-text);
+  font-family: var(--sat-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Shared type primitives used across modules */
+.sat-os .sat-label {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--sat-text-muted);
+}
+.sat-os .sat-mono {
+  font-family: var(--sat-font-mono);
+}
+
+/* Minimal scrollbar to match SigNoz dark consoles */
+.sat-os ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.sat-os ::-webkit-scrollbar-track {
+  background: var(--sat-bg-0);
+}
+.sat-os ::-webkit-scrollbar-thumb {
+  background: var(--sat-border-strong);
+  border-radius: var(--sat-radius-pill);
+}
+.sat-os ::-webkit-scrollbar-thumb:hover {
+  background: var(--sat-text-dim);
+}
+
+@keyframes sat-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

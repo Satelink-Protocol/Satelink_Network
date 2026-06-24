@@ -1,0 +1,198 @@
+.bar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  background: var(--sat-bg-1);
+  border-bottom: 1px solid var(--sat-border);
+  flex-shrink: 0;
+}
+
+/* Left section */
+.leftSection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.searchWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--sat-bg-0);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  cursor: text;
+  transition: var(--sat-transition);
+}
+.searchWrapper:hover {
+  border-color: var(--sat-border-hover);
+}
+.searchIcon {
+  color: var(--sat-text-dim);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+.searchText {
+  flex: 1;
+  font-family: var(--sat-font-sans);
+  font-size: 12px;
+  color: var(--sat-text-dim);
+}
+.kbd {
+  font-family: var(--sat-font-mono);
+  font-size: 10px;
+  color: var(--sat-text-dim);
+  border: 1px solid var(--sat-border-strong);
+  border-radius: var(--sat-radius-sm);
+  padding: 1px 4px;
+  background: var(--sat-bg-2);
+}
+
+/* Center — range indicator */
+.rangeSection {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 100%;
+  border-left: 1px solid var(--sat-border);
+  border-right: 1px solid var(--sat-border);
+  gap: 6px;
+}
+.rangeIcon {
+  display: flex;
+  align-items: center;
+  color: var(--sat-text-dim);
+}
+.rangeValue {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sat-primary);
+}
+.rangeTag {
+  font-family: var(--sat-font-mono);
+  font-size: 10px;
+  color: var(--sat-text-dim);
+  padding: 1px 5px;
+  background: var(--sat-bg-0);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-pill);
+}
+
+/* Right — status pills, env, live dot, refresh */
+.rightSection {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 12px;
+  height: 100%;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--sat-border);
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.statGroup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.statLabel {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--sat-text-dim);
+  white-space: nowrap;
+}
+.statValue {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.statValue[data-tone='primary']   { color: var(--sat-primary); }
+.statValue[data-tone='secondary'] { color: var(--sat-secondary); }
+.statValue[data-tone='accent']    { color: var(--sat-accent); }
+.statValue[data-tone='success']   { color: var(--sat-success); }
+.statValue[data-tone='warn']      { color: var(--sat-warn); }
+.statValue[data-tone='danger']    { color: var(--sat-danger); }
+.statValue[data-tone='info']      { color: var(--sat-info); }
+.statValue[data-tone='muted']     { color: var(--sat-text-muted); }
+
+.env {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--sat-secondary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sat-secondary) 25%, transparent);
+  border-radius: var(--sat-radius-pill);
+}
+.envLabel {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  color: var(--sat-text-muted);
+  letter-spacing: 0.5px;
+}
+.envValue {
+  font-family: var(--sat-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sat-secondary);
+  text-transform: uppercase;
+}
+
+.liveSection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.time {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  color: var(--sat-text-muted);
+  letter-spacing: 0.5px;
+}
+
+.refreshBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  color: var(--sat-text-muted);
+  cursor: pointer;
+  transition: var(--sat-transition);
+  margin-left: 8px;
+}
+.refreshBtn:hover {
+  background: var(--sat-hover);
+  border-color: var(--sat-border-hover);
+  color: var(--sat-text);
+}

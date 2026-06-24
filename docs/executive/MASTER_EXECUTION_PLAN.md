@@ -11,7 +11,7 @@
 | Backend | LIVE | rpc.satelink.network (Railway) |
 | Frontend | LIVE | satelink.network (Vercel) |
 | Settlement | Wired | ClaimsContract on Polygon Mainnet |
-| MATIC | Funded | 0x966E1Ae22996545015b1414B35234b10719d7Ad4 |
+| MATIC | Funded | 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3 |
 
 ## Priority Order (LOCKED)
 

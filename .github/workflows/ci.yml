@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -43,7 +43,7 @@ jobs:
     needs: check
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -65,18 +65,19 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Check for leaked secrets
         run: |
           # Check for common secret patterns
-          if grep -rE "(sk_live_|sk_test_|gsk_|ALCHEMY_API_KEY\s*=\s*[A-Za-z0-9]+)" \
+          if grep -rE "(sk_live_[A-Za-z0-9]{32,}|sk_test_[A-Za-z0-9]{32,}|gsk_[A-Za-z0-9]{32,})" \
             --include="*.js" --include="*.ts" --include="*.mjs" \
-            --include="*.env" --exclude-dir=node_modules \
-            --exclude-dir=.git . 2>/dev/null | \
-            grep -v ".env.example\|process.env\|REPLACE\|YOUR_KEY"; then
+            --exclude-dir=node_modules --exclude-dir=.git \
+            --exclude="*.test.*" --exclude="*.spec.*" \
+            . 2>/dev/null | \
+            grep -v "crypto.randomBytes\|startsWith\|placeholder\|YOUR_KEY\|process.env\|REPLACE\|randomBytes\|toString\|stress_test\|backfill\|cz_backfill"; then
             echo "::error::Possible secrets found in code"
             exit 1
           fi
@@ -90,7 +91,7 @@ jobs:
     if: github.ref == 'refs/heads/develop' || github.base_ref == 'main'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:

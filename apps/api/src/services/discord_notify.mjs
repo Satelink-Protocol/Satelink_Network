@@ -106,7 +106,7 @@ export const discord = {
     await sendEmbed({
       title: '🔄 Rate Limit Hit — Upgrade Opportunity',
       color: COLORS.info,
-      description: 'Anonymous user hit the 200/day free limit. May upgrade to paid tier.',
+      description: 'Anonymous user hit the 500/day free limit. May upgrade to paid tier.',
       fields: [
         { name: 'IP Hash', value: ip.slice(0, 12) + '...', inline: true },
         { name: 'Requests', value: String(requestCount), inline: true },

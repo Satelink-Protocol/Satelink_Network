@@ -1,0 +1,65 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sat-font-sans);
+  font-size: 13px;
+}
+.th {
+  text-align: left;
+  padding: 7px 12px;
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sat-text-muted);
+  font-weight: 500;
+  background: var(--sat-bg-2);
+  border-bottom: 1px solid var(--sat-border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.th:first-child {
+  padding-left: 16px;
+}
+.th:last-child {
+  padding-right: 16px;
+}
+.tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--sat-border) 60%, transparent);
+  transition: background 0.06s ease;
+}
+.tr:last-child {
+  border-bottom: none;
+}
+.tr:hover {
+  background: var(--sat-hover);
+}
+/* Accent row — #1 lead gets amber left bar */
+.tr[data-accent='1'] {
+  background: color-mix(in srgb, var(--sat-warn) 4%, transparent);
+  box-shadow: inset 3px 0 0 var(--sat-warn);
+}
+.tr[data-accent='1']:hover {
+  background: color-mix(in srgb, var(--sat-warn) 7%, transparent);
+}
+.td {
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--sat-text);
+  vertical-align: middle;
+}
+.td:first-child {
+  padding-left: 16px;
+}
+.td:last-child {
+  padding-right: 16px;
+}
+.td[data-mono='1'] {
+  font-family: var(--sat-font-mono);
+  font-size: 12px;
+}
+.td[data-muted='1'] {
+  color: var(--sat-text-muted);
+}

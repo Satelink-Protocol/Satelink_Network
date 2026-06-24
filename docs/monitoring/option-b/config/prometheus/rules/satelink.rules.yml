@@ -1,0 +1,74 @@
+# DESIGN ARTIFACT — recording + alerting rules.
+# Recording rules keep per-tenant series BOUNDED (top-N) per the cardinality
+# guardrail; raw api_key/wallet are NEVER label dimensions.
+
+groups:
+  - name: satelink-recording
+    interval: 30s
+    rules:
+      # Gateway RED — fleet level
+      - record: rpc:request_error_ratio:5m
+        expr: |
+          sum(rate(rpc_errors_total[5m]))
+            / clamp_min(sum(rate(rpc_requests_total[5m])), 1)
+      - record: rpc:request_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(rpc_request_duration_seconds_bucket[5m])) by (le))
+      - record: rpc:request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum(rate(rpc_request_duration_seconds_bucket[5m])) by (le))
+
+      # Per-tenant (top-N developers by api_key_hash) — bounded series
+      - record: tenant:rpc_requests:rate5m
+        expr: topk(100, sum by (api_key_hash) (rate(rpc_requests_total[5m])))
+
+      # Settlement freshness
+      - record: settlement:anchor_lag_seconds
+        expr: time() - settlement_last_anchor_timestamp_seconds
+
+  - name: satelink-alerts
+    rules:
+      - alert: GatewayErrorRateHigh
+        expr: rpc:request_error_ratio:5m > 0.02
+        for: 5m
+        labels: { severity: P1, team: platform }
+        annotations: { summary: "Gateway error ratio >2% for 5m" }
+
+      - alert: GatewayP95LatencyHigh
+        expr: rpc:request_duration_seconds:p95 > 1.5
+        for: 10m
+        labels: { severity: P2, team: platform }
+        annotations: { summary: "Gateway p95 latency above SLO" }
+
+      - alert: UpstreamProviderDown
+        expr: rpc_provider_up == 0
+        for: 2m
+        labels: { severity: P2, team: platform }
+        annotations: { summary: "Upstream provider {{ $labels.provider }} down" }
+
+      - alert: CircuitBreakerOpen
+        expr: rpc_circuit_breaker_state == 1
+        for: 1m
+        labels: { severity: P2, team: platform }
+
+      - alert: SettlementAnchorStalled
+        expr: settlement:anchor_lag_seconds > 1800
+        for: 5m
+        labels: { severity: P1, team: revenue }
+        annotations: { summary: "Settlement anchor lag >30m — revenue not settling" }
+
+      - alert: SignerBalanceLow
+        expr: settlement_signer_balance_pol < 1
+        for: 5m
+        labels: { severity: P2, team: revenue }
+
+      - alert: NodeFleetShrink
+        expr: active_nodes == 0
+        for: 5m
+        labels: { severity: P2, team: platform }
+
+      - alert: RevenueFlatlineDuringTraffic
+        expr: |
+          (rate(billing_usdt_total[15m]) == 0)
+          and (sum(rate(rpc_requests_total[15m])) > 1)
+        for: 15m
+        labels: { severity: P2, team: revenue }
+        annotations: { summary: "Traffic flowing but no USDT billed — revenue path broken" }

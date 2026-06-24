@@ -1,0 +1,89 @@
+.wrap {
+  background: var(--sat-bg-1);
+  border: 1px solid var(--sat-border);
+  border-radius: var(--sat-radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 620px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sat-text) 3%, transparent);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--sat-bg-2);
+  border-bottom: 1px solid var(--sat-border);
+  flex-shrink: 0;
+}
+.title {
+  font-family: var(--sat-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sat-text);
+}
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stateLabel {
+  font-family: var(--sat-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--sat-text-dim);
+}
+.stateLabel[data-state='live'] { color: var(--sat-success); }
+.stateLabel[data-state='error'] { color: var(--sat-danger); }
+.stateLabel[data-state='connecting'] { color: var(--sat-warn); }
+.feed {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+.note {
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  color: var(--sat-text-muted);
+  padding: 12px 14px;
+}
+.note[data-err='1'] {
+  color: var(--sat-danger);
+}
+.row {
+  display: flex;
+  gap: 8px;
+  padding: 5px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sat-border) 40%, transparent);
+  font-family: var(--sat-font-mono);
+  font-size: 11px;
+  transition: background 0.06s ease;
+}
+.row:last-child {
+  border-bottom: none;
+}
+.row:hover {
+  background: var(--sat-hover);
+}
+.time {
+  color: var(--sat-text-muted);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+.source {
+  color: var(--sat-info);
+  min-width: 100px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg {
+  color: var(--sat-text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

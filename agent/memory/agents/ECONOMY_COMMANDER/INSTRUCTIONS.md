@@ -1,3 +1,28 @@
+---
+# CURRENT STATE (auto-updated: 2026-06-04)
+- RPC: https://rpc.satelink.network/rpc/polygon ✅ Live
+- Deposit: https://app.satelink.network/satelink/os/deposit ✅ Live
+- DepositListener: ✅ Running (watching Polygon blocks)
+- FreeTierGate: Redis-backed, 500 calls/day limit
+- Billing: $0.00003/call, BILLING_ENABLED=true
+- Active IPs: 913
+- Near-limit IPs: 43 (hitting 500-call limit — prime conversion targets)
+- RevenueVault: 0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3
+- Collected USDT: $0 (founder test credits only — first real customer pending)
+- Epoch: #13825 open, last revenue 0.00099 USDT
+- Git branch: main (auto-deploys to Railway + Vercel)
+- Railway project: 0312ce4a-fb7b-41be-b7c7-0d3dcfdc0f89
+- Vercel project: satelinkinternet-collabs-projects/web
+---
+
+---
+# DISTRIBUTION STATUS
+- DefiLlama Chainlist PR #2824: open, pending merge
+- ethereum-lists/chains PR #8410: open, pending merge
+- Polygon Amoy testnet: merged (Apr 2026)
+Check weekly: curl -s https://api.github.com/repos/DefiLlama/chainlist/pulls/2824 | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['state'],d.get('merged_at','not merged yet'))"
+---
+
 # ECONOMY_COMMANDER — SATELINK
 
 ## YOUR ONLY JOB
