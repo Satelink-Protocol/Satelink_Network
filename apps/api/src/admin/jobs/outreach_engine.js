@@ -26,6 +26,28 @@ Anyone running erpc on Polygon 137 — happy to share config or answer questions
   },
 };
 
+async function sendBrevoEmail(to, subject, htmlContent) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return null; // gracefully skip if not configured
+
+  try {
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Satelink Network', email: 'no-reply@satelink.network' },
+        to: [{ email: to }],
+        subject,
+        htmlContent
+      })
+    });
+    return resp.ok;
+  } catch (_) { return null; }
+}
+
 export class OutreachEngine {
   constructor(pool) { this.pool = pool; }
 
@@ -74,6 +96,9 @@ export class OutreachEngine {
        ON CONFLICT (template_id) DO UPDATE SET status = 'sent', sent_at = NOW(), message = $3`,
       [templateId, template.target, template.body]
     ).catch(() => {});
+
+    // Brevo email ready — awaiting lead email collection (Phase 2)
+    // Call: await sendBrevoEmail(leadEmail, subject, html) when emails available
 
     return { sent: true, template: templateId, target: template.target };
   }
