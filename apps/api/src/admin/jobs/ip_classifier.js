@@ -1,7 +1,9 @@
 /**
  * IP Classifier — Satelink Admin
  * Reads REAL free-tier IP counters from Redis and classifies them as
- * developer / machine / crawler / scanner. Persists to developer_intel.
+ * scanner / machine / developer / unknown (priority order). Persists to developer_intel.
+ * Classification gates developer on BEHAVIOR (low volume + multi-day tenure), not UA
+ * alone, so high-volume bots using dev-style UAs are demoted to machine/scanner.
  *
  * Built against the actual repo (corrected vs the original design doc):
  *   - Redis key prefix is `ft:<ip>` (see free_tier_gate.js:85), NOT `free_tier:`
@@ -30,6 +32,21 @@ const ipApiLimiter = {
   },
   increment() { this.calls++; },
 };
+
+// UA signal sets, shared by classify() and computeScore() so the two never drift.
+// WEB3_UA_SIGNALS — strong intent (blockchain dev tooling). GENERIC_DEV_UA_SIGNALS —
+// HTTP-client UAs that only count as a developer when paired with human-like behavior
+// (low volume, multi-day). Substring match, lowercased — mirrors the existing logic.
+const WEB3_UA_SIGNALS = [
+  'web3.py', 'ethers', 'viem', 'web3.js', 'erpc',
+  'wagmi', 'cast', 'foundry', 'hardhat', 'brownie', 'anchor',
+];
+const GENERIC_DEV_UA_SIGNALS = [
+  'python-requests', 'aiohttp', 'axios', 'httpx', 'bun/', 'okhttp', 'go-http-client',
+];
+const SCANNER_UA_SIGNALS = [
+  'masscan', 'zgrab', 'shodan', 'scanner', 'rpc-health', 'health-check',
+];
 
 export class IpClassifier {
   constructor(pool, redis) {
@@ -104,45 +121,61 @@ export class IpClassifier {
   computeScore(dev) {
     let score = 0;
     const ua = (dev.user_agent || '').toLowerCase();
-    if (ua.includes('erpc'))        score += 30;
-    if (ua.includes('web3.py'))     score += 20;
-    if (ua.includes('ethers'))      score += 20;
-    if (ua.includes('web3.js'))     score += 18;
-    if (ua.includes('viem'))        score += 18;
-    if (ua.includes('python-requests')) score += 15;
-    if (ua.includes('aiohttp'))         score += 15;
-    if (ua.includes('httpx'))           score += 15;
-    if (ua.includes('axios'))           score += 12;
-    if (ua.includes('bun/'))            score += 12;
-    if (ua.includes('go-http-client'))  score += 8;
-    if (ua.includes('okhttp'))          score += 10;
-    if (ua.includes('curl'))            score -= 10;
-    if (dev.days_active >= 5)       score += 20;
-    else if (dev.days_active >= 3)  score += 10;
-    if (dev.avg_daily_calls >= 400) score += 15;
-    else if (dev.avg_daily_calls >= 100) score += 8;
-    if (ua.includes('masscan') || ua.includes('zgrab') ||
-        ua.includes('scanner') || ua.includes('rpc-health') ||
-        ua.includes('health-check')) score -= 50;
-    if (ua.includes('bot') || ua.includes('crawler'))   score -= 40;
+    const daysActive = dev.days_active || 0;
+    const avg = dev.avg_daily_calls || 0;
+    const callsToday = dev.calls_today || 0;
+
+    // Tenure: returning over many days is the strongest human signal.
+    if (daysActive >= 7)      score += 20;
+    else if (daysActive >= 3) score += 10;
+    else if (daysActive === 1) score -= 10; // single-day-only looks like a one-shot bot
+
+    // Volume sweet spot vs. bot-grade firehose.
+    if (avg >= 100 && avg <= 500) score += 15;
+    if (avg > 2000)               score -= 30;
+
+    // UA intent. web3-specific tooling outweighs a generic HTTP client.
+    if (WEB3_UA_SIGNALS.some((s) => ua.includes(s)))            score += 25;
+    else if (GENERIC_DEV_UA_SIGNALS.some((s) => ua.includes(s))) score += 8;
+
+    if (callsToday > 1000) score -= 20; // hammering today
+
     return Math.max(0, Math.min(100, score));
   }
 
-  classify(info, calls) {
+  // Priority-ordered: scanner → machine → developer → unknown. Volume gates run
+  // BEFORE UA-based developer tagging so a high-volume bot using a dev-style UA
+  // (python-requests, axios, …) is demoted to machine/scanner instead of counting
+  // as a lead. `calls` is calls_today; daysActive/avgDailyCalls default for new IPs.
+  classify(info, calls, daysActive = 1, avgDailyCalls = 0) {
     const ua = (info.ua || '').toLowerCase();
-    if (ua.includes('erpc') || ua.includes('web3.py') || ua.includes('ethers') || ua.includes('viem') ||
-        ua.includes('web3.js') || ua.includes('python-requests') || ua.includes('aiohttp') ||
-        ua.includes('httpx') || ua.includes('axios') || ua.includes('bun/') || ua.includes('okhttp')) {
+    const callsToday = calls || 0;
+    const days = daysActive || 1;
+    const avg = avgDailyCalls || 0;
+
+    // ── SCANNER (highest priority) ──
+    if (callsToday > 5000) return 'scanner';                 // firehose, any UA
+    if (SCANNER_UA_SIGNALS.some((s) => ua.includes(s))) return 'scanner';
+
+    // ── MACHINE ──
+    if (callsToday > 1000 && days === 1) return 'machine';   // one-shot scraper
+    if (callsToday > 500 && days <= 2)   return 'machine';   // bot farm
+    if (callsToday > 200 && avg > 2000)  return 'machine';   // high-volume machine
+    if (!ua)                             return 'machine';   // no UA at all
+
+    // ── DEVELOPER (must pass ALL conditions for its branch) ──
+    if (WEB3_UA_SIGNALS.some((s) => ua.includes(s)) &&
+        callsToday < 2000 &&
+        (days >= 2 || (avg >= 50 && avg <= 1000))) {
       return 'developer';
     }
-    if (ua.includes('masscan') || ua.includes('zgrab') || ua.includes('shodan') ||
-        ua.includes('scanner') || ua.includes('rpc-health') || ua.includes('health-check')) {
-      return 'scanner';
+    if (GENERIC_DEV_UA_SIGNALS.some((s) => ua.includes(s)) &&
+        callsToday < 600 &&        // under free tier × 1.2 — not hammering
+        days >= 2) {               // came back a second day (human behavior)
+      return 'developer';
     }
-    if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider')) {
-      return 'crawler';
-    }
-    if (calls > 200) return 'machine';
+
+    // ── UNKNOWN (default) ──
     return 'unknown';
   }
 
@@ -222,12 +255,13 @@ export class IpClassifier {
           }
         } else {
           const info = await this.lookupIP(ip);
-          const classification = this.classify({ ua: userAgent }, calls);
           // Real days_active from the ground-truth first_seen, not a hardcoded 1.
           const daysActive = realFirstSeen
             ? Math.max(1, Math.floor((Date.now() - realFirstSeen.getTime()) / 86400000))
             : 1;
-          const score = this.computeScore({ user_agent: userAgent, days_active: daysActive, avg_daily_calls: calls });
+          // New IP: avg_daily_calls is seeded to today's counter (see VALUES $9,$9).
+          const classification = this.classify({ ua: userAgent }, calls, daysActive, calls);
+          const score = this.computeScore({ user_agent: userAgent, days_active: daysActive, avg_daily_calls: calls, calls_today: calls });
 
           await this.q(
             `INSERT INTO developer_intel
@@ -260,10 +294,22 @@ export class IpClassifier {
          AND di.first_seen > '2026-01-24'`
     );
 
-    const allDevs = await this.q(`SELECT ip, user_agent, days_active, avg_daily_calls FROM developer_intel`);
+    // Re-score AND re-classify every row each run. classify() only runs at INSERT
+    // for new IPs, so without this pass existing rows keep stale labels forever even
+    // as their volume/tenure change — which is what inflated "developers" and left
+    // "scanners" at 0. No extra queries: classification rides the existing score UPDATE.
+    const allDevs = await this.q(
+      `SELECT ip, user_agent, days_active, avg_daily_calls, calls_today FROM developer_intel`
+    );
     for (const dev of allDevs) {
       const score = this.computeScore(dev);
-      await this.q(`UPDATE developer_intel SET score = $1 WHERE ip = $2`, [score, dev.ip]);
+      const classification = this.classify(
+        { ua: dev.user_agent }, dev.calls_today, dev.days_active, dev.avg_daily_calls
+      );
+      await this.q(
+        `UPDATE developer_intel SET score = $1, classification = $2 WHERE ip = $3`,
+        [score, classification, dev.ip]
+      );
     }
 
     console.log(`[IpClassifier] Done:`, results);
