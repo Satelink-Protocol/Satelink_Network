@@ -10,6 +10,7 @@
 // utils + hooks
 export { cn } from "./lib/utils";
 export { useIsMobile } from "./hooks/use-mobile";
+export { useEndpoint } from "./hooks/use-endpoint";
 
 // base primitives (shadcn / Radix)
 export { Button, buttonVariants } from "./components/ui/button";
@@ -90,3 +91,8 @@ export { ErrorBoundary } from "./components/error-boundary";
 export type { ErrorBoundaryProps } from "./components/error-boundary";
 export { AsyncBoundary } from "./components/async-boundary";
 export type { AsyncBoundaryProps } from "./components/async-boundary";
+
+// Elevated domain components
+export * from "./components/charts";
+export * from "./components/tables";
+export * from "./components/topology";

@@ -1,3 +1,4 @@
+"use client";
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, Tooltip } from 'recharts';
 

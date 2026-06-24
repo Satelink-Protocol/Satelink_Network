@@ -1,6 +1,7 @@
-import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
+"use client";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
-import { chartPalette } from '../theme/colors';
+import { chartPalette } from '../../lib/colors';
 import { ChartFrame } from './ChartFrame';
 
 export interface DonutSlice {

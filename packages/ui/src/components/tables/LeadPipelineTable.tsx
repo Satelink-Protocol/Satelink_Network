@@ -1,9 +1,9 @@
 import React from 'react';
-import { DataTable, type Column } from './DataTable';
-import { StatusBadge } from '../badges/StatusBadge';
+import { LegacyDataTable as DataTable, type Column } from './LegacyDataTable';
+import { StatusBadge } from '../status-badge';
 import { SparkArea } from '../charts/SparkArea';
 import { HorizontalMetricBar } from '../charts/HorizontalMetricBar';
-import { Button } from '../forms/Button';
+import { Button } from '../ui/button';
 
 export interface Developer {
   ip: string;

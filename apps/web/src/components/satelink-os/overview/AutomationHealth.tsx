@@ -1,5 +1,5 @@
 import React from 'react';
-import { DataTable, type Column } from '../tables/DataTable';
+import { LegacyDataTable as DataTable, type Column } from '@satelink/ui';
 import { StatusDot } from '../badges/StatusDot';
 
 export interface Job {

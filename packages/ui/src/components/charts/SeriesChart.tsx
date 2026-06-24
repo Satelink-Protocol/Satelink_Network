@@ -1,3 +1,4 @@
+"use client";
 import {
   Area,
   AreaChart,
@@ -11,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { colors } from '../theme/colors';
+import { colors, chartPalette } from '../../lib/colors';
 import { ChartFrame } from './ChartFrame';
 
 export interface SeriesPoint {

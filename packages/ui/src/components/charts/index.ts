@@ -1,6 +1,7 @@
-export * from './ChartFrame';
+"use client";
 export * from './SeriesChart';
 export * from './SparkArea';
 export * from './DonutChart';
-export * from './KpiStat';
 export * from './TrendStat';
+export * from './HorizontalMetricBar';
+export * from './RevenueProjectionChart';

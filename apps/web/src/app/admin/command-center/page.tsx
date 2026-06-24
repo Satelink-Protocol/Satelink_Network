@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  AppShell, Button, DataTable, EmptyState, Inline, Input, MetricCard, MetricGrid, Notice, Panel, SectionLabel, Split, Stack, StatusBadge, StatusDot, TopologyDiagram,
-  FilterPanel, FilterGroup, FilterCheckbox, RevenueProjectionChart, LeadPipelineTable, CustomerZeroPanel, LiveEventStream, AutomationHealth
+  Button, EmptyState, Inline, Input, Notice, Panel, SectionLabel, Split, Stack, StatusBadge, StatusDot,
+  FilterPanel, FilterGroup, FilterCheckbox, CustomerZeroPanel, LiveEventStream, AutomationHealth
 } from "@/components/satelink-os";
+import { KPIGrid, StatCard, DashboardShell, TopologyDiagram, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable } from "@satelink/ui";
 import { NAV, HEADERS, PROJECTIONS, PROJECTION_DATA, ARCH_TOPOLOGY, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 
 async function adminFetch(path, opts = {}) {
@@ -89,17 +90,28 @@ export default function AdminCommandCenter() {
   const H = HEADERS[view];
 
   return (
-    <AppShell
-      nav={{ items: NAV, activeId: view, onSelect: setView, collapsed, onToggleCollapse: () => setCollapsed((c) => !c) }}
-      topbar={{
-        brand: "SATELINK COMMAND CENTER", searchPlaceholder: "Search operations…", environment: "production",
-        status: [
-          { label: "SETTLEMENT", value: status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…", tone: status ? (status.dryRun ? "warn" : "danger") : "muted" },
-          { label: "SETTLED", value: status ? fmt.num(status.totalSettlements ?? 0) : "…", tone: "success" }, { label: "REV", value: "$0.00 ext", tone: "warn" }, { label: "CZ", value: czHit ? "HIT 🎯" : "WAITING", tone: czHit ? "success" : "warn" }
-        ],
-        live: feedState === "live", liveTone: feedState === "live" ? "success" : feedState === "error" ? "danger" : "warn", time: now, onRefresh: refreshAll
-      }}
-      header={{ icon: H.icon, title: H.title, subtitle: H.subtitle, breadcrumb: ["Admin", "Command Center"], status: headerStatus, actions: <Button size="sm" onClick={refreshAll}>Refresh all</Button> }}
+    <DashboardShell
+      brand={{ name: "SATELINK COMMAND CENTER", sublabel: "Control Room", logo: H.icon }}
+      nav={NAV}
+      activeId={view}
+      onNavigate={setView}
+      breadcrumb={["Admin", "Command Center"]}
+      title={H.title}
+      subtitle={H.subtitle}
+      headerRight={
+        <div className="flex items-center gap-2">
+          {headerStatus}
+          <Button size="sm" onClick={refreshAll}>Refresh all</Button>
+        </div>
+      }
+      kpis={
+        <div className="flex items-center gap-4 text-xs font-mono">
+          <StatusBadge label={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…"} tone={status ? (status.dryRun ? "warn" : "danger") : "muted"} />
+          <span>SETTLED: {status ? fmt.num(status.totalSettlements ?? 0) : "…"}</span>
+          <span>REV: $0.00 ext</span>
+          <span>CZ: {czHit ? "HIT 🎯" : "WAITING"}</span>
+        </div>
+      }
     >
       <Stack gap="sm">
         {notice && <Notice>{notice}</Notice>}
@@ -107,19 +119,19 @@ export default function AdminCommandCenter() {
         {view === "overview" && (
           <Split aside={<LiveEventStream title="Live Event Stream" state={feedState} events={feedEvents} />} asidePosition="right" asideWidth="sm">
             <Stack gap="sm">
-              <MetricGrid columns={4}>
-                <MetricCard label="Gateway Rate Limit" value="500/day" sub="Daily limit per IP" tone="primary" delta="stable" deltaDir="neutral" />
-                <MetricCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} sub={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} tone="warn" delta={status?.dryRun ? "safe" : "live!"} deltaDir={status?.dryRun ? "neutral" : "down"} />
-                <MetricCard label="Live Hot Signer Address" value={status ? fmt.addr(status.signerAddress) : "…"} sub="On-chain hot signer wallet" tone="info" />
-                <MetricCard label="Converted Customer Zero" value={czHit ? "1" : "0"} sub={czHit ? "Paying customer active" : "0 converted leads"} tone={czHit ? "success" : "warn"} alert={!czHit && devs != null} delta={czHit ? "converted" : "pending"} deltaDir={czHit ? "up" : "neutral"} />
-              </MetricGrid>
+              <KPIGrid columns={4}>
+                <StatCard label="Gateway Rate Limit" value="500/day" caption="Daily limit per IP" accent trend={{ label: "stable", direction: "neutral" }}/>
+                <StatCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} caption={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} trend={{ label: status?.dryRun ? "safe" : "live!", direction: status?.dryRun ? "neutral" : "down" }}/>
+                <StatCard label="Live Hot Signer Address" value={status ? fmt.addr(status.signerAddress) : "…"} caption="On-chain hot signer wallet" />
+                <StatCard label="Converted Customer Zero" value={czHit ? "1" : "0"} caption={czHit ? "Paying customer active" : "0 converted leads"} trend={{ label: czHit ? "converted" : "pending", direction: czHit ? "up" : "neutral" }}/>
+              </KPIGrid>
               
-              <MetricGrid columns={4}>
-                <MetricCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} sub="EVM gas hot balance" tone="info" delta={status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "funded" : "low"} deltaDir={status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "up" : "down"} />
-                <MetricCard label="Accumulator Threshold" value={status ? `${status.threshold} USDT` : "…"} sub="Accumulated balance trigger" tone="primary" />
-                <MetricCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} sub="Total settlements on-chain" tone="success" delta={status?.totalSettlements ? `${status.totalSettlements} total` : "0 yet"} deltaDir={status?.totalSettlements > 0 ? "up" : "neutral"} />
-                <MetricCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Active jobs (last hour)" tone="success" delta={jobs == null ? "…" : `${liveJobs}/${(jobs || []).length} active`} deltaDir={liveJobs > 0 ? "up" : "neutral"} />
-              </MetricGrid>
+              <KPIGrid columns={4}>
+                <StatCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} caption="EVM gas hot balance" trend={{ label: status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "funded" : "low", direction: status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "up" : "down" }}/>
+                <StatCard label="Accumulator Threshold" value={status ? `${status.threshold} USDT` : "…"} caption="Accumulated balance trigger" accent />
+                <StatCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} caption="Total settlements on-chain" accent trend={{ label: status?.totalSettlements ? `${status.totalSettlements} total` : "0 yet", direction: status?.totalSettlements > 0 ? "up" : "neutral" }}/>
+                <StatCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} caption="Active jobs (last hour)" accent trend={{ label: jobs == null ? "…" : `${liveJobs}/${(jobs || []).length} active`, direction: liveJobs > 0 ? "up" : "neutral" }}/>
+              </KPIGrid>
 
               <Split aside={<CustomerZeroPanel leads={devs == null ? null : topLeads} czHit={czHit} />} asidePosition="right" asideWidth="md">
                 <Stack gap="sm">
@@ -172,13 +184,13 @@ export default function AdminCommandCenter() {
                     ) : <EmptyState variant="line" label="funnel" note="loading…" />}
                   </div>
                   <div style={{ flex: "0 0 320px" }}>
-                    {devs && <MetricGrid columns={2}>
-                      <MetricCard label="Classified" value={fmt.num(devs.length)} tone="muted" size="sm" />
-                      <MetricCard label="Identified" value={fmt.num(counts.identified || 0)} tone="info" size="sm" />
-                      <MetricCard label="Contacted" value={fmt.num(counts.contacted || 0)} tone="warn" size="sm" />
-                      <MetricCard label="Deposited" value={fmt.num(counts.deposited || 0)} tone="primary" size="sm" />
-                      <MetricCard label="Paid" value={fmt.num(counts.paid || 0)} tone="success" size="sm" />
-                    </MetricGrid>}
+                    {devs && <KPIGrid columns={2}>
+                      <StatCard label="Classified" value={fmt.num(devs.length)} />
+                      <StatCard label="Identified" value={fmt.num(counts.identified || 0)} />
+                      <StatCard label="Contacted" value={fmt.num(counts.contacted || 0)} />
+                      <StatCard label="Deposited" value={fmt.num(counts.deposited || 0)} accent />
+                      <StatCard label="Paid" value={fmt.num(counts.paid || 0)} accent />
+                    </KPIGrid>}
                   </div>
                 </div>
               </Panel>
@@ -191,12 +203,12 @@ export default function AdminCommandCenter() {
 
         {view === "treasury" && (
           <Stack gap="sm">
-            <MetricGrid columns={4}>
-              <MetricCard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} sub={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} tone={status ? (status.dryRun ? "warn" : "danger") : "muted"} alert={status ? !status.dryRun : false} delta={status?.dryRun ? "simulated" : "live"} deltaDir={status?.dryRun ? "neutral" : "down"} />
-              <MetricCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} sub={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} tone="info" delta={status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "funded" : "⚠ low") : "—"} deltaDir={status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "up" : "down") : "neutral"} />
-              <MetricCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT" tone="primary" />
-              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" delta={status?.totalSettlements > 0 ? `${status.totalSettlements} epochs` : "none yet"} deltaDir={status?.totalSettlements > 0 ? "up" : "neutral"} />
-            </MetricGrid>
+            <KPIGrid columns={4}>
+              <StatCard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} caption={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} trend={{ label: status?.dryRun ? "simulated" : "live", direction: status?.dryRun ? "neutral" : "down" }}/>
+              <StatCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} caption={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} trend={{ label: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "funded" : "⚠ low") : "—", direction: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "up" : "down") : "neutral" }}/>
+              <StatCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT" accent />
+              <StatCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" accent trend={{ label: status?.totalSettlements > 0 ? `${status.totalSettlements} epochs` : "none yet", direction: status?.totalSettlements > 0 ? "up" : "neutral" }}/>
+            </KPIGrid>
             <Panel title="Settlement Control">
               {status && <Stack gap="sm">
                 <Inline gap="md">
@@ -236,16 +248,16 @@ export default function AdminCommandCenter() {
 
         {view === "revenue" && (
           <Stack gap="sm">
-            <MetricGrid columns={4}>
-              <MetricCard label="External Revenue" value="$0.00" sub="no paying customers yet" tone="warn" alert />
-              <MetricCard label="Credit Balance" value="$0.5999 USDT" sub="test wallet — founder funded" tone="primary" />
-              <MetricCard label="Settlement Thresh" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} sub="USDT before epoch settles" tone="primary" />
-              <MetricCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} sub="on-chain epochs" tone="success" />
-            </MetricGrid>
+            <KPIGrid columns={4}>
+              <StatCard label="External Revenue" value="$0.00" caption="no paying customers yet" />
+              <StatCard label="Credit Balance" value="$0.5999 USDT" caption="test wallet — founder funded" accent />
+              <StatCard label="Settlement Thresh" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT before epoch settles" accent />
+              <StatCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" accent />
+            </KPIGrid>
             <Panel title="Revenue Pipeline" headerRight={<StatusDot tone="success" pulse />}>
-              <MetricGrid columns={6}>
-                {pipeline.map((s) => <MetricCard key={s.k} label={s.k} value={s.detail} sub={s.badge} tone={s.tone} size="sm" />)}
-              </MetricGrid>
+              <KPIGrid columns={6}>
+                {pipeline.map((s) => <StatCard key={s.k} label={s.k} value={s.detail} caption={s.badge} />)}
+              </KPIGrid>
             </Panel>
             <Panel title="Demand By Lead — sorted by tenure" headerRight={<StatusBadge label="REAL LEADS" tone="info" />}>
               {devs && <div style={{ marginTop: 4 }}>
@@ -269,11 +281,11 @@ export default function AdminCommandCenter() {
 
         {view === "agents" && (
           <Stack gap="sm">
-            <MetricGrid columns={3}>
-              <MetricCard label="Active Jobs" value={jobs == null ? "…" : String(liveJobs)} sub="Ran in last hour" tone="success" delta={jobs?.length ? `${liveJobs}/${jobs.length}` : "—"} deltaDir={liveJobs > 0 ? "up" : "neutral"} />
-              <MetricCard label="Stale Jobs" value={jobs == null ? "…" : String(staleJobs)} sub="No run in 1h+" tone="warn" delta={staleJobs > 0 ? "needs attention" : "all current"} deltaDir={staleJobs > 0 ? "down" : "up"} />
-              <MetricCard label="Failed Jobs" value={jobs == null ? "…" : String(failedJobs)} sub="Error / failure" tone={failedJobs > 0 ? "danger" : "muted"} alert={failedJobs > 0} delta={failedJobs > 0 ? `${failedJobs} failed` : "none"} deltaDir={failedJobs > 0 ? "down" : "up"} />
-            </MetricGrid>
+            <KPIGrid columns={3}>
+              <StatCard label="Active Jobs" value={jobs == null ? "…" : String(liveJobs)} caption="Ran in last hour" accent trend={{ label: jobs?.length ? `${liveJobs}/${jobs.length}` : "—", direction: liveJobs > 0 ? "up" : "neutral" }}/>
+              <StatCard label="Stale Jobs" value={jobs == null ? "…" : String(staleJobs)} caption="No run in 1h+" trend={{ label: staleJobs > 0 ? "needs attention" : "all current", direction: staleJobs > 0 ? "down" : "up" }}/>
+              <StatCard label="Failed Jobs" value={jobs == null ? "…" : String(failedJobs)} caption="Error / failure" trend={{ label: failedJobs > 0 ? `${failedJobs} failed` : "none", direction: failedJobs > 0 ? "down" : "up" }}/>
+            </KPIGrid>
             <Panel title="Automation Jobs" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
               <Inline gap="sm" style={{ marginBottom: "12px" }}>
                 {TRIGGERABLE_JOBS.map((j) => (
@@ -296,6 +308,6 @@ export default function AdminCommandCenter() {
           </Stack>
         )}
       </Stack>
-    </AppShell>
+    </DashboardShell>
   );
 }

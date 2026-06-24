@@ -1,7 +1,8 @@
+"use client";
 import { useId } from 'react';
 import { Area, AreaChart, YAxis } from 'recharts';
 
-import { colors } from '../theme/colors';
+import { colors } from '../../lib/colors';
 
 export interface SparkAreaProps {
   /**

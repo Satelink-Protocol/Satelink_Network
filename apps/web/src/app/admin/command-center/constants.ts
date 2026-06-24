@@ -1,19 +1,26 @@
+import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot } from "lucide-react";
+
 export const NAV = [
-  { id: "overview", icon: "◈", label: "Overview" },
-  { id: "radar", icon: "◎", label: "Demand Radar" },
-  { id: "treasury", icon: "◉", label: "Treasury" },
-  { id: "revenue", icon: "⊕", label: "Revenue" },
-  { id: "agents", icon: "◐", label: "Agents" },
-  { id: "settings", icon: "⊙", label: "Settings" },
+  {
+    label: "Command Center",
+    items: [
+      { id: "overview", icon: LayoutDashboard, label: "Overview" },
+      { id: "radar", icon: Radar, label: "Demand Radar" },
+      { id: "treasury", icon: Building, label: "Treasury" },
+      { id: "revenue", icon: DollarSign, label: "Revenue" },
+      { id: "agents", icon: Bot, label: "Agents" },
+      { id: "settings", icon: Settings, label: "Settings" },
+    ]
+  }
 ];
 
-export const HEADERS = {
-  overview: { icon: "◈", title: "Overview", subtitle: "Gateway status & Customer Zero countdown" },
-  radar: { icon: "◎", title: "Demand Radar", subtitle: "Lead pipeline, conversion & outreach" },
-  treasury: { icon: "◉", title: "Treasury", subtitle: "Settlement control & on-chain status" },
-  revenue: { icon: "⊕", title: "Revenue", subtitle: "Credit balance, pipeline & projection" },
-  agents: { icon: "◐", title: "Agents", subtitle: "Automation jobs & agent fleet" },
-  settings: { icon: "⊙", title: "Settings", subtitle: "Configuration reference" },
+export const HEADERS: Record<string, { title: string; subtitle: string }> = {
+  overview: { title: "Overview", subtitle: "Gateway status & Customer Zero countdown" },
+  radar: { title: "Demand Radar", subtitle: "Lead pipeline, conversion & outreach" },
+  treasury: { title: "Treasury", subtitle: "Settlement control & on-chain status" },
+  revenue: { title: "Revenue", subtitle: "Credit balance, pipeline & projection" },
+  agents: { title: "Agents", subtitle: "Automation jobs & agent fleet" },
+  settings: { title: "Settings", subtitle: "Configuration reference" },
 };
 
 export const PROJECTIONS = [

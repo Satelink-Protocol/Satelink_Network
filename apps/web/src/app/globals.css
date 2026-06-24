@@ -13,28 +13,29 @@
    ============================================================ */
 
 :root {
-  --primary: #408A71;
-  --primary-hover: #4A9D82;
-  --accent: #5CB89A;
-  --accent-glow: rgba(92, 184, 154, 0.4);
+  /* Satelink const C Unified Palette */
+  --primary: #5EEAD4;
+  --primary-hover: rgba(94, 234, 212, 0.8);
+  --accent: #5EEAD4;
+  --accent-glow: rgba(94, 234, 212, 0.25);
 
-  --bg-base: #0B0D0F;
-  --bg-subtle: #111316;
-  --bg-muted: #16191D;
-  --bg-elevated: #1C1F24;
-  --bg-card: rgba(28, 31, 36, 0.7);
-  --bg-glass: rgba(28, 31, 36, 0.5);
+  --bg-base: #050816;
+  --bg-subtle: #0E1628;
+  --bg-muted: #121C33;
+  --bg-elevated: #121C33;
+  --bg-card: #121C33;
+  --bg-glass: rgba(14, 22, 40, 0.8);
 
-  --text-primary: #ECEDEE;
-  --text-secondary: #9BA1A6;
-  --text-muted: #6C7075;
+  --text-primary: #E5EEF8;
+  --text-secondary: #94A3B8;
+  --text-muted: rgba(148, 163, 184, 0.7);
 
-  --border: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border: #1A2F50;
+  --border-subtle: rgba(26, 47, 80, 0.5);
 
-  --success: #30A46C;
-  --warning: #F5A623;
-  --error: #E5484D;
+  --success: #34D399;
+  --warning: #F59E0B;
+  --error: #EF4444;
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;

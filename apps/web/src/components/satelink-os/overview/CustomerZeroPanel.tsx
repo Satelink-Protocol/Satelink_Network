@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusBadge } from '../badges/StatusBadge';
-import { HorizontalMetricBar } from '../charts/HorizontalMetricBar';
+import { HorizontalMetricBar } from '@satelink/ui';
+import { Split, Stack, Inline } from '../layout';
 import styles from './CustomerZeroPanel.module.css';
 
 export interface CustomerZeroLead {

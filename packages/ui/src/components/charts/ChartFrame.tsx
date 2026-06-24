@@ -1,7 +1,8 @@
+"use client";
 import type { ReactNode } from 'react';
 
-import { EmptyState } from '../shared/EmptyState';
-import { SectionLabel } from '../shared/SectionLabel';
+import { EmptyState } from '../empty-state';
+import { SectionLabel } from '../../../../../apps/web/src/components/satelink-os/shared/SectionLabel';
 import styles from './ChartFrame.module.css';
 
 export interface ChartFrameProps {

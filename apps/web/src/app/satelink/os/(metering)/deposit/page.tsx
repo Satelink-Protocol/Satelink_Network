@@ -9,10 +9,9 @@ import {
   Panel,
   SectionLabel,
   Notice,
-  MetricCard,
-  MetricGrid,
   StatusBadge,
 } from "@/components/satelink-os";
+import { KPIGrid, StatCard } from "@satelink/ui";
 
 // P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
 import { CreditEstimator } from "@/components/deposit/CreditEstimator";
@@ -218,22 +217,16 @@ function DepositPageInner() {
           {instructions && (
             <>
               {/* SUMMARY */}
-              <MetricGrid columns={2}>
-                <MetricCard
-                  label="Chain"
-                  value={`Polygon (${instructions.chainId})`}
-                  sub="Polygon PoS Mainnet"
-                  tone="info"
-                  size="sm"
-                />
-                <MetricCard
-                  label="Deposit Amount"
-                  value={`${instructions.amountUsdt} USDT`}
-                  sub="To RevenueVault"
-                  tone="primary"
-                  size="sm"
-                />
-              </MetricGrid>
+              <KPIGrid columns={2}>
+                <StatCard label="Chain"
+ value={`Polygon (${instructions.chainId})`}
+ caption="Polygon PoS Mainnet"
+ />
+                <StatCard label="Deposit Amount"
+ value={`${instructions.amountUsdt} USDT`}
+ caption="To RevenueVault"
+ accent />
+              </KPIGrid>
 
               {/* ADDRESSES */}
               <Panel title="Contract Addresses">
