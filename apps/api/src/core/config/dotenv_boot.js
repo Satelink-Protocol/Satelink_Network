@@ -16,7 +16,7 @@ const hasRealDbUrl = process.env.DATABASE_URL && !process.env.DATABASE_URL.inclu
 
 console.log(`[dotenv] isRailway=${isRailway}, hasRealDbUrl=${hasRealDbUrl}, DATABASE_URL=${process.env.DATABASE_URL ? 'SET' : 'UNSET'}`);
 
-if (isRailway || hasRealDbUrl) {
+if (isRailway) {
     console.log('[dotenv] Skipping .env load — platform vars detected');
 } else {
     // Local dev: load .env files

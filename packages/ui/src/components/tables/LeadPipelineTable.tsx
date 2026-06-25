@@ -27,8 +27,21 @@ export interface LeadPipelineTableProps {
 
 const NEXT_STAGE: Record<string, string> = { identified: "contacted", contacted: "deposited", deposited: "paid" };
 const STAGE_BTN: Record<string, string> = { contacted: "Mark Contacted", deposited: "Mark Deposited", paid: "Mark Paid" };
-const stageTone = (s: string) =>
-  ({ identified: "info", contacted: "warn", deposited: "primary", paid: "success" }[s] || "muted") as any;
+
+function getStatusBadgeVariant(status: string): "success" | "warning" | "destructive" | "neutral" | "default" {
+  switch (status.toLowerCase()) {
+    case "paid":
+      return "success";
+    case "contacted":
+      return "warning";
+    case "deposited":
+      return "default";
+    case "identified":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
 
 const fmt = {
   num: (n: number | undefined) =>
@@ -81,7 +94,12 @@ export function LeadPipelineTable({
     {
       key: "class",
       header: "Class",
-      render: (d) => <StatusBadge label={d.classification || "unknown"} tone={d.classification === "developer" ? "primary" : "muted"} />,
+      render: (d) => (
+        <StatusBadge
+          status={d.classification || "unknown"}
+          variant={d.classification === "developer" ? "default" : "neutral"}
+        />
+      ),
     },
     {
       key: "calls",
@@ -112,7 +130,16 @@ export function LeadPipelineTable({
         return <HorizontalMetricBar value={score} max={100} color={color} label={`${score}%`} />;
       },
     },
-    { key: "status", header: "Stage", render: (d) => <StatusBadge label={d.status} tone={stageTone(d.status)} /> },
+    {
+      key: "status",
+      header: "Stage",
+      render: (d) => (
+        <StatusBadge
+          status={d.status}
+          variant={getStatusBadgeVariant(d.status)}
+        />
+      ),
+    },
     {
       key: "action",
       header: "",
@@ -120,7 +147,12 @@ export function LeadPipelineTable({
         const next = NEXT_STAGE[d.status];
         if (!next) return null;
         return (
-          <Button size="sm" tone={stageTone(next)} disabled={busy[`stage:${d.ip}`]} onClick={() => advance(d.ip, next)}>
+          <Button
+            size="sm"
+            variant={getStatusBadgeVariant(next) === "success" ? "default" : "outline"}
+            disabled={busy[`stage:${d.ip}`]}
+            onClick={() => advance(d.ip, next)}
+          >
             {busy[`stage:${d.ip}`] ? "Saving…" : STAGE_BTN[next]}
           </Button>
         );

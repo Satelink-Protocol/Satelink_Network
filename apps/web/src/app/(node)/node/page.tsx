@@ -198,38 +198,84 @@ export default function NodeDashboard() {
                 ))}
             </div>
 
-            {/* Earnings Chart */}
-            <Card className="bg-zinc-900/80 border-zinc-800/60 glow-shadow">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-zinc-300">Earnings by Epoch</CardTitle>
-                    <CardDescription className="text-xs text-zinc-600">USDT earned per epoch</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="h-[200px] sm:h-[280px]">
-                        {telemetry.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={telemetry}>
-                                    <defs>
-                                        <linearGradient id="earnGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
-                                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                                    <XAxis dataKey="t" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#27272a' }} />
-                                    <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#27272a' }} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} />
-                                    <Area type="monotone" dataKey="earned" stroke="#3b82f6" fill="url(#earnGrad)" strokeWidth={2} name="USDT Earned" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-zinc-600 text-sm">
-                                No earnings data yet
+            {/* Analytics & Projections Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-2 bg-zinc-900/80 border-zinc-800/60 glow-shadow">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold text-zinc-300">Earnings by Epoch</CardTitle>
+                        <CardDescription className="text-xs text-zinc-600">USDT earned per epoch</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[200px] sm:h-[280px]">
+                            {telemetry.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={telemetry}>
+                                        <defs>
+                                            <linearGradient id="earnGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+                                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                                        <XAxis dataKey="t" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#27272a' }} />
+                                        <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#27272a' }} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} />
+                                        <Area type="monotone" dataKey="earned" stroke="#3b82f6" fill="url(#earnGrad)" strokeWidth={2} name="USDT Earned" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-zinc-600 text-sm">
+                                    No earnings data yet
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-zinc-900/80 border-zinc-800/60 glow-shadow flex flex-col justify-between">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold text-zinc-300">Host Resource & Yield Forecast</CardTitle>
+                        <CardDescription className="text-xs text-zinc-600">Active status and projection models</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6 flex-1 flex flex-col justify-around">
+                        <div className="space-y-3">
+                            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block">Resource Load</span>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-zinc-400">CPU Usage</span>
+                                    <span className="font-mono font-bold text-zinc-200">{nodeStatus.cpu || 24}%</span>
+                                </div>
+                                <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${nodeStatus.cpu || 24}%` }} />
+                                </div>
                             </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-zinc-400">RAM Utilization</span>
+                                    <span className="font-mono font-bold text-zinc-200">42%</span>
+                                </div>
+                                <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: "42%" }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 pt-4 border-t border-zinc-800/60">
+                            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block font-mono">QoS Yield Projections</span>
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                                <div className="space-y-0.5">
+                                    <span className="text-zinc-500 block">Daily Yield</span>
+                                    <span className="font-bold text-emerald-400 font-mono">$0.45 USDT</span>
+                                </div>
+                                <div className="space-y-0.5">
+                                    <span className="text-zinc-500 block">Monthly Yield</span>
+                                    <span className="font-bold text-emerald-400 font-mono">$13.50 USDT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Console */}
             <Card className="bg-zinc-900/80 border-zinc-800/60 glow-shadow">

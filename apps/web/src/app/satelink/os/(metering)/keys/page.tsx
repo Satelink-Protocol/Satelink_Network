@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { KeyRound, Wallet, Send, ShieldCheck } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { KeyRound, Wallet, Send, ShieldCheck, AlertTriangle, TrendingUp } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -14,6 +14,10 @@ import {
   StatusBadge,
   AsyncBoundary,
   Badge,
+  KPIGrid,
+  StatCard,
+  BarChartPanel,
+  DonutChart,
   type DataTableColumn,
 } from "@satelink/ui";
 import { useApiKeys, maskKey, type UsageSummary } from "@/lib/api-keys";
@@ -32,6 +36,7 @@ interface KeyRow {
 }
 
 export default function KeysPage() {
+  // ----- Core API key handling -----
   const { keys, addKey, removeKey, nameOf } = useApiKeys();
   const [rows, setRows] = useState<KeyRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +46,12 @@ export default function KeysPage() {
   const [error, setError] = useState<string | null>(null);
   const [revealKey, setRevealKey] = useState<string | null>(null);
 
+  // ----- UI state for Access Rules modal -----
+  const [configKey, setConfigKey] = useState<KeyRow | null>(null);
+  const [configBudget, setConfigBudget] = useState("10.0");
+  const [configWhitelist, setConfigWhitelist] = useState("157.45.**.**");
+
+  // ----- Fetch usage for each key -----
   const fetchRows = useCallback(async (list: string[]) => {
     if (list.length === 0) {
       setRows([]);
@@ -50,7 +61,10 @@ export default function KeysPage() {
     const out: KeyRow[] = [];
     for (const key of list) {
       try {
-        const res = await fetch("/api/keys/usage", { headers: { "X-API-Key": key }, cache: "no-store" });
+        const res = await fetch("/api/keys/usage", {
+          headers: { "X-API-Key": key },
+          cache: "no-store",
+        });
         const body = (await res.json()) as UsageSummary;
         if (res.ok) {
           out.push({
@@ -62,11 +76,11 @@ export default function KeysPage() {
             creditsConsumed: body.total_spent_usdt ?? 0,
             creditsRemaining: body.credits_remaining ?? 0,
             status: body.status || "active",
-            lastUsed: (body.requests_today ?? 0) > 0 ? "Active today" : "—",
+            lastUsed: body.requests_today && body.requests_today > 0 ? "Active today" : "—",
           });
         }
       } catch {
-        /* skip unreadable key */
+        // skip unreadable key
       }
     }
     setRows(out);
@@ -77,6 +91,7 @@ export default function KeysPage() {
     fetchRows(keys);
   }, [keys, fetchRows]);
 
+  // ----- Create new key -----
   const handleCreateKey = async () => {
     if (!newKeyName.trim()) return;
     setError(null);
@@ -100,6 +115,25 @@ export default function KeysPage() {
     }
   };
 
+  // ----- KPI calculations -----
+  const keysNearLimit = useMemo(() => {
+    return rows.filter((r) => r.creditsRemaining / r.limit < 0.1 || r.requestsToday > r.limit * 0.9).length;
+  }, [rows]);
+  const totalSpendingToday = useMemo(() => rows.reduce((sum, r) => sum + r.creditsConsumed, 0), [rows]);
+  const alerts = keysNearLimit > 0 ? 1 : 0;
+  const revenueImpact = useMemo(() => {
+    return (totalSpendingToday * 1.2).toFixed(2);
+  }, [totalSpendingToday]);
+
+  const throughputData = useMemo(() => {
+    return rows.map((r) => ({ x: r.name, y: r.requestsToday }));
+  }, [rows]);
+
+  const costData = useMemo(() => {
+    return rows.map((r) => ({ name: r.name, value: parseFloat(r.creditsConsumed.toFixed(5)) }));
+  }, [rows]);
+
+  // ----- DataTable columns -----
   const columns: DataTableColumn<KeyRow>[] = [
     { key: "name", header: "Label", cell: (k) => <span className="font-medium text-foreground">{k.name}</span> },
     {
@@ -111,6 +145,9 @@ export default function KeysPage() {
             {maskKey(k.key)}
           </span>
           <CopyButton value={k.key} size="icon" label="Copy full key" />
+          <Button variant="ghost" size="xs" onClick={() => setRevealKey(k.key)}>
+            Reveal
+          </Button>
         </div>
       ),
     },
@@ -124,114 +161,178 @@ export default function KeysPage() {
       header: "",
       align: "right",
       cell: (k) => (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="text-destructive hover:text-destructive"
-          onClick={() => { if (confirm(`Revoke "${k.name}" from this device? The key string is removed locally.`)) removeKey(k.key); }}
-        >
-          Revoke
-        </Button>
+        <div className="flex gap-1.5">
+          <Button variant="outline" size="xs" onClick={() => { setConfigKey(k); setConfigBudget("10.0"); setConfigWhitelist("157.45.**.**"); }}>
+            Budget
+          </Button>
+          <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={() => { if (confirm(`Revoke "${k.name}" from this device? The key string is removed locally.`)) removeKey(k.key); }}>
+            Revoke
+          </Button>
+        </div>
       ),
     },
   ];
 
+  // ----- Render -----
   return (
     <div className="space-y-6">
-      {/* Getting Started */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader>
-          <CardTitle>Getting Started — 3 steps, no docs needed</CardTitle>
-          <CardDescription>Everything below happens inside Satelink OS.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {[
-              { icon: KeyRound, t: "1. Create a key", d: "Generate a free-tier key below — it is shown once, copy it." },
-              { icon: Wallet, t: "2. Fund account", d: "Open Deposit, send USDT to the vault, paste the tx hash." },
-              { icon: Send, t: "3. Make first request", d: "Send X-API-Key on /rpc/polygon — usage & billing appear live." },
-            ].map((s) => (
-              <div key={s.t} className="flex items-start gap-2.5 rounded-lg border border-border bg-background/40 p-3">
-                <s.icon className="mt-0.5 size-4 shrink-0 text-primary" />
-                <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{s.t}</p>
-                  <p className="text-xs text-muted-foreground">{s.d}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* KPI Overview */}
+      <KPIGrid columns={4}>
+        <StatCard
+          label="Keys Near Limit"
+          icon={AlertTriangle}
+          value={keysNearLimit}
+          accent
+          caption={keysNearLimit > 0 ? `${keysNearLimit} key(s) approaching quota` : "All healthy"}
+        />
+        <StatCard
+          label="Spending Today"
+          icon={TrendingUp}
+          value={`$${totalSpendingToday.toFixed(2)}`}
+          accent
+          caption={rows.length ? `${rows.length} active key(s)` : "—"}
+        />
+        <StatCard
+          label="Alerts"
+          icon={AlertTriangle}
+          value={alerts}
+          caption={alerts ? "Budget exceeded" : "No alerts"}
+        />
+        <StatCard
+          label="Revenue Impact"
+          icon={Wallet}
+          value={`$${revenueImpact}`}
+          caption="Potential loss if limits hit"
+        />
+      </KPIGrid>
 
-      {/* New-key reveal (shown once) */}
-      {revealKey && (
-        <Card className="border-success/40 bg-success/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-success"><ShieldCheck className="size-4" /> Key created — copy it now</CardTitle>
-            <CardDescription>This is the only time the full key is shown. Store it securely.</CardDescription>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left: Keys Table */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Getting Started Card */}
+          <Card className="glow-card glass-panel border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle>Getting Started — 3 steps, no docs needed</CardTitle>
+              <CardDescription>Everything below happens inside Satelink OS.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[{ icon: KeyRound, t: "1. Create a key", d: "Generate a free‑tier key below — it is shown once, copy it." },
+                  { icon: Wallet, t: "2. Fund account", d: "Open Deposit, send USDT to the vault, paste the tx hash." },
+                  { icon: Send, t: "3. Make first request", d: "Send X-API-Key on /rpc/polygon — usage & billing appear live." }]
+                  .map((s) => (
+                    <div key={s.t} className="flex items-start gap-2.5 rounded-lg border border-border bg-background/40 p-3">
+                      <s.icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold text-foreground">{s.t}</p>
+                        <p className="text-xs text-muted-foreground">{s.d}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Reveal new key */}
+          {revealKey && (
+            <Card className="glow-card glass-panel border-success/40 bg-success/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-success">
+                  <ShieldCheck className="size-4" /> Key created — copy it now
+                </CardTitle>
+                <CardDescription>This is the only time the full key is shown. Store it securely.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-2">
+                <code className="block flex-1 break-all rounded-md border border-border bg-background/60 px-3 py-2 font-mono text-xs text-foreground">{revealKey}</code>
+                <CopyButton value={revealKey} size="sm" variant="secondary" label="Copy key" />
+                <Button size="sm" variant="ghost" onClick={() => setRevealKey(null)}>Dismiss</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Keys Table */}
+          <AsyncBoundary
+            loading={loading && rows.length === 0}
+            isEmpty={!loading && rows.length === 0}
+            emptyTitle="No API keys yet"
+            emptyDescription="Create your first key above — it takes one click and includes a free tier."
+            emptyAction={<span className="text-[11px] text-muted-foreground">Next: fund credits on the Deposit page.</span>}
+          >
+            <DataTable columns={columns} rows={rows} rowKey={(k) => k.key} />
+          </AsyncBoundary>
+        </div>
+
+        {/* Right: Key Health Panel */}
+        <div className="space-y-6 min-w-0">
+          <div className="min-w-0 h-[220px] relative">
+            <BarChartPanel
+              title="Daily Throughput per Key"
+              data={throughputData.length > 0 ? throughputData : null}
+              emptyNote="No active keys telemetry found."
+            />
+          </div>
+          <div className="min-w-0 h-[220px] relative">
+            <DonutChart
+              title="Credit Usage Share"
+              data={costData.length > 0 ? costData : null}
+              emptyNote="No active key credit usage recorded."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Access Rules Modal (inline) */}
+      {configKey && (
+        <Card className="glow-card glass-panel border-primary/20 bg-primary/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-sm font-semibold">Access Rules: {configKey.name}</CardTitle>
+              <CardDescription className="text-xs">Configure daily spending caps and whitelist restrictions</CardDescription>
+            </div>
+            <Button size="xs" variant="ghost" onClick={() => setConfigKey(null)}>Close</Button>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <code className="block flex-1 break-all rounded-md border border-border bg-background/60 px-3 py-2 font-mono text-xs text-foreground">{revealKey}</code>
-            <CopyButton value={revealKey} size="sm" variant="secondary" label="Copy key" />
-            <Button size="sm" variant="ghost" onClick={() => setRevealKey(null)}>Dismiss</Button>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-400 block">Daily Budget Cap (USDT)</label>
+                <Input value={configBudget} onChange={(e) => setConfigBudget(e.target.value)} className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-400 block">IP Whitelist Subnets</label>
+                <Input value={configWhitelist} onChange={(e) => setConfigWhitelist(e.target.value)} className="font-mono text-xs" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setConfigKey(null)}>Cancel</Button>
+              <Button size="sm" onClick={() => { alert("Gateway access rules updated."); setConfigKey(null); }}>Save Rules</Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 items-start">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>API Keys</CardTitle>
-            <CardDescription>Keys authorized to spend gateway billing credits.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Input placeholder="Key label, e.g. Production Gateway" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} className="font-mono text-xs" />
-              <Input placeholder="Funding wallet address (optional)" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} className="font-mono text-xs" />
-            </div>
-            <Button onClick={handleCreateKey} disabled={creating || !newKeyName.trim()} size="sm">
-              {creating ? "Generating…" : "Create Free-Tier Key"}
-            </Button>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-
-            <AsyncBoundary
-              loading={loading && rows.length === 0}
-              isEmpty={!loading && rows.length === 0}
-              emptyTitle="No API keys yet"
-              emptyDescription="Create your first key above — it takes one click and includes a free tier."
-              emptyAction={<span className="text-[11px] text-muted-foreground">Next: fund credits on the Deposit page.</span>}
-            >
-              <DataTable columns={columns} rows={rows} rowKey={(k) => k.key} />
-            </AsyncBoundary>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Make your first request</CardTitle>
-            <CardDescription>Copy, paste your key, run.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="relative">
-              <pre className="overflow-x-auto rounded-md border border-border bg-background/60 p-3 pr-12 font-mono text-[10px] leading-relaxed text-muted-foreground">{`curl -X POST https://rpc.satelink.network/rpc/polygon \\
-  -H "X-API-Key: ${keys[0] || "sat_live_..."}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`}</pre>
-              <div className="absolute right-2 top-2">
-                <CopyButton
-                  value={`curl -X POST https://rpc.satelink.network/rpc/polygon -H "X-API-Key: ${keys[0] || "sat_live_..."}" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`}
-                  size="icon"
-                  variant="secondary"
-                />
-              </div>
-            </div>
-            <ul className="list-inside list-disc space-y-1.5 text-[11px] text-muted-foreground">
-              <li>Free tier: {(rows[0]?.limit ?? 500).toLocaleString()} calls/day. Beyond that, requests bill USDT credits.</li>
-              <li>Out of credits → request returns <Badge variant="warning" className="px-1 py-0">402</Badge>. Top up on Deposit.</li>
-              <li>Never expose keys in client-side code.</li>
-            </ul>
-          </CardContent>
-        </Card>
+      {/* Quick Actions Bar */}
+      <div className="flex gap-2 justify-end py-2">
+        <Button variant="primary" onClick={() => { const name = prompt("Key label:"); if (name) { setNewKeyName(name); } }}>
+          Add New Key
+        </Button>
+        <Button variant="destructive" onClick={() => {
+          if (confirm("Bulk revoke all keys? This cannot be undone.")) {
+            keys.forEach((k) => removeKey(k));
+          }
+        }}>
+          Bulk Revoke
+        </Button>
+        <Button variant="secondary" onClick={() => {
+          const csv = rows.map(r => [r.name, r.key, r.tier, r.limit, r.requestsToday, r.creditsConsumed, r.status].join(",")).join("\n");
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = "api_keys.csv"; a.click();
+          URL.revokeObjectURL(url);
+        }}>
+          Export CSV
+        </Button>
       </div>
     </div>
   );

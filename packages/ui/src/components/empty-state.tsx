@@ -32,17 +32,17 @@ export function EmptyState({
       data-slot="empty-state"
       role={tone === "error" ? "alert" : undefined}
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center",
-        tone === "error" ? "border-destructive/30" : "border-border",
+        "flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-8 py-12 text-center glass-panel",
+        tone === "error" ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-muted/20",
         className
       )}
     >
       <div
         className={cn(
-          "flex size-10 items-center justify-center rounded-full",
+          "flex size-12 items-center justify-center rounded-full shadow-inner",
           tone === "error"
-            ? "bg-destructive/10 text-destructive"
-            : "bg-muted text-muted-foreground"
+            ? "bg-destructive/10 text-destructive ring-1 ring-destructive/20"
+            : "bg-background/80 text-muted-foreground ring-1 ring-border/50"
         )}
       >
         <Icon className="size-5" />

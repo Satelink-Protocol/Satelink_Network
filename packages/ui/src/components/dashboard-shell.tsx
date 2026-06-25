@@ -213,6 +213,7 @@ export function DashboardShell({
                           isActive={item.id === activeId}
                           tooltip={item.label}
                           onClick={() => onNavigate(item.id)}
+                          className="transition-colors duration-200 hover:bg-muted/50 data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                         >
                           {Icon ? <Icon /> : null}
                           <span>{item.label}</span>
@@ -239,7 +240,7 @@ export function DashboardShell({
 
       <SidebarInset>
         {/* sticky header */}
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border glass-panel px-4 backdrop-blur-md">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mr-1 h-5" />
           {breadcrumb && breadcrumb.length > 0 ? (
@@ -303,7 +304,7 @@ export function DashboardShell({
         </header>
 
         {/* content container */}
-        <div className={cn("flex flex-1 flex-col gap-6 p-4 sm:p-6 mx-auto w-full", fullWidth ? "max-w-[1600px]" : "max-w-7xl")}>
+        <div className={cn("flex flex-1 flex-col gap-6 p-4 sm:p-6 mx-auto w-full animate-fade-in", fullWidth ? "max-w-[1600px]" : "max-w-7xl")}>
           {(title || actions) && (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="space-y-1">

@@ -1,188 +1,351 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Wallet, Hourglass, CreditCard, CalendarDays, CalendarRange, Calendar } from "lucide-react";
 import {
+  Wallet,
+  Hourglass,
+  CreditCard,
+  Coins,
+  BarChart3,
+  RefreshCw,
+  Database,
+  ArrowUpRight,
+  TrendingUp,
+} from "lucide-react";
+import {
+  DashboardSection,
   KPIGrid,
   StatCard,
-  DashboardSection,
   DataTable,
   StatusBadge,
-  AsyncBoundary,
   Badge,
-  type DataTableColumn,
+  Button,
+  useEndpoint,
 } from "@satelink/ui";
-import {
-  useApiKeys,
-  keyFetch,
-  PRICE_PER_CALL,
-  type UsageSummary,
-  type DepositInfo,
-  type DepositRecord,
-} from "@/lib/api-keys";
-import { KeySelector, NoKeyState } from "@/components/billing/shared";
 
-interface UsageDay {
-  date: string;
-  request_count: number;
-  usdt_spent: number;
-}
-
-interface LedgerRow {
-  ts: number;
-  when: string;
-  type: "Deposit" | "Deduction";
-  detail: string;
-  delta: number; // signed USDT
+interface FinancialTruth {
+  ok: boolean;
+  timestamp: string;
+  query_ms: number;
+  metered_value_usdt: number;
+  allocated_value_usdt: number;
+  unpaid_value_usdt: number;
+  treasury_real_usdt: number;
+  withdrawable_now_usdt: number;
+  claimed_total_usdt: number;
+  cash_conversion_pct: number;
+  status: string;
+  warnings: {
+    code: string;
+    message: string;
+    severity: "critical" | "warning";
+  }[];
 }
 
-interface RevenueRow {
-  when: string;
-  operation: string;
-  deducted: number;
-  balanceAfter: number;
+interface EconomicsSummary {
+  ok: boolean;
+  totalRevenueUsdt: number;
+  totalNodePoolUsdt: number;
+  totalPlatformShareUsdt: number;
+  totalDistributorShareUsdt: number;
+  splitRatio: {
+    nodeOperators: number;
+    platform: number;
+    distributors: number;
+  };
+  lastEpochId: number;
+  lastEpochRevenueUsdt: number;
+  lastEpochClosedAt: string | null;
 }
 
-function parseDay(d: string): number {
-  const t = Date.parse(d);
-  return Number.isNaN(t) ? 0 : t;
+interface TreasuryStatus {
+  ok: boolean;
+  vault_address: string;
+  vault_balance_usdt: number | null;
+  total_deposited_usdt: number;
+  active_wallets: number;
+  network: string;
+  timestamp: string;
 }
-function depTs(d: DepositRecord): number {
-  const n = Number(d.created_at);
-  if (n) return n > 1e12 ? n : n * 1000;
-  return parseDay(d.created_at);
+
+interface RevenueEventItem {
+  id: number;
+  amount_usdt: string;
+  created_at: string;
 }
+
+interface RevenueEventsResponse {
+  ok: boolean;
+  events: RevenueEventItem[];
+}
+
+interface EpochItem {
+  epoch_id: number;
+  status: string;
+  starts_at: string;
+  ends_at: string | null;
+  total: string;
+  node_pool_usdt: string;
+  platform_share_usdt: string;
+  distributor_share_usdt: string;
+  requests: string;
+}
+
+interface EpochsResponse {
+  ok: boolean;
+  epochs: EpochItem[];
+}
+
+const formatTs = (ts: any) => {
+  if (!ts) return "—";
+  const num = Number(ts);
+  return new Date(num * 1000).toLocaleString();
+};
 
 export default function BillingPage() {
-  const { keys, selected, setSelected, ready } = useApiKeys();
-  const [summary, setSummary] = useState<UsageSummary | null>(null);
-  const [info, setInfo] = useState<DepositInfo | null>(null);
-  const [usage, setUsage] = useState<UsageDay[]>([]);
-  const [deposits, setDeposits] = useState<DepositRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const financial = useEndpoint<FinancialTruth>(["/api/financial/truth"]);
+  const econ = useEndpoint<EconomicsSummary>(["/api/economics/summary"]);
+  const treasury = useEndpoint<TreasuryStatus>(["/api/treasury/status"]);
+  const revEvents = useEndpoint<RevenueEventsResponse>(["/api/revenue/events"]);
+  const epochs = useEndpoint<EpochsResponse>(["/api/epochs"]);
 
-  const load = useCallback(async (key: string) => {
-    if (!key) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [s, i, u, d] = await Promise.all([
-        keyFetch<UsageSummary>("/api/keys/usage", key),
-        keyFetch<DepositInfo>("/api/keys/deposit-info", key),
-        keyFetch<{ usage: UsageDay[] }>("/api/keys/usage-history", key).catch(() => ({ usage: [] })),
-        keyFetch<{ deposits: DepositRecord[] }>("/api/keys/deposits", key).catch(() => ({ deposits: [] })),
-      ]);
-      setSummary(s);
-      setInfo(i);
-      setUsage(u.usage || []);
-      setDeposits(d.deposits || []);
-    } catch (e) {
-      setError(e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const reloadAll = () => {
+    financial.reload();
+    econ.reload();
+    treasury.reload();
+    revEvents.reload();
+    epochs.reload();
+  };
 
-  useEffect(() => {
-    if (selected) load(selected);
-  }, [selected, load]);
+  const billedValue = financial.data?.metered_value_usdt ?? 0;
+  const collectedValue = treasury.data?.total_deposited_usdt ?? 0;
+  const unpaidValue = financial.data?.unpaid_value_usdt ?? 0;
+  const claimableValue = financial.data?.withdrawable_now_usdt ?? 0;
+  const withdrawnValue = financial.data?.claimed_total_usdt ?? 0;
 
-  if (ready && keys.length === 0) return <NoKeyState context="view your balance and billing" />;
-
-  const now = Date.now();
-  const within = (days: number) =>
-    usage.filter((u) => now - parseDay(u.date) <= days * 86400_000).reduce((a, u) => a + Number(u.usdt_spent || 0), 0);
-  const spentToday = summary?.usdt_spent_today ?? 0;
-  const spentWeek = within(7);
-  const spentMonth = within(30);
-
-  const creditsRemaining = summary?.credits_remaining ?? 0;
-  const totalDeposited = info?.total_deposited ?? 0;
-
-  // Revenue events: daily deductions with an estimated running balance-after.
-  const sortedDesc = [...usage].sort((a, b) => parseDay(b.date) - parseDay(a.date));
-  let running = creditsRemaining;
-  const revenueRows: RevenueRow[] = sortedDesc
-    .filter((u) => Number(u.usdt_spent || 0) > 0 || Number(u.request_count || 0) > 0)
-    .map((u) => {
-      const deducted = Number(u.usdt_spent || 0);
-      const row: RevenueRow = {
-        when: new Date(parseDay(u.date)).toLocaleDateString(),
-        operation: `${Number(u.request_count || 0).toLocaleString()} RPC calls`,
-        deducted,
-        balanceAfter: running,
-      };
-      running += deducted;
-      return row;
-    });
-
-  // Credit history: deposits (+) and daily deductions (−), chronological.
-  const ledger: LedgerRow[] = [
-    ...deposits.map((d) => ({ ts: depTs(d), when: new Date(depTs(d)).toLocaleString(), type: "Deposit" as const, detail: `${d.tx_hash.substring(0, 12)}…`, delta: parseFloat(d.amount_usdt) })),
-    ...usage.filter((u) => Number(u.usdt_spent || 0) > 0).map((u) => ({ ts: parseDay(u.date), when: new Date(parseDay(u.date)).toLocaleDateString(), type: "Deduction" as const, detail: `${Number(u.request_count || 0).toLocaleString()} calls`, delta: -Number(u.usdt_spent || 0) })),
-  ].sort((a, b) => b.ts - a.ts);
-
-  const revenueCols: DataTableColumn<RevenueRow>[] = [
-    { key: "when", header: "Timestamp", cell: (r) => <span className="text-xs">{r.when}</span> },
-    { key: "op", header: "Operation", cell: (r) => <span className="text-xs">{r.operation}</span> },
-    { key: "deducted", header: "Credits Deducted", align: "right", cell: (r) => <span className="font-mono text-xs text-destructive">-${r.deducted.toFixed(5)}</span> },
-    { key: "after", header: "Balance After (est.)", align: "right", cell: (r) => <span className="font-mono text-xs">${r.balanceAfter.toFixed(5)}</span> },
+  const eventCols = [
+    {
+      key: "id",
+      header: "Event ID",
+      cell: (r: RevenueEventItem) => <span className="font-mono text-xs text-muted-foreground">{r.id}</span>,
+    },
+    {
+      key: "created_at",
+      header: "Timestamp",
+      cell: (r: RevenueEventItem) => <span className="text-xs">{formatTs(r.created_at)}</span>,
+    },
+    {
+      key: "amount_usdt",
+      header: "Amount (USDT)",
+      align: "right" as const,
+      cell: (r: RevenueEventItem) => (
+        <span className="font-mono text-xs font-bold text-emerald-400">
+          ${parseFloat(r.amount_usdt).toFixed(6)}
+        </span>
+      ),
+    },
   ];
 
-  const ledgerCols: DataTableColumn<LedgerRow>[] = [
-    { key: "when", header: "When", cell: (r) => <span className="text-xs">{r.when}</span> },
-    { key: "type", header: "Type", cell: (r) => <StatusBadge status={r.type === "Deposit" ? "confirmed" : "pending"} label={r.type} /> },
-    { key: "detail", header: "Detail", cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.detail}</span> },
-    { key: "delta", header: "Amount", align: "right", cell: (r) => <span className={"font-mono text-xs " + (r.delta >= 0 ? "text-success" : "text-destructive")}>{r.delta >= 0 ? "+" : "-"}${Math.abs(r.delta).toFixed(5)}</span> },
+  const epochCols = [
+    {
+      key: "epoch_id",
+      header: "Epoch ID",
+      cell: (r: EpochItem) => <span className="font-mono text-xs font-semibold text-foreground">Epoch {r.epoch_id}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (r: EpochItem) => (
+        <StatusBadge status={r.status === "CLOSED" ? "confirmed" : "pending"} label={r.status} />
+      ),
+    },
+    {
+      key: "starts_at",
+      header: "Start Time",
+      cell: (r: EpochItem) => <span className="text-[11px] text-muted-foreground">{formatTs(r.starts_at)}</span>,
+    },
+    {
+      key: "ends_at",
+      header: "End Time",
+      cell: (r: EpochItem) => <span className="text-[11px] text-muted-foreground">{formatTs(r.ends_at)}</span>,
+    },
+    {
+      key: "requests",
+      header: "RPC Calls",
+      cell: (r: EpochItem) => <span className="font-mono text-xs">{Number(r.requests || 0).toLocaleString()}</span>,
+    },
+    {
+      key: "total",
+      header: "Revenue",
+      align: "right" as const,
+      cell: (r: EpochItem) => <span className="font-mono text-xs text-foreground">${parseFloat(r.total).toFixed(4)}</span>,
+    },
+    {
+      key: "node_pool_usdt",
+      header: "Node Share",
+      align: "right" as const,
+      cell: (r: EpochItem) => <span className="font-mono text-xs text-red-400">${parseFloat(r.node_pool_usdt).toFixed(4)}</span>,
+    },
   ];
 
   return (
     <div className="space-y-6">
-      <KeySelector keys={keys} selected={selected} onSelect={setSelected} />
-
-      {/* Current Balance */}
-      <DashboardSection title="Current Balance" description="spendable credits, pending funding and lifetime deposits" card={false}>
-        <KPIGrid columns={3}>
-          <StatCard label="Available Credits" icon={Wallet} accent loading={loading && !summary} value={`$${creditsRemaining.toFixed(5)}`} caption={`≈ ${Math.round(creditsRemaining / PRICE_PER_CALL).toLocaleString()} calls`} />
-          <StatCard label="Pending Credits" icon={Hourglass} value="$0.00000" caption="no unconfirmed deposits" />
-          <StatCard label="Total Deposited" icon={CreditCard} loading={loading && !info} value={`$${totalDeposited.toFixed(2)}`} caption="USDT lifetime" />
-        </KPIGrid>
-      </DashboardSection>
-
-      {/* Consumption */}
-      <DashboardSection title="Consumption" description="metered spend over time" card={false}>
-        <KPIGrid columns={3}>
-          <StatCard label="Today" icon={CalendarDays} loading={loading && !summary} value={`$${spentToday.toFixed(5)}`} caption={`${summary?.requests_today ?? 0} calls`} />
-          <StatCard label="This Week" icon={CalendarRange} loading={loading} value={`$${spentWeek.toFixed(5)}`} caption="last 7 days" />
-          <StatCard label="This Month" icon={Calendar} loading={loading} value={`$${spentMonth.toFixed(5)}`} caption="last 30 days" />
-        </KPIGrid>
-      </DashboardSection>
-
-      {/* Revenue Events */}
-      <DashboardSection title="Revenue Events" description="per-day metered deductions with running balance" actions={<Badge variant="outline">{revenueRows.length}</Badge>} flush>
-        <div className="px-2">
-          <AsyncBoundary loading={loading && revenueRows.length === 0} error={error} isEmpty={!loading && revenueRows.length === 0}
-            emptyTitle="No billed activity yet"
-            emptyDescription="Once your key makes billable requests, each day's deductions appear here."
-            emptyAction={<span className="text-[11px] text-muted-foreground">Next: make a request from the Keys page.</span>}
-            onRetry={() => load(selected)}>
-            <DataTable columns={revenueCols} rows={revenueRows} rowKey={(r) => r.when + r.deducted} />
-          </AsyncBoundary>
+      {/* Top Header Actions */}
+      <div className="flex justify-between items-center border-b border-border pb-4">
+        <div>
+          <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Operator Billing Panel</span>
+          <h2 className="text-sm font-bold text-foreground">Platform Ledger & Vault Metrics</h2>
         </div>
+        <Button size="sm" variant="outline" onClick={reloadAll}>
+          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Reload Data
+        </Button>
+      </div>
+
+      {/* KPI metrics answering the core billing questions */}
+      <KPIGrid columns={5}>
+        <StatCard
+          label="Billed (Metered)"
+          value={`$${billedValue.toFixed(5)} USDT`}
+          icon={BarChart3}
+          caption="Gross query volume billed"
+          loading={financial.loading}
+        />
+        <StatCard
+          label="Collected (Deposited)"
+          value={`$${collectedValue.toFixed(2)} USDT`}
+          icon={Wallet}
+          caption="Total funded by customers"
+          loading={treasury.loading}
+          accent
+        />
+        <StatCard
+          label="Unpaid Payouts"
+          value={`$${unpaidValue.toFixed(5)} USDT`}
+          icon={Hourglass}
+          caption="Epoch rewards owed to nodes"
+          loading={financial.loading}
+        />
+        <StatCard
+          label="Claimable Yield"
+          value={`$${claimableValue.toFixed(5)} USDT`}
+          icon={Coins}
+          caption="Allocated ready-to-claim payouts"
+          loading={financial.loading}
+          accent={claimableValue > 0}
+        />
+        <StatCard
+          label="Withdrawn (Claimed)"
+          value={`$${withdrawnValue.toFixed(5)} USDT`}
+          icon={CreditCard}
+          caption="Total payouts withdrawn to wallets"
+          loading={financial.loading}
+        />
+      </KPIGrid>
+
+      {/* platform treasury & split rules */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* On-Chain Vault Details */}
+        <div className="border border-border bg-card p-5 rounded-lg space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">On-Chain Vault Details</h3>
+            <p className="text-[11px] text-muted-foreground">EVM smart contract storage state</p>
+          </div>
+          
+          <div className="space-y-3 font-mono text-xs">
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Vault Address:</span>
+              <span className="text-foreground truncate max-w-[200px] select-all">
+                {treasury.data?.vault_address || "0x80AF...DdA3"}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Vault Balance:</span>
+              <span className="text-emerald-400 font-bold">
+                {treasury.data?.vault_balance_usdt !== null && treasury.data?.vault_balance_usdt !== undefined
+                  ? `$${parseFloat(String(treasury.data.vault_balance_usdt)).toFixed(4)} USDT`
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Active Customers (Depositors):</span>
+              <span className="text-foreground font-bold">
+                {treasury.data?.active_wallets ?? 0} accounts
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">USDT Contract:</span>
+              <span className="text-slate-400 select-all truncate max-w-[200px]">
+                0xc2132D05D31c914a87C6611C10748AEb04B58e8F
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Platform Share Policies */}
+        <div className="border border-border bg-card p-5 rounded-lg space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">USDT Top-Level Share Metrics</h3>
+            <p className="text-[11px] text-muted-foreground">Total accumulated allocations across settled epochs</p>
+          </div>
+
+          <div className="space-y-3 font-mono text-xs">
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Node Operators Allocation:</span>
+              <span className="text-slate-200 font-bold">
+                ${(econ.data?.totalNodePoolUsdt ?? 0).toFixed(4)} USDT (50.0%)
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Platform Core Allocation:</span>
+              <span className="text-slate-200 font-bold">
+                ${(econ.data?.totalPlatformShareUsdt ?? 0).toFixed(4)} USDT (30.0%)
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-border/50 pb-2">
+              <span className="text-muted-foreground">Distributors Allocation:</span>
+              <span className="text-slate-200 font-bold">
+                ${(econ.data?.totalDistributorShareUsdt ?? 0).toFixed(4)} USDT (20.0%)
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Allocated Total (All Epochs):</span>
+              <span className="text-emerald-400 font-bold">
+                ${(econ.data?.totalRevenueUsdt ?? 0).toFixed(4)} USDT
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Epochs Ledger Section */}
+      <DashboardSection
+        title="Historical Epoch Ledger"
+        description="Platforms aggregated settled epochs and node reward shares"
+        actions={<Badge variant="outline">{(epochs.data?.epochs ?? []).length} settled epochs</Badge>}
+        flush
+      >
+        <DataTable
+          columns={epochCols}
+          rows={epochs.data?.epochs ?? []}
+          rowKey={(r) => r.epoch_id}
+          loading={epochs.loading}
+        />
       </DashboardSection>
 
-      {/* Credit History */}
-      <DashboardSection title="Credit History" description="deposits and deductions (adjustments shown when issued)" flush>
-        <div className="px-2">
-          <AsyncBoundary loading={loading && ledger.length === 0} error={error} isEmpty={!loading && ledger.length === 0}
-            emptyTitle="No credit history yet"
-            emptyDescription="Your deposits and deductions will be listed here as a single ledger."
-            emptyAction={<span className="text-[11px] text-muted-foreground">Next: fund credits on the Deposit page.</span>}
-            onRetry={() => load(selected)}>
-            <DataTable columns={ledgerCols} rows={ledger} rowKey={(r) => r.type + r.ts + r.delta} />
-          </AsyncBoundary>
-        </div>
+      {/* Recent Billed Revenue Events */}
+      <DashboardSection
+        title="Recent Billed Revenue Events"
+        description="Metered RPC query billing entries recorded in database ledger"
+        actions={<Badge variant="outline">{(revEvents.data?.events ?? []).length} records</Badge>}
+        flush
+      >
+        <DataTable
+          columns={eventCols}
+          rows={revEvents.data?.events ?? []}
+          rowKey={(r) => r.id}
+          loading={revEvents.loading}
+        />
       </DashboardSection>
     </div>
   );

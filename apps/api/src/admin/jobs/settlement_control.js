@@ -29,6 +29,7 @@ export class SettlementControl {
       treasuryAddress:  TREASURY_ADDRESS,
       threshold:        parseFloat(process.env.MIN_ANCHOR_REVENUE_USDT || '1.0'),
       totalSettlements: await this.getTotalSettlements(),
+      contractAddress:  process.env.CLAIMS_CONTRACT_ADDRESS || null,
     };
   }
 

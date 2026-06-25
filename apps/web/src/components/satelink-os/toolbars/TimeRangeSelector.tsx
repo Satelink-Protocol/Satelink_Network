@@ -1,24 +1,46 @@
 import React from 'react';
+import { cn } from '@satelink/ui';
+
+export type TimeRangeValue = '1H' | '24H' | '7D' | '30D' | '90D';
 
 export interface TimeRangeSelectorProps {
-  value?: string;
+  value?: TimeRangeValue;
+  onChange?: (value: TimeRangeValue) => void;
+  className?: string;
 }
 
-export function TimeRangeSelector({ value = 'SINCE LAUNCH (183d)' }: TimeRangeSelectorProps): JSX.Element {
+const RANGES: { label: string; value: TimeRangeValue }[] = [
+  { label: '1H', value: '1H' },
+  { label: '24H', value: '24H' },
+  { label: '7D', value: '7D' },
+  { label: '30D', value: '30D' },
+  { label: '90D', value: '90D' },
+];
+
+export function TimeRangeSelector({ 
+  value = '24H', 
+  onChange,
+  className 
+}: TimeRangeSelectorProps): JSX.Element {
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-      padding: '3px 8px',
-      background: 'var(--sat-bg-0)',
-      border: '1px dashed var(--sat-border)',
-      borderRadius: 'var(--sat-radius-md)',
-      fontFamily: 'var(--sat-font-mono)',
-      fontSize: '10px'
-    }}>
-      <span style={{ color: 'var(--sat-text-dim)', fontWeight: 500, letterSpacing: '0.5px' }}>RANGE</span>
-      <span style={{ color: 'var(--sat-primary)', fontWeight: 600 }}>{value}</span>
+    <div className={cn("inline-flex items-center rounded-md border border-border bg-muted/20 p-1 font-mono text-[11px]", className)}>
+      <span className="px-2 font-medium text-muted-foreground mr-1">RANGE</span>
+      <div className="flex items-center gap-1">
+        {RANGES.map((range) => (
+          <button
+            key={range.value}
+            onClick={() => onChange?.(range.value)}
+            className={cn(
+              "px-2 py-1 rounded transition-colors",
+              value === range.value
+                ? "bg-primary text-primary-foreground font-bold shadow-sm"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            )}
+          >
+            {range.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -65,5 +65,57 @@ export default function revenueRoutes(pool) {
     }
   });
 
+  router.get("/economics/summary", async (req, res) => {
+    try {
+      // 1. Total Allocations (All Closed/Finalized Epochs)
+      const totalsResult = await pool.query(`
+        SELECT
+          SUM(total_revenue_usdt) as totalrevenueusdt,
+          SUM(node_pool_usdt) as totalnodepoolusdt,
+          SUM(platform_share_usdt) as totalplatformshareusdt,
+          SUM(distributor_share_usdt) as totaldistributorshareusdt
+        FROM epochs
+        WHERE status IN ('CLOSED', 'FINALIZED')
+      `);
+      const totals = totalsResult.rows[0] || {};
+
+      const coalesce = (val) => val === null || val === undefined ? 0 : Number(val);
+
+      const totalRevenueUsdt = coalesce(totals.totalrevenueusdt);
+      const totalNodePoolUsdt = coalesce(totals.totalnodepoolusdt);
+      const totalPlatformShareUsdt = coalesce(totals.totalplatformshareusdt);
+      const totalDistributorShareUsdt = coalesce(totals.totaldistributorshareusdt);
+
+      // 2. Last Closed Epoch Properties
+      const lastEpochResult = await pool.query(`
+        SELECT id, total_revenue_usdt, closed_at
+        FROM epochs
+        WHERE status IN ('CLOSED', 'FINALIZED')
+        ORDER BY id DESC
+        LIMIT 1
+      `);
+      const lastEpoch = lastEpochResult.rows[0] || { id: 0, total_revenue_usdt: 0, closed_at: null };
+
+      res.json({
+        ok: true,
+        totalRevenueUsdt,
+        totalNodePoolUsdt,
+        totalPlatformShareUsdt,
+        totalDistributorShareUsdt,
+        splitRatio: {
+          nodeOperators: 50,
+          platform: 30,
+          distributors: 20
+        },
+        lastEpochId: lastEpoch.id || 0,
+        lastEpochRevenueUsdt: coalesce(lastEpoch.total_revenue_usdt),
+        lastEpochClosedAt: lastEpoch.closed_at || null
+      });
+    } catch (err) {
+      console.error("Economics summary error:", err);
+      res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  });
+
   return router;
 }

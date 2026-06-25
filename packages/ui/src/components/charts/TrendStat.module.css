@@ -1,16 +1,16 @@
 .card {
   padding: 10px 12px;
-  background: var(--sat-bg-1);
-  border: 1px solid var(--sat-border);
-  border-radius: var(--sat-radius-md);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sat-text) 3%, transparent);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent);
 }
 .label {
-  font-family: var(--sat-font-mono);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--sat-text-muted);
+  color: var(--muted-foreground);
   margin-bottom: 6px;
 }
 .row {
@@ -19,15 +19,15 @@
   gap: 8px;
 }
 .value {
-  font-family: var(--sat-font-mono);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 28px;
   font-weight: 700;
-  color: var(--sat-text);
+  color: var(--foreground);
 }
 .delta {
-  font-family: var(--sat-font-mono);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
 }
-.delta[data-dir='up'] { color: var(--sat-success); }
-.delta[data-dir='down'] { color: var(--sat-danger); }
-.delta[data-dir='flat'] { color: var(--sat-text-muted); }
+.delta[data-dir='up'] { color: var(--success); }
+.delta[data-dir='down'] { color: var(--destructive); }
+.delta[data-dir='flat'] { color: var(--muted-foreground); }

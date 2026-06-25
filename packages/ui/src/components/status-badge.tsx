@@ -41,14 +41,14 @@ export function StatusBadge({
 }: StatusBadgeProps) {
   const tone = variant ?? STATUS_MAP[status?.toLowerCase()] ?? "neutral";
   return (
-    <Badge variant={tone} className={cn("gap-1.5", className)}>
+    <Badge variant={tone} className={cn("gap-1.5 transition-all duration-300 hover:brightness-110", className)}>
       {(tone === "success" || tone === "warning" || tone === "destructive") && (
         <span
           className={cn(
-            "size-1.5 rounded-full shrink-0",
-            tone === "success" && "bg-success animate-pulse",
-            tone === "warning" && "bg-warning",
-            tone === "destructive" && "bg-destructive"
+            "size-1.5 rounded-full shrink-0 shadow-sm",
+            tone === "success" && "bg-success animate-pulse-glow shadow-success/20",
+            tone === "warning" && "bg-warning animate-pulse-glow shadow-warning/20",
+            tone === "destructive" && "bg-destructive animate-pulse-glow shadow-destructive/20"
           )}
         />
       )}
