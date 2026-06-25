@@ -75,7 +75,7 @@ export default function revenueRoutes(pool) {
           SUM(platform_share_usdt) as totalplatformshareusdt,
           SUM(distributor_share_usdt) as totaldistributorshareusdt
         FROM epochs
-        WHERE status IN ('CLOSED', 'FINALIZED')
+        WHERE status IN ('CLOSED', 'FINALIZED') AND (is_phantom = false OR is_phantom IS NULL)
       `);
       const totals = totalsResult.rows[0] || {};
 
@@ -90,7 +90,7 @@ export default function revenueRoutes(pool) {
       const lastEpochResult = await pool.query(`
         SELECT id, total_revenue_usdt, closed_at
         FROM epochs
-        WHERE status IN ('CLOSED', 'FINALIZED')
+        WHERE status IN ('CLOSED', 'FINALIZED') AND (is_phantom = false OR is_phantom IS NULL)
         ORDER BY id DESC
         LIMIT 1
       `);

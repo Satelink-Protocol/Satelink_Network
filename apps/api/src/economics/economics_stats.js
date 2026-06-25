@@ -1,3 +1,4 @@
+// PHANTOM FIX: is_phantom filter active — deployed Jun 26 2026
 /**
  * Aggregates Economics Revenue Split information directly from the database schema.
  * Operates on `epochs` where `status = 'CLOSED'` (canonical) or 'FINALIZED' (legacy).
