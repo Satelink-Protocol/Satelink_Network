@@ -11,7 +11,7 @@ export async function getEconomicsSummary(db) {
             SUM(platform_share_usdt) as totalplatformshareusdt,
             SUM(distributor_share_usdt) as totaldistributorshareusdt
         FROM epochs
-        WHERE status IN ('CLOSED', 'FINALIZED')
+        WHERE status IN ('CLOSED', 'FINALIZED') AND (is_phantom = false OR is_phantom IS NULL)
     `).get() || {};
 
     const coalesce = (val) => val === null || val === undefined ? 0 : Number(val);
@@ -26,7 +26,7 @@ export async function getEconomicsSummary(db) {
     const lastEpoch = await db.prepare(`
         SELECT id, total_revenue_usdt, closed_at
         FROM epochs
-        WHERE status IN ('CLOSED', 'FINALIZED')
+        WHERE status IN ('CLOSED', 'FINALIZED') AND (is_phantom = false OR is_phantom IS NULL)
         ORDER BY id DESC
         LIMIT 1
     `).get() || { id: 0, total_revenue_usdt: 0, closed_at: null };
