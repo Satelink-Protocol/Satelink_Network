@@ -55,7 +55,6 @@ async function stream(req) {
 
 async function proxy(req) {
   const token = process.env.ADMIN_TOKEN; // server-side only
-  console.log(`[DEBUG Proxy] ADMIN_TOKEN configured? ${!!token} (${token?.substring(0, 6)}...)`);
   if (!token) {
     return Response.json({ ok: false, error: 'ADMIN_TOKEN not configured' }, { status: 503 });
   }
@@ -67,7 +66,6 @@ async function proxy(req) {
   // Only allow forwarding to /admin/* on the API — no open relay.
   const cleanPath = String(path).replace(/^\/+/, '');
   const upstream = `${API_BASE}/admin/${cleanPath}`;
-  console.log(`[DEBUG Proxy] Fetching ${method} ${upstream} with token prefix ${token?.substring(0, 6)}...`);
 
   try {
     const result = await fetch(upstream, {
