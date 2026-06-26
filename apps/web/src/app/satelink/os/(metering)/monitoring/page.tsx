@@ -18,13 +18,15 @@ import {
   Grid
 } from "lucide-react";
 import {
-  DashboardSection,
-  KPIGrid,
-  StatCard,
   GrafanaPanel,
   Badge,
   StatusBadge,
   Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  KPICard,
 } from "@satelink/ui";
 import { FilterPanel } from "@/components/satelink-os/filters/FilterPanel";
 import { TimeRangeSelector, type TimeRangeValue } from "@/components/satelink-os/toolbars/TimeRangeSelector";
@@ -378,43 +380,18 @@ export default function MonitoringPage() {
   return (
     <div className="space-y-6">
       {/* Overview — real KPIs from the live API */}
-      <DashboardSection
-        title="Overview"
-        description="Live platform health — sourced directly from the gateway API"
-        card={false}
-      >
-        <KPIGrid columns={4}>
-          <StatCard
-            label="Requests (24h)"
-            icon={Activity}
-            loading={loading}
-            accent
-            value={num(status?.total_requests_24h)}
-            caption={status ? `${status.uptime_pct}% uptime` : "gateway metering"}
-          />
-          <StatCard
-            label="Avg Latency"
-            icon={Gauge}
-            loading={loading}
-            value={status ? `${status.avg_latency_ms} ms` : "—"}
-            caption={status ? `${status.chains_supported?.length ?? 0} chains` : ""}
-          />
-          <StatCard
-            label="Nodes Online"
-            icon={Server}
-            loading={loading}
-            value={num(status?.nodes_online)}
-            caption={`epoch ${status?.current_epoch ?? "—"}`}
-          />
-          <StatCard
-            label="Vault Balance"
-            icon={Landmark}
-            loading={loading}
-            value={treasury ? `$${treasury.vault_balance_usdt} USDT` : "—"}
-            caption={treasury ? `${treasury.active_wallets} active wallet(s)` : ""}
-          />
-        </KPIGrid>
-      </DashboardSection>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
+          <p className="text-sm text-muted-foreground">Live platform health — sourced directly from the gateway API</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KPICard label="Requests (24h)" icon={Activity} value={num(status?.total_requests_24h)} caption={status ? `${status.uptime_pct}% uptime` : "gateway metering"} />
+          <KPICard label="Avg Latency" icon={Gauge} value={status ? `${status.avg_latency_ms} ms` : "—"} caption={status ? `${status.chains_supported?.length ?? 0} chains` : ""} />
+          <KPICard label="Nodes Online" icon={Server} value={num(status?.nodes_online)} caption={`epoch ${status?.current_epoch ?? "—"}`} />
+          <KPICard label="Vault Balance" icon={Landmark} value={treasury ? `$${treasury.vault_balance_usdt} USDT` : "—"} caption={treasury ? `${treasury.active_wallets} active wallet(s)` : ""} />
+        </div>
+      </div>
 
       {/* Observability View Sub-tabs Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border bg-card/20 px-4 py-2 rounded-t-lg">
@@ -959,12 +936,12 @@ export default function MonitoringPage() {
               height={260}
             />
             {freeTier ? (
-              <KPIGrid columns={4} className="mt-4">
-                <StatCard label="Active IPs" icon={Wifi} value={num(freeTier.activeIPs)} caption="last 24h" />
-                <StatCard label="Near Limit" value={num(freeTier.nearLimitIPs)} caption={`limit ${freeTier.limit}/day`} />
-                <StatCard label="Total Calls" icon={Activity} value={num(freeTier.totalCalls)} caption="free tier" />
-                <StatCard label="Deposited" icon={DollarSign} value={treasury ? `$${treasury.total_deposited_usdt}` : "—"} caption="USDT lifetime" />
-              </KPIGrid>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-4">
+                <KPICard label="Active IPs" icon={Wifi} value={num(freeTier.activeIPs)} caption="last 24h" />
+                <KPICard label="Near Limit" value={num(freeTier.nearLimitIPs)} caption={`limit ${freeTier.limit}/day`} />
+                <KPICard label="Total Calls" icon={Activity} value={num(freeTier.totalCalls)} caption="free tier" />
+                <KPICard label="Deposited" icon={DollarSign} value={treasury ? `$${treasury.total_deposited_usdt}` : "—"} caption="USDT lifetime" />
+              </div>
             ) : null}
           </DashboardSection>
         </div>

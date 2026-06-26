@@ -13,8 +13,7 @@ import {
 } from "lucide-react";
 import {
   DashboardSection,
-  KPIGrid,
-  StatCard,
+  KPICard,
   DataTable,
   StatusBadge,
   Badge,
@@ -201,45 +200,38 @@ export default function BillingPage() {
       </div>
 
       {/* KPI metrics answering the core billing questions */}
-      <KPIGrid columns={5}>
-        <StatCard
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <KPICard
           label="Billed (Metered)"
           value={`$${billedValue.toFixed(5)} USDT`}
           icon={BarChart3}
           caption="Gross query volume billed"
-          loading={financial.loading}
         />
-        <StatCard
+        <KPICard
           label="Collected (Deposited)"
           value={`$${collectedValue.toFixed(2)} USDT`}
           icon={Wallet}
           caption="Total funded by customers"
-          loading={treasury.loading}
-          accent
         />
-        <StatCard
+        <KPICard
           label="Unpaid Payouts"
           value={`$${unpaidValue.toFixed(5)} USDT`}
           icon={Hourglass}
           caption="Epoch rewards owed to nodes"
-          loading={financial.loading}
         />
-        <StatCard
+        <KPICard
           label="Claimable Yield"
           value={`$${claimableValue.toFixed(5)} USDT`}
           icon={Coins}
           caption="Allocated ready-to-claim payouts"
-          loading={financial.loading}
-          accent={claimableValue > 0}
         />
-        <StatCard
+        <KPICard
           label="Withdrawn (Claimed)"
           value={`$${withdrawnValue.toFixed(5)} USDT`}
           icon={CreditCard}
           caption="Total payouts withdrawn to wallets"
-          loading={financial.loading}
         />
-      </KPIGrid>
+      </div>
 
       {/* platform treasury & split rules */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

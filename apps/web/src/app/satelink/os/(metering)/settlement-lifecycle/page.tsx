@@ -16,8 +16,7 @@ import {
 } from "lucide-react";
 import {
   DashboardSection,
-  KPIGrid,
-  StatCard,
+  KPICard,
   DataTable,
   StatusBadge,
   Badge,
@@ -186,38 +185,32 @@ export default function SettlementLifecyclePage() {
   return (
     <div className="space-y-6">
       {/* KPI summaries */}
-      <KPIGrid columns={4}>
-        <StatCard
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
           label="Total Billed Usage"
           value={financial.data ? `$${financial.data.metered_value_usdt.toFixed(4)}` : "—"}
           icon={Coins}
           caption="Unpaid + Claimed revenue events"
-          loading={financial.loading}
         />
-        <StatCard
+        <KPICard
           label="Reconciled Unpaid Payouts"
           value={financial.data ? `$${financial.data.unpaid_value_usdt.toFixed(4)}` : "—"}
           icon={Clock}
           caption="Epoch earnings in UNPAID state"
-          loading={financial.loading}
         />
-        <StatCard
+        <KPICard
           label="USDT Treasury Liquidity"
           value={financial.data ? `$${financial.data.treasury_real_usdt.toFixed(2)}` : "—"}
           icon={Wallet}
           caption="Polygon Vault contract balance"
-          loading={financial.loading}
-          accent={financial.data && financial.data.treasury_real_usdt > 0}
         />
-        <StatCard
+        <KPICard
           label="Claimed Payouts Total"
           value={financial.data ? `$${financial.data.claimed_total_usdt.toFixed(4)}` : "—"}
           icon={CheckCircle}
           caption="On-chain claimed withdrawals"
-          loading={financial.loading}
-          accent
         />
-      </KPIGrid>
+      </div>
 
       {/* Pipeline flow */}
       <div className="border border-border bg-card p-6 rounded-lg space-y-6">

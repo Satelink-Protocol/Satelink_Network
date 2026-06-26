@@ -13,59 +13,59 @@
    ============================================================ */
 
 .satelink-os {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  /* Surfaces — slate neutrals, dense dark dashboard */
-  --background: #050816;
-  --foreground: #E5EEF8;
-  --card: #121C33;
-  --card-foreground: #E5EEF8;
-  --popover: #0E1628;
-  --popover-foreground: #E5EEF8;
+  /* Satelink Brand Tokens */
+  --background: 201 64% 4%; /* #040D12 */
+  --foreground: 0 0% 93%; /* #EEEEEE */
+  
+  --card: 217 10% 25%; /* #393E46 */
+  --card-foreground: 0 0% 93%;
+  
+  --popover: 180 44% 17%; /* #183D3D (Surface) */
+  --popover-foreground: 0 0% 93%;
+  
+  --primary: 182 100% 35%; /* #00ADB5 */
+  --primary-foreground: 201 64% 4%;
+  
+  --secondary: 180 44% 17%; /* #183D3D */
+  --secondary-foreground: 0 0% 93%;
+  
+  --muted: 216 18% 16%; /* #222831 (Sidebar base for muted blocks) */
+  --muted-foreground: 158 17% 64%; /* #93B1A6 */
+  
+  --accent: 180 44% 17%;
+  --accent-foreground: 0 0% 93%;
+  
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  
+  --success: 142.1 76.2% 36.3%;
+  --warning: 45.4 93.4% 47.5%;
 
-  /* Accent — teal (the ONE brand accent) */
-  --primary: #5EEAD4;
-  --primary-foreground: #050816;
+  --border: 157 17% 44%; /* #5C8374 */
+  --input: 157 17% 44%;
+  --ring: 182 100% 35%; /* #00ADB5 */
 
-  /* Ice secondary */
-  --secondary: #7DD3FC;
-  --secondary-foreground: #050816;
+  /* Charts - Adjusted for new theme */
+  --chart-1: 182 100% 35%; /* Primary */
+  --chart-2: 158 17% 64%; /* Muted */
+  --chart-3: 157 17% 44%; /* Border */
+  --chart-4: 180 44% 17%; /* Surface */
+  --chart-5: 217 10% 25%; /* Card */
 
-  --muted: #0A1422;
-  --muted-foreground: #94A3B8;
+  /* Sidebar */
+  --sidebar-background: 216 18% 16%; /* #222831 */
+  --sidebar-foreground: 0 0% 93%;
+  --sidebar-primary: 182 100% 35%;
+  --sidebar-primary-foreground: 201 64% 4%;
+  --sidebar-accent: 217 10% 25%; /* Card hover */
+  --sidebar-accent-foreground: 0 0% 93%;
+  --sidebar-border: 157 17% 44%;
+  --sidebar-ring: 182 100% 35%;
 
-  --accent: rgba(94,234,212,0.06);
-  --accent-foreground: #5EEAD4;
-
-  /* Semantic state colors */
-  --destructive: #EF4444;
-  --destructive-foreground: #E5EEF8;
-  --success: #34D399;
-  --warning: #F59E0B;
-
-  --border: #1A2F50;
-  --input: #1A2F50;
-  --ring: #5EEAD4;
-
-  /* Charts */
-  --chart-1: #5EEAD4;
-  --chart-2: #7DD3FC;
-  --chart-3: #34D399;
-  --chart-4: #F59E0B;
-  --chart-5: #EF4444;
-
-  /* Sidebar / shell */
-  --sidebar: #0E1628;
-  --sidebar-foreground: #E5EEF8;
-  --sidebar-primary: #5EEAD4;
-  --sidebar-primary-foreground: #050816;
-  --sidebar-accent: #121C33;
-  --sidebar-accent-foreground: #E5EEF8;
-  --sidebar-border: #1A2F50;
-  --sidebar-ring: #5EEAD4;
-
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 /* Custom Scrollbars */
@@ -115,23 +115,7 @@
   animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Glass & Depth Effects */
-.glass-panel {
-  background: rgba(18, 28, 51, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(26, 47, 80, 0.5);
-}
-
-.glow-card {
-  transition: all 0.2s ease-in-out;
-}
-
-.glow-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px -2px rgba(94, 234, 212, 0.15);
-  border-color: rgba(94, 234, 212, 0.3);
-}
+/* Removed legacy glass/glow effects to adhere to strict flat Shadcn design */
 
 /* Typography standardization */
 .font-mono {

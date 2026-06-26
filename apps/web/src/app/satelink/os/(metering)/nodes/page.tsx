@@ -9,16 +9,22 @@ import {
   type DataTableColumn,
   StatusBadge,
   Button,
-  KPIGrid,
+  KPICard,
   useEndpoint,
-  StatCard,
   Badge,
   BarChartPanel,
   LineChartPanel,
   DonutChart,
   Card,
   CardHeader,
+  CardTitle,
   CardContent,
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
 } from "@satelink/ui";
 import { Server, Compass, Cpu, HardDrive, ShieldAlert, Zap, LogOut, Monitor, TrendingUp, AlertTriangle } from "lucide-react";
 
@@ -180,49 +186,48 @@ export default function NodesPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Executive Layer */}
       {execStats && (
-        <KPIGrid columns={4}>
-          <StatCard label="Total Nodes" value={execStats.total.toString()} icon={Server} />
-          <StatCard label="Healthy Nodes" value={execStats.healthy.toString()} icon={Zap} />
-          <StatCard label="Degraded Nodes" value={execStats.degraded.toString()} icon={AlertTriangle} />
-          <StatCard label="Capacity Available" value={`${execStats.capacity}%`} icon={Compass} />
-          <StatCard label="Avg Latency" value={`${execStats.avgLatency.toFixed(1)}ms`} icon={Cpu} />
-          <StatCard label="Revenue Contribution" value={`${execStats.revenue.toFixed(2)} USD`} icon={TrendingUp} />
-          <StatCard label="Fleet Health Score" value={`${execStats.fleetScore.toFixed(1)}`} icon={HardDrive} />
-        </KPIGrid>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KPICard label="Total Nodes" icon={Server} value={execStats.total} />
+          <KPICard label="Healthy Nodes" icon={Zap} value={execStats.healthy} />
+          <KPICard label="Capacity Available" icon={Compass} value={`${execStats.capacity}%`} />
+          <KPICard label="Avg Latency" icon={Cpu} value={`${execStats.avgLatency.toFixed(1)}ms`} />
+        </div>
       )}
 
       {/* Main Nodes Table */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         <div className={selectedNode ? "xl:col-span-2" : "xl:col-span-3"}>
-          <DashboardSection
-            title="Registered Nodes"
-            description="Active decentralized validation nodes on the gateway pool"
-            actions={
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Registered Nodes</CardTitle>
+                <div className="text-sm text-muted-foreground mt-1">Active decentralized validation nodes on the gateway pool</div>
+              </div>
               <Button size="sm" asChild>
                 <a href="/docs">Run a Node</a>
               </Button>
-            }
-            flush
-          >
-            <div className="p-4 border-b border-border">
+            </CardHeader>
+            <CardContent>
               {w.loading && <LoadingState count={3} />}
               {w.error && <ErrorState title="Unable to load nodes" description={w.error} />}
-            </div>
-            {w.data && (
-              <DataTable
-                columns={cols}
-                rows={w.data.nodes}
-                rowKey={(n) => n.nodeId}
-                emptyTitle="No nodes registered yet."
-                emptyDescription="Join the network and earn rewards by running a decentralized node."
-                emptyAction={
-                  <Button size="sm" asChild>
-                    <a href="/docs">Read Documentation</a>
-                  </Button>
-                }
-              />
-            )}
-          </DashboardSection>
+              {w.data && (
+                <div className="rounded-md border">
+                  <DataTable
+                    columns={cols}
+                    rows={w.data.nodes}
+                    rowKey={(n) => n.nodeId}
+                    emptyTitle="No nodes registered yet."
+                    emptyDescription="Join the network and earn rewards by running a decentralized node."
+                    emptyAction={
+                      <Button size="sm" asChild>
+                        <a href="/docs">Read Documentation</a>
+                      </Button>
+                    }
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
         {/* Selected Node Detail */}
         {selectedNode && (

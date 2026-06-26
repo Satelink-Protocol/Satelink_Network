@@ -6,7 +6,8 @@ import {
   Button, EmptyState, Inline, Input, Notice, Panel, SectionLabel, Split, Stack, StatusBadge, StatusDot,
   FilterPanel, FilterGroup, FilterCheckbox, CustomerZeroPanel, LiveEventStream, AutomationHealth
 } from "@/components/satelink-os";
-import { KPIGrid, StatCard, DashboardShell, TopologyDiagram, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable } from "@satelink/ui";
+import { DashboardShell, TopologyDiagram, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard } from "@satelink/ui";
+import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, AlertTriangle, ShieldAlert } from "lucide-react";
 import { NAV, HEADERS, PROJECTIONS, PROJECTION_DATA, ARCH_TOPOLOGY, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 
 async function adminFetch(path, opts = {}) {
@@ -121,44 +122,137 @@ export default function AdminCommandCenter() {
         {notice && <Notice>{notice}</Notice>}
 
         {view === "overview" && (
-          <Split aside={<LiveEventStream title="Live Event Stream" state={feedState} events={feedEvents} />} asidePosition="right" asideWidth="sm">
-            <Stack gap="sm">
-              <KPIGrid columns={4}>
-                <StatCard label="Gateway Rate Limit" value="500/day" caption="Daily limit per IP" accent trend={{ label: "stable", direction: "neutral" }}/>
-                <StatCard label="Dry Run Mode" value={status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"} caption={status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"} trend={{ label: status?.dryRun ? "safe" : "live!", direction: status?.dryRun ? "neutral" : "down" }}/>
-                <StatCard label="Live Hot Signer Address" value={status ? fmt.addr(status.signerAddress) : "…"} caption="On-chain hot signer wallet" />
-                <StatCard label="Converted Customer Zero" value={czHit ? "1" : "0"} caption={czHit ? "Paying customer active" : "0 converted leads"} trend={{ label: czHit ? "converted" : "pending", direction: czHit ? "up" : "neutral" }}/>
-              </KPIGrid>
-              
-              <KPIGrid columns={4}>
-                <StatCard label="Hot Signer Balance" value={status ? `${fmt.bal(status.signerBalance)} POL` : "…"} caption="EVM gas hot balance" trend={{ label: status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "funded" : "low", direction: status?.signerBalance != null && Number(status.signerBalance) > 0.1 ? "up" : "down" }}/>
-                <StatCard label="Accumulator Threshold" value={status ? `${status.threshold} USDT` : "…"} caption="Accumulated balance trigger" accent />
-                <StatCard label="Settled Epochs count" value={status ? String(status.totalSettlements ?? 0) : "…"} caption="Total settlements on-chain" accent trend={{ label: status?.totalSettlements ? `${status.totalSettlements} total` : "0 yet", direction: status?.totalSettlements > 0 ? "up" : "neutral" }}/>
-                <StatCard label="Active Scheduler Cron Jobs" value={jobs == null ? "…" : String(liveJobs)} caption="Active jobs (last hour)" accent trend={{ label: jobs == null ? "…" : `${liveJobs}/${(jobs || []).length} active`, direction: liveJobs > 0 ? "up" : "neutral" }}/>
-              </KPIGrid>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Gateway Rate Limit</CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">500/day</div>
+                  <p className="text-xs text-muted-foreground">Daily limit per IP</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Mode</CardTitle>
+                  <Server className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{status ? (status.dryRun ? "SIMULATED" : "LIVE") : "…"}</div>
+                  <p className="text-xs text-muted-foreground">{status ? (status.dryRun ? "Dry-run enabled" : "Real settlements") : "Loading status…"}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Accumulator Threshold</CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{status ? `${status.threshold} USDT` : "…"}</div>
+                  <p className="text-xs text-muted-foreground">Accumulated balance trigger</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Settled Epochs</CardTitle>
+                  <ArrowUpToLine className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{status ? String(status.totalSettlements ?? 0) : "…"}</div>
+                  <p className="text-xs text-muted-foreground">Total settlements on-chain</p>
+                </CardContent>
+              </Card>
+            </div>
 
-              <Split aside={<CustomerZeroPanel leads={devs == null ? null : topLeads} czHit={czHit} />} asidePosition="right" asideWidth="md">
-                <Stack gap="sm">
-                  <Panel title="Gateway Security Policy Override" headerRight={<StatusBadge label={strictShield ? "SHIELD MODE ACTIVE" : "SHIELD INACTIVE"} tone={strictShield ? "danger" : "warn"} />}>
-                    <div className="p-4 bg-zinc-900/40 rounded-lg border border-border flex flex-col gap-3">
-                      <div className="flex justify-between items-center">
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-semibold text-foreground">Strict IP Shielding</p>
-                          <p className="text-[10px] text-muted-foreground">Instantly block crawlers, scanners, and high-frequency anomaly IPs.</p>
-                        </div>
-                        <Button size="sm" tone={strictShield ? "danger" : "primary"} onClick={() => { setStrictShield(!strictShield); flash(`IP Shielding is ${!strictShield ? "ENABLED" : "DISABLED"}`); }}>
-                          {strictShield ? "Disable Shield" : "Enable Strict Shield"}
-                        </Button>
+            <div className="grid gap-4 grid-cols-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Load Activity</CardTitle>
+                  <div className="text-sm text-muted-foreground">API call distribution across nodes over last 24 hours</div>
+                </CardHeader>
+                <CardContent className="pl-2">
+                  <ChartContainer
+                    config={{
+                      calls: { label: "API Calls", color: "hsl(var(--primary))" },
+                    }}
+                    className="h-[350px] w-full"
+                  >
+                    <AreaChart data={demandByLead} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="fillCallsAdmin" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-calls)" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="var(--color-calls)" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} className="text-xs text-muted-foreground" />
+                      <YAxis tickLine={false} axisLine={false} tickMargin={8} className="text-xs text-muted-foreground" />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Area type="monotone" dataKey="calls" stroke="var(--color-calls)" strokeWidth={2} fillOpacity={1} fill="url(#fillCallsAdmin)" />
+                    </AreaChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Live Event Stream</CardTitle>
+                    <div className="text-sm text-muted-foreground mt-1">Real-time system events and actions</div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Event</TableHead>
+                          <TableHead>Source</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {feedEvents.slice(0, 10).map((ev, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="text-muted-foreground">{ev.time}</TableCell>
+                            <TableCell className="font-medium max-w-[200px] truncate">{ev.message}</TableCell>
+                            <TableCell className="text-muted-foreground">{ev.source}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Security Policy</CardTitle>
+                    <div className="text-sm text-muted-foreground mt-1">Gateway and firewall management</div>
+                  </div>
+                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-muted/50 rounded-lg border border-border flex flex-col gap-3">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-foreground">Strict IP Shielding</p>
+                        <p className="text-xs text-muted-foreground">Instantly block crawlers, scanners, and high-frequency anomaly IPs.</p>
                       </div>
+                      <Button size="sm" variant={strictShield ? "destructive" : "default"} onClick={() => { setStrictShield(!strictShield); flash(`IP Shielding is ${!strictShield ? "ENABLED" : "DISABLED"}`); }}>
+                        {strictShield ? "Disable Shield" : "Enable Shield"}
+                      </Button>
                     </div>
-                  </Panel>
-                  <Panel title="Automation Scheduler Health" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
-                    <AutomationHealth jobs={jobs} jobsErr={jobsErr} jobDotTone={jobDotTone} />
-                  </Panel>
-                </Stack>
-              </Split>
-            </Stack>
-          </Split>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         )}
 
         {view === "radar" && (
@@ -201,13 +295,13 @@ export default function AdminCommandCenter() {
                     ) : <EmptyState variant="line" label="funnel" note="loading…" />}
                   </div>
                   <div style={{ flex: "0 0 320px" }}>
-                    {devs && <KPIGrid columns={2}>
-                      <StatCard label="Classified" value={fmt.num(devs.length)} />
-                      <StatCard label="Identified" value={fmt.num(counts.identified || 0)} />
-                      <StatCard label="Contacted" value={fmt.num(counts.contacted || 0)} />
-                      <StatCard label="Deposited" value={fmt.num(counts.deposited || 0)} accent />
-                      <StatCard label="Paid" value={fmt.num(counts.paid || 0)} accent />
-                    </KPIGrid>}
+                    {devs && <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+                      <KPICard label="Classified" value={fmt.num(devs.length)} />
+                      <KPICard label="Identified" value={fmt.num(counts.identified || 0)} />
+                      <KPICard label="Contacted" value={fmt.num(counts.contacted || 0)} />
+                      <KPICard label="Deposited" value={fmt.num(counts.deposited || 0)} />
+                      <KPICard label="Paid" value={fmt.num(counts.paid || 0)} />
+                    </div>}
                   </div>
                 </div>
               </Panel>
@@ -220,12 +314,12 @@ export default function AdminCommandCenter() {
 
         {view === "treasury" && (
           <Stack gap="sm">
-            <KPIGrid columns={4}>
-              <StatCard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} caption={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} trend={{ label: status?.dryRun ? "simulated" : "live", direction: status?.dryRun ? "neutral" : "down" }}/>
-              <StatCard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} caption={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} trend={{ label: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "funded" : "⚠ low") : "—", direction: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "up" : "down") : "neutral" }}/>
-              <StatCard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT" accent />
-              <StatCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" accent trend={{ label: status?.totalSettlements > 0 ? `${status.totalSettlements} epochs` : "none yet", direction: status?.totalSettlements > 0 ? "up" : "neutral" }}/>
-            </KPIGrid>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <KPICard label="Settlement mode" value={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : statusErr ? "—" : "…"} caption={status ? (status.dryRun ? "no real TXs" : "real POL spent") : ""} trend={{ label: status?.dryRun ? "simulated" : "live", direction: status?.dryRun ? "neutral" : "down" }}/>
+              <KPICard label="Signer POL" value={status ? fmt.bal(status.signerBalance) : statusErr ? "—" : "…"} caption={status?.signerBalance == null ? "no signer / unreachable" : "on-chain"} trend={{ label: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "funded" : "⚠ low") : "—", direction: status?.signerBalance != null ? (Number(status.signerBalance) > 0.05 ? "up" : "down") : "neutral" }}/>
+              <KPICard label="Anchor threshold" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT" />
+              <KPICard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" trend={{ label: status?.totalSettlements > 0 ? `${status.totalSettlements} epochs` : "none yet", direction: status?.totalSettlements > 0 ? "up" : "neutral" }}/>
+            </div>
             <Panel title="Settlement Control">
               {status && <Stack gap="sm">
                 <Inline gap="md">
@@ -293,16 +387,16 @@ export default function AdminCommandCenter() {
 
         {view === "revenue" && (
           <Stack gap="sm">
-            <KPIGrid columns={4}>
-              <StatCard label="External Revenue" value="$0.00" caption="no paying customers yet" />
-              <StatCard label="Credit Balance" value="$0.5999 USDT" caption="test wallet — founder funded" accent />
-              <StatCard label="Settlement Thresh" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT before epoch settles" accent />
-              <StatCard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" accent />
-            </KPIGrid>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <KPICard label="External Revenue" value="$0.00" caption="no paying customers yet" />
+              <KPICard label="Credit Balance" value="$0.5999 USDT" caption="test wallet — founder funded" />
+              <KPICard label="Settlement Thresh" value={status ? (status.threshold ?? "—") : statusErr ? "—" : "…"} caption="USDT before epoch settles" />
+              <KPICard label="Settled TXs" value={status ? fmt.num(status.totalSettlements ?? 0) : statusErr ? "—" : "…"} caption="on-chain epochs" />
+            </div>
             <Panel title="Revenue Pipeline" headerRight={<StatusDot tone="success" pulse />}>
-              <KPIGrid columns={6}>
-                {pipeline.map((s) => <StatCard key={s.k} label={s.k} value={s.detail} caption={s.badge} />)}
-              </KPIGrid>
+              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+                {pipeline.map((s) => <KPICard key={s.k} label={s.k} value={s.detail} caption={s.badge} />)}
+              </div>
             </Panel>
             <Panel title="Demand By Lead — sorted by tenure" headerRight={<StatusBadge label="REAL LEADS" tone="info" />}>
               {devs && <div style={{ marginTop: 4 }}>
@@ -326,11 +420,11 @@ export default function AdminCommandCenter() {
 
         {view === "agents" && (
           <Stack gap="sm">
-            <KPIGrid columns={3}>
-              <StatCard label="Active Jobs" value={jobs == null ? "…" : String(liveJobs)} caption="Ran in last hour" accent trend={{ label: jobs?.length ? `${liveJobs}/${jobs.length}` : "—", direction: liveJobs > 0 ? "up" : "neutral" }}/>
-              <StatCard label="Stale Jobs" value={jobs == null ? "…" : String(staleJobs)} caption="No run in 1h+" trend={{ label: staleJobs > 0 ? "needs attention" : "all current", direction: staleJobs > 0 ? "down" : "up" }}/>
-              <StatCard label="Failed Jobs" value={jobs == null ? "…" : String(failedJobs)} caption="Error / failure" trend={{ label: failedJobs > 0 ? `${failedJobs} failed` : "none", direction: failedJobs > 0 ? "down" : "up" }}/>
-            </KPIGrid>
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+              <KPICard label="Active Jobs" value={jobs == null ? "…" : String(liveJobs)} caption="Ran in last hour" trend={{ label: jobs?.length ? `${liveJobs}/${jobs.length}` : "—", direction: liveJobs > 0 ? "up" : "neutral" }}/>
+              <KPICard label="Stale Jobs" value={jobs == null ? "…" : String(staleJobs)} caption="No run in 1h+" trend={{ label: staleJobs > 0 ? "needs attention" : "all current", direction: staleJobs > 0 ? "down" : "up" }}/>
+              <KPICard label="Failed Jobs" value={jobs == null ? "…" : String(failedJobs)} caption="Error / failure" trend={{ label: failedJobs > 0 ? `${failedJobs} failed` : "none", direction: failedJobs > 0 ? "down" : "up" }}/>
+            </div>
             <Panel title="Automation Jobs" headerRight={<StatusDot tone={jobs && jobs.length ? jobDotTone(jobs[0]) : "muted"} pulse />}>
               <Inline gap="sm" style={{ marginBottom: "12px" }}>
                 {TRIGGERABLE_JOBS.map((j) => (

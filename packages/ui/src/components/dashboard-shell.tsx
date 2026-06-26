@@ -240,7 +240,7 @@ export function DashboardShell({
 
       <SidebarInset>
         {/* sticky header */}
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border glass-panel px-4 backdrop-blur-md">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mr-1 h-5" />
           {breadcrumb && breadcrumb.length > 0 ? (

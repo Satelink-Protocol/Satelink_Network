@@ -16,8 +16,7 @@ import {
 } from "lucide-react";
 import {
   DashboardSection,
-  KPIGrid,
-  StatCard,
+  KPICard,
   DataTable,
   StatusBadge,
   Badge,
@@ -226,36 +225,32 @@ export default function CustomerZeroTrackerPage() {
   return (
     <div className="space-y-6">
       {/* KPI stats */}
-      <KPIGrid columns={4}>
-        <StatCard
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
           label="Conversion Funnel Users"
           value={String(devLeads.length || "—")}
           icon={Users}
           caption="Identified developer leads"
-          accent
         />
-        <StatCard
+        <KPICard
           label="Funded API Keys"
           value={String(depositCount)}
           icon={Key}
           caption="Deposited credits > $0"
-          accent
         />
-        <StatCard
+        <KPICard
           label="Active Deposited Wallets"
           value={treasury.data ? String(treasury.data.active_wallets) : "—"}
           icon={Coins}
           caption="Verified on-chain accounts"
-          loading={treasury.loading}
         />
-        <StatCard
+        <KPICard
           label="Gross Revenue Generated"
           value={financial.data ? `$${financial.data.metered_value_usdt.toFixed(3)} USDT` : "—"}
           icon={TrendingUp}
           caption="Total metered credit events"
-          loading={financial.loading}
         />
-      </KPIGrid>
+      </div>
 
       {/* Visual Funnel and Dropoffs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

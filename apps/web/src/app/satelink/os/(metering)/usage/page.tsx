@@ -9,8 +9,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  StatCard,
-  KPIGrid,
+  KPICard,
   DashboardSection,
   DataTable,
   StatusBadge,
@@ -118,12 +117,12 @@ export default function UsagePage() {
         <InsufficientBalance balance={creditsRemaining} vaultAddress={info.deposit.address} onRetry={() => load(selected)} />
       )}
 
-      <KPIGrid columns={4}>
-        <StatCard label="Requests" icon={Activity} loading={loading && !summary} value={totalRequests.toLocaleString()} caption={`${summary?.requests_today ?? 0} today`} />
-        <StatCard label="Billable Requests" icon={Receipt} loading={loading && !summary} value={billableRequests.toLocaleString()} caption="metered (cost > 0)" />
-        <StatCard label="Credits Consumed" icon={CircleDollarSign} loading={loading && !summary} value={`$${creditsConsumed.toFixed(5)}`} caption="lifetime spend" />
-        <StatCard label="Avg Cost / Request" icon={Zap} accent loading={loading && !summary} value={`$${avgCost.toFixed(6)}`} caption={`base $${PRICE_PER_CALL}/call`} />
-      </KPIGrid>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard label="Requests" icon={Activity} value={totalRequests.toLocaleString()} caption={`${summary?.requests_today ?? 0} today`} />
+        <KPICard label="Billable Requests" icon={Receipt} value={billableRequests.toLocaleString()} caption="metered (cost > 0)" />
+        <KPICard label="Credits Consumed" icon={CircleDollarSign} value={`$${creditsConsumed.toFixed(5)}`} caption="lifetime spend" />
+        <KPICard label="Avg Cost / Request" icon={Zap} value={`$${avgCost.toFixed(6)}`} caption={`base $${PRICE_PER_CALL}/call`} />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Usage timeline */}

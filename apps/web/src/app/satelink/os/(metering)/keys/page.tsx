@@ -14,8 +14,7 @@ import {
   StatusBadge,
   AsyncBoundary,
   Badge,
-  KPIGrid,
-  StatCard,
+  KPICard,
   BarChartPanel,
   DonutChart,
   type DataTableColumn,
@@ -177,34 +176,32 @@ export default function KeysPage() {
   return (
     <div className="space-y-6">
       {/* KPI Overview */}
-      <KPIGrid columns={4}>
-        <StatCard
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
           label="Keys Near Limit"
           icon={AlertTriangle}
           value={keysNearLimit}
-          accent
           caption={keysNearLimit > 0 ? `${keysNearLimit} key(s) approaching quota` : "All healthy"}
         />
-        <StatCard
+        <KPICard
           label="Spending Today"
           icon={TrendingUp}
           value={`$${totalSpendingToday.toFixed(2)}`}
-          accent
           caption={rows.length ? `${rows.length} active key(s)` : "—"}
         />
-        <StatCard
+        <KPICard
           label="Alerts"
           icon={AlertTriangle}
           value={alerts}
           caption={alerts ? "Budget exceeded" : "No alerts"}
         />
-        <StatCard
+        <KPICard
           label="Revenue Impact"
           icon={Wallet}
           value={`$${revenueImpact}`}
           caption="Potential loss if limits hit"
         />
-      </KPIGrid>
+      </div>
 
       {/* Main Content */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

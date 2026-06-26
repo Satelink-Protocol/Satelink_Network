@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 import {
   DashboardSection,
-  KPIGrid,
-  StatCard,
+  KPICard,
   DataTable,
   StatusBadge,
   Badge,
@@ -245,34 +244,33 @@ export default function RevenueOpsPage() {
       )}
 
       {/* Financial truth cards (What is happening now?) */}
-      <KPIGrid columns={4}>
-        <StatCard
+      {/* Financial truth cards (What is happening now?) */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
           label="Gross Metered Volume"
           value={financial.data ? `$${financial.data.metered_value_usdt.toFixed(4)} USDT` : "Loading..."}
           icon={DollarSign}
           caption="Aggregate metered query value"
-          accent
         />
-        <StatCard
+        <KPICard
           label="Allocated Revenue"
           value={econ.data ? `$${econ.data.totalRevenueUsdt.toFixed(4)} USDT` : "Loading..."}
           icon={Database}
           caption="Total finalized epoch revenue"
         />
-        <StatCard
+        <KPICard
           label="Treasury Balance"
           value={financial.data ? `$${financial.data.treasury_real_usdt.toFixed(4)} USDT` : "Loading..."}
           icon={Coins}
           caption="On-chain vault USDT holdings"
-          accent={financial.data && financial.data.status === "healthy"}
         />
-        <StatCard
+        <KPICard
           label="Epoch Payout Reserve"
           value={financial.data ? `$${financial.data.unpaid_value_usdt.toFixed(4)} USDT` : "Loading..."}
           icon={Cpu}
           caption="Owed but unpaid epoch rewards"
         />
-      </KPIGrid>
+      </div>
 
       {/* Waterfall & growth curve grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

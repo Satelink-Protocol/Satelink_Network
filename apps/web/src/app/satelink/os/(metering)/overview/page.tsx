@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useEndpoint, DashboardSection, KPIGrid, StatCard, ErrorState, LoadingState, Badge, StatusBadge, DataTable, type DataTableColumn, Button } from "@satelink/ui";
+import { useEndpoint, DashboardSection, KPICard, ErrorState, LoadingState, Badge, StatusBadge, DataTable, type DataTableColumn, Button } from "@satelink/ui";
 import { Activity, ShieldCheck, HeartPulse, GitMerge, DollarSign, Wallet } from "lucide-react";
 
 /* ---------- Section 1: System Health ---------- */
@@ -50,20 +50,18 @@ function SystemHealth() {
         {w.loading && <LoadingState count={2} />}
         {!w.loading && w.error && !w.data && <ErrorState title="Unable to load System Health" />}
         {w.data && (
-          <KPIGrid columns={2}>
-            <StatCard
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+            <KPICard
               label="Providers Healthy"
               value={`${w.data.summary.healthy}/${w.data.summary.total}`}
               icon={ShieldCheck}
-              accent={w.data.summary.unhealthy === 0}
             />
-            <StatCard
+            <KPICard
               label="Health"
               value={w.data.summary.healthPercent}
               icon={HeartPulse}
-              accent
             />
-          </KPIGrid>
+          </div>
         )}
       </div>
       {w.data && (
@@ -93,13 +91,13 @@ function NetworkStatus() {
       {w.loading && <LoadingState variant="cards" count={4} />}
       {!w.loading && w.error && !w.data && <ErrorState title="Unable to load Network Status" />}
       {w.data && (
-        <KPIGrid columns={2}>
-          <StatCard label="Epoch" value={w.data.current_epoch.toLocaleString("en-US")} />
-          <StatCard label="Requests (24h)" value={w.data.total_requests_24h.toLocaleString("en-US")} accent icon={Activity} />
-          <StatCard label="Avg Latency" value={`${w.data.avg_latency_ms}ms`} />
-          <StatCard label="Nodes Online" value={w.data.nodes_online === 0 ? "Node agent offline" : String(w.data.nodes_online)} accent={w.data.nodes_online > 0} />
-          <StatCard label="Uptime" value={`${w.data.uptime_pct}%`} />
-        </KPIGrid>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+          <KPICard label="Epoch" value={w.data.current_epoch.toLocaleString("en-US")} />
+          <KPICard label="Requests (24h)" value={w.data.total_requests_24h.toLocaleString("en-US")} icon={Activity} />
+          <KPICard label="Avg Latency" value={`${w.data.avg_latency_ms}ms`} />
+          <KPICard label="Nodes Online" value={w.data.nodes_online === 0 ? "Node agent offline" : String(w.data.nodes_online)} />
+          <KPICard label="Uptime" value={`${w.data.uptime_pct}%`} />
+        </div>
       )}
     </DashboardSection>
   );
@@ -132,11 +130,11 @@ function Treasury() {
       {!w.loading && w.error && !w.data && <ErrorState title="Unable to load Treasury data" />}
       {w.data && (
         <div className="space-y-4">
-          <KPIGrid columns={3}>
-            <StatCard label="Collected (on-chain)" value="$0.00 USDT" icon={Wallet} />
-            <StatCard label="Metered (unbilled)" value={`$${metered.toFixed(6)} USDT`} icon={DollarSign} />
-            <StatCard label="Net Profit Margin" value="94.2%" caption="Minus gas expenses" accent />
-          </KPIGrid>
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+            <KPICard label="Collected (on-chain)" value="$0.00 USDT" icon={Wallet} />
+            <KPICard label="Metered (unbilled)" value={`$${metered.toFixed(6)} USDT`} icon={DollarSign} />
+            <KPICard label="Net Profit Margin" value="94.2%" caption="Minus gas expenses" />
+          </div>
           <div className="text-xs text-muted-foreground border-l-2 border-border pl-3">
             <p>Metered = last {w.data.epochs.length} epochs of usage, not yet settled on-chain. Never counted as collected revenue.</p>
             <p>Settlement anchor: running every 10 min</p>
@@ -184,11 +182,11 @@ function FreeTierMonitor() {
       {w.loading && <LoadingState variant="cards" count={3} />}
       {!w.loading && w.error && !w.data && <ErrorState title="Unable to load Free Tier stats" />}
       {w.data && (
-        <KPIGrid columns={3}>
-          <StatCard label="Active IPs" value={w.data.activeIPs.toLocaleString("en-US")} accent />
-          <StatCard label="Calls Today" value={w.data.totalCalls.toLocaleString("en-US")} />
-          <StatCard label="Daily Limit / IP" value={String(w.data.limit)} />
-        </KPIGrid>
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+          <KPICard label="Active IPs" value={w.data.activeIPs.toLocaleString("en-US")} />
+          <KPICard label="Calls Today" value={w.data.totalCalls.toLocaleString("en-US")} />
+          <KPICard label="Daily Limit / IP" value={String(w.data.limit)} />
+        </div>
       )}
     </DashboardSection>
   );

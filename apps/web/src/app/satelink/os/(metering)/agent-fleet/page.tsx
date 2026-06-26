@@ -15,14 +15,17 @@ import {
   Settings,
 } from "lucide-react";
 import {
-  DashboardSection,
-  KPIGrid,
-  StatCard,
   DataTable,
   StatusBadge,
   Badge,
   Button,
   EmptyState,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  KPICard,
+  LogPanel
 } from "@satelink/ui";
 
 interface AgentIdentity {
@@ -113,72 +116,51 @@ export default function AgentFleetPage() {
     <div className="space-y-6 animate-fade-in">
       
       {/* KPI Stats */}
-      <KPIGrid columns={4}>
-        <StatCard
-          label="Registered AI Agents"
-          value={data ? String(data.identities.length) : "—"}
-          icon={Users}
-          caption="Identities in directory"
-          loading={loading}
-        />
-        <StatCard
-          label="Running Tasks"
-          value="0"
-          icon={Cpu}
-          caption="Active execution threads"
-        />
-        <StatCard
-          label="Websocket Handshakes"
-          value="0"
-          icon={Share2}
-          caption="No active socket loops"
-        />
-        <StatCard
-          label="Sandbox Safety Status"
-          value="STRICT SHIELD"
-          icon={ShieldCheck}
-          caption="Rate limits & gas caps active"
-          accent
-        />
-      </KPIGrid>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard label="Registered AI Agents" icon={Users} value={data ? String(data.identities.length) : "—"} caption="Identities in directory" />
+        <KPICard label="Running Tasks" icon={Cpu} value="0" caption="Active execution threads" />
+        <KPICard label="Websocket Handshakes" icon={Share2} value="0" caption="No active socket loops" />
+        <KPICard label="Sandbox Safety" icon={ShieldCheck} value="STRICT SHIELD" caption="Rate limits & gas caps active" />
+      </div>
 
       {/* Main Terminal Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Terminal and diagnostics console */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="border border-border bg-card rounded-lg overflow-hidden flex flex-col h-[380px]">
-            <div className="px-4 py-2 border-b border-border bg-muted/40 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-mono">
+        <div className="lg:col-span-2 space-y-4 h-[380px] flex flex-col">
+          <LogPanel 
+            title={
+              <span className="flex items-center gap-1.5 uppercase tracking-wider text-slate-300">
                 <Terminal className="size-3 text-primary animate-pulse" /> paperclip-fleet-terminal
               </span>
-              <Button size="xs" onClick={triggerDiagnostics} disabled={acting}>
-                {acting ? "Running Self-Test..." : "Execute Diagnostics"}
-              </Button>
-            </div>
-            
-            <div className="flex-1 bg-[#05070B] p-4 font-mono text-[10px] text-slate-300 overflow-y-auto space-y-1.5">
-              <div className="text-muted-foreground select-none">Welcome to Paperclip Fleet Control. Gateway server initialized at v1.0.0-scaffold.</div>
-              {diagLog.map((log, index) => {
-                let color = "text-slate-300";
-                if (log.includes("[OK]")) color = "text-emerald-400";
-                else if (log.includes("ERROR")) color = "text-red-400 font-bold";
-                else if (log.includes("[PENDING]")) color = "text-amber-400";
-                return (
-                  <div key={index} className={color}>
-                    &gt; {log}
-                  </div>
-                );
-              })}
-              {diagLog.length === 0 && (
-                <div className="h-full flex items-center justify-center">
-                  <EmptyState
-                    title="Agent Handshake Pending"
-                    description="The orchestrator websocket interface is not connected. Execute diagnostics to verify the sandbox identity configuration."
-                  />
+            }
+            className="flex-1"
+          >
+            <div className="text-muted-foreground select-none mb-1.5">Welcome to Paperclip Fleet Control. Gateway server initialized at v1.0.0-scaffold.</div>
+            {diagLog.map((log, index) => {
+              let color = "text-slate-300";
+              if (log.includes("[OK]")) color = "text-emerald-400";
+              else if (log.includes("ERROR")) color = "text-red-400 font-bold";
+              else if (log.includes("[PENDING]")) color = "text-amber-400";
+              return (
+                <div key={index} className={color}>
+                  &gt; {log}
                 </div>
-              )}
-            </div>
+              );
+            })}
+            {diagLog.length === 0 && (
+              <div className="h-full flex items-center justify-center">
+                <EmptyState
+                  title="Agent Handshake Pending"
+                  description="The orchestrator websocket interface is not connected. Execute diagnostics to verify the sandbox identity configuration."
+                />
+              </div>
+            )}
+          </LogPanel>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={triggerDiagnostics} disabled={acting}>
+              {acting ? "Running Self-Test..." : "Execute Diagnostics"}
+            </Button>
           </div>
         </div>
 
@@ -217,29 +199,33 @@ export default function AgentFleetPage() {
       </div>
 
       {/* Registered Agent list */}
-      <DashboardSection
-        title="Registered Machine Identities"
-        description="Active AI Agent and automation worker credentials registered under the Machine Access Layer"
-        actions={
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Registered Machine Identities</CardTitle>
+            <div className="text-sm text-muted-foreground mt-1">Active AI Agent and automation worker credentials registered under the Machine Access Layer</div>
+          </div>
           <Button size="sm" variant="outline" onClick={fetchPolicy} disabled={loading}>
             <RefreshCw className="mr-1 h-3.5 w-3.5" /> Re-Sync
           </Button>
-        }
-        flush
-      >
-        {loading ? (
-          <div className="p-8 text-center text-xs text-muted-foreground">Syncing agent directory...</div>
-        ) : !data || data.identities.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground">
-            <EmptyState
-              title="No AI Agents Registered"
-              description="Deploy a Paperclip worker with valid client credentials to register it in the machine identity directory."
-            />
-          </div>
-        ) : (
-          <DataTable columns={agentCols} rows={data.identities} rowKey={(r) => r.id} />
-        )}
-      </DashboardSection>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">Syncing agent directory...</div>
+          ) : !data || data.identities.length === 0 ? (
+            <div className="p-12 text-center text-xs text-muted-foreground">
+              <EmptyState
+                title="No AI Agents Registered"
+                description="Deploy a Paperclip worker with valid client credentials to register it in the machine identity directory."
+              />
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <DataTable columns={agentCols} rows={data.identities} rowKey={(r) => r.id} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   );

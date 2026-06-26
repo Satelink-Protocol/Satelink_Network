@@ -11,7 +11,7 @@ import {
   Notice,
   StatusBadge,
 } from "@/components/satelink-os";
-import { KPIGrid, StatCard } from "@satelink/ui";
+import { KPICard } from "@satelink/ui";
 
 // P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
 import { CreditEstimator } from "@/components/deposit/CreditEstimator";
@@ -217,16 +217,16 @@ function DepositPageInner() {
           {instructions && (
             <>
               {/* SUMMARY */}
-              <KPIGrid columns={2}>
-                <StatCard label="Chain"
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+                <KPICard label="Chain"
  value={`Polygon (${instructions.chainId})`}
  caption="Polygon PoS Mainnet"
  />
-                <StatCard label="Deposit Amount"
+                <KPICard label="Deposit Amount"
  value={`${instructions.amountUsdt} USDT`}
  caption="To RevenueVault"
- accent />
-              </KPIGrid>
+ />
+              </div>
 
               {/* ADDRESSES */}
               <Panel title="Contract Addresses">

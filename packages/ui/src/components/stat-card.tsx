@@ -37,7 +37,7 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <Card data-slot="stat-card" className={cn("glow-card glass-panel flex flex-col gap-2 py-3", className)}>
+    <Card data-slot="stat-card" className={cn("flex flex-col gap-2 py-3", className)}>
       <div className="flex items-center justify-between px-4">
         <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</span>
         {Icon ? <Icon className="size-3.5 text-muted-foreground" /> : null}

@@ -63,6 +63,9 @@ export type {
 // dashboard-level primitives
 export { KPIGrid } from "./components/kpi-grid";
 export type { KPIGridProps } from "./components/kpi-grid";
+export { KPICard, StatusCard, MetricCard } from "./components/metrics-cards";
+export type { KPICardProps, StatusCardProps, MetricCardProps } from "./components/metrics-cards";
+// Keep StatCard around temporarily to prevent breaking changes during refactor
 export { StatCard } from "./components/stat-card";
 export type { StatCardProps } from "./components/stat-card";
 export { MetricTrend } from "./components/metric-trend";
@@ -77,6 +80,8 @@ export { StatusBadge } from "./components/status-badge";
 export type { StatusBadgeProps } from "./components/status-badge";
 export { GrafanaPanel } from "./components/grafana-panel";
 export type { GrafanaPanelProps } from "./components/grafana-panel";
+export { TimeseriesPanel, HeatmapPanel, LogPanel } from "./components/monitoring-panels";
+export type { MonitoringPanelProps } from "./components/monitoring-panels";
 
 // state primitives
 export { EmptyState } from "./components/empty-state";
