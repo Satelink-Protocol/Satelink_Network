@@ -121,6 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       breadcrumb={["Satelink", "Admin", header.crumb]}
       title={header.title}
       subtitle={header.subtitle}
+      fullWidth={true}
     >
       {children}
     </DashboardShell>

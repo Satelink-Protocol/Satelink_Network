@@ -37,42 +37,42 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <Card data-slot="stat-card" className={cn("glow-card glass-panel flex flex-col gap-2 py-3", className)}>
-      <div className="flex items-center justify-between px-4">
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</span>
-        {Icon ? <Icon className="size-3.5 text-muted-foreground" /> : null}
+    <Card data-slot="stat-card" className={cn("border border-border bg-card flex flex-col justify-center px-3 py-2", className)}>
+      <div className="flex items-center gap-2 mb-1">
+        {Icon ? (
+          <div className="flex items-center justify-center size-6 rounded-md bg-muted text-primary">
+            <Icon className="size-3.5" />
+          </div>
+        ) : null}
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground truncate">{label}</span>
       </div>
-      <div className="flex items-end justify-between gap-3 px-4">
-        <div className="min-w-0">
+      <div className="flex items-end justify-between gap-2">
+        <div className="flex-1 min-w-0">
           {loading ? (
-            <Skeleton className="h-7 w-24 rounded-md bg-muted/60" />
+            <Skeleton className="h-7 w-20 rounded-md bg-muted" />
           ) : (
-            <div
-              className={cn(
-                "truncate font-mono text-xl font-bold tracking-tight tabular-nums",
-                accent ? "text-primary" : "text-foreground"
-              )}
-            >
-              {value}
+            <div className="flex flex-col gap-0.5">
+              <div
+                className={cn(
+                  "truncate font-mono text-xl lg:text-2xl font-bold tracking-tight tabular-nums",
+                  accent ? "text-primary" : "text-foreground"
+                )}
+              >
+                {value}
+              </div>
+              {(trend || caption) ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {trend ? <MetricTrend {...trend} /> : null}
+                  {caption ? (
+                    <span className="truncate text-[10px] text-muted-foreground">{caption}</span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
         </div>
         {visual ? <div className="shrink-0">{visual}</div> : null}
       </div>
-      {(trend || caption || loading) ? (
-        <div className="flex items-center gap-2 px-4 mt-0.5">
-          {loading ? (
-            <Skeleton className="h-3 w-32 rounded-md bg-muted/50" />
-          ) : (
-            <>
-              {trend ? <MetricTrend {...trend} /> : null}
-              {caption ? (
-                <span className="truncate text-xs text-muted-foreground">{caption}</span>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
     </Card>
   );
 }

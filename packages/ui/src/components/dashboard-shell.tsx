@@ -304,17 +304,17 @@ export function DashboardShell({
         </header>
 
         {/* content container */}
-        <div className={cn("flex flex-1 flex-col gap-6 p-4 sm:p-6 mx-auto w-full animate-fade-in", fullWidth ? "max-w-[1600px]" : "max-w-7xl")}>
+        <div className={cn("flex flex-1 flex-col gap-4 p-4 mx-auto w-full animate-fade-in", fullWidth ? "max-w-full" : "max-w-[1800px]")}>
           {(title || actions) && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-2">
               <div className="space-y-1">
                 {title ? (
-                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  <h1 className="text-lg font-semibold tracking-tight text-foreground uppercase">
                     {title}
                   </h1>
                 ) : null}
                 {subtitle ? (
-                  <p className="text-sm text-muted-foreground">{subtitle}</p>
+                  <p className="text-xs text-muted-foreground">{subtitle}</p>
                 ) : null}
               </div>
               {actions ? (
@@ -322,8 +322,8 @@ export function DashboardShell({
               ) : null}
             </div>
           )}
-          {kpis ? <div data-slot="kpi-strip">{kpis}</div> : null}
-          <div className="flex flex-col gap-6">{children}</div>
+          {kpis ? <div data-slot="kpi-strip" className="-mx-2 px-2 overflow-x-auto pb-2">{kpis}</div> : null}
+          <div className="flex flex-col gap-4">{children}</div>
         </div>
       </SidebarInset>
     </SidebarProvider>

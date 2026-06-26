@@ -154,6 +154,7 @@ export default function SatelinkOSLayout({
       title={header.title}
       subtitle={header.subtitle}
       search={{ items: SEARCH_ITEMS, onSelect: navigate, placeholder: "Search OS…" }}
+      fullWidth={true}
       headerRight={
         <Badge variant="success" className="hidden gap-1.5 sm:inline-flex">
           <span className="size-1.5 rounded-full bg-success" />

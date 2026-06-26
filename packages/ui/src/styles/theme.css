@@ -1,8 +1,8 @@
 /* ============================================================
    @satelink/ui — canonical design tokens (SINGLE SOURCE OF TRUTH)
 
-   Dark, neutral/slate dashboard surface (Signoz / Datadog / Railway)
-   with a single emerald accent for primary actions + active state.
+   Command Center NOC layout using strict brand palette:
+   #222831 #393E46 #00ADB5 #EEEEEE #040D12 #183D3D #5C8374 #93B1A6
 
    Scope: `.satelink-os`. Every OS surface is wrapped by <AppShell>,
    which applies this class. Components consume ONLY semantic Tailwind
@@ -13,56 +13,71 @@
    ============================================================ */
 
 .satelink-os {
-  --radius: 0.625rem;
+  --radius: 0.25rem; /* tight, professional corners */
 
-  /* Surfaces — slate neutrals, dense dark dashboard */
-  --background: #050816;
-  --foreground: #E5EEF8;
-  --card: #121C33;
-  --card-foreground: #E5EEF8;
-  --popover: #0E1628;
-  --popover-foreground: #E5EEF8;
+  /* Surfaces */
+  --background: #040D12;
+  --foreground: #EEEEEE;
+  --card: #222831;
+  --card-foreground: #EEEEEE;
+  --popover: #222831;
+  --popover-foreground: #EEEEEE;
 
-  /* Accent — teal (the ONE brand accent) */
-  --primary: #5EEAD4;
-  --primary-foreground: #050816;
+  /* Accent — Neon Blue */
+  --primary: #00ADB5;
+  --primary-foreground: #040D12;
 
-  /* Ice secondary */
-  --secondary: #7DD3FC;
-  --secondary-foreground: #050816;
+  /* Secondary */
+  --secondary: #183D3D;
+  --secondary-foreground: #EEEEEE;
 
-  --muted: #0A1422;
-  --muted-foreground: #94A3B8;
+  --muted: #040D12;
+  --muted-foreground: #93B1A6;
 
-  --accent: rgba(94,234,212,0.06);
-  --accent-foreground: #5EEAD4;
+  --accent: rgba(0, 173, 181, 0.1);
+  --accent-foreground: #00ADB5;
 
   /* Semantic state colors */
-  --destructive: #EF4444;
-  --destructive-foreground: #E5EEF8;
-  --success: #34D399;
+  --destructive: #E11D48;
+  --destructive-foreground: #EEEEEE;
+  --success: #5C8374;
   --warning: #F59E0B;
 
-  --border: #1A2F50;
-  --input: #1A2F50;
-  --ring: #5EEAD4;
+  --border: #393E46;
+  --input: #393E46;
+  --ring: #00ADB5;
 
   /* Charts */
-  --chart-1: #5EEAD4;
-  --chart-2: #7DD3FC;
-  --chart-3: #34D399;
-  --chart-4: #F59E0B;
-  --chart-5: #EF4444;
+  --chart-1: #00ADB5;
+  --chart-2: #5C8374;
+  --chart-3: #183D3D;
+  --chart-4: #93B1A6;
+  --chart-5: #393E46;
 
   /* Sidebar / shell */
-  --sidebar: #0E1628;
-  --sidebar-foreground: #E5EEF8;
-  --sidebar-primary: #5EEAD4;
-  --sidebar-primary-foreground: #050816;
-  --sidebar-accent: #121C33;
-  --sidebar-accent-foreground: #E5EEF8;
-  --sidebar-border: #1A2F50;
-  --sidebar-ring: #5EEAD4;
+  --sidebar: #040D12;
+  --sidebar-foreground: #EEEEEE;
+  --sidebar-primary: #00ADB5;
+  --sidebar-primary-foreground: #040D12;
+  --sidebar-accent: #222831;
+  --sidebar-accent-foreground: #EEEEEE;
+  --sidebar-border: #393E46;
+  --sidebar-ring: #00ADB5;
+
+  /* Legacy Compatibility Mappings for Brand Colors */
+  --sat-primary: var(--primary);
+  --sat-secondary: var(--primary);
+  --sat-accent: var(--accent-foreground);
+  --sat-success: var(--success);
+  --sat-bg-0: var(--background);
+  --sat-bg-1: var(--card);
+  --sat-bg-2: var(--card);
+  --sat-bg-3: var(--card);
+  --sat-border: var(--border);
+  --sat-border-strong: var(--border);
+  --sat-text: var(--foreground);
+  --sat-text-secondary: var(--muted-foreground);
+  --sat-text-muted: var(--muted-foreground);
 
   background-color: var(--background);
   color: var(--foreground);
@@ -70,15 +85,15 @@
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--background);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
@@ -97,40 +112,23 @@
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+  animation: fadeIn 0.2s ease-out forwards;
 }
 
-@keyframes pulse-glow {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.4);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 0 8px 2px rgba(94, 234, 212, 0.2);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Glass & Depth Effects */
+/* Solid NOC Panels */
 .glass-panel {
-  background: rgba(18, 28, 51, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(26, 47, 80, 0.5);
+  background: #222831;
+  border: 1px solid #393E46;
 }
 
 .glow-card {
-  transition: all 0.2s ease-in-out;
+  transition: border-color 0.15s ease-in-out;
+  border: 1px solid #393E46;
+  background: #222831;
 }
 
 .glow-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px -2px rgba(94, 234, 212, 0.15);
-  border-color: rgba(94, 234, 212, 0.3);
+  border-color: #00ADB5;
 }
 
 /* Typography standardization */

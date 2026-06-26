@@ -65,6 +65,8 @@ export { KPIGrid } from "./components/kpi-grid";
 export type { KPIGridProps } from "./components/kpi-grid";
 export { StatCard } from "./components/stat-card";
 export type { StatCardProps } from "./components/stat-card";
+export { NocStatCard } from "./components/noc-stat-card";
+export type { NocStatCardProps } from "./components/noc-stat-card";
 export { MetricTrend } from "./components/metric-trend";
 export type { MetricTrendProps } from "./components/metric-trend";
 export { DashboardSection } from "./components/dashboard-section";
@@ -96,3 +98,12 @@ export type { AsyncBoundaryProps } from "./components/async-boundary";
 export * from "./components/charts";
 export * from "./components/tables";
 export * from "./components/topology";
+
+// NOC Specific Overhauls
+export { NocTelemetryChart } from "./components/charts/NocTelemetryChart";
+export type { NocTelemetryChartProps, NocTelemetryPoint } from "./components/charts/NocTelemetryChart";
+export { NocWorldMap } from "./components/charts/NocWorldMap";
+export { NocConcentricRing } from "./components/charts/NocConcentricRing";
+export type { NocConcentricRingProps } from "./components/charts/NocConcentricRing";
+export { NocLatencyHeatmap } from "./components/charts/NocLatencyHeatmap";
+export type { NocLatencyHeatmapProps } from "./components/charts/NocLatencyHeatmap";

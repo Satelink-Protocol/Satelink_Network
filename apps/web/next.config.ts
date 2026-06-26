@@ -133,10 +133,10 @@ const nextConfig: NextConfig = {
         destination: `${API_BASE}/${prefix}/:path*`,
       })),
 
-      // Proxy /api/* to the backend EXCEPT /api/grafana/* (served by the
-      // embedded-Grafana BFF route handler at apps/web/src/app/api/grafana).
+      // Proxy /api/* to the backend EXCEPT /api/grafana/* and /api/admin-proxy/* (served by the
+      // Next.js route handlers at apps/web/src/app/api/).
       {
-        source: "/api/:path((?!grafana(?:/|$)).*)",
+        source: "/api/:path((?!grafana(?:/|$)|admin-proxy(?:/|$)).*)",
         destination: `${API_BASE}/api/:path`,
       },
 
