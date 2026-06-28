@@ -1,5 +1,5 @@
 import * as React from "react";
-import { type LucideIcon } from "lucide-react";
+import { Activity, type LucideIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Card } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
@@ -15,6 +15,8 @@ export interface KPICardProps {
   caption?: string;
   icon?: LucideIcon;
   trend?: MetricTrendProps;
+  /** Optional signed percentage; renders a colored pill (+green / -red) top-right. */
+  trendValue?: number;
   loading?: boolean;
   className?: string;
 }
@@ -23,16 +25,41 @@ export function KPICard({
   label,
   value,
   caption,
-  icon: Icon,
+  icon: Icon = Activity,
   trend,
+  trendValue,
   loading = false,
   className,
 }: KPICardProps) {
+  const hasTrendValue = typeof trendValue === "number";
+  const trendUp = (trendValue ?? 0) >= 0;
   return (
-    <Card className={cn("flex flex-col gap-2 p-5 shadow-sm", className)}>
+    <Card
+      className={cn(
+        "flex flex-col gap-2 p-5 shadow-sm transition-colors",
+        "border-zinc-800/60 bg-gradient-to-b from-zinc-900/60 to-zinc-900/40",
+        "hover:border-zinc-700/80",
+        className
+      )}
+    >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium tracking-tight text-muted-foreground">{label}</span>
-        {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
+        <span className="flex items-center gap-2 text-sm font-medium tracking-tight text-muted-foreground">
+          <Icon className="size-4 text-muted-foreground" />
+          {label}
+        </span>
+        {hasTrendValue ? (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-semibold",
+              trendUp
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-red-500/15 text-red-400"
+            )}
+          >
+            {trendUp ? "+" : ""}
+            {trendValue}%
+          </span>
+        ) : null}
       </div>
       <div className="flex items-baseline gap-2">
         {loading ? (
