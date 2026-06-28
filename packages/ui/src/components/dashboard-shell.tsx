@@ -177,7 +177,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const BrandLogo = brand.logo;
   return (
-    <SidebarProvider className="satelink-os">
+    <SidebarProvider className="satelink-os h-svh overflow-hidden">
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-1 py-1.5">
@@ -238,9 +238,9 @@ export function DashboardShell({
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
-        {/* sticky header */}
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+      <SidebarInset className="h-svh min-h-0 overflow-hidden">
+        {/* topbar — pinned above the scroll region */}
+        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mr-1 h-5" />
           {breadcrumb && breadcrumb.length > 0 ? (
@@ -303,27 +303,30 @@ export function DashboardShell({
           </div>
         </header>
 
-        {/* content container */}
-        <div className={cn("flex flex-1 flex-col gap-6 p-4 sm:p-6 mx-auto w-full animate-fade-in", fullWidth ? "max-w-[1600px]" : "max-w-7xl")}>
-          {(title || actions) && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1">
-                {title ? (
-                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                    {title}
-                  </h1>
-                ) : null}
-                {subtitle ? (
-                  <p className="text-sm text-muted-foreground">{subtitle}</p>
+        {/* scroll region — owns vertical overflow so the shell fills the viewport */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* content container */}
+          <div className={cn("flex flex-col gap-6 p-4 sm:p-6 mx-auto w-full animate-fade-in", fullWidth ? "max-w-[1600px]" : "max-w-7xl")}>
+            {(title || actions) && (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1">
+                  {title ? (
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {title}
+                    </h1>
+                  ) : null}
+                  {subtitle ? (
+                    <p className="text-sm text-muted-foreground">{subtitle}</p>
+                  ) : null}
+                </div>
+                {actions ? (
+                  <div className="flex items-center gap-2">{actions}</div>
                 ) : null}
               </div>
-              {actions ? (
-                <div className="flex items-center gap-2">{actions}</div>
-              ) : null}
-            </div>
-          )}
-          {kpis ? <div data-slot="kpi-strip">{kpis}</div> : null}
-          <div className="flex flex-col gap-6">{children}</div>
+            )}
+            {kpis ? <div data-slot="kpi-strip">{kpis}</div> : null}
+            <div className="flex flex-col gap-6">{children}</div>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>
