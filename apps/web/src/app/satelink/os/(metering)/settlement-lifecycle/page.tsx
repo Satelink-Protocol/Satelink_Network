@@ -280,7 +280,7 @@ export default function SettlementLifecyclePage() {
       </div>
 
       {/* Settlement system stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         
         {/* On-Chain Signer Wallet status */}
         <div className="border border-border bg-card p-5 rounded-lg space-y-4">
@@ -311,68 +311,6 @@ export default function SettlementLifecyclePage() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Auto-Signer State:</span>
               <StatusBadge status={settlementStatus?.dryRun ? "neutral" : "confirmed"} label={settlementStatus?.dryRun ? "SIMULATION" : "ACTIVE"} />
-            </div>
-          </div>
-        </div>
-
-        {/* Platform Share and split rules */}
-        <div className="border border-border bg-card p-5 rounded-lg space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">USDT Yield Split Policies</h3>
-            <p className="text-[11px] text-muted-foreground">Current protocol reward distribution rules</p>
-          </div>
-
-          <div className="space-y-3 font-mono text-xs">
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Node Operators Share:</span>
-              <span className="text-slate-200 font-bold">50.0%</span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Platform Core Reserve:</span>
-              <span className="text-slate-200 font-bold">30.0%</span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Distributors Share:</span>
-              <span className="text-slate-200 font-bold">20.0%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Pricing Policy:</span>
-              <span className="text-slate-300">$0.000030 / RPC Call</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Security / Merkle Audits */}
-        <div className="border border-border bg-card p-5 rounded-lg space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">On-chain Settlement Proofs</h3>
-            <p className="text-[11px] text-muted-foreground">Validation hashes matching database weights</p>
-          </div>
-
-          <div className="space-y-3 font-mono text-xs">
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Merkle Registry Contract:</span>
-              <span className="text-primary truncate max-w-[120px] select-all">
-                {settlementStatus?.contractAddress || "0x80AF...DdA3"}
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Last Merkle Root:</span>
-              <span className="text-foreground truncate max-w-[120px] select-all">
-                0xf89ca98bef48cb921...
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted-foreground">Pending Batches:</span>
-              <span className="text-slate-200 font-bold">
-                {financial.data?.settlement?.batches_pending || 0} batches
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Confirmed Batches:</span>
-              <span className="text-emerald-400 font-bold">
-                {financial.data?.settlement?.batches_confirmed || 0} batches
-              </span>
             </div>
           </div>
         </div>

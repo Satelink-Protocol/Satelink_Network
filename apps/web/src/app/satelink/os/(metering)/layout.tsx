@@ -27,16 +27,12 @@ const NAV: ShellNavGroup[] = [
     label: "Platform",
     items: [
       { id: "mission-control", icon: LayoutDashboard, label: "Mission Control" },
-      { id: "overview", icon: Activity, label: "System Overview" },
-      { id: "nodes", icon: Server, label: "Nodes" },
       { id: "monitoring", icon: Activity, label: "Monitoring" },
-      { id: "agent-fleet", icon: Cpu, label: "Paperclip Fleet" },
     ],
   },
   {
     label: "Revenue Ops",
     items: [
-      { id: "customer-zero", icon: Users, label: "Customer Zero" },
       { id: "revenue-ops", icon: DollarSign, label: "Revenue Operations" },
       { id: "settlement-lifecycle", icon: RefreshCcw, label: "Settlement Lifecycle" },
     ],
@@ -44,7 +40,6 @@ const NAV: ShellNavGroup[] = [
   {
     label: "Billing",
     items: [
-      { id: "billing", icon: Receipt, label: "Billing" },
       { id: "deposit", icon: Wallet, label: "Credits & Deposits" },
       { id: "usage", icon: BarChart3, label: "Usage Metering" },
       { id: "keys", icon: KeyRound, label: "API Keys & SDK" },
@@ -54,14 +49,9 @@ const NAV: ShellNavGroup[] = [
 
 const SEARCH_ITEMS: ShellSearchItem[] = [
   { id: "mission-control", label: "Mission Control", icon: LayoutDashboard, group: "Platform" },
-  { id: "overview", label: "System Overview", icon: Activity, group: "Platform" },
-  { id: "nodes", label: "Nodes", icon: Server, group: "Platform" },
   { id: "monitoring", label: "Monitoring", icon: Activity, group: "Platform" },
-  { id: "agent-fleet", label: "Paperclip Fleet", icon: Cpu, group: "Platform" },
-  { id: "customer-zero", label: "Customer Zero Tracker", icon: Users, group: "Revenue Ops" },
   { id: "revenue-ops", label: "Revenue Operations", icon: DollarSign, group: "Revenue Ops" },
   { id: "settlement-lifecycle", label: "Settlement Lifecycle", icon: RefreshCcw, group: "Revenue Ops" },
-  { id: "billing", label: "Billing", icon: Receipt, group: "Billing" },
   { id: "deposit", label: "Credits & Deposits", icon: Wallet, group: "Billing" },
   { id: "usage", label: "Usage Metering", icon: BarChart3, group: "Billing" },
   { id: "keys", label: "API Keys & SDK", icon: KeyRound, group: "Billing" },

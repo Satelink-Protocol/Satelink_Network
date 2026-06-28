@@ -1,26 +1,34 @@
-import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot } from "lucide-react";
+import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle } from "lucide-react";
 
 export const NAV = [
   {
     label: "Command Center",
     items: [
-      { id: "overview", icon: LayoutDashboard, label: "Overview" },
+      { id: "overview", icon: LayoutDashboard, label: "Executive" },
       { id: "radar", icon: Radar, label: "Demand Radar" },
       { id: "treasury", icon: Building, label: "Treasury" },
-      { id: "revenue", icon: DollarSign, label: "Revenue" },
-      { id: "agents", icon: Bot, label: "Agents" },
-      { id: "settings", icon: Settings, label: "Settings" },
+      { id: "revenue", icon: DollarSign, label: "Revenue Control" },
+      { id: "network", icon: Activity, label: "Network Health" },
+      { id: "billing", icon: CreditCard, label: "Billing & Credits" },
+      { id: "agents", icon: Bot, label: "Agents Fleet" },
+      { id: "security", icon: ShieldAlert, label: "Security Ops" },
+      { id: "incidents", icon: AlertTriangle, label: "Incidents & Audits" },
+      { id: "settings", icon: Settings, label: "System Config" },
     ]
   }
 ];
 
-export const HEADERS: Record<string, { title: string; subtitle: string }> = {
-  overview: { title: "Overview", subtitle: "Gateway status & Customer Zero countdown" },
-  radar: { title: "Demand Radar", subtitle: "Lead pipeline, conversion & outreach" },
-  treasury: { title: "Treasury", subtitle: "Settlement control & on-chain status" },
-  revenue: { title: "Revenue", subtitle: "Credit balance, pipeline & projection" },
-  agents: { title: "Agents", subtitle: "Automation jobs & agent fleet" },
-  settings: { title: "Settings", subtitle: "Configuration reference" },
+export const HEADERS: Record<string, { title: string; subtitle: string; icon: any }> = {
+  overview: { title: "Executive Overview", subtitle: "NOC executive dashboard & live risk analysis", icon: LayoutDashboard },
+  radar: { title: "Demand Radar", subtitle: "IP analysis, conversion funnel & leads tracking", icon: Radar },
+  treasury: { title: "Treasury Operations", subtitle: "On-chain settlements, wallet states & dry-run switches", icon: Building },
+  revenue: { title: "Revenue Control", subtitle: "Lifetime income logs, billing rates & ledger events", icon: DollarSign },
+  network: { title: "Network Status", subtitle: "API latency metrics, node list & availability tracking", icon: Activity },
+  billing: { title: "Billing & Credits", subtitle: "Credit distribution, customer listings & token deposits", icon: CreditCard },
+  agents: { title: "Automation & Agents", subtitle: "Satelink background tasks & Live SSE NOC feed", icon: Bot },
+  security: { title: "Security Operations", subtitle: "L3 firewall blocks, threat detection & ASN blacklists", icon: ShieldAlert },
+  incidents: { title: "Incidents & Audits", subtitle: "System outage timelines & administrative audit trails", icon: AlertTriangle },
+  settings: { title: "System Config", subtitle: "Verified global constants & environment state variables", icon: Settings },
 };
 
 export const PROJECTIONS = [

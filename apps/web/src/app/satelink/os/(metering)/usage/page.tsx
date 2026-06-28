@@ -96,19 +96,6 @@ export default function UsagePage() {
     { key: "status", header: "Status", cell: () => <StatusBadge status="confirmed" /> },
   ];
 
-  // Honest empty for telemetry the gateway does not yet expose per key.
-  const unavailable = (title: string, what: string) => (
-    <EmptyState
-      title={title}
-      description={`Per-key ${what} isn't exposed by the gateway yet — it ships with the metrics pipeline (Monitoring).`}
-      action={
-        <a href="/satelink/os/monitoring" className="text-xs text-primary hover:underline">
-          Open Monitoring →
-        </a>
-      }
-    />
-  );
-
   return (
     <div className="space-y-6">
       <KeySelector keys={keys} selected={selected} onSelect={setSelected} />
@@ -174,13 +161,6 @@ export default function UsagePage() {
             </AsyncBoundary>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Breakdowns */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <DashboardSection title="Top Endpoints">{unavailable("Endpoint breakdown coming", "endpoint breakdown")}</DashboardSection>
-        <DashboardSection title="Method Breakdown">{unavailable("Method breakdown coming", "RPC-method breakdown")}</DashboardSection>
-        <DashboardSection title="Error Breakdown">{unavailable("Error breakdown coming", "error-code breakdown")}</DashboardSection>
       </div>
 
       {/* History */}

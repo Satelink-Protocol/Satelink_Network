@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "../../../../packages/ui/src/styles/theme.css";
 import "./globals.css";
 
 const FAVICON =

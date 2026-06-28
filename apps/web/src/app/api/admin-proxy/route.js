@@ -73,9 +73,7 @@ async function proxy(req) {
       headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
       body: method !== 'GET' && body !== undefined ? JSON.stringify(body) : undefined,
     });
-    console.log(`[DEBUG Proxy] Upstream response: ${result.status}`);
     const data = await result.json().catch(() => ({ ok: false, error: 'non-JSON upstream response' }));
-    console.log(`[DEBUG Proxy] Upstream data:`, data);
     return Response.json(data, { status: result.status });
   } catch (e) {
     return Response.json({ ok: false, error: e.message }, { status: 502 });
