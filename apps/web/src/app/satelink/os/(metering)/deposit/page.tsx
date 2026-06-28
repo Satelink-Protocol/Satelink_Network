@@ -16,11 +16,7 @@ import { KPICard } from "@satelink/ui";
 // P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
 import { CreditEstimator } from "@/components/deposit/CreditEstimator";
 import { WalletBalanceCard } from "@/components/deposit/WalletBalanceCard";
-import { RevenueVaultProofCard } from "@/components/deposit/RevenueVaultProofCard";
-import { PricingEconomicsCard } from "@/components/deposit/PricingEconomicsCard";
-import { NetworkStatsWidget } from "@/components/deposit/NetworkStatsWidget";
 import { DepositHistory } from "@/components/deposit/DepositHistory";
-import { FundingWorkflow } from "@/components/deposit/FundingWorkflow";
 import { WalletProvider } from "@/components/deposit/wallet/WalletProvider";
 import { ConnectWalletButton } from "@/components/deposit/wallet/ConnectWalletButton";
 import { useAccount } from "wagmi";
@@ -55,21 +51,9 @@ function CopyField({ label, value }: { label: string; value: string }) {
   return (
     <Stack gap="sm">
       <SectionLabel>{label}</SectionLabel>
-      <div style={{ display: "flex", alignItems: "stretch", gap: "8px" }}>
+      <div className="flex items-stretch gap-2">
         <code
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: "var(--sat-bg-0)",
-            border: "1px solid var(--sat-border)",
-            borderRadius: "var(--sat-radius-md)",
-            padding: "8px 10px",
-            fontFamily: "var(--sat-font-mono)",
-            fontSize: "11px",
-            lineHeight: 1.5,
-            color: "var(--sat-text-secondary)",
-            wordBreak: "break-all",
-          }}
+          className="flex-1 min-w-0 bg-background border border-border rounded-md px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/70 break-all"
         >
           {value}
         </code>
@@ -127,13 +111,8 @@ function DepositPageInner() {
   };
 
   return (
-    <div
-      style={{
-        background: "var(--sat-bg-0)",
-        padding: "24px 20px",
-      }}
-    >
-      <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+    <div className="bg-background px-5 py-6">
+      <div className="max-w-[720px] mx-auto">
         <Stack gap="md">
           {/* Wallet action row — page title/chrome now provided by the OS DashboardShell header */}
           <Inline gap="sm">
@@ -145,30 +124,6 @@ function DepositPageInner() {
             </span>
           </Inline>
 
-          {/* Value proposition (copy only) */}
-          <ul
-            style={{
-              margin: 0,
-              paddingLeft: 18,
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              fontSize: 12,
-              color: "var(--sat-text-secondary)",
-              lineHeight: 1.5,
-            }}
-          >
-            <li>Pay-as-you-go — buy exactly the capacity you need</li>
-            <li>No subscriptions</li>
-            <li>No monthly commitments</li>
-            <li>Credits never expire</li>
-            <li>Machine-to-machine billing — per-call, fully programmatic</li>
-            <li>On-chain USDT settlement on Polygon</li>
-          </ul>
-
-          {/* P0 — funding lifecycle (static, above the fold) */}
-          <FundingWorkflow />
-
           {/* P0 — capacity estimator (shares the amount state with the deposit flow below) */}
           <CreditEstimator
             amount={parseFloat(amount) || 0}
@@ -177,9 +132,6 @@ function DepositPageInner() {
 
           {/* P0 — trust + economics panels */}
           <WalletBalanceCard wallet={wallet} />
-          <RevenueVaultProofCard />
-          <PricingEconomicsCard />
-          <NetworkStatsWidget />
 
           {/* AMOUNT INPUT */}
           <Panel title="Amount">
@@ -248,14 +200,9 @@ function DepositPageInner() {
                 headerRight={<StatusBadge label="Step 1" tone="muted" />}
               >
                 <Stack gap="sm">
-                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                  <p className="text-[11px] text-muted-foreground m-0">
                     Send to:{" "}
-                    <span
-                      style={{
-                        fontFamily: "var(--sat-font-mono)",
-                        color: "var(--sat-text-secondary)",
-                      }}
-                    >
+                    <span className="font-mono text-foreground/70">
                       {instructions.usdtAddress}
                     </span>
                   </p>
@@ -269,14 +216,9 @@ function DepositPageInner() {
                 headerRight={<StatusBadge label="Step 2" tone="primary" />}
               >
                 <Stack gap="sm">
-                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                  <p className="text-[11px] text-muted-foreground m-0">
                     Send to:{" "}
-                    <span
-                      style={{
-                        fontFamily: "var(--sat-font-mono)",
-                        color: "var(--sat-text-secondary)",
-                      }}
-                    >
+                    <span className="font-mono text-foreground/70">
                       {instructions.revenueVaultAddress}
                     </span>
                   </p>
@@ -287,20 +229,12 @@ function DepositPageInner() {
               {/* HOW TO EXECUTE */}
               <Panel title="How to execute">
                 <Stack gap="sm">
-                  <p style={{ fontSize: "12px", color: "var(--sat-text-secondary)", margin: 0 }}>
+                  <p className="text-xs text-foreground/70 m-0">
                     Use any EVM wallet or web3 tool to execute these two transactions.
                   </p>
-                  <p style={{ fontSize: "11px", color: "var(--sat-text-muted)", margin: 0 }}>
+                  <p className="text-[11px] text-muted-foreground m-0">
                     After both transactions confirm, your credits will be available. Add{" "}
-                    <code
-                      style={{
-                        fontFamily: "var(--sat-font-mono)",
-                        background: "var(--sat-bg-0)",
-                        padding: "1px 5px",
-                        borderRadius: "var(--sat-radius-sm)",
-                        color: "var(--sat-secondary)",
-                      }}
-                    >
+                    <code className="font-mono bg-background px-1 py-[1px] rounded text-foreground">
                       X-Wallet-Address: &lt;your-wallet&gt;
                     </code>{" "}
                     to your RPC calls to claim earnings.
@@ -310,12 +244,7 @@ function DepositPageInner() {
                       href={instructions.polygonscan}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--sat-primary)",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "2px",
-                      }}
+                      className="text-[11px] text-primary underline underline-offset-2"
                     >
                       View vault on Polygonscan →
                     </a>
@@ -326,53 +255,29 @@ function DepositPageInner() {
               {/* WHAT HAPPENS NEXT */}
               <Panel title="What happens next">
                 <Stack gap="sm">
-                  <ol
-                    style={{
-                      margin: 0,
-                      paddingLeft: "18px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      fontSize: "12px",
-                      color: "var(--sat-text-secondary)",
-                      lineHeight: 1.5,
-                    }}
-                  >
+                  <ol className="m-0 pl-[18px] flex flex-col gap-2 text-xs text-foreground/70 leading-relaxed">
                     <li>
                       Credits appear automatically within{" "}
-                      <strong style={{ color: "var(--sat-success)" }}>~30 seconds</strong> of
+                      <strong className="text-green-400">~30 seconds</strong> of
                       transaction confirmation (2 Polygon blocks).
                     </li>
                     <li>
                       Add{" "}
-                      <code
-                        style={{
-                          fontFamily: "var(--sat-font-mono)",
-                          background: "var(--sat-bg-0)",
-                          padding: "1px 5px",
-                          borderRadius: "var(--sat-radius-sm)",
-                          color: "var(--sat-secondary)",
-                        }}
-                      >
+                      <code className="font-mono bg-background px-1 py-[1px] rounded text-foreground">
                         X-Wallet-Address: &lt;your-wallet&gt;
                       </code>{" "}
                       to every RPC request so calls are billed to your balance.
                     </li>
                     <li>
                       Each call costs{" "}
-                      <strong style={{ color: "var(--sat-success)" }}>$0.00003 USDT</strong> —
+                      <strong className="text-green-400">$0.00003 USDT</strong> —
                       33,333 calls per $1 deposited.
                     </li>
                   </ol>
                   <div>
                     <a
                       href="/satelink/os/overview"
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "var(--sat-primary)",
-                        textDecoration: "none",
-                      }}
+                      className="text-xs font-semibold text-primary no-underline"
                     >
                       Open the console →
                     </a>

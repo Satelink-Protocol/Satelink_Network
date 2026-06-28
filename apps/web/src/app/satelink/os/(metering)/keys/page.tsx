@@ -207,30 +207,6 @@ export default function KeysPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left: Keys Table */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Getting Started Card */}
-          <Card className="glow-card glass-panel border-primary/20 bg-primary/5">
-            <CardHeader>
-              <CardTitle>Getting Started — 3 steps, no docs needed</CardTitle>
-              <CardDescription>Everything below happens inside Satelink OS.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {[{ icon: KeyRound, t: "1. Create a key", d: "Generate a free‑tier key below — it is shown once, copy it." },
-                  { icon: Wallet, t: "2. Fund account", d: "Open Deposit, send USDT to the vault, paste the tx hash." },
-                  { icon: Send, t: "3. Make first request", d: "Send X-API-Key on /rpc/polygon — usage & billing appear live." }]
-                  .map((s) => (
-                    <div key={s.t} className="flex items-start gap-2.5 rounded-lg border border-border bg-background/40 p-3">
-                      <s.icon className="mt-0.5 size-4 shrink-0 text-primary" />
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-semibold text-foreground">{s.t}</p>
-                        <p className="text-xs text-muted-foreground">{s.d}</p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Reveal new key */}
           {revealKey && (
             <Card className="glow-card glass-panel border-success/40 bg-success/5">

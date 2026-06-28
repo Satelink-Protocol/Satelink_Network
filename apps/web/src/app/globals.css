@@ -1,11 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* @satelink/ui — canonical OS design tokens (single source of truth) */
-@import "../../../../packages/ui/src/styles/theme.css";
-
-/* Tailwind must scan the design-system package for utility class names */
-@source "../../../../packages/ui/src";
+/* Tailwind must scan the entire web src and packages/ui src directories */
+@source "../**/*.{js,ts,jsx,tsx}";
+@source "../../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
 
 /* ============================================================
    Satelink landing design system — copied verbatim from the
