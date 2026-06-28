@@ -15,7 +15,8 @@ export interface DataTableProps<T> {
   columns: Column<T>[];
   /** null = loading. */
   rows: T[] | null;
-  getRowKey: (row: T, index: number) => string;
+  /** Optional; defaults to `row.id ?? row.key ?? index`. */
+  getRowKey?: (row: T, index: number) => string;
   error?: string | null;
   emptyLabel?: string;
   emptyMessage?: string;
@@ -28,7 +29,7 @@ export interface DataTableProps<T> {
 export function LegacyDataTable<T>({
   columns,
   rows,
-  getRowKey,
+  getRowKey = (row: any, i: number) => row.id ?? row.key ?? i,
   error,
   emptyLabel = 'No data',
   emptyMessage,
