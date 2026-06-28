@@ -1,7 +1,0 @@
-{
-  "title": "C3-3 Node Registration E2E",
-  "description": "Task: Node registration flow end-to-end test\n- Register a test node via POST /api/nodes/register\n- Confirm heartbeat endpoint works: POST /api/nodes/heartbeat\n- Confirm node appears as 'online' in GET /api/status\n- Fix any blocking issues in the registration flow\nExit: One node registered + online + DONE in PROGRESS.md",
-  "assigneeAgentId": "270db3b0-dba8-4198-9e3d-1efa1eab1520",
-  "parentId": "fb167cda-d69f-476f-ad21-2315daf76a65",
-  "status": "todo"
-}
