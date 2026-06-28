@@ -1,7 +1,7 @@
 import * as React from "react";
-import { Activity, type LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 import { cn } from "../lib/utils";
-import { Card } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 import { MetricTrend, type MetricTrendProps } from "./metric-trend";
 
@@ -13,9 +13,11 @@ export interface KPICardProps {
   label: string;
   value: React.ReactNode;
   caption?: string;
-  icon?: LucideIcon;
+  /** Renders top-right inside a subtle primary-tinted box when provided. */
+  icon?: React.ComponentType<{ className?: string }>;
+  /** Optional detailed trend rendered bottom-left (legacy, backward compatible). */
   trend?: MetricTrendProps;
-  /** Optional signed percentage; renders a colored pill (+green / -red) top-right. */
+  /** Optional signed percentage; renders a colored pill (+green / -red) bottom-right. */
   trendValue?: number;
   loading?: boolean;
   className?: string;
@@ -25,7 +27,7 @@ export function KPICard({
   label,
   value,
   caption,
-  icon: Icon = Activity,
+  icon: Icon,
   trend,
   trendValue,
   loading = false,
@@ -33,57 +35,57 @@ export function KPICard({
 }: KPICardProps) {
   const hasTrendValue = typeof trendValue === "number";
   const trendUp = (trendValue ?? 0) >= 0;
+  const showBottom = !loading && (caption || trend || hasTrendValue);
   return (
-    <Card
-      className={cn(
-        "flex flex-col gap-2 p-5 shadow-sm transition-colors",
-        "border-zinc-800/60 bg-gradient-to-b from-zinc-900/60 to-zinc-900/40",
-        "hover:border-zinc-700/80",
-        className
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-2 text-sm font-medium tracking-tight text-muted-foreground">
-          <Icon className="size-4 text-muted-foreground" />
-          {label}
-        </span>
-        {hasTrendValue ? (
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-semibold",
-              trendUp
-                ? "bg-emerald-500/15 text-emerald-400"
-                : "bg-red-500/15 text-red-400"
-            )}
-          >
-            {trendUp ? "+" : ""}
-            {trendValue}%
+    <Card className={cn("relative overflow-hidden py-0", className)}>
+      <CardContent className="p-5">
+        {/* Top row — label + optional icon */}
+        <div className="flex items-start justify-between">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+            {label}
           </span>
-        ) : null}
-      </div>
-      <div className="flex items-baseline gap-2">
+          {Icon ? (
+            <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+              <Icon className="size-4" />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Value */}
         {loading ? (
-          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="mt-2 h-8 w-24 rounded-md" />
         ) : (
-          <div className="font-mono text-2xl font-bold tracking-tight text-foreground">
+          <div className="mt-2 font-mono text-2xl font-bold text-foreground">
             {value}
           </div>
         )}
-      </div>
-      {(trend || caption || loading) ? (
-        <div className="mt-1 flex items-center gap-2">
-          {loading ? (
-            <Skeleton className="h-4 w-32 rounded-md" />
-          ) : (
-            <>
+
+        {/* Bottom row — caption / trend + optional pill */}
+        {showBottom ? (
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
               {trend ? <MetricTrend {...trend} /> : null}
-              {caption ? (
-                <span className="truncate text-xs text-muted-foreground">{caption}</span>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
+              {caption ? <span className="truncate">{caption}</span> : null}
+            </span>
+            {hasTrendValue ? (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
+                  trendUp
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : "bg-red-500/15 text-red-400"
+                )}
+              >
+                {trendUp ? "+" : ""}
+                {trendValue}%
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+
+      {/* Subtle accent line */}
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/40 to-transparent" />
     </Card>
   );
 }

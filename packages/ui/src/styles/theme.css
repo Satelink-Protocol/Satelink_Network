@@ -19,8 +19,10 @@
   --background: 201 64% 4%; /* #040D12 */
   --foreground: 0 0% 93%; /* #EEEEEE */
   
-  --card: 217 10% 25%; /* #393E46 */
-  --card-foreground: 0 0% 93%;
+  --card: 220 13% 18%;        /* was 217 10% 25% — slightly lighter for contrast */
+  --card-foreground: 0 0% 95%;
+  --card-border: 157 20% 28%;     /* visible card border — darker than --border */
+  --card-shadow: 0 1px 3px 0 rgba(0,0,0,0.4), 0 0 0 1px hsl(157 20% 22%);
   
   --popover: 180 44% 17%; /* #183D3D (Surface) */
   --popover-foreground: 0 0% 93%;
