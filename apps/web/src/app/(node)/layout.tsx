@@ -1,61 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardShell, type ShellNavGroup, type ShellSearchItem } from "@satelink/ui";
-import { Server, Activity, DollarSign, Wrench } from "lucide-react";
+import {
+  LayoutDashboard,
+  DollarSign,
+  Cpu,
+  Activity,
+  Shield,
+  Wallet,
+  Server,
+  Settings,
+  AlertTriangle,
+  Satellite,
+} from "lucide-react";
 
-const NAV: ShellNavGroup[] = [
+// Master navigation for node.satelink.network. Each id maps to a view rendered
+// by the single-page portal at /node (tabs-in-one-page), addressed via ?view=.
+const NODE_NAV: ShellNavGroup[] = [
   {
-    label: "Node Operations",
+    label: "Node Portal",
     items: [
-      { id: "node", icon: Server, label: "Dashboard" },
-      { id: "node/earnings", icon: Activity, label: "Earnings" },
-      { id: "node/claim", icon: DollarSign, label: "Claim Rewards" },
-      { id: "node/setup", icon: Wrench, label: "Setup" },
+      { id: "overview", icon: LayoutDashboard, label: "Overview" },
+      { id: "earnings", icon: DollarSign, label: "Earnings & Rewards" },
+      { id: "workloads", icon: Cpu, label: "Workloads" },
+      { id: "performance", icon: Activity, label: "Performance" },
+      { id: "reputation", icon: Shield, label: "Reputation" },
+      { id: "withdrawals", icon: Wallet, label: "Withdrawals" },
+      { id: "capacity", icon: Server, label: "Capacity" },
+      { id: "config", icon: Settings, label: "Configuration" },
+      { id: "alerts", icon: AlertTriangle, label: "Alerts" },
     ],
   },
 ];
 
-const SEARCH_ITEMS: ShellSearchItem[] = [
-  { id: "node", label: "Dashboard", icon: Server, group: "Node Operations" },
-  { id: "node/earnings", label: "Earnings", icon: Activity, group: "Node Operations" },
-  { id: "node/claim", label: "Claim Rewards", icon: DollarSign, group: "Node Operations" },
-  { id: "node/setup", label: "Setup", icon: Wrench, group: "Node Operations" },
-];
+const SEARCH_ITEMS: ShellSearchItem[] = NODE_NAV[0].items.map((i) => ({
+  id: i.id,
+  label: i.label,
+  icon: i.icon,
+  group: "Node Portal",
+}));
 
-export default function NodeLayout({ children }: { children: React.ReactNode }) {
+function NodeShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [authorized, setAuthorized] = useState(false);
+  const params = useSearchParams();
+  const view = params.get("view") || "overview";
 
-  useEffect(() => {
-    const token = localStorage.getItem("satelink_token");
-    if (!token) {
-      router.push("/login");
-    } else {
-      setAuthorized(true);
-    }
-  }, [router]);
+  const go = (id: string) =>
+    router.push(id === "overview" ? "/node" : `/node?view=${id}`);
 
-  if (!authorized) return null;
-
-  const activeId =
-    NAV.flatMap((g) => g.items).find((i) => pathname?.includes(`/${i.id}`))?.id ??
-    "node";
+  const activeLabel =
+    NODE_NAV[0].items.find((i) => i.id === view)?.label ?? "Overview";
 
   return (
     <DashboardShell
-      brand={{ name: "Satelink OS", sublabel: "Node Operator" }}
-      nav={NAV}
-      activeId={activeId}
-      onNavigate={(id) => router.push(`/${id}`)}
-      breadcrumb={["Satelink", "Node"]}
-      title="Node Operator"
-      subtitle="Manage your decentralized infrastructure"
-      search={{ items: SEARCH_ITEMS, onSelect: (id) => router.push(`/${id}`), placeholder: "Search..." }}
+      brand={{ name: "Satelink Node", sublabel: "Operator Portal", logo: Satellite }}
+      nav={NODE_NAV}
+      activeId={view}
+      onNavigate={go}
+      breadcrumb={["Satelink", "Node", activeLabel]}
+      title="Node Operator Portal"
+      subtitle="Am I online? Am I earning? How do I earn more?"
+      search={{
+        items: SEARCH_ITEMS,
+        onSelect: go,
+        placeholder: "Search node portal…",
+      }}
     >
       {children}
     </DashboardShell>
+  );
+}
+
+export default function NodeLayout({ children }: { children: React.ReactNode }) {
+  // useSearchParams must sit inside a Suspense boundary so statically-rendered
+  // sibling routes under (node) (setup, earnings, claim) keep building.
+  return (
+    <Suspense fallback={null}>
+      <NodeShell>{children}</NodeShell>
+    </Suspense>
   );
 }
