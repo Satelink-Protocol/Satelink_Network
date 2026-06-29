@@ -32,6 +32,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // node subdomain root lands on the setup flow.
+  if (subdomain === 'node') {
+    if (url.pathname === '/' || url.pathname === '') {
+      url.pathname = '/node/setup'
+      return NextResponse.redirect(url)
+    }
+  }
+
   const prefix = SUBDOMAIN_MAP[subdomain]
 
   // Only rewrite if it is a known subdomain and path not already prefixed
