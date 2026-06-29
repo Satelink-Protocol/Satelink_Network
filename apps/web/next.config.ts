@@ -86,6 +86,13 @@ const nextConfig: NextConfig = {
           { key: 'Vary', value: '*' },
         ],
       },
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,OPTIONS' },
+        ],
+      },
     ];
   },
 
