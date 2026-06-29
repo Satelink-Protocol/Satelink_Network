@@ -35,7 +35,7 @@ export function middleware(req: NextRequest) {
   // node subdomain root lands on the setup flow.
   if (subdomain === 'node') {
     if (url.pathname === '/' || url.pathname === '') {
-      url.pathname = '/node/setup'
+      url.pathname = '/node'
       return NextResponse.redirect(url)
     }
   }
