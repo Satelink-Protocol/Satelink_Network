@@ -177,7 +177,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const BrandLogo = brand.logo;
   return (
-    <SidebarProvider className="satelink-os h-svh overflow-hidden">
+    <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties} className="satelink-os h-svh overflow-hidden">
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-1 py-1.5">
@@ -189,7 +189,7 @@ export function DashboardShell({
             <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate text-sm font-semibold">{brand.name}</span>
               {brand.sublabel ? (
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-[10px] uppercase tracking-widest text-muted-foreground">
                   {brand.sublabel}
                 </span>
               ) : null}
@@ -201,7 +201,9 @@ export function DashboardShell({
           {nav.map((group, gi) => (
             <SidebarGroup key={group.label ?? gi}>
               {group.label ? (
-                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                <SidebarGroupLabel className={cn("text-[10px] font-semibold uppercase tracking-widest text-muted-foreground", gi === 0 ? "pt-4" : "pt-6")}>
+                  {group.label}
+                </SidebarGroupLabel>
               ) : null}
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -213,7 +215,7 @@ export function DashboardShell({
                           isActive={item.id === activeId}
                           tooltip={item.label}
                           onClick={() => onNavigate(item.id)}
-                          className="cursor-pointer transition-colors duration-200 hover:bg-muted/50 data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+                          className="cursor-pointer transition-colors duration-200 border-l-2 border-transparent hover:bg-muted/50 data-[active=true]:border-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                         >
                           {Icon ? <Icon /> : null}
                           <span>{item.label}</span>

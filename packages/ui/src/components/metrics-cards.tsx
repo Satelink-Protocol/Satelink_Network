@@ -33,59 +33,50 @@ export function KPICard({
   loading = false,
   className,
 }: KPICardProps) {
-  const hasTrendValue = typeof trendValue === "number";
-  const trendUp = (trendValue ?? 0) >= 0;
-  const showBottom = !loading && (caption || trend || hasTrendValue);
   return (
-    <Card className={cn("relative overflow-hidden py-0", className)}>
-      <CardContent className="p-5">
-        {/* Top row — label + optional icon */}
-        <div className="flex items-start justify-between">
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+    <Card className={cn(
+      'relative overflow-hidden panel-hover border-[hsl(var(--card-border))] shadow-[var(--card-shadow)]',
+      className
+    )}>
+      {/* Grafana-style top accent line */}
+      <div className='absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary via-primary/60 to-transparent' />
+      
+      <CardContent className='p-5 pt-6'>
+        <div className='flex items-start justify-between'>
+          <span className='text-[11px] font-semibold uppercase tracking-widest text-muted-foreground'>
             {label}
           </span>
-          {Icon ? (
-            <div className="rounded-md bg-primary/10 p-1.5 text-primary">
-              <Icon className="size-4" />
+          {Icon && (
+            <div className='flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 ring-1 ring-primary/20'>
+              <Icon className='h-3.5 w-3.5 text-primary' />
             </div>
-          ) : null}
+          )}
         </div>
-
-        {/* Value */}
+        
         {loading ? (
-          <Skeleton className="mt-2 h-8 w-24 rounded-md" />
+          <div className='mt-3 h-8 w-24 animate-pulse rounded bg-muted' />
         ) : (
-          <div className="mt-2 font-mono text-2xl font-bold text-foreground">
+          <div className='metric-value mt-2 text-[28px] font-bold leading-none text-foreground'>
             {value}
           </div>
         )}
-
-        {/* Bottom row — caption / trend + optional pill */}
-        {showBottom ? (
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              {trend ? <MetricTrend {...trend} /> : null}
-              {caption ? <span className="truncate">{caption}</span> : null}
+        
+        <div className='mt-2 flex items-center justify-between'>
+          {caption && (
+            <span className='text-[11px] text-muted-foreground'>{caption}</span>
+          )}
+          {trendValue !== undefined && trendValue !== null && (
+            <span className={cn(
+              'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+              trendValue >= 0 
+                ? 'bg-success/15 text-success' 
+                : 'bg-destructive/15 text-destructive'
+            )}>
+              {trendValue >= 0 ? '▲' : '▼'} {Math.abs(trendValue)}%
             </span>
-            {hasTrendValue ? (
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
-                  trendUp
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "bg-red-500/15 text-red-400"
-                )}
-              >
-                {trendUp ? "+" : ""}
-                {trendValue}%
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+          )}
+        </div>
       </CardContent>
-
-      {/* Subtle accent line */}
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/40 to-transparent" />
     </Card>
   );
 }
