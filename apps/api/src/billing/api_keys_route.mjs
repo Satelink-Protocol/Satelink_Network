@@ -3,6 +3,8 @@
  * The API key is a bearer secret — pass it in the X-API-Key header (never the
  * URL path) for every key-scoped endpoint.
  * POST /api/keys              — Create free tier key (no auth required, rate-limited)
+ *                               Optional body: { email, email_consent } captures opt-in contact.
+ * POST /api/keys/email        — Attach/update opt-in email for an existing key (X-API-Key header)
  * GET  /api/keys/usage        — Check usage           (X-API-Key header)
  * GET  /api/keys/deposit-info — Deposit instructions  (X-API-Key header)
  * POST /api/keys/deposit      — Verify USDT deposit + upgrade tier (X-API-Key header)
@@ -16,6 +18,8 @@ import {
   createApiKeyWithCredits,
   getKeyUsageSummary,
   ensureCreditTables,
+  setKeyEmail,
+  normaliseEmail,
   TIERS
 } from './credit_system.mjs';
 import { discord } from '../services/discord_notify.mjs';
@@ -56,7 +60,7 @@ export function createSimpleApiKeysRouter(pool) {
   ensureCreditTables(pool);
 
   router.post('/', apiKeyCreateLimiter, async (req, res) => {
-    const { tier = 'free', wallet_address } = req.body || {};
+    const { tier = 'free', wallet_address, email, email_consent } = req.body || {};
 
     if (!TIERS[tier]) {
       return res.status(400).json({
@@ -74,14 +78,28 @@ export function createSimpleApiKeysRouter(pool) {
       });
     }
 
+    // Email is optional. If supplied it must be valid — we reject junk rather
+    // than silently dropping it, so callers know their address was not stored.
+    let normalisedEmail = null;
+    if (email !== undefined && email !== null && email !== '') {
+      normalisedEmail = normaliseEmail(email);
+      if (!normalisedEmail) {
+        return res.status(400).json({ ok: false, error: 'Invalid email format' });
+      }
+    }
+
     try {
-      const result = await createApiKeyWithCredits(pool, tier, wallet_address || null);
+      const result = await createApiKeyWithCredits(pool, tier, wallet_address || null, {
+        email: normalisedEmail,
+        emailConsent: email_consent === true,
+      });
 
       return res.json({
         ok: true,
         api_key: result.api_key,
         tier: result.tier,
         daily_limit: result.daily_limit,
+        email_captured: result.email_captured,
         usage: `Add header: X-API-Key: ${result.api_key}`,
         example: `curl -X POST https://rpc.satelink.network/rpc/polygon -H "X-API-Key: ${result.api_key}" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`,
         docs: 'https://docs.satelink.network'
@@ -89,6 +107,41 @@ export function createSimpleApiKeysRouter(pool) {
     } catch (err) {
       console.error('[ApiKeys] Create failed:', err.message);
       return res.status(500).json({ ok: false, error: 'Failed to create API key' });
+    }
+  });
+
+  // POST /api/keys/email — Attach/update opt-in contact email for an existing key
+  // (key via X-API-Key header). Lets keyholders created before email collection
+  // opt in. `email_consent: true` marks the address as outreach-eligible.
+  router.post('/email', apiKeyReadLimiter, async (req, res) => {
+    const key = extractApiKey(req);
+    const { email, email_consent } = req.body || {};
+
+    if (!isValidKeyFormat(key)) {
+      return res.status(400).json({ ok: false, error: 'Invalid API key format' });
+    }
+
+    const normalisedEmail = normaliseEmail(email);
+    if (!normalisedEmail) {
+      return res.status(400).json({ ok: false, error: 'Invalid email format' });
+    }
+
+    try {
+      const updated = await setKeyEmail(pool, key, normalisedEmail, email_consent === true);
+      if (!updated) {
+        return res.status(404).json({ ok: false, error: 'API key not found' });
+      }
+      return res.json({
+        ok: true,
+        email_captured: true,
+        email_consent: email_consent === true,
+        message: email_consent === true
+          ? 'Email saved. You may receive product and usage updates.'
+          : 'Email saved for account/transactional contact only.',
+      });
+    } catch (err) {
+      console.error('[ApiKeys] Email capture failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'Failed to save email' });
     }
   });
 

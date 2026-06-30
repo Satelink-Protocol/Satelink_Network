@@ -21,6 +21,18 @@ export function generateApiKey(tier = 'free') {
   return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
 }
 
+// Conservative single-address email validation. Returns the normalised
+// (trimmed, lower-cased) address, or null if the input is not a usable email.
+// Used to gate what we persist for outreach — we never store junk we would
+// later try to send mail to.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export function normaliseEmail(raw) {
+  if (typeof raw !== 'string') return null;
+  const email = raw.trim().toLowerCase();
+  if (email.length < 3 || email.length > 254) return null;
+  return EMAIL_RE.test(email) ? email : null;
+}
+
 export async function ensureCreditTables(pool) {
   if (!pool) return;
 
@@ -40,6 +52,15 @@ export async function ensureCreditTables(pool) {
         status          VARCHAR(20) DEFAULT 'active'
       )
     `);
+
+    // Email collection — opt-in contact for product/outreach communication.
+    // Added via ALTER so existing api_credits rows (keys created before this
+    // surface) gain the columns without a destructive migration. `email_consent`
+    // gates marketing/outreach use; a stored email with consent=false is for
+    // transactional contact only and must NOT be used for cold outreach.
+    await pool.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS email VARCHAR(254)`);
+    await pool.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS email_consent BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS email_captured_at TIMESTAMPTZ`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS api_usage_daily (
@@ -71,6 +92,8 @@ export async function ensureCreditTables(pool) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_credits_key ON api_credits(api_key)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_usage_key_date ON api_usage_daily(api_key, date)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_deposits_key ON api_deposits(api_key)`);
+    // Fast lookup of outreach-eligible contacts (opted-in, non-null email).
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_credits_outreach ON api_credits(email_consent) WHERE email IS NOT NULL`);
 
     console.log('[CreditSystem] Tables ensured');
   } catch (err) {
@@ -78,7 +101,7 @@ export async function ensureCreditTables(pool) {
   }
 }
 
-export async function createApiKeyWithCredits(pool, tier = 'free', walletAddress = null) {
+export async function createApiKeyWithCredits(pool, tier = 'free', walletAddress = null, opts = {}) {
   if (!TIERS[tier]) {
     throw new Error(`Invalid tier: ${tier}`);
   }
@@ -86,25 +109,48 @@ export async function createApiKeyWithCredits(pool, tier = 'free', walletAddress
   const apiKey = generateApiKey(tier);
   const { daily_limit } = TIERS[tier];
 
+  // Email is optional and pre-validated by the caller (normaliseEmail).
+  const email = opts.email || null;
+  const emailConsent = email ? Boolean(opts.emailConsent) : false;
+  const capturedAt = email ? new Date() : null;
+
   try {
     await pool.query(`
-      INSERT INTO api_credits (api_key, tier, daily_limit, wallet_address, status)
-      VALUES ($1, $2, $3, $4, 'active')
-    `, [apiKey, tier, daily_limit, walletAddress]);
+      INSERT INTO api_credits (api_key, tier, daily_limit, wallet_address, status, email, email_consent, email_captured_at)
+      VALUES ($1, $2, $3, $4, 'active', $5, $6, $7)
+    `, [apiKey, tier, daily_limit, walletAddress, email, emailConsent, capturedAt]);
 
-    console.log(`[CreditSystem] Created key: ${apiKey.slice(0, 15)}... tier=${tier}`);
+    console.log(`[CreditSystem] Created key: ${apiKey.slice(0, 15)}... tier=${tier}${email ? ` email=yes consent=${emailConsent}` : ''}`);
 
     return {
       api_key: apiKey,
       tier,
       daily_limit,
       credits_usdt: 0,
-      status: 'active'
+      status: 'active',
+      email_captured: Boolean(email),
     };
   } catch (err) {
     console.error('[CreditSystem] Key creation failed:', err.message);
     throw err;
   }
+}
+
+/**
+ * Attach or update the opt-in contact email for an existing key.
+ * Lets the ~16 free keys created before email collection opt in later.
+ * `email` must already be normalised (normaliseEmail) by the caller.
+ * Returns true if a row was updated, false if the key was not found.
+ */
+export async function setKeyEmail(pool, apiKey, email, emailConsent = false) {
+  const result = await pool.query(`
+    UPDATE api_credits
+       SET email = $1,
+           email_consent = $2,
+           email_captured_at = NOW()
+     WHERE api_key = $3
+  `, [email, Boolean(emailConsent), apiKey]);
+  return result.rowCount > 0;
 }
 
 export async function getKeyCredits(pool, apiKey) {
