@@ -19,6 +19,78 @@ async function adminFetch(path: string, opts: any = {}) {
   return res.json();
 }
 
+function OutreachTab() {
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const send = async () => {
+    if (!to || !subject || !body) { setStatus("error: all fields required"); return; }
+    setSending(true);
+    setStatus("Sending...");
+    try {
+      const data = await adminFetch("/email/send", { method: "POST", body: { to, subject, body } });
+      if (data.ok) {
+        setStatus(`✓ Email sent${data.messageId ? ` (${data.messageId})` : ""}`);
+        setTo(""); setSubject(""); setBody("");
+      } else {
+        setStatus("✗ " + (data.error || "send failed"));
+      }
+    } catch (e: any) {
+      setStatus("✗ " + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Send Email</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">To:</label>
+            <input
+              type="email"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-sm"
+              placeholder="support@example.com"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Subject:</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-sm"
+              placeholder="Email subject"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Body (HTML):</label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-sm font-mono h-32"
+              placeholder="<p>Hello...</p>"
+            />
+          </div>
+          <Button onClick={send} disabled={sending}>
+            {sending ? "Sending..." : "Send Email"}
+          </Button>
+          {status && <p className="text-xs text-muted-foreground">{status}</p>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminCommandCenter() {
   const [view, setView] = useState("overview");
   const [now, setNow] = useState("");
@@ -773,6 +845,9 @@ export default function AdminCommandCenter() {
             </Panel>
           </Stack>
         )}
+
+        {/* 8b. OUTREACH VIEW */}
+        {view === "outreach" && <OutreachTab />}
 
         {/* 9. INCIDENTS & AUDITS VIEW */}
         {view === "incidents" && (

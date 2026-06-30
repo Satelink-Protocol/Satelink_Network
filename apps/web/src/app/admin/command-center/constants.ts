@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle, Mail } from "lucide-react";
 
 export const NAV = [
   {
@@ -12,6 +12,7 @@ export const NAV = [
       { id: "billing", icon: CreditCard, label: "Billing & Credits" },
       { id: "agents", icon: Bot, label: "Agents Fleet" },
       { id: "security", icon: ShieldAlert, label: "Security Ops" },
+      { id: "outreach", icon: Mail, label: "Outreach" },
       { id: "incidents", icon: AlertTriangle, label: "Incidents & Audits" },
       { id: "settings", icon: Settings, label: "System Config" },
     ]
@@ -27,6 +28,7 @@ export const HEADERS: Record<string, { title: string; subtitle: string; icon: an
   billing: { title: "Billing & Credits", subtitle: "Credit distribution, customer listings & token deposits", icon: CreditCard },
   agents: { title: "Automation & Agents", subtitle: "Satelink background tasks & Live SSE NOC feed", icon: Bot },
   security: { title: "Security Operations", subtitle: "L3 firewall blocks, threat detection & ASN blacklists", icon: ShieldAlert },
+  outreach: { title: "Outreach", subtitle: "Send emails to infrastructure partners via Brevo", icon: Mail },
   incidents: { title: "Incidents & Audits", subtitle: "System outage timelines & administrative audit trails", icon: AlertTriangle },
   settings: { title: "System Config", subtitle: "Verified global constants & environment state variables", icon: Settings },
 };
