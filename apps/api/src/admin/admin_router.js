@@ -16,6 +16,7 @@ import { IpClassifier }         from './jobs/ip_classifier.js';
 import { OutreachEngine }       from './jobs/outreach_engine.js';
 import { SettlementControl }    from './jobs/settlement_control.js';
 import { CustomerZeroDetector } from './jobs/customer_zero_detector.js';
+import { emailRouter }          from './email.js';
 
 // Mirrors BAD_ASNS in apps/api/src/middleware/free_tier_gate.js — kept as a
 // separate literal here rather than imported so the admin router has no
@@ -58,6 +59,9 @@ export function createAdminRouter(pool, redis) {
       );
     } catch { /* automation_logs may not exist until migration runs */ }
   };
+
+  // ── Outreach email (Brevo) ────────────────────────────────────────────────
+  router.use('/email', emailRouter(express));
 
   // ── Intelligence ──────────────────────────────────────────────────────────
   router.get('/intel/developers', async (req, res) => {
