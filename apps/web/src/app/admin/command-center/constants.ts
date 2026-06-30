@@ -4,7 +4,7 @@ export const NAV = [
   {
     label: "Command Center",
     items: [
-      { id: "overview", icon: LayoutDashboard, label: "Executive" },
+      { id: "executive", icon: LayoutDashboard, label: "Executive" },
       { id: "radar", icon: Radar, label: "Demand Radar" },
       { id: "treasury", icon: Building, label: "Treasury" },
       { id: "revenue", icon: DollarSign, label: "Revenue Control" },
@@ -20,7 +20,7 @@ export const NAV = [
 ];
 
 export const HEADERS: Record<string, { title: string; subtitle: string; icon: any }> = {
-  overview: { title: "Executive Overview", subtitle: "NOC executive dashboard & live risk analysis", icon: LayoutDashboard },
+  executive: { title: "Executive Overview", subtitle: "NOC executive dashboard & live risk analysis", icon: LayoutDashboard },
   radar: { title: "Demand Radar", subtitle: "IP analysis, conversion funnel & leads tracking", icon: Radar },
   treasury: { title: "Treasury Operations", subtitle: "On-chain settlements, wallet states & dry-run switches", icon: Building },
   revenue: { title: "Revenue Control", subtitle: "Lifetime income logs, billing rates & ledger events", icon: DollarSign },

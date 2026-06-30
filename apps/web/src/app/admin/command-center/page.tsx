@@ -102,9 +102,9 @@ function AdminCommandCenter() {
   // browser back/forward stay in sync (same pattern as the node/machine portals).
   const router = useRouter();
   const params = useSearchParams();
-  const view = params.get("view") || "overview";
+  const view = params.get("view") || "executive";
   const go = (id: string) =>
-    router.push(id === "overview" ? "/admin/command-center" : `/admin/command-center?view=${id}`);
+    router.push(id === "executive" ? "/admin/command-center" : `/admin/command-center?view=${id}`);
   const [now, setNow] = useState("");
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
   const [confirmLive, setConfirmLive] = useState("");
@@ -366,7 +366,7 @@ function AdminCommandCenter() {
         {notice && <Notice>{notice}</Notice>}
 
         {/* 1. EXECUTIVE OVERVIEW VIEW */}
-        {view === "overview" && (
+        {view === "executive" && (
           <div className="space-y-4">
             {execErr && <Notice tone="danger">Executive Summary fetch failed: {execErr}</Notice>}
             
