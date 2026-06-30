@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Button, EmptyState, Inline, Input, Notice, Panel, Split, Stack, StatusBadge, StatusDot,
@@ -9,6 +9,11 @@ import {
 import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, AlertTriangle, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
+
+// Lead pipeline is paginated — developer_intel can hold 24k+ rows. Loading the
+// whole table at once froze the dashboard, so we fetch one page and let the
+// operator load more on demand.
+const DEVS_PAGE_SIZE = 200;
 
 async function adminFetch(path: string, opts: any = {}) {
   const res = await fetch("/api/admin-proxy", {
@@ -103,6 +108,10 @@ export default function AdminCommandCenter() {
   const [status, setStatus] = useState<any>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [devs, setDevs] = useState<any>(null);
+  const [devsTotal, setDevsTotal] = useState(0);
+  const [devsOffset, setDevsOffset] = useState(0);
+  const [devsLoading, setDevsLoading] = useState(false);
+  const [devsLoadingMore, setDevsLoadingMore] = useState(false);
   const [devErr, setDevErr] = useState<string | null>(null);
   const [jobs, setJobs] = useState<any>(null);
   const [jobsErr, setJobsErr] = useState<string | null>(null);
@@ -158,7 +167,31 @@ export default function AdminCommandCenter() {
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(null), 6000); };
 
   const loadStatus = useCallback(async () => { setStatusErr(null); try { const r = await adminFetch("/settlement/status"); if (!r.ok) throw new Error(r.error || "failed"); setStatus(r); } catch (e: any) { setStatusErr(e.message); } }, []);
-  const loadDevs = useCallback(async () => { setDevErr(null); try { const r = await adminFetch("/intel/developers"); if (!r.ok) throw new Error(r.error || "failed"); setDevs(Array.isArray(r.developers) ? r.developers : []); } catch (e: any) { setDevErr(e.message); setDevs([]); } }, []);
+  const loadDevs = useCallback(async () => {
+    setDevErr(null); setDevsLoading(true);
+    try {
+      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=0`);
+      if (!r.ok) throw new Error(r.error || "failed");
+      const page = Array.isArray(r.developers) ? r.developers : [];
+      setDevs(page);
+      setDevsTotal(typeof r.total === "number" ? r.total : page.length);
+      setDevsOffset(0);
+    } catch (e: any) { setDevErr(e.message); setDevs([]); setDevsTotal(0); }
+    finally { setDevsLoading(false); }
+  }, []);
+  const loadMoreDevs = useCallback(async () => {
+    const nextOffset = devsOffset + DEVS_PAGE_SIZE;
+    setDevsLoadingMore(true);
+    try {
+      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=${nextOffset}`);
+      if (!r.ok) throw new Error(r.error || "failed");
+      const more = Array.isArray(r.developers) ? r.developers : [];
+      setDevs((prev: any) => [...(prev || []), ...more]);
+      setDevsOffset(nextOffset);
+      if (typeof r.total === "number") setDevsTotal(r.total);
+    } catch (e: any) { setDevErr(e.message); }
+    finally { setDevsLoadingMore(false); }
+  }, [devsOffset]);
   const loadJobs = useCallback(async () => { setJobsErr(null); try { const r = await adminFetch("/jobs/status"); if (!r.ok) throw new Error(r.error || "failed"); setJobs(Array.isArray(r.jobs) ? r.jobs : []); } catch (e: any) { setJobsErr(e.message); setJobs([]); } }, []);
 
   const refreshAll = useCallback(async () => {
@@ -274,15 +307,23 @@ export default function AdminCommandCenter() {
   const feedEvents = feed.map((e, i) => ({ id: e.id ?? i, time: fmt.time(e.created_at), source: e.job_name || "log", message: e.action || "—" }));
   const czHit = (devs || []).some((d: any) => d.status === "deposited" || d.status === "paid");
   const jobDotTone = (j: any) => /error|fail/i.test(j.action || "") ? "danger" : j.created_at && (Date.now() - new Date(j.created_at).getTime()) < 3600000 ? "success" : "warn";
-  const topLeads = [...(devs || [])].sort((a: any, b: any) => (b.avg_daily_calls || 0) - (a.avg_daily_calls || 0)).slice(0, 3);
+  const topLeads = useMemo(() => [...(devs || [])].sort((a: any, b: any) => (b.avg_daily_calls || 0) - (a.avg_daily_calls || 0)).slice(0, 3), [devs]);
   const liveJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "success").length;
   const failedJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "danger").length;
   const staleJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "warn").length;
-  const demandByLead = [...(devs || [])].sort((a: any, b: any) => (a.days_active || 0) - (b.days_active || 0)).map((d: any) => ({ label: String(d.ip || "").split(".").pop() || "?", calls: d.avg_daily_calls || 0 }));
-  const maxCalls = Math.max(...(devs || []).map((d: any) => d.avg_daily_calls || 1), 150000);
-  const filteredDevs = devs == null ? null : devs.filter((d: any) => (stages[d.status] ?? false) && (d.classification ? (classes[d.classification] ?? true) : true));
-  const counts = (devs || []).reduce((a: any, d: any) => ((a[d.status] = (a[d.status] || 0) + 1), a), {});
-  const funnelData = [{ name: "Classified", value: (devs || []).length, fill: "#4e9eff" }, { name: "Identified", value: counts.identified || 0, fill: "#53b1fd" }, { name: "Contacted", value: counts.contacted || 0, fill: "#f5a623" }, { name: "Deposited", value: counts.deposited || 0, fill: "#32d583" }, { name: "Paid", value: counts.paid || 0, fill: "#0aab53" }];
+  // Downsample to <=50 points so the area chart stays cheap regardless of how
+  // many lead pages are loaded.
+  const demandByLead = useMemo(() => {
+    const full = [...(devs || [])].sort((a: any, b: any) => (a.days_active || 0) - (b.days_active || 0)).map((d: any) => ({ label: String(d.ip || "").split(".").pop() || "?", calls: d.avg_daily_calls || 0 }));
+    const MAX_POINTS = 50;
+    if (full.length <= MAX_POINTS) return full;
+    const step = Math.ceil(full.length / MAX_POINTS);
+    return full.filter((_: any, i: number) => i % step === 0);
+  }, [devs]);
+  const maxCalls = useMemo(() => Math.max(...(devs || []).map((d: any) => d.avg_daily_calls || 1), 150000), [devs]);
+  const filteredDevs = useMemo(() => devs == null ? null : devs.filter((d: any) => (stages[d.status] ?? false) && (d.classification ? (classes[d.classification] ?? true) : true)), [devs, stages, classes]);
+  const counts = useMemo(() => (devs || []).reduce((a: any, d: any) => ((a[d.status] = (a[d.status] || 0) + 1), a), {}), [devs]);
+  const funnelData = useMemo(() => [{ name: "Classified", value: (devs || []).length, fill: "#4e9eff" }, { name: "Identified", value: counts.identified || 0, fill: "#53b1fd" }, { name: "Contacted", value: counts.contacted || 0, fill: "#f5a623" }, { name: "Deposited", value: counts.deposited || 0, fill: "#32d583" }, { name: "Paid", value: counts.paid || 0, fill: "#0aab53" }], [devs, counts]);
 
   const H = HEADERS[view] || { title: "Command Center", subtitle: "Management NOC Console", icon: Server };
 
@@ -479,8 +520,17 @@ export default function AdminCommandCenter() {
                 </div>
               </Panel>
               
-              <Panel title="Lead Pipeline" headerRight={<StatusBadge label={`${filteredDevs ? filteredDevs.length : 0} filtered`} tone="info" />} flush>
-                <LeadPipelineTable devs={filteredDevs} topLeadIp={topLeads[0]?.ip} maxCalls={maxCalls} busy={busy} devErr={devErr} advance={advance} />
+              <Panel title="Lead Pipeline" headerRight={<StatusBadge label={`${filteredDevs ? filteredDevs.length : 0} filtered · ${fmt.num(devs ? devs.length : 0)} of ${fmt.num(devsTotal)} loaded`} tone="info" />} flush>
+                {devsLoading && (devs == null || devs.length === 0)
+                  ? <EmptyState variant="line" label="lead pipeline" note="loading leads…" />
+                  : <LeadPipelineTable devs={filteredDevs} topLeadIp={topLeads[0]?.ip} maxCalls={maxCalls} busy={busy} devErr={devErr} advance={advance} />}
+                {devs && devs.length < devsTotal && (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "12px" }}>
+                    <Button tone="info" size="sm" disabled={devsLoadingMore} onClick={loadMoreDevs}>
+                      {devsLoadingMore ? "Loading…" : `Load more (${fmt.num(devs.length)} / ${fmt.num(devsTotal)})`}
+                    </Button>
+                  </div>
+                )}
               </Panel>
             </Stack>
           </Split>
@@ -901,19 +951,32 @@ export default function AdminCommandCenter() {
               />
             </Panel>
 
-            <Panel title="Verified Infrastructure Services">
+            <Panel title="Live Service Health">
+              {obsMetricsErr && <Notice tone="danger">Service health probe failed: {obsMetricsErr}</Notice>}
               <div className="grid gap-4 md:grid-cols-3">
                 <Card>
-                  <CardHeader><CardTitle>API Database Connection</CardTitle></CardHeader>
-                  <CardContent><p className="text-xs font-mono text-[#00ADB5]">CONNECTED (Railway-Managed PG)</p></CardContent>
+                  <CardHeader><CardTitle>API Database (PostgreSQL)</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400") : "text-muted-foreground"}`}>
+                      {obsMetrics ? (obsMetrics.db_status === "ok" ? "CONNECTED (Railway-managed PG)" : "UNREACHABLE") : "checking…"}
+                    </p>
+                  </CardContent>
                 </Card>
                 <Card>
                   <CardHeader><CardTitle>Key-Value Store (Redis)</CardTitle></CardHeader>
-                  <CardContent><p className="text-xs font-mono text-[#00ADB5]">OPERATIONAL (L3 cache active)</p></CardContent>
+                  <CardContent>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400") : "text-muted-foreground"}`}>
+                      {obsMetrics ? (obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : "ERROR") : "checking…"}
+                    </p>
+                  </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader><CardTitle>Polygon RPC Bridge</CardTitle></CardHeader>
-                  <CardContent><p className="text-xs font-mono text-[#00ADB5]">SLA 99.98% OK</p></CardContent>
+                  <CardHeader><CardTitle>API Response (p50, 24h)</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className="text-xs font-mono text-[#00ADB5]">
+                      {obsMetrics && typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms} ms median` : "checking…"}
+                    </p>
+                  </CardContent>
                 </Card>
               </div>
             </Panel>
