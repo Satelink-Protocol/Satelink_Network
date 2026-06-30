@@ -734,6 +734,203 @@ function AdminCommandCenter() {
           </Stack>
         )}
 
+        {/* 5b. PROVIDER OPERATIONS VIEW — wired to /admin/network/health (no dedicated /providers endpoint exists) */}
+        {view === "providers" && (
+          <Stack gap="sm">
+            {netHealthErr && <Notice tone="danger">Provider health fetch failed: {netHealthErr}</Notice>}
+            {netHealth ? (() => {
+              const polygon = (netHealth.chain_status || []).find((c: any) => c.chain_id === 137) || (netHealth.chain_status || [])[0];
+              return (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <KPICard label="RPC Gateway Status" value={netHealth.availability_pct >= 99.9 ? "Operational" : "Degraded"} caption={`${netHealth.availability_pct}% availability (24h)`} />
+                    <KPICard label="Polygon Bridge" value={polygon ? polygon.status.toUpperCase() : "—"} caption={polygon ? `Chain ID ${polygon.chain_id}` : "no chain data"} />
+                    <KPICard label="Bridge Requests Served" value={fmt.num(polygon ? polygon.requests_24h : netHealth.requests_24h)} caption="24h gateway calls" />
+                    <KPICard label="Error Rate" value={`${netHealth.error_rate_pct}%`} caption="HTTP 5xx and timeouts" />
+                  </div>
+
+                  <Panel title="Operational Blockchain Bridges">
+                    <DataTable
+                      columns={[
+                        { key: "name", header: "Network Name" },
+                        { key: "chain_id", header: "Chain ID", mono: true },
+                        { key: "sla", header: "SLA Status", cell: (c: any) => <StatusBadge label={c.status.toUpperCase()} tone={c.status === "operational" ? "success" : "danger"} /> },
+                        { key: "requests_24h", header: "Requests Served", mono: true, cell: (c: any) => fmt.num(c.requests_24h) },
+                        { key: "latency", header: "Latency", mono: true, cell: () => <span>{fmt.num(netHealth.p50_latency_ms)}ms</span> },
+                        { key: "status", header: "Status", cell: (c: any) => <Inline gap="sm"><StatusDot tone={c.status === "operational" ? "success" : "danger"} /><span>{c.status === "operational" ? "Up" : "Down"}</span></Inline> }
+                      ]}
+                      rows={netHealth.chain_status}
+                      emptyLabel="blockchain bridges"
+                    />
+                  </Panel>
+
+                  <Panel title="Multi-Provider Routing">
+                    <p className="text-xs text-muted-foreground">Provider cost analytics and multi-provider routing coming when additional RPC providers are onboarded. Currently single-provider: direct Polygon node.</p>
+                  </Panel>
+                </>
+              );
+            })() : <EmptyState label="No provider health data loaded" />}
+          </Stack>
+        )}
+
+        {/* 5c. NODE OPERATIONS VIEW — wired to /admin/nodes/list + /admin/treasury/status */}
+        {view === "nodes" && (
+          <Stack gap="sm">
+            {nodesListErr && <Notice tone="danger">Node list fetch failed: {nodesListErr}</Notice>}
+            {nodesList ? (() => {
+              const nodes = nodesList.nodes || [];
+              const avgRep = nodes.length ? nodes.reduce((s: number, n: any) => s + (Number(n.reputation_score) || 0), 0) / nodes.length : 0;
+              const avgUp = nodes.length ? nodes.reduce((s: number, n: any) => s + (Number(n.uptime_pct) || 0), 0) / nodes.length : 0;
+              return (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <KPICard label="Registered Nodes" value={fmt.num(nodes.length)} caption="Total operators on record" />
+                    <KPICard label="Active Nodes" value={fmt.num(nodesList.total_active)} caption={`${fmt.num(nodesList.total_offline)} offline`} />
+                    <KPICard label="Avg Reputation" value={nodes.length ? avgRep.toFixed(1) : "—"} caption="Operator reputation score" />
+                    <KPICard label="Avg Uptime SLA" value={nodes.length ? `${avgUp.toFixed(1)}%` : "—"} caption="Mean across operators" />
+                  </div>
+
+                  <Panel title="Registered Node Operators">
+                    <DataTable
+                      columns={[
+                        { key: "id", header: "Node UUID", mono: true, muted: true },
+                        { key: "region", header: "Region" },
+                        { key: "tier", header: "Tier", mono: true },
+                        { key: "uptime_pct", header: "Uptime SLA", mono: true, cell: (n: any) => <span>{n.uptime_pct}%</span> },
+                        { key: "reputation_score", header: "Reputation", mono: true },
+                        { key: "avg_latency_ms", header: "Avg Latency", mono: true, cell: (n: any) => <span>{n.avg_latency_ms == null ? "—" : `${n.avg_latency_ms}ms`}</span> },
+                        { key: "jobs_executed", header: "Cumulative Requests", mono: true, cell: (n: any) => fmt.num(Number(n.jobs_executed)) },
+                        { key: "status", header: "Status", cell: (n: any) => <StatusBadge label={n.status.toUpperCase()} tone={n.status === "active" ? "success" : "muted"} /> }
+                      ]}
+                      rows={nodes}
+                      emptyLabel="registered nodes"
+                    />
+                    {nodes.length <= 1 && (
+                      <EmptyState label="Network in early onboarding" note="Additional node operators register via the node portal (/api/nodes/register)." />
+                    )}
+                  </Panel>
+
+                  <Panel title="Node Economics">
+                    {treasStatusErr && <Notice tone="danger">Treasury status fetch failed: {treasStatusErr}</Notice>}
+                    {treasStatus ? (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <KPICard label="Pending Earnings" value={`$${fmt.bal(treasStatus.blocked_unfunded_usdt)} USDT`} caption={`${fmt.num(treasStatus.blocked_unfunded_batches)} batches blocked (unfunded signer)`} />
+                        <KPICard label="Settled Earnings" value={`$${fmt.bal(treasStatus.confirmed_usdt)} USDT`} caption={`${fmt.num(treasStatus.confirmed_batches)} confirmed batches`} />
+                      </div>
+                    ) : <EmptyState label="No treasury data loaded" />}
+                  </Panel>
+                </>
+              );
+            })() : <EmptyState label="No node data loaded" />}
+          </Stack>
+        )}
+
+        {/* 5d. CUSTOMER OPERATIONS VIEW — wired to /admin/customers/list */}
+        {view === "customers" && (
+          <Stack gap="sm">
+            {custsListErr && <Notice tone="danger">Customer list fetch failed: {custsListErr}</Notice>}
+            {custsList ? (() => {
+              const paying = custsList.paying || [];
+              const free = custsList.free_tier || [];
+              const deposited = paying.reduce((s: number, c: any) => s + (Number(c.total_deposited) || 0), 0);
+              const segPaying = paying.filter((c: any) => Number(c.total_deposited) > 0 && Number(c.total_spent) > 0).length;
+              const segTrial = paying.filter((c: any) => Number(c.total_deposited) > 0 && Number(c.total_spent) === 0).length;
+              const segFree = free.length;
+              return (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <KPICard label="Total Customers" value={fmt.num(paying.length + free.length)} caption="Paying + active free-tier" />
+                    <KPICard label="Paying" value={fmt.num(custsList.total_paying ?? paying.length)} caption="Wallets with deposits" />
+                    <KPICard label="Free Tier" value={fmt.num(free.length)} caption="Active free-tier IPs (24h)" />
+                    <KPICard label="Deposited Balance" value={`$${fmt.bal(deposited)} USDT`} caption="Sum of customer deposits" />
+                  </div>
+
+                  <Panel title="Customer Accounts">
+                    <DataTable
+                      columns={[
+                        { key: "wallet", header: "Wallet", mono: true, cell: (c: any) => <span>{fmt.addr(c.wallet)}</span> },
+                        { key: "total_deposited", header: "Credits Deposited", mono: true, cell: (c: any) => <span>${fmt.bal(c.total_deposited)}</span> },
+                        { key: "total_spent", header: "Credits Spent", mono: true, cell: (c: any) => <span>${fmt.bal(c.total_spent)}</span> },
+                        { key: "credits_usdt", header: "Balance", mono: true, cell: (c: any) => <span>${fmt.bal(c.credits_usdt)}</span> },
+                        { key: "products", header: "Products Used", cell: () => <span className="text-muted-foreground">—</span> },
+                        { key: "last_activity", header: "Last Activity", mono: true, cell: () => <span className="text-muted-foreground">—</span> },
+                        { key: "status", header: "Status", cell: (c: any) => Number(c.total_spent) > 0 ? <StatusBadge label="PAYING" tone="success" /> : Number(c.total_deposited) > 0 ? <StatusBadge label="DEPOSITED" tone="info" /> : <StatusBadge label="FREE" tone="muted" /> }
+                      ]}
+                      rows={paying}
+                      error={custsListErr}
+                      emptyLabel="customer accounts"
+                    />
+                  </Panel>
+
+                  <Panel title="Customer Segments">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <KPICard label="Paying" value={fmt.num(segPaying)} caption="Deposits > 0 and spending > 0" />
+                      <KPICard label="Trial" value={fmt.num(segTrial)} caption="Deposited, no spend yet" />
+                      <KPICard label="Free" value={fmt.num(segFree)} caption="No deposits (free-tier IPs)" />
+                    </div>
+                  </Panel>
+                </>
+              );
+            })() : <EmptyState label="No customer data loaded" />}
+          </Stack>
+        )}
+
+        {/* 5e. OBSERVABILITY CENTER VIEW — wired to /admin/observability/metrics */}
+        {view === "observability" && (
+          <Stack gap="sm">
+            {obsMetricsErr && <Notice tone="danger">Observability metrics fetch failed: {obsMetricsErr}</Notice>}
+            {obsMetrics ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <KPICard label="API p50 Latency" value={typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms}ms` : "—"} caption="Median 24h response" />
+                  <KPICard label="DB Status" value={obsMetrics.db_status ? obsMetrics.db_status.toUpperCase() : "—"} caption="PostgreSQL (Railway)" />
+                  <KPICard label="Redis Status" value={obsMetrics.redis_status ? obsMetrics.redis_status.toUpperCase() : "—"} caption="Key-value cache" />
+                  <KPICard label="API Uptime (24h)" value={netHealth && typeof netHealth.availability_pct === "number" ? `${netHealth.availability_pct}%` : "—"} caption="Gateway availability" />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardHeader><CardTitle>Database</CardTitle></CardHeader>
+                    <CardContent>
+                      <p className={`text-sm font-mono ${obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400"}`}>
+                        {obsMetrics.db_status === "ok" ? "CONNECTED" : (obsMetrics.db_status || "—").toUpperCase()}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Connection pool metrics not exposed by endpoint.</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader><CardTitle>Cache (Redis)</CardTitle></CardHeader>
+                    <CardContent>
+                      <p className={`text-sm font-mono ${obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400"}`}>
+                        {obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : (obsMetrics.redis_status || "—").toUpperCase()}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader><CardTitle>API Performance</CardTitle></CardHeader>
+                    <CardContent className="space-y-1 text-xs font-mono">
+                      <div className="flex justify-between"><span className="text-muted-foreground">p50</span><span>{typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms}ms` : "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">p95</span><span>—</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Requests (24h)</span><span>{fmt.num(obsMetrics.requests_24h)}</span></div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Panel title="Recent Metrics Snapshot">
+                  <DataTable
+                    columns={[
+                      { key: "metric", header: "Metric", mono: true, muted: true },
+                      { key: "value", header: "Value", mono: true }
+                    ]}
+                    rows={Object.entries(obsMetrics).map(([k, v]) => ({ metric: k, value: v == null ? "—" : String(v) }))}
+                    emptyLabel="metrics"
+                  />
+                </Panel>
+              </>
+            ) : <EmptyState label="No observability metrics loaded" />}
+          </Stack>
+        )}
+
         {/* 6. BILLING & CREDITS VIEW */}
         {view === "billing" && (
           <Stack gap="sm">

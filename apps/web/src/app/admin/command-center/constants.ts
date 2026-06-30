@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle, Mail } from "lucide-react";
+import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle, Mail, Network, Server, Users } from "lucide-react";
 
 export const NAV = [
   {
@@ -9,6 +9,10 @@ export const NAV = [
       { id: "treasury", icon: Building, label: "Treasury" },
       { id: "revenue", icon: DollarSign, label: "Revenue Control" },
       { id: "network", icon: Activity, label: "Network Health" },
+      { id: "providers", icon: Network, label: "Providers" },
+      { id: "nodes", icon: Server, label: "Node Operations" },
+      { id: "customers", icon: Users, label: "Customer Ops" },
+      { id: "observability", icon: Activity, label: "Observability" },
       { id: "billing", icon: CreditCard, label: "Billing & Credits" },
       { id: "agents", icon: Bot, label: "Agents Fleet" },
       { id: "security", icon: ShieldAlert, label: "Security Ops" },
@@ -25,6 +29,10 @@ export const HEADERS: Record<string, { title: string; subtitle: string; icon: an
   treasury: { title: "Treasury Operations", subtitle: "On-chain settlements, wallet states & dry-run switches", icon: Building },
   revenue: { title: "Revenue Control", subtitle: "Lifetime income logs, billing rates & ledger events", icon: DollarSign },
   network: { title: "Network Status", subtitle: "API latency metrics, node list & availability tracking", icon: Activity },
+  providers: { title: "Provider Operations", subtitle: "RPC provider routing, health, costs and fallback tracking", icon: Network },
+  nodes: { title: "Node Operations", subtitle: "Registered node performance, reputation and economics", icon: Server },
+  customers: { title: "Customer Operations", subtitle: "Customer accounts, credits, revenue and activity", icon: Users },
+  observability: { title: "Observability Center", subtitle: "Infrastructure metrics, database, Redis, and API telemetry", icon: Activity },
   billing: { title: "Billing & Credits", subtitle: "Credit distribution, customer listings & token deposits", icon: CreditCard },
   agents: { title: "Automation & Agents", subtitle: "Satelink background tasks & Live SSE NOC feed", icon: Bot },
   security: { title: "Security Operations", subtitle: "L3 firewall blocks, threat detection & ASN blacklists", icon: ShieldAlert },
