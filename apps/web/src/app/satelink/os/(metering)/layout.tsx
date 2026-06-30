@@ -12,8 +12,6 @@ import {
   Satellite,
   Users,
   Cpu,
-  RefreshCcw,
-  DollarSign,
 } from "lucide-react";
 import {
   DashboardShell,
@@ -31,13 +29,6 @@ const NAV: ShellNavGroup[] = [
     ],
   },
   {
-    label: "Revenue Ops",
-    items: [
-      { id: "revenue-ops", icon: DollarSign, label: "Revenue Operations" },
-      { id: "settlement-lifecycle", icon: RefreshCcw, label: "Settlement Lifecycle" },
-    ],
-  },
-  {
     label: "Billing",
     items: [
       { id: "deposit", icon: Wallet, label: "Credits & Deposits" },
@@ -50,8 +41,6 @@ const NAV: ShellNavGroup[] = [
 const SEARCH_ITEMS: ShellSearchItem[] = [
   { id: "mission-control", label: "Mission Control", icon: LayoutDashboard, group: "Platform" },
   { id: "monitoring", label: "Monitoring", icon: Activity, group: "Platform" },
-  { id: "revenue-ops", label: "Revenue Operations", icon: DollarSign, group: "Revenue Ops" },
-  { id: "settlement-lifecycle", label: "Settlement Lifecycle", icon: RefreshCcw, group: "Revenue Ops" },
   { id: "deposit", label: "Credits & Deposits", icon: Wallet, group: "Billing" },
   { id: "usage", label: "Usage Metering", icon: BarChart3, group: "Billing" },
   { id: "keys", label: "API Keys & SDK", icon: KeyRound, group: "Billing" },
@@ -87,16 +76,6 @@ const HEADERS: Record<string, { title: string; subtitle: string; crumb: string }
     title: "Customer Zero Tracker",
     subtitle: "Track visitor-to-settlement conversion funnel and first customer revenue",
     crumb: "Customer Zero",
-  },
-  "revenue-ops": {
-    title: "Revenue Operations Center",
-    subtitle: "Gross billing, infrastructure gas costs, and net margin tracking",
-    crumb: "Revenue Operations",
-  },
-  "settlement-lifecycle": {
-    title: "Settlement Lifecycle Center",
-    subtitle: "Epoch calculations, Merkle validations, and withdrawal ledger",
-    crumb: "Settlement Lifecycle",
   },
   billing: {
     title: "Billing",

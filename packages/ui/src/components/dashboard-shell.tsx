@@ -213,7 +213,7 @@ export function DashboardShell({
                           isActive={item.id === activeId}
                           tooltip={item.label}
                           onClick={() => onNavigate(item.id)}
-                          className="transition-colors duration-200 hover:bg-muted/50 data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+                          className="cursor-pointer transition-colors duration-200 hover:bg-muted/50 data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                         >
                           {Icon ? <Icon /> : null}
                           <span>{item.label}</span>

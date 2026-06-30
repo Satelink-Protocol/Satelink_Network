@@ -172,6 +172,10 @@ function AdminCommandCenter() {
 
   const setBusyFor = (k: string, v: boolean) => setBusy((b) => ({ ...b, [k]: v }));
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(null), 6000); };
+  // fmt.bal truncates to 4 decimals, hiding the real $0.00003 revenue datapoint.
+  // Revenue figures need 5 decimals to surface sub-$0.0001 values honestly.
+  const usdt5 = (n: number | string | undefined) =>
+    n == null ? "—" : Number(n).toLocaleString("en-US", { minimumFractionDigits: 5, maximumFractionDigits: 5 });
 
   const loadStatus = useCallback(async () => { setStatusErr(null); try { const r = await adminFetch("/settlement/status"); if (!r.ok) throw new Error(r.error || "failed"); setStatus(r); } catch (e: any) { setStatusErr(e.message); } }, []);
   const loadDevs = useCallback(async () => {
@@ -353,7 +357,7 @@ function AdminCommandCenter() {
       kpis={
         <div className="flex items-center gap-4 text-xs font-mono">
           <StatusBadge label={status ? (status.dryRun ? "DRY_RUN" : "LIVE") : "…"} tone={status ? (status.dryRun ? "warn" : "danger") : "muted"} />
-          <span>REAL REV: ${execSummary ? fmt.bal(execSummary.revenue_mtd_usdt) : "0.0000"} USDT</span>
+          <span>REAL REV: ${execSummary ? usdt5(execSummary.revenue_mtd_usdt) : "0.00000"} USDT</span>
           <span>CZ STATUS: {czHit ? "🎯 HIT" : "WAITING"}</span>
         </div>
       }
@@ -367,8 +371,8 @@ function AdminCommandCenter() {
             {execErr && <Notice tone="danger">Executive Summary fetch failed: {execErr}</Notice>}
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <KPICard label="Revenue Today" value={execSummary ? `$${fmt.bal(execSummary.revenue_today_usdt)}` : "—"} caption="USDT real earnings" />
-              <KPICard label="Revenue MTD" value={execSummary ? `$${fmt.bal(execSummary.revenue_mtd_usdt)}` : "—"} caption="USDT Month-To-Date" />
+              <KPICard label="Revenue Today" value={execSummary ? `$${usdt5(execSummary.revenue_today_usdt)}` : "—"} caption="USDT real earnings" />
+              <KPICard label="Revenue MTD" value={execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"} caption="USDT Month-To-Date" />
               <KPICard label="Active IPs (24h)" value={execSummary ? fmt.num(execSummary.active_ips_24h) : "—"} caption="Unique developer nodes" />
               <KPICard label="Total Requests" value={execSummary ? fmt.num(execSummary.total_requests_24h) : "—"} caption="Cumulative 24h calls" />
               <KPICard label="Paying Customers" value={execSummary ? fmt.num(execSummary.paying_customers) : "—"} caption="Deposits > 0" />
