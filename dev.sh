@@ -22,7 +22,7 @@ fi
 
 # Install deps if needed
 [ ! -d node_modules ] && echo "📦 Installing backend deps..." && npm install
-[ ! -d web/node_modules ] && echo "📦 Installing frontend deps..." && (cd web && npm install)
+[ ! -d apps/web/node_modules ] && echo "📦 Installing frontend deps..." && (cd apps/web && npm install)
 
 # Start backend
 echo "🔧 Starting backend on :8080..."
@@ -79,9 +79,9 @@ echo ""
 
 # Start frontend
 echo "🎨 Starting frontend on :3000..."
-cd web && npm run dev > /tmp/satelink-frontend.log 2>&1 &
+cd apps/web && npm run dev > /tmp/satelink-frontend.log 2>&1 &
 FRONTEND_PID=$!
-cd ..
+cd ../..
 
 sleep 3
 echo ""

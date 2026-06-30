@@ -11,11 +11,11 @@ export function NocWorldMap() {
       </div>
       <div className="flex-1 relative bg-background w-full h-[200px] overflow-hidden flex items-center justify-center">
         {/* Abstract World Map SVG */}
-        <svg 
-          viewBox="0 0 1000 500" 
-          className="absolute inset-0 w-full h-full opacity-30" 
-          fill="none" 
-          stroke="#393E46" 
+        <svg
+          viewBox="0 0 1000 500"
+          className="absolute inset-0 w-full h-full opacity-30"
+          fill="none"
+          stroke="hsl(var(--muted))"
           strokeWidth="2"
         >
           {/* Abstract landmasses */}
@@ -27,8 +27,8 @@ export function NocWorldMap() {
 
         {/* Nodes and Links */}
         <svg viewBox="0 0 1000 500" className="absolute inset-0 w-full h-full z-10 pointer-events-none">
-          <style>
-            {`
+          <defs>
+            <style>{`
               @keyframes pulse {
                 0% { r: 4; opacity: 1; stroke-width: 0; }
                 100% { r: 15; opacity: 0; stroke-width: 2; }
@@ -36,7 +36,7 @@ export function NocWorldMap() {
               .node-pulse {
                 animation: pulse 2s infinite ease-out;
                 fill: transparent;
-                stroke: #00ADB5;
+                stroke: hsl(var(--primary, 182 100% 35%));
                 transform-origin: center;
               }
               @keyframes dash {
@@ -46,33 +46,33 @@ export function NocWorldMap() {
                 stroke-dasharray: 4, 6;
                 animation: dash 1s linear infinite;
               }
-            `}
-          </style>
+            `}</style>
+          </defs>
 
           {/* Paths */}
-          <path className="traffic-path" d="M 250,150 Q 400,50 550,150" fill="none" stroke="#00ADB5" strokeWidth="2" opacity="0.6"/>
-          <path className="traffic-path" d="M 550,150 Q 650,250 800,250" fill="none" stroke="#00ADB5" strokeWidth="2" opacity="0.6"/>
-          <path className="traffic-path" d="M 250,150 Q 300,300 180,350" fill="none" stroke="#00ADB5" strokeWidth="1.5" opacity="0.4"/>
-          <path className="traffic-path" d="M 550,150 Q 500,350 750,350" fill="none" stroke="#00ADB5" strokeWidth="1.5" opacity="0.4"/>
+          <path className="traffic-path" d="M 250,150 Q 400,50 550,150" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" opacity="0.6"/>
+          <path className="traffic-path" d="M 550,150 Q 650,250 800,250" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" opacity="0.6"/>
+          <path className="traffic-path" d="M 250,150 Q 300,300 180,350" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" opacity="0.4"/>
+          <path className="traffic-path" d="M 550,150 Q 500,350 750,350" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" opacity="0.4"/>
 
           {/* Nodes (NY, London, Tokyo, SF, Sydney) */}
           <g transform="translate(250, 150)">
-            <circle r="4" fill="#00ADB5" />
+            <circle r="4" fill="hsl(var(--primary))" />
             <circle className="node-pulse" style={{ animationDelay: '0s' }} />
           </g>
           <g transform="translate(550, 150)">
-            <circle r="4" fill="#00ADB5" />
+            <circle r="4" fill="hsl(var(--primary))" />
             <circle className="node-pulse" style={{ animationDelay: '0.5s' }} />
           </g>
           <g transform="translate(800, 250)">
-            <circle r="4" fill="#00ADB5" />
+            <circle r="4" fill="hsl(var(--primary))" />
             <circle className="node-pulse" style={{ animationDelay: '1s' }} />
           </g>
           <g transform="translate(180, 350)">
-            <circle r="3" fill="#5C8374" />
+            <circle r="3" fill="hsl(var(--border))" />
           </g>
           <g transform="translate(750, 350)">
-            <circle r="3" fill="#5C8374" />
+            <circle r="3" fill="hsl(var(--border))" />
           </g>
         </svg>
       </div>

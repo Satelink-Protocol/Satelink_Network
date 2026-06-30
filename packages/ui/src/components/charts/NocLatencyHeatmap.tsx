@@ -21,11 +21,11 @@ export function NocLatencyHeatmap({ title }: NocLatencyHeatmapProps) {
   
   const getCellColor = (i: number) => {
     // A pseudo-random function based on index and current minute so it looks static but random
-    const rand = Math.abs(Math.sin(i * 12.5 + 4) * 100); 
+    const rand = Math.abs(Math.sin(i * 12.5 + 4) * 100);
     if (rand > 96) return "bg-destructive";
     if (rand > 85) return "bg-warning";
-    if (rand > 60) return "bg-[#5C8374]";
-    return "bg-[#00ADB5]";
+    if (rand > 60) return "bg-border";
+    return "bg-primary";
   };
 
   return (
@@ -35,8 +35,8 @@ export function NocLatencyHeatmap({ title }: NocLatencyHeatmapProps) {
           {title}
         </span>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-[#00ADB5]"/> <span className="text-[8px] text-muted-foreground">&lt;50ms</span></div>
-          <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-[#5C8374]"/> <span className="text-[8px] text-muted-foreground">100ms</span></div>
+          <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-primary"/> <span className="text-[8px] text-muted-foreground">&lt;50ms</span></div>
+          <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-border"/> <span className="text-[8px] text-muted-foreground">100ms</span></div>
           <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-warning"/> <span className="text-[8px] text-muted-foreground">High</span></div>
           <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm bg-destructive"/> <span className="text-[8px] text-muted-foreground">Fail</span></div>
         </div>

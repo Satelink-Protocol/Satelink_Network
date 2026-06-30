@@ -72,33 +72,46 @@ export function DataTable<T>({
         : "text-left";
 
   return (
-    <Table className={className}>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          {columns.map((col) => (
-            <TableHead
-              key={col.key}
-              className={cn(alignClass(col.align), col.headerClassName)}
-            >
-              {col.header}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.map((row, i) => (
-          <TableRow key={rowKey(row, i)}>
+    <div className="w-full overflow-auto rounded-md border border-border">
+      <Table className={cn("w-full", className)}>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent border-b border-border bg-muted/20">
             {columns.map((col) => (
-              <TableCell
+              <TableHead
                 key={col.key}
-                className={cn(alignClass(col.align), col.className)}
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-widest text-muted-foreground py-2 px-3 whitespace-nowrap",
+                  alignClass(col.align),
+                  col.headerClassName
+                )}
               >
-                {col.cell(row, i)}
-              </TableCell>
+                {col.header}
+              </TableHead>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {data.map((row, i) => (
+            <TableRow
+              key={rowKey(row, i)}
+              className="border-b border-border/40 hover:bg-primary/[0.04] transition-colors"
+            >
+              {columns.map((col) => (
+                <TableCell
+                  key={col.key}
+                  className={cn(
+                    "py-2 px-3 text-xs tabular-nums",
+                    alignClass(col.align),
+                    col.className
+                  )}
+                >
+                  {col.cell(row, i)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

@@ -76,10 +76,10 @@ export function LeadPipelineTable({
                 marginLeft: 6,
                 padding: "1px 5px",
                 fontSize: 9,
-                fontFamily: "JetBrains Mono",
-                background: "rgba(245,158,11,0.15)",
-                border: "1px solid rgba(245,158,11,0.4)",
-                color: "#F59E0B",
+                fontFamily: "ui-monospace, monospace",
+                background: "hsl(var(--warning) / 0.15)",
+                border: "1px solid hsl(var(--warning) / 0.4)",
+                color: "hsl(var(--warning))",
                 borderRadius: 2,
                 letterSpacing: "0.08em",
               }}
@@ -108,7 +108,7 @@ export function LeadPipelineTable({
         <HorizontalMetricBar
           value={d.avg_daily_calls || 0}
           max={maxCalls}
-          color="var(--sat-success)"
+          color="hsl(var(--success))"
           label={fmt.num(d.avg_daily_calls)}
         />
       ),
@@ -124,9 +124,9 @@ export function LeadPipelineTable({
       header: "Score",
       render: (d) => {
         const score = d.score ?? 0;
-        let color = "var(--sat-text-dim)";
-        if (score > 70) color = "var(--sat-success)";
-        else if (score > 30) color = "var(--sat-warn)";
+        let color = "hsl(var(--muted-foreground))";
+        if (score > 70) color = "hsl(var(--success))";
+        else if (score > 30) color = "hsl(var(--warning))";
         return <HorizontalMetricBar value={score} max={100} color={color} label={`${score}%`} />;
       },
     },

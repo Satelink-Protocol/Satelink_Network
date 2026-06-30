@@ -9,31 +9,20 @@ export interface FilterCheckboxProps {
 
 export function FilterCheckbox({ label, count, checked, onChange }: FilterCheckboxProps): JSX.Element {
   return (
-    <label style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      width: '100%',
-      padding: '4px 0',
-      cursor: 'pointer',
-      userSelect: 'none'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <input 
-          type="checkbox" 
-          checked={checked} 
+    <label className="flex items-center justify-between w-full py-1 cursor-pointer select-none">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          style={{
-            accentColor: 'var(--sat-primary)',
-            cursor: 'pointer'
-          }}
+          className="accent-primary cursor-pointer"
         />
-        <span style={{ fontSize: '11px', fontFamily: 'var(--sat-font-sans)', color: 'var(--sat-text-secondary)' }}>
+        <span className="text-[11px] font-sans text-foreground/70">
           {label}
         </span>
       </div>
       {count !== undefined && (
-        <span style={{ fontSize: '9px', fontFamily: 'var(--sat-font-mono)', color: 'var(--sat-text-dim)' }}>
+        <span className="text-[9px] font-mono text-muted-foreground">
           {count}
         </span>
       )}

@@ -24,27 +24,34 @@ export function NocConcentricRing({ progressValue, title }: NocConcentricRingPro
       </div>
       <div className="flex-1 flex items-center justify-center p-4 relative">
         <svg viewBox="0 0 100 100" className="w-full h-full max-h-[150px]">
-          {/* Inner decorative rings */}
-          <circle cx={cx} cy={cy} r={r - 15} fill="none" stroke="#183D3D" strokeWidth="2" strokeDasharray="2 4" />
-          <circle cx={cx} cy={cy} r={r - 8} fill="none" stroke="#393E46" strokeWidth="1" />
-          
-          {/* Background track */}
-          <circle 
-            cx={cx} 
-            cy={cy} 
-            r={r} 
-            fill="none" 
-            stroke="#040D12" 
-            strokeWidth="8" 
+          {/* Inner decorative rings — CSS vars adapt to .satelink-os scope */}
+          <circle
+            cx={cx} cy={cy} r={r - 15}
+            fill="none"
+            stroke="hsl(var(--secondary))"
+            strokeWidth="2"
+            strokeDasharray="2 4"
           />
-          
+          <circle
+            cx={cx} cy={cy} r={r - 8}
+            fill="none"
+            stroke="hsl(var(--muted))"
+            strokeWidth="1"
+          />
+
+          {/* Background track */}
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke="hsl(var(--background))"
+            strokeWidth="8"
+          />
+
           {/* Progress bar */}
-          <circle 
-            cx={cx} 
-            cy={cy} 
-            r={r} 
-            fill="none" 
-            stroke="#00ADB5" 
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke="hsl(var(--primary))"
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -52,13 +59,13 @@ export function NocConcentricRing({ progressValue, title }: NocConcentricRingPro
             transform="rotate(-90 50 50)"
             className="transition-all duration-1000 ease-out"
           />
-          
+
           {/* Center text */}
-          <text 
-            x={cx} 
-            y={cy + 4} 
-            textAnchor="middle" 
-            fill="#EEEEEE" 
+          <text
+            x={cx}
+            y={cy + 4}
+            textAnchor="middle"
+            fill="hsl(var(--foreground))"
             className="font-mono text-xl font-bold"
           >
             {Math.round(progressValue)}%
@@ -68,16 +75,16 @@ export function NocConcentricRing({ progressValue, title }: NocConcentricRingPro
         {/* Legend */}
         <div className="absolute right-4 bottom-4 flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 bg-[#00ADB5] rounded-sm" />
+            <div className="w-2 h-2 bg-primary rounded-sm" />
             <span className="text-[9px] text-muted-foreground uppercase font-mono">Status</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 bg-[#5C8374] rounded-sm" />
+            <div className="w-2 h-2 bg-border rounded-sm" />
             <span className="text-[9px] text-muted-foreground uppercase font-mono">Sub-agent</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 bg-[#183D3D] rounded-sm" />
-            <span className="text-[9px] text-muted-foreground uppercase font-mono">Epocal</span>
+            <div className="w-2 h-2 bg-secondary rounded-sm" />
+            <span className="text-[9px] text-muted-foreground uppercase font-mono">Epochal</span>
           </div>
         </div>
       </div>

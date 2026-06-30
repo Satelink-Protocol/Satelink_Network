@@ -80,8 +80,8 @@ export { StatusBadge } from "./components/status-badge";
 export type { StatusBadgeProps } from "./components/status-badge";
 export { GrafanaPanel } from "./components/grafana-panel";
 export type { GrafanaPanelProps } from "./components/grafana-panel";
-export { TimeseriesPanel, HeatmapPanel, LogPanel } from "./components/monitoring-panels";
-export type { MonitoringPanelProps } from "./components/monitoring-panels";
+export { TimeseriesPanel, HeatmapPanel, LogPanel, LogLine } from "./components/monitoring-panels";
+export type { MonitoringPanelProps, LogEntry } from "./components/monitoring-panels";
 
 // state primitives
 export { EmptyState } from "./components/empty-state";

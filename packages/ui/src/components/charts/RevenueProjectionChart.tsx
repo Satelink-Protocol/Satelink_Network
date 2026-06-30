@@ -18,32 +18,33 @@ export function RevenueProjectionChart({ data }: RevenueProjectionChartProps): J
       <BarChart data={data} barCategoryGap="30%" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <XAxis
           dataKey="label"
-          tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11, fontFamily: "ui-monospace, monospace" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fill: "#64748B", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11, fontFamily: "ui-monospace, monospace" }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => `$${v}`}
         />
         <Tooltip
           contentStyle={{
-            background: "#0C1120",
-            border: "1px solid #1A2840",
+            background: "hsl(var(--popover))",
+            border: "1px solid hsl(var(--border))",
             borderRadius: 4,
-            fontFamily: "JetBrains Mono",
+            fontFamily: "ui-monospace, monospace",
             fontSize: 12,
+            color: "hsl(var(--foreground))",
           }}
           formatter={(value) => [`$${value}/mo`, "Monthly"]}
-          labelStyle={{ color: "#64748B" }}
-          cursor={{ fill: "rgba(78,205,196,0.05)" }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+          cursor={{ fill: "hsl(var(--primary) / 0.05)" }}
         />
         <Bar dataKey="monthly" radius={[4, 4, 0, 0]}>
-          <Cell fill="#4ECDC4" />
-          <Cell fill="#4ECDC4" opacity={0.7} />
-          <Cell fill="#4ECDC4" opacity={0.5} />
+          <Cell fill="hsl(var(--primary))" />
+          <Cell fill="hsl(var(--primary) / 0.7)" />
+          <Cell fill="hsl(var(--primary) / 0.5)" />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
