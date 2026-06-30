@@ -66,10 +66,24 @@ export function createAdminRouter(pool, redis) {
   // ── Intelligence ──────────────────────────────────────────────────────────
   router.get('/intel/developers', async (req, res) => {
     try {
+      // Pagination guard: developer_intel grows unbounded as the IP classifier
+      // runs (24k+ rows / ~10MB if returned whole), which froze the admin
+      // dashboard. Default to one page; clamp limit to a sane max.
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
       const rows = await q(
-        `SELECT * FROM developer_intel WHERE classification IN ('developer','machine') ORDER BY score DESC, days_active DESC`
+        `SELECT id, ip, isp, country, classification, score, days_active, calls_today, avg_daily_calls, status, user_agent
+           FROM developer_intel
+          WHERE classification IN ('developer','machine')
+          ORDER BY score DESC, days_active DESC
+          LIMIT $1 OFFSET $2`,
+        [limit, offset]
       );
-      res.json({ ok: true, developers: rows, count: rows.length });
+      const totalRows = await q(
+        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE classification IN ('developer','machine')`
+      );
+      const total = totalRows[0] ? Number(totalRows[0].c) : 0;
+      res.json({ ok: true, developers: rows, count: rows.length, total, limit, offset });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
 
@@ -399,9 +413,19 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Demand Leads (ALIAS of /intel/developers for dashboard compatibility)
   router.get('/demand/leads', async (req, res) => {
     try {
+      // Same pagination guard as /intel/developers (this is an alias of it).
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
       const rows = await q(
-        `SELECT * FROM developer_intel WHERE classification IN ('developer','machine') ORDER BY score DESC, days_active DESC`);
-      ok(res, { developers: rows, count: rows.length });
+        `SELECT id, ip, isp, country, classification, score, days_active, calls_today, avg_daily_calls, status, user_agent
+           FROM developer_intel
+          WHERE classification IN ('developer','machine')
+          ORDER BY score DESC, days_active DESC
+          LIMIT $1 OFFSET $2`,
+        [limit, offset]);
+      const total = num((await one(
+        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE classification IN ('developer','machine')`)).c);
+      ok(res, { developers: rows, leads: rows, count: rows.length, total, limit, offset });
     } catch (e) { fail(res, e); }
   });
 
