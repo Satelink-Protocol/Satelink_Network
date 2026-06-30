@@ -97,8 +97,12 @@ export class OutreachEngine {
       [templateId, template.target, template.body]
     ).catch(() => {});
 
-    // Brevo email ready — awaiting lead email collection (Phase 2)
-    // Call: await sendBrevoEmail(leadEmail, subject, html) when emails available
+    // Brevo email ready — opt-in lead emails are now collected at key creation
+    // and via POST /api/keys/email (see billing/api_keys_route.mjs). The
+    // outreach-eligible source is:
+    //   SELECT email FROM api_credits WHERE email_consent = true AND email IS NOT NULL
+    // Only send to consented addresses — never to inferred ISP/abuse contacts.
+    // Call: await sendBrevoEmail(leadEmail, subject, html) when wiring Phase 2 sends.
 
     return { sent: true, template: templateId, target: template.target };
   }
