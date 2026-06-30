@@ -80,7 +80,7 @@ export { StatusBadge } from "./components/status-badge";
 export type { StatusBadgeProps } from "./components/status-badge";
 export { GrafanaPanel } from "./components/grafana-panel";
 export type { GrafanaPanelProps } from "./components/grafana-panel";
-export { TimeseriesPanel, HeatmapPanel, LogPanel } from "./components/monitoring-panels";
+export { LogPanel } from "./components/monitoring-panels";
 export type { MonitoringPanelProps } from "./components/monitoring-panels";
 
 // state primitives
@@ -101,3 +101,11 @@ export type { AsyncBoundaryProps } from "./components/async-boundary";
 export * from "./components/charts";
 export * from "./components/tables";
 export * from "./components/topology";
+
+// Grafana-inspired components
+export { SparklineKPICard } from "./components/grafana/SparklineKPICard";
+export { StatRow } from "./components/grafana/StatRow";
+export { TimeseriesPanel } from "./components/grafana/TimeseriesPanel";
+export { LogFeed } from "./components/grafana/LogFeed";
+export { AlertBand } from "./components/grafana/AlertBand";
+export { HeatmapPanel } from "./components/grafana/HeatmapPanel";
