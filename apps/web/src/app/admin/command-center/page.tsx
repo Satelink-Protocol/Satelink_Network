@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Area, AreaChart, CartesianGrid, Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  Button, EmptyState, Inline, Input, Notice, Panel, Split, Stack, StatusBadge, StatusDot,
-  FilterPanel, FilterGroup, FilterCheckbox
+  Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
+  FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
 import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, AlertTriangle, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
@@ -96,8 +97,14 @@ function OutreachTab() {
   );
 }
 
-export default function AdminCommandCenter() {
-  const [view, setView] = useState("overview");
+function AdminCommandCenter() {
+  // View is driven by the ?view= search param so sidebar nav, bookmarks, and
+  // browser back/forward stay in sync (same pattern as the node/machine portals).
+  const router = useRouter();
+  const params = useSearchParams();
+  const view = params.get("view") || "overview";
+  const go = (id: string) =>
+    router.push(id === "overview" ? "/admin/command-center" : `/admin/command-center?view=${id}`);
   const [now, setNow] = useState("");
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
   const [confirmLive, setConfirmLive] = useState("");
@@ -332,7 +339,7 @@ export default function AdminCommandCenter() {
       brand={{ name: "SATELINK COMMAND CENTER", sublabel: "Control Room", logo: H.icon }}
       nav={NAV}
       activeId={view}
-      onNavigate={setView}
+      onNavigate={go}
       breadcrumb={["Admin", "Command Center"]}
       title={H.title}
       subtitle={H.subtitle}
@@ -460,42 +467,47 @@ export default function AdminCommandCenter() {
 
         {/* 2. DEMAND RADAR VIEW */}
         {view === "radar" && (
-          <Split
-            asideWidth="md" asidePosition="left"
-            aside={
-              <FilterPanel title="Filters">
-                <FilterGroup title="Lead Stage">
-                  {["identified", "contacted", "deposited", "paid"].map((stg) => (
-                    <FilterCheckbox key={stg} label={stg.toUpperCase()} count={counts[stg] || 0} checked={stages[stg]} onChange={(chk) => setStages((prev) => ({ ...prev, [stg]: chk }))} />
-                  ))}
-                </FilterGroup>
-                <FilterGroup title="Classification">
-                  {["developer", "crawler", "new"].map((cls) => (
-                    <FilterCheckbox key={cls} label={cls.toUpperCase()} count={(devs || []).filter((d: any) => d.classification === cls).length} checked={classes[cls]} onChange={(chk) => setClasses((prev) => ({ ...prev, [cls]: chk }))} />
-                  ))}
-                </FilterGroup>
-                <FilterGroup title="Classifier & Actions">
+          <Stack gap="sm">
+            {/* KPI cards span the full width across the top — no overlap. */}
+            {demStats && (
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+                <KPICard label="Total Active IPs" value={fmt.num(demStats.total_active_ips)} />
+                <KPICard label="Developers" value={fmt.num(demStats.developer_count)} />
+                <KPICard label="Machines" value={fmt.num(demStats.machine_count)} />
+                <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} />
+                <KPICard label="Top IP calls" value={`${fmt.num(demStats.top_lead_calls_per_day)}/d`} caption={demStats.top_lead_ip || ""} />
+              </div>
+            )}
+
+            {/* Filters/actions sidebar and main content sit in a defined grid
+                (280px + 1fr), collapsing to a single column below lg. The filter
+                and Classifier & Actions panels are separate, stacked blocks — no
+                absolute positioning, so nothing overlaps the cards or each other. */}
+            <div className="grid gap-4 lg:grid-cols-[280px_1fr] items-start">
+              <div className="flex flex-col gap-4">
+                <Panel title="Filters">
+                  <FilterGroup title="Lead Stage">
+                    {["identified", "contacted", "deposited", "paid"].map((stg) => (
+                      <FilterCheckbox key={stg} label={stg.toUpperCase()} count={counts[stg] || 0} checked={stages[stg]} onChange={(chk) => setStages((prev) => ({ ...prev, [stg]: chk }))} />
+                    ))}
+                  </FilterGroup>
+                  <FilterGroup title="Classification">
+                    {["developer", "crawler", "new"].map((cls) => (
+                      <FilterCheckbox key={cls} label={cls.toUpperCase()} count={(devs || []).filter((d: any) => d.classification === cls).length} checked={classes[cls]} onChange={(chk) => setClasses((prev) => ({ ...prev, [cls]: chk }))} />
+                    ))}
+                  </FilterGroup>
+                </Panel>
+                <Panel title="Classifier & Actions">
                   <Stack gap="xs">
                     <Button tone="primary" size="sm" disabled={busy.classify} onClick={classify} style={{ width: "100%" }}>{busy.classify ? "Classifying..." : "Run IP Classifier"}</Button>
                     {TEMPLATES.map((t) => (
                       <Button key={t.id} tone="info" size="sm" disabled={busy[`outreach:${t.id}`]} onClick={() => outreach(t.id)} style={{ width: "100%", marginTop: "4px" }}>{busy[`outreach:${t.id}`] ? "Sending..." : `Send: ${t.label}`}</Button>
                     ))}
                   </Stack>
-                </FilterGroup>
-              </FilterPanel>
-            }
-          >
-            <Stack gap="sm">
-              {demStats && (
-                <div className="grid gap-2 grid-cols-2 lg:grid-cols-5">
-                  <KPICard label="Total Active IPs" value={fmt.num(demStats.total_active_ips)} />
-                  <KPICard label="Developers" value={fmt.num(demStats.developer_count)} />
-                  <KPICard label="Machines" value={fmt.num(demStats.machine_count)} />
-                  <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} />
-                  <KPICard label="Top IP calls" value={`${fmt.num(demStats.top_lead_calls_per_day)}/d`} caption={demStats.top_lead_ip || ""} />
-                </div>
-              )}
-              
+                </Panel>
+              </div>
+
+              <Stack gap="sm">
               <Panel title="Conversion Funnel">
                 <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: "280px" }}>
@@ -532,8 +544,9 @@ export default function AdminCommandCenter() {
                   </div>
                 )}
               </Panel>
-            </Stack>
-          </Split>
+              </Stack>
+            </div>
+          </Stack>
         )}
 
         {/* 3. TREASURY OPERATIONS VIEW */}
@@ -984,5 +997,15 @@ export default function AdminCommandCenter() {
         )}
       </Stack>
     </DashboardShell>
+  );
+}
+
+export default function AdminCommandCenterPage() {
+  // useSearchParams must sit inside a Suspense boundary so the route can be
+  // statically prerendered (same boundary pattern as node/machine layouts).
+  return (
+    <Suspense fallback={null}>
+      <AdminCommandCenter />
+    </Suspense>
   );
 }
