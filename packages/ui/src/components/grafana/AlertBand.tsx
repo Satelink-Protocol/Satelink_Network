@@ -1,14 +1,16 @@
 import * as React from "react";
-import { AlertTriangle, Info, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 
-export type AlertSeverity = "critical" | "high" | "warning" | "info";
+export type AlertSeverity = "critical" | "high" | "warning" | "info" | "resolved";
 
 export interface AlertItem {
   code: string;
   message: string;
   severity: AlertSeverity;
+  /** Optional timestamp rendered in a mono gutter (timeline support). */
+  ts?: string | number;
   action?: {
     label: string;
     onClick: () => void;
@@ -56,6 +58,12 @@ export function AlertBand({
       iconColor: "text-blue-400",
       icon: Info,
     },
+    resolved: {
+      wrapper:
+        "border-[hsl(var(--state-healthy)/0.4)] bg-[hsl(var(--state-healthy)/0.1)] text-state-healthy border-l-[hsl(var(--state-healthy))]",
+      iconColor: "text-state-healthy",
+      icon: CheckCircle2,
+    },
   };
 
   if (isCollapsed) {
@@ -99,6 +107,11 @@ export function AlertBand({
             <div className="flex items-center gap-3 min-w-0">
               <Icon className={cn("h-4 w-4 shrink-0", style.iconColor)} />
               <div className="flex items-baseline gap-2 truncate">
+                {alert.ts != null && (
+                  <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">
+                    {new Date(alert.ts).toISOString().replace("T", " ").substring(5, 19)}
+                  </span>
+                )}
                 <span className="shrink-0 rounded bg-background/40 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider opacity-80 border border-background/20">
                   {alert.code}
                 </span>

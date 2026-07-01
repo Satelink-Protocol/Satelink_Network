@@ -2,23 +2,16 @@ import * as React from "react";
 
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
+import { normalizeState, type SystemState } from "../tokens";
 
 type Variant = "success" | "warning" | "destructive" | "neutral" | "default";
 
-const STATUS_MAP: Record<string, Variant> = {
-  active: "success",
-  online: "success",
-  confirmed: "success",
-  ok: "success",
+const STATE_TO_VARIANT: Record<SystemState, Variant> = {
   healthy: "success",
-  pending: "warning",
   degraded: "warning",
-  warning: "warning",
-  failed: "destructive",
-  error: "destructive",
-  offline: "destructive",
-  bad: "destructive",
-  inactive: "neutral",
+  critical: "destructive",
+  unknown: "neutral",
+  "dry-run": "warning",
 };
 
 export interface StatusBadgeProps {
@@ -30,8 +23,9 @@ export interface StatusBadgeProps {
 }
 
 /**
- * Status pill with a consistent status→tone mapping. Replaces the legacy
- * `os-pill ok/bad/pending` classes so every status reads identically.
+ * Legacy status pill kept for existing call sites. Color resolution is
+ * delegated to tokens/normalizeState so it can never disagree with
+ * StatusPill/HealthBadge. Prefer StatusPill in new code.
  */
 export function StatusBadge({
   status,
@@ -39,16 +33,16 @@ export function StatusBadge({
   label,
   className,
 }: StatusBadgeProps) {
-  const tone = variant ?? STATUS_MAP[status?.toLowerCase()] ?? "neutral";
+  const tone = variant ?? STATE_TO_VARIANT[normalizeState(status)];
   return (
-    <Badge variant={tone} className={cn("gap-1.5 transition-all duration-300 hover:brightness-110", className)}>
+    <Badge variant={tone} className={cn("gap-1.5 transition-tokens", className)}>
       {(tone === "success" || tone === "warning" || tone === "destructive") && (
         <span
           className={cn(
-            "size-1.5 rounded-full shrink-0 shadow-sm",
-            tone === "success" && "bg-success animate-pulse-glow shadow-success/20",
-            tone === "warning" && "bg-warning animate-pulse-glow shadow-warning/20",
-            tone === "destructive" && "bg-destructive animate-pulse-glow shadow-destructive/20"
+            "size-1.5 shrink-0 rounded-full",
+            tone === "success" && "bg-success",
+            tone === "warning" && "bg-warning",
+            tone === "destructive" && "bg-destructive"
           )}
         />
       )}

@@ -7,7 +7,8 @@ export interface EmptyStateProps {
   /** Visual tone — `error` switches to a destructive treatment. */
   tone?: "neutral" | "error";
   icon?: LucideIcon;
-  title: string;
+  /** Defaults to the honest "No data yet". */
+  title?: string;
   description?: string;
   /** Optional call-to-action rendered under the description. */
   action?: React.ReactNode;
@@ -15,14 +16,15 @@ export interface EmptyStateProps {
 }
 
 /**
- * Canonical empty/error placeholder. Used directly and as the fallback for
- * both <AsyncBoundary> (no data / fetch error) and <ErrorBoundary> (runtime
- * crash) — a page never shows a blank or a stack trace.
+ * Canonical empty/error placeholder — the ONLY correct rendering when a
+ * panel has no backing data source. A gorgeous empty panel is a success;
+ * a fabricated number is a failure. Also the fallback for <AsyncBoundary>
+ * and <ErrorBoundary> so a page never shows a blank or a stack trace.
  */
 export function EmptyState({
   tone = "neutral",
   icon: Icon = Inbox,
-  title,
+  title = "No data yet",
   description,
   action,
   className,
@@ -32,7 +34,7 @@ export function EmptyState({
       data-slot="empty-state"
       role={tone === "error" ? "alert" : undefined}
       className={cn(
-        "flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-8 py-12 text-center glass-panel",
+        "flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-8 py-12 text-center",
         tone === "error" ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-muted/20",
         className
       )}

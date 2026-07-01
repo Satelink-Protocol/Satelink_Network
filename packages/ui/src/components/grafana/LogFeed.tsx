@@ -17,6 +17,8 @@ export interface LogFeedProps {
   logs: LogEntry[];
   maxRows?: number;
   loading?: boolean;
+  /** Error message — renders instead of rows. */
+  error?: string | null;
   emptyMessage?: string;
   className?: string;
 }
@@ -25,7 +27,8 @@ export function LogFeed({
   logs,
   maxRows = 50,
   loading = false,
-  emptyMessage = "No logs available.",
+  error,
+  emptyMessage = "No logs yet",
   className,
 }: LogFeedProps) {
   // Use a map to track expanded rows individually
@@ -97,7 +100,11 @@ export function LogFeed({
       </div>
 
       <div className="max-h-[400px] overflow-y-auto scrollbar-thin flex-1 p-0 m-0 bg-background/50">
-        {logs.length === 0 && !loading ? (
+        {error && !loading ? (
+          <div role="alert" className="flex items-center justify-center h-32 text-sm text-destructive font-mono">
+            {error}
+          </div>
+        ) : logs.length === 0 && !loading ? (
           <div className="flex items-center justify-center h-32 text-sm text-muted-foreground font-mono">
             {emptyMessage}
           </div>
@@ -111,7 +118,16 @@ export function LogFeed({
               return (
                 <div
                   key={log.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
                   onClick={() => toggleRow(log.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleRow(log.id);
+                    }
+                  }}
                   className={cn(
                     "flex items-start gap-2 py-1.5 px-3 font-mono text-[11px] cursor-pointer transition-colors border-l-2",
                     isEven ? "bg-transparent" : "bg-muted/20",

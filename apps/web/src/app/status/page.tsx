@@ -1,21 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { StatusPill } from '@satelink/ui';
 
 type Health = 'operational' | 'degraded' | 'unknown';
-
-interface ServiceRow {
-  name: string;
-  badge: string;
-  tone: 'green' | 'amber';
-}
-
-const SERVICES: ServiceRow[] = [
-  { name: 'RPC Gateway', badge: 'OPERATIONAL', tone: 'green' },
-  { name: 'Billing System', badge: 'OPERATIONAL', tone: 'green' },
-  { name: 'Settlement Engine', badge: 'DRY_RUN', tone: 'amber' },
-  { name: 'Polygon Mainnet (Chain 137)', badge: 'OPERATIONAL', tone: 'green' },
-];
 
 export default function StatusPage() {
   const [lastChecked, setLastChecked] = useState<string>('');
@@ -42,16 +30,25 @@ export default function StatusPage() {
     };
   }, []);
 
+  // The gateway row reflects the live /health probe; billing + chain ride the
+  // same backend, settlement mode is a deploy-time fact (SETTLEMENT_DRY_RUN=1).
+  const services = [
+    { name: 'RPC Gateway', status: gateway === 'unknown' ? 'checking' : gateway },
+    { name: 'Billing System', status: gateway === 'unknown' ? 'checking' : gateway },
+    { name: 'Settlement Engine', status: 'dry_run' },
+    { name: 'Polygon Mainnet (Chain 137)', status: gateway === 'unknown' ? 'checking' : gateway },
+  ];
+
   return (
     <div className="mx-auto max-w-2xl">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">
           Satelink Network Status
         </h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="numeric mt-1 text-sm text-muted-foreground">
           Last checked: {lastChecked || '—'}
           {gateway === 'degraded' ? (
-            <span className="ml-2 text-amber-400">
+            <span className="ml-2 text-state-degraded">
               (live health probe degraded)
             </span>
           ) : null}
@@ -59,37 +56,22 @@ export default function StatusPage() {
       </header>
 
       <div className="space-y-3">
-        {SERVICES.map((svc) => (
+        {services.map((svc) => (
           <div
             key={svc.name}
-            className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3"
+            className="flex items-center justify-between rounded-lg border border-[hsl(var(--card-border))] bg-card px-4 py-3 transition-tokens"
           >
             <span className="text-sm font-medium">{svc.name}</span>
-            <span
-              className={
-                svc.tone === 'green'
-                  ? 'inline-flex items-center gap-2 rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-400'
-                  : 'inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400'
-              }
-            >
-              <span
-                className={
-                  svc.tone === 'green'
-                    ? 'h-1.5 w-1.5 rounded-full bg-green-400'
-                    : 'h-1.5 w-1.5 rounded-full bg-amber-400'
-                }
-              />
-              {svc.badge}
-            </span>
+            <StatusPill status={svc.status} />
           </div>
         ))}
       </div>
 
-      <footer className="mt-10 text-center text-xs text-zinc-500">
+      <footer className="mt-10 text-center text-xs text-muted-foreground">
         For support contact{' '}
         <a
           href="mailto:support@satelink.network"
-          className="text-zinc-300 underline underline-offset-2"
+          className="text-foreground underline underline-offset-2"
         >
           support@satelink.network
         </a>
