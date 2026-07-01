@@ -1,125 +1,91 @@
-# Satelink UI Design System
+# Satelink UI Design System — Grafana-Grade (Fable 5 rebuild)
+
+Dark control-room aesthetic (Grafana / Datadog / New Relic / Cloudflare tier),
+built on one non-negotiable rule:
+
+> **Never render a number that isn't traceable to a real API response.**
+> No data source → `<EmptyState>` ("No data yet"). A gorgeous empty panel is a
+> success. A gorgeous fake-data panel is a failure that gets reverted.
+> See `DATA_SOURCE_MAP.md` for the per-panel audit.
 
 ## Architecture
-Single source: `@satelink/ui` package
-All components imported from `packages/ui/src/index.ts`
 
-## Token Reference
-| Token Name | HSL Value | Hex Equivalent | Usage Context |
-| :--- | :--- | :--- | :--- |
-| `--background` | `220 20% 4%` | `#080A0C` (approx `#090D15`) | Main dashboard surface (near-black with blue tint) |
-| `--foreground` | `210 20% 92%` | `#E5E8EC` | Cool white text for primary content |
-| `--card` | `220 18% 8%` | `#111518` | Dark card surface |
-| `--card-border` | `217 25% 16%` | `#1E2533` | Subtle blue-grey border for cards/panels |
-| `--primary` | `174 80% 38%` | `#13AE9E` | Satelink teal accent for primary actions and active states |
-| `--muted` | `220 15% 11%` | `#181B20` | Subdued panel backgrounds and alternating rows |
-| `--muted-foreground`| `215 15% 55%` | `#788293` | Subdued labels and secondary text |
-| `--success` | `152 65% 38%` | `#21A063` | Positive trends, "good" status |
-| `--warning` | `38 90% 52%` | `#F6A816` | Amber for warnings, "warning" status |
-| `--destructive`| `0 72% 42%` | `#B81E1E` | Red for errors, "critical" status |
-| `--chart-1` | `174 80% 48%` | `#18DCC8` | Primary teal for chart series |
-| `--chart-2` | `200 85% 55%` | `#29A6EE` | Electric blue for chart series |
-| `--chart-3` | `38 90% 55%` | `#F7B121` | Amber/warning for chart series |
-| `--chart-4` | `152 65% 45%` | `#28BE76` | Green/success for chart series |
-
-## Component Catalog
-*(Existing primitives like `Button`, `Card`, `Badge`, `KPICard`, `DashboardShell` are documented in code and imported directly from `@satelink/ui`)*
-
-## Grafana Components (NEW)
-These components use Grafana-inspired density, dark teal branding, and precise tabular-nums for metrics.
-
-### SparklineKPICard
-File: `packages/ui/src/components/grafana/SparklineKPICard.tsx`
-Props: `SparklineKPICardProps`
-```tsx
-import { SparklineKPICard } from "@satelink/ui";
-
-<SparklineKPICard 
-  label="API Requests (1h)" 
-  value="1.2M" 
-  unit="req/s" 
-  status="good"
-  sparkData={[12, 15, 20, 18, 25, 30, 28]} 
-  trend={12.4} 
-/>
+```
+packages/ui/src/
+├── tokens/            ← SINGLE SOURCE OF TRUTH
+│   ├── tokens.css     state colors, spacing, radius, elevation, mono stack,
+│   │                  motion, focus rings + .text-state-* utilities
+│   └── index.ts       SystemState, STATE_META, normalizeState, MOTION
+├── styles/theme.css   .satelink-os scope (imports tokens.css)
+├── components/        primitives (below)
+└── index.ts           public surface
 ```
 
-### StatRow
-File: `packages/ui/src/components/grafana/StatRow.tsx`
-Props: `StatRowProps`
-```tsx
-import { StatRow } from "@satelink/ui";
+The `.satelink-os` class scopes every token; `DashboardShell` applies it, and
+standalone surfaces (e.g. the public status page) apply it at their layout.
 
-<StatRow 
-  stats={[
-    { label: "Success Rate", value: "99.99", unit: "%", status: "good", colorize: true },
-    { label: "Errors", value: "2", status: "critical", colorize: true }
-  ]} 
-/>
-```
+## Tokens
 
-### TimeseriesPanel
-File: `packages/ui/src/components/grafana/TimeseriesPanel.tsx`
-Props: `TimeseriesPanelProps`
-```tsx
-import { TimeseriesPanel } from "@satelink/ui";
+### State color — color IS state, never decoration
 
-<TimeseriesPanel 
-  title="Gateway Traffic"
-  timeRange="1h"
-  data={[{ ts: 1718000000, value1: 400, value2: 120 }]}
-  series={[
-    { key: "value1", label: "Inbound", type: "area" },
-    { key: "value2", label: "Outbound", type: "line" }
-  ]}
-/>
-```
+| State | Token | Color | Meaning |
+| :-- | :-- | :-- | :-- |
+| `healthy` | `--state-healthy` | green | working |
+| `degraded` | `--state-degraded` | amber | limping |
+| `critical` | `--state-critical` | red | broken |
+| `unknown` | `--state-unknown` | zinc | **no signal — the honest default** |
+| `dry-run` | `--state-dry-run` | violet | simulated, not broadcasting |
 
-### LogFeed
-File: `packages/ui/src/components/grafana/LogFeed.tsx`
-Props: `LogFeedProps`
-```tsx
-import { LogFeed } from "@satelink/ui";
+Every pill/badge/dot/threshold resolves through `normalizeState(raw)` +
+`STATE_META` from `tokens/`. Unrecognized statuses render **zinc**, never a
+guessed green. Utilities: `.text-state-*`, `.bg-state-*`, `.pill-state-*`.
 
-<LogFeed 
-  logs={[
-    { id: 1, timestamp: Date.now(), level: "error", process: "gateway", message: "Timeout" }
-  ]} 
-/>
-```
+### Other scales
 
-### AlertBand
-File: `packages/ui/src/components/grafana/AlertBand.tsx`
-Props: `AlertBandProps`
-```tsx
-import { AlertBand } from "@satelink/ui";
+- **Spacing**: 4px base (`--space-1` … `--space-8`).
+- **Radius**: `--radius-sm/md/lg` (4/6/8px).
+- **Elevation**: `--elev-panel` (1px ring + soft shadow), `--elev-overlay`.
+- **Typography**: `.numeric` → JetBrains Mono / system-mono, tabular-nums.
+  ALL metric values are monospaced.
+- **Motion**: 120–200ms ease-out ONLY (`--motion-fast: 140ms`,
+  `--motion-slow: 200ms`, `--ease-out`). No bounce, no scale pops.
+  `pulse-glow` is opacity-only. `prefers-reduced-motion` collapses all motion.
+- **Focus**: 2px `--ring` outline on every interactive element inside
+  `.satelink-os` (see tokens.css `:focus-visible` rule).
 
-<AlertBand 
-  alerts={[
-    { code: "ERR_503", message: "Service Unavailable", severity: "critical" }
-  ]} 
-/>
-```
+## Primitives (all support loading + empty + error)
 
-### HeatmapPanel
-File: `packages/ui/src/components/grafana/HeatmapPanel.tsx`
-Props: `HeatmapPanelProps`
-```tsx
-import { HeatmapPanel } from "@satelink/ui";
+| Component | File | Notes |
+| :-- | :-- | :-- |
+| `Panel` | `components/panel.tsx` | Core Grafana shell: title, description, actions, timeRange slot, status pill, context menu. Body renders skeleton / EmptyState / retryable error / children. |
+| `KPIStat` | `components/kpi-stat.tsx` | Mono value, state accent edge, delta pill, low-opacity sparkline (real history only), time-window chip. `value: null` → "—". |
+| `TimeseriesPanel` | `components/grafana/TimeseriesPanel.tsx` | Area/line/bar, low-opacity fills, `error` + `emptyHint` built in. |
+| `StatusPill` / `HealthBadge` | `components/status-pill.tsx` | THE state-color source. `StatusBadge` (legacy) delegates to the same map. |
+| `DataTable` | `components/data-table.tsx` | Sticky header (`maxHeight`), sortable columns (`sortValue`), pagination (`pageSize`), row hover, keyboard-activatable rows, shape-matched skeleton rows, empty + error states. |
+| `LogFeed` | `components/grafana/LogFeed.tsx` | Mono rows, timestamp gutter, severity coding, keyboard-expandable rows, capped rows. |
+| `AlertBand` | `components/grafana/AlertBand.tsx` | critical / high / warning / info / **resolved**, optional `ts` timeline gutter. |
+| `EmptyState` | `components/empty-state.tsx` | Defaults to "No data yet". The ONLY correct rendering for absent data. |
+| `Skeleton` | `components/ui/skeleton.tsx` | Shape-matched placeholders; DataTable/KPIStat/Panel compose it. |
+| `DashboardShell` | `components/dashboard-shell.tsx` | Left nav, top bar, ⌘K palette, env chip, system-health dot (`health` prop — defaults to zinc **unknown**, never fake green), `refreshedAt` indicator. |
 
-<HeatmapPanel 
-  title="Latency Heatmap"
-  data={[[10, 20, 5], [5, 40, 10]]}
-  colorScale="teal"
-/>
-```
+## Composition
 
-## Future Roadmap
-- Components planned but not yet built: Drill-down histograms, unified trace view, dynamic node topology minimaps.
-- Design decisions deferred: Refactoring the legacy `KPICard` entirely to use `SparklineKPICard` internally to unify APIs.
+Every page: **Header → KPI strip → status strip → panels → tables → activity.**
+All six subdomains (admin, developer, node, machine, ops, status) share the
+shell + tokens; each keeps its own nav.
 
-## Debug Guide
-Common issues and fixes:
-- **Theme not applying** → check `.satelink-os` wrapper class is correctly bound to the AppShell or DashboardShell.
-- **recharts not rendering** → check `ResponsiveContainer` has an explicit `height` or its parent container has absolute sizing (e.g. `h-[200px]` or `absolute inset-0`).
-- **Tailwind arbitrary values not working** → check `next.config` content globs include `packages/ui`.
+## Data honesty contract (per panel)
+
+1. Real endpoint with real data → wire it, render real values.
+2. Endpoint returns 0 / tiny values ($0.00003, 1 node) → render the REAL value.
+3. No endpoint → `<EmptyState>` + `// TODO: no data source yet — empty by design`.
+4. Never pad sparklines/series with invented datapoints (zeros included).
+
+## Accessibility
+
+- WCAG AA contrast on all text.
+- Focus rings on all interactive elements (token-level rule).
+- Keyboard: ⌘K palette, sortable headers are buttons, clickable table rows and
+  log rows respond to Enter/Space with `role="button"`.
+- `aria-busy` on loading regions, `role="alert"` on error states,
+  `aria-sort` on sorted columns.

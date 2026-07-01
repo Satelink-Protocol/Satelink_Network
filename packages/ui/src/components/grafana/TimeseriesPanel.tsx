@@ -33,6 +33,9 @@ export interface TimeseriesPanelProps {
   height?: number;
   showLegend?: boolean;
   loading?: boolean;
+  /** Error message — renders the error treatment instead of the chart. */
+  error?: string | null;
+  emptyHint?: string;
   className?: string;
 }
 
@@ -46,6 +49,8 @@ export function TimeseriesPanel({
   height = 240,
   showLegend = true,
   loading = false,
+  error,
+  emptyHint,
   className,
 }: TimeseriesPanelProps) {
   const chartColors = [
@@ -108,16 +113,23 @@ export function TimeseriesPanel({
       <CardContent className="pt-0 pb-4">
         <div style={{ height }} className="w-full relative mt-2">
           {loading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 rounded-md">
+            <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 rounded-md" aria-busy="true">
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <span className="text-xs font-medium">Loading data...</span>
               </div>
             </div>
+          ) : error ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground rounded-md border border-dashed border-destructive/40 bg-destructive/5" role="alert">
+              <Activity className="h-8 w-8 opacity-20 mb-2 text-destructive" />
+              <span className="text-sm text-destructive">Failed to load</span>
+              <span className="mt-1 text-xs">{error}</span>
+            </div>
           ) : !hasData ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground rounded-md border border-dashed border-border bg-muted/20">
               <Activity className="h-8 w-8 opacity-20 mb-2" />
-              <span className="text-sm">No data for this time range</span>
+              <span className="text-sm">No data yet</span>
+              {emptyHint ? <span className="mt-1 text-xs">{emptyHint}</span> : null}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">

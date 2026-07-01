@@ -12,23 +12,17 @@ import {
   Wallet,
 } from "lucide-react";
 import {
-  SparklineKPICard,
+  KPIStat,
   StatRow,
   AlertBand,
+  TimeseriesPanel,
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardContent,
   Button,
   useEndpoint,
 } from "@satelink/ui";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  Tooltip,
-} from "recharts";
 
 // ---------------------------------------------------------------------------
 // API contracts (real endpoints — no mock/fallback values)
@@ -115,18 +109,6 @@ export default function MissionControlPage() {
   const confirmedBatches =
     pipeline?.settlement_batches?.confirmed ?? fin?.settlement?.batches_confirmed ?? 0;
 
-  // Honest 7-slot series: we only have a single real data point today, so prior
-  // slots are zero until the RPC metrics pipeline backfills real history.
-  const trafficData = React.useMemo(() => {
-    const latest =
-      execSummary?.total_requests_24h ?? pipeline?.revenue_events_v2.count ?? 0;
-    const labels = ["6d", "5d", "4d", "3d", "2d", "1d", "Today"];
-    return labels.map((label, i) => ({
-      label,
-      requests: i === labels.length - 1 ? latest : 0,
-    }));
-  }, [execSummary?.total_requests_24h, pipeline?.revenue_events_v2.count]);
-
   const copyEndpoint = () => {
     navigator.clipboard?.writeText(RPC_URL).then(() => {
       setCopied(true);
@@ -138,89 +120,55 @@ export default function MissionControlPage() {
     <div className="space-y-6">
       {/* Section 2 — KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SparklineKPICard
-          label="Real Revenue (MTD)"
+        <KPIStat
+          label="Real Revenue"
+          timeWindow="MTD"
           icon={DollarSign}
-          value={usd5(fin?.metered_value_usdt)}
+          value={fin ? usd5(fin.metered_value_usdt) : null}
           caption="Metered value"
           loading={financial.loading}
-          sparkData={Array(6).fill(0).concat([fin?.metered_value_usdt ?? 0])}
-          status={(fin?.metered_value_usdt ?? 0) > 0 ? "good" : "neutral"}
+          error={financial.error}
+          state={(fin?.metered_value_usdt ?? 0) > 0 ? "healthy" : "unknown"}
         />
-        <SparklineKPICard
-          label="API Requests (24h)"
+        <KPIStat
+          label="API Requests"
+          timeWindow="24h"
           icon={Activity}
-          value={compact(execSummary?.total_requests_24h)}
+          value={execSummary ? compact(execSummary.total_requests_24h) : null}
           caption="Total requests"
           loading={!execSummary}
-          sparkData={Array(6).fill(0).concat([execSummary?.total_requests_24h ?? 0])}
-          status="neutral"
         />
-        <SparklineKPICard
-          label="Active IPs (24h)"
+        <KPIStat
+          label="Active IPs"
+          timeWindow="24h"
           icon={Users}
-          value={compact(execSummary?.active_ips_24h)}
+          value={execSummary ? compact(execSummary.active_ips_24h) : null}
           caption="Unique callers"
           loading={!execSummary}
-          sparkData={Array(6).fill(0).concat([execSummary?.active_ips_24h ?? 0])}
-          status="neutral"
         />
-        <SparklineKPICard
+        <KPIStat
           label="Settlement Batches"
           icon={Server}
-          value={confirmedBatches}
+          value={fin ? confirmedBatches : null}
           caption="Confirmed on-chain"
           loading={financial.loading}
-          sparkData={Array(6).fill(0).concat([confirmedBatches])}
-          status="neutral"
+          error={financial.error}
         />
       </div>
 
-      {/* Section 2.5 — Gateway traffic */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gateway Traffic</CardTitle>
-          <CardDescription>7-day request activity</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={trafficData}
-                margin={{ top: 4, right: 4, bottom: 0, left: 4 }}
-              >
-                <defs>
-                  <linearGradient id="gatewayTraffic" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <Tooltip
-                  cursor={{ stroke: "hsl(var(--border))" }}
-                  contentStyle={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    color: "hsl(var(--popover-foreground))",
-                  }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                  formatter={(v: number) => [compact(v), "Requests"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="requests"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  fill="url(#gatewayTraffic)"
-                  isAnimationActive={false}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Section 2.5 — Gateway traffic.
+          TODO: no data source yet — empty by design. There is no historical
+          request-rate endpoint (only 24h totals), so this panel renders its
+          honest empty state instead of a chart padded with invented zeros. */}
+      <TimeseriesPanel
+        title="Gateway Traffic"
+        subtitle="Request rate over time"
+        data={[]}
+        series={[{ key: "requests", label: "Requests", type: "area" }]}
+        height={160}
+        showLegend={false}
+        emptyHint="No request-history endpoint yet — 24h totals appear in the KPI strip above."
+      />
 
       {/* Section 3 — Warnings */}
       <AlertBand

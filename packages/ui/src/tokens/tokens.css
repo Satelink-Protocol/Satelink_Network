@@ -1,0 +1,121 @@
+/* ============================================================
+   @satelink/ui — DESIGN TOKENS (single source of truth)
+
+   Layered onto the `.satelink-os` scope (see ../styles/theme.css,
+   which @imports this file). Components consume these via the
+   semantic Tailwind tokens or the `.text-state-*` / `.bg-state-*`
+   utilities below — never hardcoded colors.
+
+   Color = state ONLY:
+     healthy   → green    (things working)
+     degraded  → amber    (things limping)
+     critical  → red      (things broken)
+     unknown   → zinc     (no signal — the HONEST default)
+     dry-run   → violet   (simulated, not broadcasting)
+   ============================================================ */
+
+.satelink-os {
+  /* ---- state colors ---- */
+  --state-healthy: 152 65% 42%;
+  --state-degraded: 38 90% 52%;
+  --state-critical: 0 72% 52%;
+  --state-unknown: 220 9% 55%;
+  --state-dry-run: 270 60% 62%;
+
+  /* ---- spacing scale (4px base) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* ---- radius scale ---- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+
+  /* ---- elevation ---- */
+  --elev-panel: 0 1px 4px 0 rgba(0, 0, 0, 0.6), 0 0 0 1px hsl(217 25% 13%);
+  --elev-overlay: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px hsl(217 25% 16%);
+
+  /* ---- typography ---- */
+  --font-mono-numeric: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* ---- motion: 120–200ms ease-out ONLY. No bounce. ---- */
+  --motion-fast: 140ms;
+  --motion-slow: 200ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* ---- state color utilities (Tailwind-independent, always available) ---- */
+.text-state-healthy { color: hsl(var(--state-healthy)); }
+.text-state-degraded { color: hsl(var(--state-degraded)); }
+.text-state-critical { color: hsl(var(--state-critical)); }
+.text-state-unknown { color: hsl(var(--state-unknown)); }
+.text-state-dry-run { color: hsl(var(--state-dry-run)); }
+
+.bg-state-healthy { background-color: hsl(var(--state-healthy)); }
+.bg-state-degraded { background-color: hsl(var(--state-degraded)); }
+.bg-state-critical { background-color: hsl(var(--state-critical)); }
+.bg-state-unknown { background-color: hsl(var(--state-unknown)); }
+.bg-state-dry-run { background-color: hsl(var(--state-dry-run)); }
+
+.pill-state-healthy {
+  color: hsl(var(--state-healthy));
+  background-color: hsl(var(--state-healthy) / 0.12);
+  border-color: hsl(var(--state-healthy) / 0.25);
+}
+.pill-state-degraded {
+  color: hsl(var(--state-degraded));
+  background-color: hsl(var(--state-degraded) / 0.12);
+  border-color: hsl(var(--state-degraded) / 0.25);
+}
+.pill-state-critical {
+  color: hsl(var(--state-critical));
+  background-color: hsl(var(--state-critical) / 0.12);
+  border-color: hsl(var(--state-critical) / 0.25);
+}
+.pill-state-unknown {
+  color: hsl(var(--state-unknown));
+  background-color: hsl(var(--state-unknown) / 0.12);
+  border-color: hsl(var(--state-unknown) / 0.25);
+}
+.pill-state-dry-run {
+  color: hsl(var(--state-dry-run));
+  background-color: hsl(var(--state-dry-run) / 0.12);
+  border-color: hsl(var(--state-dry-run) / 0.25);
+}
+
+/* ---- mono numerics ---- */
+.numeric {
+  font-family: var(--font-mono-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ---- focus rings on ALL interactive elements in the OS scope ---- */
+.satelink-os :is(button, a, input, select, textarea, [role="button"], [tabindex="0"]):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- motion helpers ---- */
+.transition-tokens {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satelink-os *,
+  .satelink-os *::before,
+  .satelink-os *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

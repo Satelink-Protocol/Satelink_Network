@@ -31,6 +31,7 @@ import {
   CommandItem,
   CommandList,
 } from "./ui/command";
+import { STATE_META, type SystemState } from "../tokens";
 
 export interface ShellNavItem {
   id: string;
@@ -74,6 +75,16 @@ export interface DashboardShellProps {
   headerRight?: React.ReactNode;
   /** KPI strip rendered at the top of the content area. */
   kpis?: React.ReactNode;
+
+  /** Environment label chip in the header. Defaults to "Production". */
+  env?: string;
+  /**
+   * System-health dot next to the env chip. Wire this to a REAL health
+   * endpoint — it defaults to "unknown" (zinc), never a guessed green.
+   */
+  health?: SystemState;
+  /** Last successful data refresh; renders "Updated HH:MM:SS". */
+  refreshedAt?: number | null;
 
   /** Render the content container edge-to-edge for NOC layouts. */
   fullWidth?: boolean;
@@ -172,10 +183,14 @@ export function DashboardShell({
   search,
   headerRight,
   kpis,
+  env = "Production",
+  health = "unknown",
+  refreshedAt,
   fullWidth,
   children,
 }: DashboardShellProps) {
   const BrandLogo = brand.logo;
+  const healthMeta = STATE_META[health];
   return (
     <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties} className="satelink-os h-svh overflow-hidden">
       <Sidebar collapsible="icon" variant="inset">
@@ -267,40 +282,28 @@ export function DashboardShell({
             {search ? <CommandSearch search={search} /> : null}
             
             <div className="flex items-center gap-2 border-l border-border pl-3">
-              <Button variant="ghost" size="icon" className="relative size-8">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-muted-foreground"
-                >
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-                <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" />
-              </Button>
-              
-              <div className="hidden h-8 items-center gap-2 rounded-md border border-border bg-muted/50 px-2 text-xs font-medium sm:flex">
-                <div className="size-2 rounded-full bg-success animate-pulse" />
-                <select className="bg-transparent outline-none ring-0 appearance-none cursor-pointer">
-                  <option value="production">Production</option>
-                  <option value="staging">Staging</option>
-                  <option value="development">Development</option>
-                </select>
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="m6 9 6 6 6-6"/></svg>
+              {refreshedAt ? (
+                <span className="numeric hidden text-[10px] text-muted-foreground md:inline">
+                  Updated{" "}
+                  {new Date(refreshedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
+              ) : null}
+
+              {/* env chip + system-health dot — health defaults to unknown
+                  (zinc) until a real health signal is wired in. */}
+              <div
+                className="hidden h-8 items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 text-xs font-medium sm:flex"
+                title={`System health: ${healthMeta.label}`}
+              >
+                <span className={cn("size-2 rounded-full", healthMeta.bgClass)} />
+                <span>{env}</span>
               </div>
 
               {headerRight}
-
-              <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground ring-1 ring-border">
-                AD
-              </div>
             </div>
           </div>
         </header>

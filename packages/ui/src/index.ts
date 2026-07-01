@@ -7,6 +7,15 @@
  * colors. Reference density: shadcn finance dashboard.
  */
 
+// design tokens (single source of truth for state → color)
+export {
+  STATE_META,
+  normalizeState,
+  MOTION,
+  FONT_MONO_NUMERIC,
+} from "./tokens";
+export type { SystemState, StateMeta } from "./tokens";
+
 // utils + hooks
 export { cn } from "./lib/utils";
 export { useIsMobile } from "./hooks/use-mobile";
@@ -59,6 +68,14 @@ export type {
   ShellNavGroup,
   ShellSearchItem,
 } from "./components/dashboard-shell";
+
+// core Grafana-grade primitives
+export { Panel } from "./components/panel";
+export type { PanelProps } from "./components/panel";
+export { KPIStat } from "./components/kpi-stat";
+export type { KPIStatProps } from "./components/kpi-stat";
+export { StatusPill, HealthBadge } from "./components/status-pill";
+export type { StatusPillProps, HealthBadgeProps } from "./components/status-pill";
 
 // dashboard-level primitives
 export { KPIGrid } from "./components/kpi-grid";
