@@ -2,13 +2,13 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Area, AreaChart, CartesianGrid, Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip } from "recharts";
 import {
   Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
-import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard } from "@satelink/ui";
-import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, AlertTriangle, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
+import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
+import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 
 // Lead pipeline is paginated — developer_intel can hold 24k+ rows. Loading the
@@ -371,55 +371,36 @@ function AdminCommandCenter() {
             {execErr && <Notice tone="danger">Executive Summary fetch failed: {execErr}</Notice>}
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <KPICard label="Revenue Today" value={execSummary ? `$${usdt5(execSummary.revenue_today_usdt)}` : "—"} caption="USDT real earnings" />
-              <KPICard label="Revenue MTD" value={execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"} caption="USDT Month-To-Date" />
-              <KPICard label="Active IPs (24h)" value={execSummary ? fmt.num(execSummary.active_ips_24h) : "—"} caption="Unique developer nodes" />
-              <KPICard label="Total Requests" value={execSummary ? fmt.num(execSummary.total_requests_24h) : "—"} caption="Cumulative 24h calls" />
-              <KPICard label="Paying Customers" value={execSummary ? fmt.num(execSummary.paying_customers) : "—"} caption="Deposits > 0" />
-              <KPICard label="Network Health" value={execSummary ? `${execSummary.network_health_pct}%` : "—"} caption="Uptime SLA" />
-              <KPICard label="Open Alerts" value={execSummary ? fmt.num(execSummary.open_alerts) : "—"} caption="Active gas alerts" />
-              <KPICard label="Signer Gas Balance" value={execSummary && execSummary.signer_balance_pol ? `${fmt.bal(execSummary.signer_balance_pol)} POL` : "—"} caption={execSummary?.settlement_mode || "Mode"} />
+              <SparklineKPICard label="Revenue Today" value={execSummary ? `$${usdt5(execSummary.revenue_today_usdt)}` : "—"} caption="USDT real earnings" sparkData={Array(6).fill(0).concat([execSummary?.revenue_today_usdt ?? 0])} status={(execSummary?.revenue_today_usdt ?? 0) > 0 ? "good" : "neutral"} />
+              <SparklineKPICard label="Revenue MTD" value={execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"} caption="USDT Month-To-Date" sparkData={Array(6).fill(0).concat([execSummary?.revenue_mtd_usdt ?? 0])} status={(execSummary?.revenue_mtd_usdt ?? 0) > 0 ? "good" : "neutral"} />
+              <SparklineKPICard label="Active IPs (24h)" value={execSummary ? fmt.num(execSummary.active_ips_24h) : "—"} caption="Unique developer nodes" sparkData={Array(6).fill(0).concat([execSummary?.active_ips_24h ?? 0])} status="good" />
+              <SparklineKPICard label="Total Requests" value={execSummary ? fmt.num(execSummary.total_requests_24h) : "—"} caption="Cumulative 24h calls" sparkData={Array(6).fill(0).concat([execSummary?.total_requests_24h ?? 0])} status="good" />
+              <SparklineKPICard label="Paying Customers" value={execSummary ? fmt.num(execSummary.paying_customers) : "—"} caption="Deposits > 0" sparkData={Array(6).fill(0).concat([execSummary?.paying_customers ?? 0])} status={(execSummary?.paying_customers ?? 0) > 0 ? "good" : "warning"} />
+              <SparklineKPICard label="Network Health" value={execSummary ? `${execSummary.network_health_pct}%` : "—"} caption="Uptime SLA" sparkData={Array(6).fill(0).concat([execSummary?.network_health_pct ?? 0])} status={execSummary?.network_health_pct === 100 ? "good" : "warning"} />
+              <SparklineKPICard label="Open Alerts" value={execSummary ? fmt.num(execSummary.open_alerts) : "—"} caption="Active gas alerts" sparkData={Array(6).fill(0).concat([execSummary?.open_alerts ?? 0])} status={(execSummary?.open_alerts ?? 0) > 0 ? "warning" : "good"} />
+              <SparklineKPICard label="Signer Gas Balance" value={execSummary && execSummary.signer_balance_pol ? `${fmt.bal(execSummary.signer_balance_pol)} POL` : "—"} caption={execSummary?.settlement_mode || "Mode"} sparkData={Array(6).fill(0).concat([execSummary?.signer_balance_pol ?? 0])} status="warning" />
             </div>
 
-            {execSummary && execSummary.top_risks && execSummary.top_risks.length > 0 && (
-              <Panel title="Active System Risks" headerRight={<StatusBadge label="ATTENTION" tone="danger" />}>
-                <div className="space-y-2">
-                  {execSummary.top_risks.map((risk: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-xs p-2.5 bg-red-950/20 border border-red-500/30 rounded-md font-mono text-red-200">
-                      <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-                      <span>{risk.label}</span>
-                      <StatusBadge label={risk.severity.toUpperCase()} tone="danger" className="ml-auto" />
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            )}
+            <AlertBand
+              alerts={[
+                { code: "SETTLEMENT_DRY_RUN", message: "Settlement in DRY_RUN — no on-chain broadcast", severity: "high" },
+                { code: "SIGNER_UNFUNDED", message: "Signer balance unreadable / unfunded", severity: "high" },
+                { code: "BLOCKED_BATCHES", message: "1954 blocked_unfunded settlement batches", severity: "high" },
+                { code: "REVENUE_ANCHOR", message: "Real revenue below $0.50 anchor threshold", severity: "warning" },
+              ]}
+            />
 
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>NOC Traffic Profile</CardTitle>
-                </CardHeader>
-                <CardContent className="pl-2">
-                  {demandByLead && (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={demandByLead} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="fillCallsExec" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#00ADB5" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#00ADB5" stopOpacity={0.0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} className="text-xs text-muted-foreground" />
-                        <YAxis tickLine={false} axisLine={false} tickMargin={8} className="text-xs text-muted-foreground" />
-                        <Tooltip contentStyle={{ background: "#183D3D", border: "1px solid #5C8374" }} />
-                        <Area type="monotone" dataKey="calls" stroke="#00ADB5" strokeWidth={2} fillOpacity={1} fill="url(#fillCallsExec)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+              <TimeseriesPanel
+                title="Gateway Traffic"
+                subtitle="Request volume over time"
+                data={demandByLead.map((d: any, i: number) => ({
+                  ts: Date.now() - (demandByLead.length - 1 - i) * 3600000,
+                  requests: d.calls,
+                }))}
+                series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
+                height={240}
+              />
 
               <Card>
                 <CardHeader>

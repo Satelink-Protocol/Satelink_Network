@@ -7,13 +7,14 @@ import {
   Activity,
   Users,
   Server,
-  AlertTriangle,
   Copy,
   Key,
   Wallet,
 } from "lucide-react";
 import {
-  KPICard,
+  SparklineKPICard,
+  StatRow,
+  AlertBand,
   Card,
   CardHeader,
   CardTitle,
@@ -137,33 +138,41 @@ export default function MissionControlPage() {
     <div className="space-y-6">
       {/* Section 2 — KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard
+        <SparklineKPICard
           label="Real Revenue (MTD)"
           icon={DollarSign}
           value={usd5(fin?.metered_value_usdt)}
           caption="Metered value"
           loading={financial.loading}
+          sparkData={Array(6).fill(0).concat([fin?.metered_value_usdt ?? 0])}
+          status={(fin?.metered_value_usdt ?? 0) > 0 ? "good" : "neutral"}
         />
-        <KPICard
+        <SparklineKPICard
           label="API Requests (24h)"
           icon={Activity}
           value={compact(execSummary?.total_requests_24h)}
           caption="Total requests"
           loading={!execSummary}
+          sparkData={Array(6).fill(0).concat([execSummary?.total_requests_24h ?? 0])}
+          status="neutral"
         />
-        <KPICard
+        <SparklineKPICard
           label="Active IPs (24h)"
           icon={Users}
           value={compact(execSummary?.active_ips_24h)}
           caption="Unique callers"
           loading={!execSummary}
+          sparkData={Array(6).fill(0).concat([execSummary?.active_ips_24h ?? 0])}
+          status="neutral"
         />
-        <KPICard
+        <SparklineKPICard
           label="Settlement Batches"
           icon={Server}
           value={confirmedBatches}
           caption="Confirmed on-chain"
           loading={financial.loading}
+          sparkData={Array(6).fill(0).concat([confirmedBatches])}
+          status="neutral"
         />
       </div>
 
@@ -214,27 +223,42 @@ export default function MissionControlPage() {
       </Card>
 
       {/* Section 3 — Warnings */}
-      {warnings.length > 0 && (
-        <div className="space-y-2">
-          {warnings.map((w) => (
-            <div
-              key={w.code}
-              className={
-                "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm " +
-                (w.severity === "critical"
-                  ? "border-red-500/40 bg-red-500/10 text-red-300"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-300")
-              }
-            >
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <div>
-                <span className="font-semibold">{w.code}</span>
-                <span className="ml-2">{w.message}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <AlertBand
+        alerts={warnings.map((w) => ({
+          code: w.code,
+          message: w.message,
+          severity: w.severity === "critical" ? "critical" : "warning",
+        }))}
+      />
+
+      {/* Section 3.5 — Operational stat strip */}
+      <StatRow
+        stats={[
+          {
+            label: "Network Health",
+            value: execSummary?.network_health_pct ?? "—",
+            unit: "%",
+            status: execSummary?.network_health_pct === 100 ? "good" : "warning",
+            colorize: true,
+          },
+          {
+            label: "Paying Customers",
+            value: execSummary?.paying_customers ?? "—",
+            status: "neutral",
+          },
+          {
+            label: "Open Alerts",
+            value: execSummary?.open_alerts ?? "—",
+            status: (execSummary?.open_alerts ?? 0) > 0 ? "warning" : "good",
+            colorize: true,
+          },
+          {
+            label: "Settlement Mode",
+            value: execSummary?.settlement_mode ?? "DRY_RUN",
+            status: execSummary?.settlement_mode === "LIVE" ? "good" : "warning",
+          },
+        ]}
+      />
 
       {/* Section 4 — Two-column grid */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -306,24 +330,6 @@ export default function MissionControlPage() {
         </Card>
       </div>
 
-      {/* Section 5 — Network Health bar */}
-      <Card>
-        <CardContent className="grid gap-4 py-4 sm:grid-cols-2 lg:grid-cols-4">
-          <HealthStat
-            label="Network Health"
-            value={execSummary ? `${execSummary.network_health_pct}%` : "—"}
-          />
-          <HealthStat
-            label="Paying Customers"
-            value={execSummary ? `${execSummary.paying_customers}` : "—"}
-          />
-          <HealthStat
-            label="Open Alerts"
-            value={execSummary ? `${execSummary.open_alerts}` : "—"}
-          />
-          <HealthStat label="Settlement Mode" value={execSummary?.settlement_mode ?? "—"} />
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -337,11 +343,3 @@ function PipelineRow({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
-function HealthStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-mono text-lg font-semibold text-foreground">{value}</span>
-    </div>
-  );
-}
