@@ -40,8 +40,9 @@ export default function KeysPage() {
   const [rows, setRows] = useState<KeyRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newKeyName, setNewKeyName] = useState("");
-  const [walletAddress, setWalletAddress] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [revealKey, setRevealKey] = useState<string | null>(null);
 
@@ -92,21 +93,27 @@ export default function KeysPage() {
 
   // ----- Create new key -----
   const handleCreateKey = async () => {
-    if (!newKeyName.trim()) return;
+    const label = newLabel.trim() || "My API Key";
     setError(null);
     setCreating(true);
     try {
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: "free", wallet_address: walletAddress || undefined }),
+        body: JSON.stringify({
+          label,
+          email: newEmail.trim() || undefined,
+          email_consent: !!newEmail.trim(),
+          tier: "free",
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || "Failed to create API key");
-      addKey(body.api_key, newKeyName.trim());
+      addKey(body.api_key, label);
       setRevealKey(body.api_key);
-      setNewKeyName("");
-      setWalletAddress("");
+      setShowCreate(false);
+      setNewLabel("");
+      setNewEmail("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally {
@@ -286,7 +293,7 @@ export default function KeysPage() {
 
       {/* Quick Actions Bar */}
       <div className="flex gap-2 justify-end py-2">
-        <Button variant="primary" onClick={() => { const name = prompt("Key label:"); if (name) { setNewKeyName(name); } }}>
+        <Button variant="primary" onClick={() => { setError(null); setShowCreate(true); }}>
           Add New Key
         </Button>
         <Button variant="destructive" onClick={() => {
@@ -307,6 +314,50 @@ export default function KeysPage() {
           Export CSV
         </Button>
       </div>
+
+      {/* Create Key Modal */}
+      {showCreate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowCreate(false)}
+        >
+          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <Card className="glow-card glass-panel border-primary/20 bg-background">
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold">Create API Key</CardTitle>
+                <CardDescription className="text-xs">Generate a new free-tier key. Opt in to updates if you like.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-400 block">Label</label>
+                  <Input
+                    placeholder="My API Key"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-400 block">Email (optional)</label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
+                </div>
+                {error && <p className="text-xs text-destructive">{error}</p>}
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                  <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
