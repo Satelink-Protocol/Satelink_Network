@@ -7,11 +7,13 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col gap-4 rounded-xl border border-border bg-[hsl(var(--card))] py-5 text-card-foreground shadow-sm border-[hsl(var(--card-border))] shadow-[var(--card-shadow)]",
+        "relative flex flex-col gap-4 rounded-sm border border-zinc-800 bg-zinc-900/60 py-5 text-card-foreground shadow-sm overflow-hidden",
         className
       )}
-      {...props}
-    />
+    >
+      <div className="absolute top-0 inset-x-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+      <div className="contents" {...props} />
+    </div>
   );
 }
 

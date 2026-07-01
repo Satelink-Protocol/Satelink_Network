@@ -34,45 +34,37 @@ export function KPICard({
   className,
 }: KPICardProps) {
   return (
-    <Card className={cn(
-      'relative overflow-hidden panel-hover border-[hsl(var(--card-border))] shadow-[var(--card-shadow)]',
-      className
-    )}>
-      {/* Grafana-style top accent line */}
-      <div className='absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary via-primary/60 to-transparent' />
-      
-      <CardContent className='p-5 pt-6'>
+    <Card className={cn('relative overflow-hidden panel-hover', className)}>
+      <CardContent className='p-4'>
         <div className='flex items-start justify-between'>
-          <span className='text-[11px] font-semibold uppercase tracking-widest text-muted-foreground'>
+          <span className='text-xs uppercase tracking-wider text-muted-foreground font-semibold'>
             {label}
           </span>
           {Icon && (
-            <div className='flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 ring-1 ring-primary/20'>
-              <Icon className='h-3.5 w-3.5 text-primary' />
+            <div className='text-muted-foreground'>
+              <Icon className='h-4 w-4' />
             </div>
           )}
         </div>
         
         {loading ? (
-          <div className='mt-3 h-8 w-24 animate-pulse rounded bg-muted' />
+          <div className='mt-2 h-8 w-24 animate-pulse rounded bg-zinc-800/50' />
         ) : (
-          <div className='metric-value mt-2 text-[28px] font-bold leading-none text-foreground'>
+          <div className='mt-2 font-mono text-2xl text-white tabular-nums leading-none'>
             {value}
           </div>
         )}
         
-        <div className='mt-2 flex items-center justify-between'>
+        <div className='mt-2 flex items-center justify-between min-h-[16px]'>
           {caption && (
-            <span className='text-[11px] text-muted-foreground'>{caption}</span>
+            <span className='text-xs text-muted-foreground'>{caption}</span>
           )}
           {trendValue !== undefined && trendValue !== null && (
             <span className={cn(
-              'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-              trendValue >= 0 
-                ? 'bg-success/15 text-success' 
-                : 'bg-destructive/15 text-destructive'
+              'font-mono text-xs font-semibold tabular-nums',
+              trendValue >= 0 ? 'text-[hsl(174,80%,38%)]' : 'text-red-400'
             )}>
-              {trendValue >= 0 ? '▲' : '▼'} {Math.abs(trendValue)}%
+              {trendValue >= 0 ? '+' : ''}{trendValue}%
             </span>
           )}
         </div>

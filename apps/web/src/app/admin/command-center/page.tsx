@@ -7,7 +7,7 @@ import {
   Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
-import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
+import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel, StatRow, LogFeed } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 
@@ -455,13 +455,15 @@ function AdminCommandCenter() {
           <Stack gap="sm">
             {/* KPI cards span the full width across the top — no overlap. */}
             {demStats && (
-              <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-                <KPICard label="Total Active IPs" value={fmt.num(demStats.total_active_ips)} />
-                <KPICard label="Developers" value={fmt.num(demStats.developer_count)} />
-                <KPICard label="Machines" value={fmt.num(demStats.machine_count)} />
-                <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} />
-                <KPICard label="Top IP calls" value={`${fmt.num(demStats.top_lead_calls_per_day)}/d`} caption={demStats.top_lead_ip || ""} />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Total Active IPs", value: fmt.num(demStats.total_active_ips) },
+                  { label: "Developers", value: fmt.num(demStats.developer_count) },
+                  { label: "Machines", value: fmt.num(demStats.machine_count) },
+                  { label: "Scanners", value: fmt.num(demStats.scanner_count) },
+                  { label: "Top IP calls", value: `${fmt.num(demStats.top_lead_calls_per_day)}/d` },
+                ]}
+              />
             )}
 
             {/* Filters/actions sidebar and main content sit in a defined grid
@@ -506,13 +508,16 @@ function AdminCommandCenter() {
                     ) : <EmptyState variant="line" label="funnel" note="loading…" />}
                   </div>
                   <div style={{ flex: "0 0 320px" }}>
-                    {devs && <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-                      <KPICard label="Classified" value={fmt.num(devs.length)} />
-                      <KPICard label="Identified" value={fmt.num(counts.identified || 0)} />
-                      <KPICard label="Contacted" value={fmt.num(counts.contacted || 0)} />
-                      <KPICard label="Deposited" value={fmt.num(counts.deposited || 0)} />
-                      <KPICard label="Paid" value={fmt.num(counts.paid || 0)} />
-                    </div>}
+                    {devs && <StatRow
+                      className="flex-col md:flex-row flex-wrap"
+                      stats={[
+                        { label: "Classified", value: fmt.num(devs.length) },
+                        { label: "Identified", value: fmt.num(counts.identified || 0) },
+                        { label: "Contacted", value: fmt.num(counts.contacted || 0) },
+                        { label: "Deposited", value: fmt.num(counts.deposited || 0) },
+                        { label: "Paid", value: fmt.num(counts.paid || 0) },
+                      ]}
+                    />}
                   </div>
                 </div>
               </Panel>
@@ -540,12 +545,14 @@ function AdminCommandCenter() {
             {treasStatusErr && <Notice tone="danger">Treasury status fetch failed: {treasStatusErr}</Notice>}
             
             {treasStatus && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <KPICard label="Settlement Mode" value={treasStatus.dry_run ? "DRY_RUN (Simulated)" : "LIVE"} caption={treasStatus.dry_run ? "No on-chain broadcast" : "Real transfers"} />
-                <KPICard label="Signer Balance" value={treasStatus.signer_balance_pol !== null ? `${fmt.bal(treasStatus.signer_balance_pol)} POL` : "—"} caption="On-chain hot balance" />
-                <KPICard label="Confirmed Batches" value={fmt.num(treasStatus.confirmed_batches)} caption={`${fmt.bal(treasStatus.confirmed_usdt)} USDT settled`} />
-                <KPICard label="Blocked Unfunded" value={fmt.num(treasStatus.blocked_unfunded_batches)} caption={`${fmt.bal(treasStatus.blocked_unfunded_usdt)} USDT blocked`} />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Settlement Mode", value: treasStatus.dry_run ? "DRY_RUN" : "LIVE", status: treasStatus.dry_run ? "warning" : "good" },
+                  { label: "Signer Balance (POL)", value: treasStatus.signer_balance_pol !== null ? fmt.bal(treasStatus.signer_balance_pol) : "—" },
+                  { label: "Confirmed Batches", value: fmt.num(treasStatus.confirmed_batches), status: "good" },
+                  { label: "Blocked Unfunded", value: fmt.num(treasStatus.blocked_unfunded_batches), status: treasStatus.blocked_unfunded_batches > 0 ? "critical" : "neutral" },
+                ]}
+              />
             )}
 
             <Panel title="Settlement Control">
@@ -622,23 +629,27 @@ function AdminCommandCenter() {
             {revSummaryErr && <Notice tone="danger">Revenue summary fetch failed: {revSummaryErr}</Notice>}
             
             {revSummary && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <KPICard label="Lifetime Real Revenue" value={`$${fmt.bal(revSummary.total_real_usdt)}`} caption="USDT excl. mock data" />
-                <KPICard label="Revenue MTD" value={`$${fmt.bal(revSummary.mtd_usdt)}`} caption="This billing cycle" />
-                <KPICard label="Revenue Today" value={`$${fmt.bal(revSummary.today_usdt)}`} caption="Last 24h real earnings" />
-                <KPICard label="Cumulative Events" value={fmt.num(revSummary.events_count)} caption={`${revSummary.real_data_count} real / ${revSummary.is_test_data_count} test`} />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Lifetime Real Revenue", value: `$${fmt.bal(revSummary.total_real_usdt)}`, status: "good" },
+                  { label: "Revenue MTD", value: `$${fmt.bal(revSummary.mtd_usdt)}` },
+                  { label: "Revenue Today", value: `$${fmt.bal(revSummary.today_usdt)}` },
+                  { label: "Cumulative Events", value: fmt.num(revSummary.events_count) },
+                ]}
+              />
             )}
 
             {revFunnel && (
               <Panel title="Revenue Funnel Distribution" headerRight={<StatusDot tone="success" pulse />}>
-                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-                  <KPICard label="Cumulative Calls" value={fmt.num(revFunnel.requests_24h)} caption="Gateway logs" />
-                  <KPICard label="Billable Requests" value={fmt.num(revFunnel.billable_24h)} caption="Billed at $0.00003/call" />
-                  <KPICard label="Consumed Balance" value={`$${fmt.bal(revFunnel.credits_consumed_usdt)} USDT`} caption="Drawn from user wallets" />
-                  <KPICard label="Settled On-Chain" value={`$${fmt.bal(revFunnel.settled_usdt)} USDT`} caption="Confirmed settlement batches" />
-                  <KPICard label="Withdrawable Balance" value={`$${fmt.bal(revFunnel.withdrawable_usdt)} USDT`} caption="Stored in treasury state" />
-                </div>
+                <StatRow
+                  stats={[
+                    { label: "Cumulative Calls", value: fmt.num(revFunnel.requests_24h) },
+                    { label: "Billable Requests", value: fmt.num(revFunnel.billable_24h) },
+                    { label: "Consumed Balance", value: `$${fmt.bal(revFunnel.credits_consumed_usdt)}` },
+                    { label: "Settled On-Chain", value: `$${fmt.bal(revFunnel.settled_usdt)}`, status: "good" },
+                    { label: "Withdrawable", value: `$${fmt.bal(revFunnel.withdrawable_usdt)}` },
+                  ]}
+                />
               </Panel>
             )}
 
@@ -672,12 +683,14 @@ function AdminCommandCenter() {
             {netHealthErr && <Notice tone="danger">Network health metrics failed: {netHealthErr}</Notice>}
             
             {netHealth && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <KPICard label="Availability (24h)" value={`${netHealth.availability_pct}%`} caption="SLA target: 99.9%" />
-                <KPICard label="p50 Latency" value={`${fmt.num(netHealth.p50_latency_ms)}ms`} caption="Median roundtrip response" />
-                <KPICard label="Error Rate" value={`${netHealth.error_rate_pct}%`} caption="HTTP 5xx and timeout exceptions" />
-                <KPICard label="Active Registered Nodes" value={fmt.num(netHealth.active_nodes)} caption="Verified Node Operators" />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Availability (24h)", value: `${netHealth.availability_pct}%`, status: netHealth.availability_pct >= 99.9 ? "good" : "warning" },
+                  { label: "p50 Latency", value: `${fmt.num(netHealth.p50_latency_ms)}ms` },
+                  { label: "Error Rate", value: `${netHealth.error_rate_pct}%`, status: netHealth.error_rate_pct > 1 ? "warning" : "good" },
+                  { label: "Active Registered Nodes", value: fmt.num(netHealth.active_nodes) },
+                ]}
+              />
             )}
 
             {netHealth && netHealth.chain_status && (
@@ -723,12 +736,14 @@ function AdminCommandCenter() {
               const polygon = (netHealth.chain_status || []).find((c: any) => c.chain_id === 137) || (netHealth.chain_status || [])[0];
               return (
                 <>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <KPICard label="RPC Gateway Status" value={netHealth.availability_pct >= 99.9 ? "Operational" : "Degraded"} caption={`${netHealth.availability_pct}% availability (24h)`} />
-                    <KPICard label="Polygon Bridge" value={polygon ? polygon.status.toUpperCase() : "—"} caption={polygon ? `Chain ID ${polygon.chain_id}` : "no chain data"} />
-                    <KPICard label="Bridge Requests Served" value={fmt.num(polygon ? polygon.requests_24h : netHealth.requests_24h)} caption="24h gateway calls" />
-                    <KPICard label="Error Rate" value={`${netHealth.error_rate_pct}%`} caption="HTTP 5xx and timeouts" />
-                  </div>
+                  <StatRow
+                    stats={[
+                      { label: "RPC Gateway Status", value: netHealth.availability_pct >= 99.9 ? "Operational" : "Degraded", status: netHealth.availability_pct >= 99.9 ? "good" : "warning" },
+                      { label: "Polygon Bridge", value: polygon ? polygon.status.toUpperCase() : "—", status: polygon && polygon.status === "operational" ? "good" : "warning" },
+                      { label: "Bridge Requests Served", value: fmt.num(polygon ? polygon.requests_24h : netHealth.requests_24h) },
+                      { label: "Error Rate", value: `${netHealth.error_rate_pct}%`, status: netHealth.error_rate_pct > 1 ? "warning" : "good" },
+                    ]}
+                  />
 
                   <Panel title="Operational Blockchain Bridges">
                     <DataTable
@@ -764,12 +779,14 @@ function AdminCommandCenter() {
               const avgUp = nodes.length ? nodes.reduce((s: number, n: any) => s + (Number(n.uptime_pct) || 0), 0) / nodes.length : 0;
               return (
                 <>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <KPICard label="Registered Nodes" value={fmt.num(nodes.length)} caption="Total operators on record" />
-                    <KPICard label="Active Nodes" value={fmt.num(nodesList.total_active)} caption={`${fmt.num(nodesList.total_offline)} offline`} />
-                    <KPICard label="Avg Reputation" value={nodes.length ? avgRep.toFixed(1) : "—"} caption="Operator reputation score" />
-                    <KPICard label="Avg Uptime SLA" value={nodes.length ? `${avgUp.toFixed(1)}%` : "—"} caption="Mean across operators" />
-                  </div>
+                  <StatRow
+                    stats={[
+                      { label: "Registered Nodes", value: fmt.num(nodes.length) },
+                      { label: "Active Nodes", value: fmt.num(nodesList.total_active) },
+                      { label: "Avg Reputation", value: nodes.length ? avgRep.toFixed(1) : "—" },
+                      { label: "Avg Uptime SLA", value: nodes.length ? `${avgUp.toFixed(1)}%` : "—", status: avgUp >= 99 ? "good" : "warning" },
+                    ]}
+                  />
 
                   <Panel title="Registered Node Operators">
                     <DataTable
@@ -794,10 +811,12 @@ function AdminCommandCenter() {
                   <Panel title="Node Economics">
                     {treasStatusErr && <Notice tone="danger">Treasury status fetch failed: {treasStatusErr}</Notice>}
                     {treasStatus ? (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <KPICard label="Pending Earnings" value={`$${fmt.bal(treasStatus.blocked_unfunded_usdt)} USDT`} caption={`${fmt.num(treasStatus.blocked_unfunded_batches)} batches blocked (unfunded signer)`} />
-                        <KPICard label="Settled Earnings" value={`$${fmt.bal(treasStatus.confirmed_usdt)} USDT`} caption={`${fmt.num(treasStatus.confirmed_batches)} confirmed batches`} />
-                      </div>
+                      <StatRow
+                        stats={[
+                          { label: "Pending Earnings", value: `$${fmt.bal(treasStatus.blocked_unfunded_usdt)}` },
+                          { label: "Settled Earnings", value: `$${fmt.bal(treasStatus.confirmed_usdt)}`, status: "good" },
+                        ]}
+                      />
                     ) : <EmptyState label="No treasury data loaded" />}
                   </Panel>
                 </>
@@ -819,12 +838,14 @@ function AdminCommandCenter() {
               const segFree = free.length;
               return (
                 <>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <KPICard label="Total Customers" value={fmt.num(paying.length + free.length)} caption="Paying + active free-tier" />
-                    <KPICard label="Paying" value={fmt.num(custsList.total_paying ?? paying.length)} caption="Wallets with deposits" />
-                    <KPICard label="Free Tier" value={fmt.num(free.length)} caption="Active free-tier IPs (24h)" />
-                    <KPICard label="Deposited Balance" value={`$${fmt.bal(deposited)} USDT`} caption="Sum of customer deposits" />
-                  </div>
+                  <StatRow
+                    stats={[
+                      { label: "Total Customers", value: fmt.num(paying.length + free.length) },
+                      { label: "Paying", value: fmt.num(custsList.total_paying ?? paying.length), status: "good" },
+                      { label: "Free Tier", value: fmt.num(free.length) },
+                      { label: "Deposited Balance", value: `$${fmt.bal(deposited)}` },
+                    ]}
+                  />
 
                   <Panel title="Customer Accounts">
                     <DataTable
@@ -844,11 +865,13 @@ function AdminCommandCenter() {
                   </Panel>
 
                   <Panel title="Customer Segments">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <KPICard label="Paying" value={fmt.num(segPaying)} caption="Deposits > 0 and spending > 0" />
-                      <KPICard label="Trial" value={fmt.num(segTrial)} caption="Deposited, no spend yet" />
-                      <KPICard label="Free" value={fmt.num(segFree)} caption="No deposits (free-tier IPs)" />
-                    </div>
+                      <StatRow
+                        stats={[
+                          { label: "Paying", value: fmt.num(segPaying), status: "good" },
+                          { label: "Trial", value: fmt.num(segTrial), status: "neutral" },
+                          { label: "Free", value: fmt.num(segFree) },
+                        ]}
+                      />
                   </Panel>
                 </>
               );
@@ -862,12 +885,14 @@ function AdminCommandCenter() {
             {obsMetricsErr && <Notice tone="danger">Observability metrics fetch failed: {obsMetricsErr}</Notice>}
             {obsMetrics ? (
               <>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <KPICard label="API p50 Latency" value={typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms}ms` : "—"} caption="Median 24h response" />
-                  <KPICard label="DB Status" value={obsMetrics.db_status ? obsMetrics.db_status.toUpperCase() : "—"} caption="PostgreSQL (Railway)" />
-                  <KPICard label="Redis Status" value={obsMetrics.redis_status ? obsMetrics.redis_status.toUpperCase() : "—"} caption="Key-value cache" />
-                  <KPICard label="API Uptime (24h)" value={netHealth && typeof netHealth.availability_pct === "number" ? `${netHealth.availability_pct}%` : "—"} caption="Gateway availability" />
-                </div>
+                <StatRow
+                  stats={[
+                    { label: "API p50 Latency", value: typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms}ms` : "—" },
+                    { label: "DB Status", value: obsMetrics.db_status ? obsMetrics.db_status.toUpperCase() : "—", status: obsMetrics.db_status === "ok" ? "good" : "warning" },
+                    { label: "Redis Status", value: obsMetrics.redis_status ? obsMetrics.redis_status.toUpperCase() : "—", status: obsMetrics.redis_status === "ok" ? "good" : "warning" },
+                    { label: "API Uptime (24h)", value: netHealth && typeof netHealth.availability_pct === "number" ? `${netHealth.availability_pct}%` : "—", status: netHealth?.availability_pct >= 99.9 ? "good" : "warning" },
+                  ]}
+                />
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <Card>
@@ -918,12 +943,14 @@ function AdminCommandCenter() {
             {billCreditsErr && <Notice tone="danger">Billing credits fetch failed: {billCreditsErr}</Notice>}
             
             {billCredits && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <KPICard label="Total Keys Tracked" value={fmt.num(billCredits.total_keys)} caption={`${billCredits.paid_keys} paid / ${billCredits.free_keys} free`} />
-                <KPICard label="Total Deposited" value={`$${fmt.bal(billCredits.total_deposited_usdt)} USDT`} caption="Cumulative credits loaded" />
-                <KPICard label="Total Consumed" value={`$${fmt.bal(billCredits.total_spent_usdt)} USDT`} caption="Spent call value" />
-                <KPICard label="Outstanding Balance" value={`$${fmt.bal(billCredits.total_outstanding_usdt)} USDT`} caption="Prepaid customer value" />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Total Keys Tracked", value: fmt.num(billCredits.total_keys) },
+                  { label: "Total Deposited", value: `$${fmt.bal(billCredits.total_deposited_usdt)}` },
+                  { label: "Total Consumed", value: `$${fmt.bal(billCredits.total_spent_usdt)}` },
+                  { label: "Outstanding Balance", value: `$${fmt.bal(billCredits.total_outstanding_usdt)}` },
+                ]}
+              />
             )}
 
             {billCredits && billCredits.deposits && (
@@ -974,11 +1001,13 @@ function AdminCommandCenter() {
               </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
-              <KPICard label="Active Scheduler Tasks" value={jobs == null ? "…" : String(liveJobs)} caption="Executed in the last hour" />
-              <KPICard label="Stale Automation Tasks" value={jobs == null ? "…" : String(staleJobs)} caption="Idle over 60 minutes" />
-              <KPICard label="Failed Automation Tasks" value={jobs == null ? "…" : String(failedJobs)} caption="Critical exception state" />
-            </div>
+            <StatRow
+              stats={[
+                { label: "Active Scheduler Tasks", value: jobs == null ? "…" : String(liveJobs), status: "good" },
+                { label: "Stale Automation Tasks", value: jobs == null ? "…" : String(staleJobs), status: staleJobs > 0 ? "warning" : "good" },
+                { label: "Failed Automation Tasks", value: jobs == null ? "…" : String(failedJobs), status: failedJobs > 0 ? "critical" : "good" },
+              ]}
+            />
 
             <Panel title="Background Scheduler Engines">
               <Inline gap="sm" style={{ marginBottom: "12px" }}>
@@ -1022,36 +1051,18 @@ function AdminCommandCenter() {
               </Panel>
             )}
 
-            <Panel title="Live Server Operations Stream" headerRight={<StatusBadge label={feedState.toUpperCase()} tone={feedState === "live" ? "success" : "warn"} />}>
-              <div className="max-h-[300px] overflow-y-auto rounded-md border font-mono text-[11px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Process</TableHead>
-                      <TableHead>Log String</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {feedEvents.length > 0 ? (
-                      feedEvents.map((ev, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground w-24">{ev.time}</TableCell>
-                          <TableCell className="text-[#00ADB5] w-36">{ev.source}</TableCell>
-                          <TableCell className="text-zinc-200">{ev.message}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                          Waiting for server notifications stream...
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </Panel>
+            <LogFeed
+              title="Live Server Operations Stream"
+              subtitle={feedState === "live" ? "LIVE" : feedState.toUpperCase()}
+              height={300}
+              logs={feedEvents.map((ev, i) => ({
+                id: String(i),
+                timestamp: Date.now(),
+                level: "info",
+                process: ev.source,
+                message: ev.message,
+              }))}
+            />
           </Stack>
         )}
 
@@ -1061,13 +1072,15 @@ function AdminCommandCenter() {
             {secClassStatsErr && <Notice tone="danger">Classifier stats fetch failed: {secClassStatsErr}</Notice>}
             
             {secClassStats && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                <KPICard label="Total Cataloged IPs" value={fmt.num(secClassStats.total)} />
-                <KPICard label="Developer IPs" value={fmt.num(secClassStats.developer)} />
-                <KPICard label="Machine Agents" value={fmt.num(secClassStats.machine)} />
-                <KPICard label="Vulnerability Scanners" value={fmt.num(secClassStats.scanner)} />
-                <KPICard label="Classified Scans (24h)" value={fmt.num(secClassStats.unknown)} />
-              </div>
+              <StatRow
+                stats={[
+                  { label: "Total Cataloged IPs", value: fmt.num(secClassStats.total) },
+                  { label: "Developer IPs", value: fmt.num(secClassStats.developer) },
+                  { label: "Machine Agents", value: fmt.num(secClassStats.machine) },
+                  { label: "Vulnerability Scanners", value: fmt.num(secClassStats.scanner), status: "warning" },
+                  { label: "Classified Scans (24h)", value: fmt.num(secClassStats.unknown) },
+                ]}
+              />
             )}
 
             <Panel title="L3 Firewall Threat Analysis Log" headerRight={<StatusBadge label="ANOMALY DETECTION" tone="danger" />}>
@@ -1113,20 +1126,17 @@ function AdminCommandCenter() {
               />
             </Panel>
 
-            <Panel title="Administrative Audit Trail (admin_audit_log)" headerRight={<StatusBadge label="READ-ONLY" tone="muted" />}>
-              <DataTable
-                columns={[
-                  { key: "id", header: "Audit ID", mono: true },
-                  { key: "admin_user", header: "Operator Wallet" },
-                  { key: "action", header: "Action Taken" },
-                  { key: "metadata", header: "Action Details", mono: true },
-                  { key: "created_at", header: "Timestamp", mono: true }
-                ]}
-                rows={auditLogData}
-                error={auditLogErr}
-                emptyLabel="audit log entries"
-              />
-            </Panel>
+            <LogFeed
+              title="Administrative Audit Trail (admin_audit_log)"
+              subtitle="READ-ONLY"
+              logs={(auditLogData || []).map((l: any) => ({
+                id: String(l.id),
+                timestamp: new Date(l.created_at).getTime(),
+                level: "info",
+                process: l.admin_user,
+                message: `${l.action} | ${l.metadata}`,
+              }))}
+            />
           </Stack>
         )}
 

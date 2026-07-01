@@ -32,25 +32,25 @@ export function EmptyState({
       data-slot="empty-state"
       role={tone === "error" ? "alert" : undefined}
       className={cn(
-        "flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-8 py-12 text-center glass-panel",
-        tone === "error" ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-muted/20",
+        "flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed px-8 py-12 text-center",
+        tone === "error" ? "border-red-500/40 bg-red-500/5" : "border-zinc-700/50 bg-zinc-900/40",
         className
       )}
     >
       <div
         className={cn(
-          "flex size-12 items-center justify-center rounded-full shadow-inner",
+          "flex size-12 items-center justify-center rounded-full",
           tone === "error"
-            ? "bg-destructive/10 text-destructive ring-1 ring-destructive/20"
-            : "bg-background/80 text-muted-foreground ring-1 ring-border/50"
+            ? "bg-red-500/10 text-red-500"
+            : "bg-zinc-900/60 text-zinc-600 ring-1 ring-zinc-700/50"
         )}
       >
         <Icon className="size-5" />
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-sm font-medium text-zinc-300">{title}</p>
         {description ? (
-          <p className="mx-auto max-w-sm text-xs text-muted-foreground">
+          <p className="mx-auto max-w-sm text-xs text-zinc-500">
             {description}
           </p>
         ) : null}

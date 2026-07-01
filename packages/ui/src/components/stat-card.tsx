@@ -37,20 +37,20 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <Card data-slot="stat-card" className={cn("flex flex-col gap-2 py-3", className)}>
-      <div className="flex items-center justify-between px-4">
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</span>
-        {Icon ? <Icon className="size-3.5 text-muted-foreground" /> : null}
+    <Card data-slot="stat-card" className={cn("flex flex-col gap-2 p-4", className)}>
+      <div className="flex items-start justify-between">
+        <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">{label}</span>
+        {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
       </div>
-      <div className="flex items-end justify-between gap-3 px-4">
+      <div className="flex items-end justify-between gap-3 mt-2">
         <div className="min-w-0">
           {loading ? (
-            <Skeleton className="h-7 w-24 rounded-md bg-muted/60" />
+            <Skeleton className="h-8 w-24 rounded bg-zinc-800/50" />
           ) : (
             <div
               className={cn(
-                "truncate font-mono text-xl font-bold tracking-tight tabular-nums",
-                accent ? "text-primary" : "text-foreground"
+                "truncate font-mono text-2xl text-white tabular-nums leading-none",
+                accent ? "text-[hsl(174,80%,38%)]" : ""
               )}
             >
               {value}
@@ -60,15 +60,15 @@ export function StatCard({
         {visual ? <div className="shrink-0">{visual}</div> : null}
       </div>
       {(trend || caption || loading) ? (
-        <div className="flex items-center gap-2 px-4 mt-0.5">
+        <div className="flex items-center justify-between mt-2 min-h-[16px]">
           {loading ? (
-            <Skeleton className="h-3 w-32 rounded-md bg-muted/50" />
+            <Skeleton className="h-3 w-32 rounded bg-zinc-800/50" />
           ) : (
             <>
-              {trend ? <MetricTrend {...trend} /> : null}
               {caption ? (
                 <span className="truncate text-xs text-muted-foreground">{caption}</span>
-              ) : null}
+              ) : <span />}
+              {trend ? <MetricTrend {...trend} /> : null}
             </>
           )}
         </div>

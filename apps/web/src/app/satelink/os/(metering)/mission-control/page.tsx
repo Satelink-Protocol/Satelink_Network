@@ -22,13 +22,8 @@ import {
   CardContent,
   Button,
   useEndpoint,
+  TimeseriesPanel,
 } from "@satelink/ui";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  Tooltip,
-} from "recharts";
 
 // ---------------------------------------------------------------------------
 // API contracts (real endpoints — no mock/fallback values)
@@ -120,10 +115,10 @@ export default function MissionControlPage() {
   const trafficData = React.useMemo(() => {
     const latest =
       execSummary?.total_requests_24h ?? pipeline?.revenue_events_v2.count ?? 0;
-    const labels = ["6d", "5d", "4d", "3d", "2d", "1d", "Today"];
-    return labels.map((label, i) => ({
-      label,
-      requests: i === labels.length - 1 ? latest : 0,
+    const now = Date.now();
+    return Array.from({ length: 7 }).map((_, i) => ({
+      ts: now - (6 - i) * 86400000, // subtract days
+      requests: i === 6 ? latest : 0,
     }));
   }, [execSummary?.total_requests_24h, pipeline?.revenue_events_v2.count]);
 
@@ -177,50 +172,15 @@ export default function MissionControlPage() {
       </div>
 
       {/* Section 2.5 — Gateway traffic */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gateway Traffic</CardTitle>
-          <CardDescription>7-day request activity</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={trafficData}
-                margin={{ top: 4, right: 4, bottom: 0, left: 4 }}
-              >
-                <defs>
-                  <linearGradient id="gatewayTraffic" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <Tooltip
-                  cursor={{ stroke: "hsl(var(--border))" }}
-                  contentStyle={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    color: "hsl(var(--popover-foreground))",
-                  }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                  formatter={(v: number) => [compact(v), "Requests"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="requests"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  fill="url(#gatewayTraffic)"
-                  isAnimationActive={false}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <TimeseriesPanel
+        title="Gateway Traffic"
+        subtitle="7-day request activity"
+        timeRange="7d"
+        data={trafficData}
+        series={[
+          { key: "requests", label: "Requests", type: "area" }
+        ]}
+      />
 
       {/* Section 3 — Warnings */}
       <AlertBand
@@ -263,30 +223,29 @@ export default function MissionControlPage() {
       {/* Section 4 — Two-column grid */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Left — Revenue Pipeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue Pipeline</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
-            <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
-            <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
-            {eco ? (
-              <PipelineRow
-                label="Last Closed Epoch"
-                value={`#${eco.lastEpochId} · ${usd5(eco.lastEpochRevenueUsdt)}`}
-              />
-            ) : null}
-            {pipeline?.bottleneck_reason ? (
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-sm text-muted-foreground">Bottleneck</span>
-                <span className="text-sm font-medium text-amber-400">
-                  {pipeline.bottleneck_reason}
-                </span>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-4">
+          <StatRow
+            stats={[
+              { label: "Metered Events", value: pipeline?.revenue_events_v2.count ?? 0, status: "neutral" },
+              { label: "Open Epochs", value: pipeline?.epoch_ledger.open ?? 0, status: "warning" },
+              { label: "Confirmed Batches", value: confirmedBatches, status: "good" },
+            ]}
+          />
+          {eco && (
+            <StatRow
+              stats={[
+                { label: "Last Closed Epoch", value: `#${eco.lastEpochId}` },
+                { label: "Epoch Revenue", value: usd5(eco.lastEpochRevenueUsdt) },
+              ]}
+            />
+          )}
+          {pipeline?.bottleneck_reason && (
+            <AlertBand 
+              alerts={[{ code: "PIPELINE_DELAY", message: pipeline.bottleneck_reason, severity: "warning" }]} 
+              collapsible={false} 
+            />
+          )}
+        </div>
 
         {/* Right — Quick Start */}
         <Card>

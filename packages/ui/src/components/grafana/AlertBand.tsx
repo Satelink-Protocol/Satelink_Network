@@ -35,24 +35,24 @@ export function AlertBand({
     { wrapper: string; iconColor: string; icon: React.ElementType }
   > = {
     critical: {
-      wrapper: "border-red-500/40 bg-red-500/10 text-red-300 border-l-red-500",
+      wrapper: "border border-l-4 border-zinc-800/50 border-l-red-500 bg-red-500/5 text-red-300",
       iconColor: "text-red-400",
       icon: AlertTriangle,
     },
     high: {
       wrapper:
-        "border-orange-500/40 bg-orange-500/10 text-orange-300 border-l-orange-500",
+        "border border-l-4 border-zinc-800/50 border-l-orange-500 bg-orange-500/5 text-orange-300",
       iconColor: "text-orange-400",
       icon: AlertTriangle,
     },
     warning: {
       wrapper:
-        "border-amber-500/40 bg-amber-500/10 text-amber-300 border-l-amber-500",
+        "border border-l-4 border-zinc-800/50 border-l-amber-500 bg-amber-500/5 text-amber-300",
       iconColor: "text-amber-400",
       icon: AlertTriangle,
     },
     info: {
-      wrapper: "border-blue-500/40 bg-blue-500/10 text-blue-300 border-l-blue-500",
+      wrapper: "border border-l-4 border-zinc-800/50 border-l-blue-500 bg-blue-500/5 text-blue-300",
       iconColor: "text-blue-400",
       icon: Info,
     },

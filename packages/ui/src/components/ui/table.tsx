@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className="relative w-full overflow-x-auto bg-zinc-900/40 rounded-sm">
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
@@ -18,7 +18,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b [&_tr]:border-border", className)}
+      className={cn("bg-zinc-800/60 sticky top-0 z-10 [&_tr]:border-b [&_tr]:border-zinc-800", className)}
       {...props}
     />
   );
@@ -52,7 +52,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-9 px-3 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground whitespace-nowrap",
+        "h-9 px-3 text-left align-middle text-xs font-medium uppercase tracking-wider text-muted-foreground whitespace-nowrap",
         className
       )}
       {...props}

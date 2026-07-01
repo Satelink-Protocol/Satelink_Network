@@ -178,7 +178,7 @@ export function DashboardShell({
   const BrandLogo = brand.logo;
   return (
     <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties} className="satelink-os h-svh overflow-hidden">
-      <Sidebar collapsible="icon" variant="inset">
+      <Sidebar collapsible="icon" variant="inset" className="bg-zinc-950 border-r border-zinc-800/50">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-1 py-1.5">
             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -215,7 +215,7 @@ export function DashboardShell({
                           isActive={item.id === activeId}
                           tooltip={item.label}
                           onClick={() => onNavigate(item.id)}
-                          className="cursor-pointer transition-colors duration-200 border-l-2 border-transparent hover:bg-muted/50 data-[active=true]:border-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                          className="cursor-pointer transition-colors duration-200 border-l-2 border-transparent hover:bg-zinc-800/50 data-[active=true]:border-[hsl(174,80%,38%)] data-[active=true]:bg-[hsl(174,80%,38%)]/10 data-[active=true]:text-[hsl(174,80%,38%)] data-[active=true]:font-medium text-zinc-400"
                         >
                           {Icon ? <Icon /> : null}
                           <span>{item.label}</span>
@@ -240,9 +240,9 @@ export function DashboardShell({
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset className="h-svh min-h-0 overflow-hidden">
+      <SidebarInset className="h-svh min-h-0 overflow-hidden bg-[hsl(220,20%,4%)]">
         {/* topbar — pinned above the scroll region */}
-        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-zinc-800/50 bg-zinc-900/60 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/60 px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mr-1 h-5" />
           {breadcrumb && breadcrumb.length > 0 ? (

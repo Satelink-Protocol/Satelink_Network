@@ -40,19 +40,27 @@ export function StatusBadge({
   className,
 }: StatusBadgeProps) {
   const tone = variant ?? STATUS_MAP[status?.toLowerCase()] ?? "neutral";
+  
+  const toneClasses = {
+    success: "bg-green-500/10 text-green-400 border border-green-500/20",
+    warning: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+    destructive: "bg-red-500/10 text-red-400 border border-red-500/20",
+    neutral: "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20",
+    default: "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20",
+  }[tone];
+
+  const dotClasses = {
+    success: "bg-green-500",
+    warning: "bg-amber-500",
+    destructive: "bg-red-500",
+    neutral: "bg-zinc-500",
+    default: "bg-zinc-500",
+  }[tone];
+
   return (
-    <Badge variant={tone} className={cn("gap-1.5 transition-all duration-300 hover:brightness-110", className)}>
-      {(tone === "success" || tone === "warning" || tone === "destructive") && (
-        <span
-          className={cn(
-            "size-1.5 rounded-full shrink-0 shadow-sm",
-            tone === "success" && "bg-success animate-pulse-glow shadow-success/20",
-            tone === "warning" && "bg-warning animate-pulse-glow shadow-warning/20",
-            tone === "destructive" && "bg-destructive animate-pulse-glow shadow-destructive/20"
-          )}
-        />
-      )}
+    <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", toneClasses, className)}>
+      <span className={cn("size-1.5 rounded-full shrink-0", dotClasses)} />
       {label ?? status}
-    </Badge>
+    </div>
   );
 }
