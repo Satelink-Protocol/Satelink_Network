@@ -1,3 +1,6 @@
+// CLOUDFLARE DNS:
+// ops.satelink.network CNAME → cname.vercel-dns.com
+// (canonical subdomain DNS list lives in apps/web/src/middleware.ts header)
 import type { NextConfig } from "next";
 
 const API_BASE =
@@ -140,10 +143,12 @@ const nextConfig: NextConfig = {
         destination: `${API_BASE}/${prefix}/:path*`,
       })),
 
-      // Proxy /api/* to the backend EXCEPT /api/grafana/* (served by the
-      // embedded-Grafana BFF route handler at apps/web/src/app/api/grafana).
+      // Proxy /api/* to the backend EXCEPT route handlers served by the web app
+      // itself: /api/grafana/* (embedded-Grafana BFF) and /api/ops-auth
+      // (ops.satelink.network session login). Without the exclusion the
+      // afterFiles rewrite shadows those local route handlers.
       {
-        source: "/api/:path((?!grafana(?:/|$)).*)",
+        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)).*)",
         destination: `${API_BASE}/api/:path`,
       },
 

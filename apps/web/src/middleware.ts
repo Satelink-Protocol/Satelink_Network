@@ -4,6 +4,7 @@
 // node.satelink.network      CNAME → cname.vercel-dns.com
 // admin.satelink.network     CNAME → cname.vercel-dns.com (already set)
 // status.satelink.network    CNAME → cname.vercel-dns.com
+// ops.satelink.network       CNAME → cname.vercel-dns.com
 // docs.satelink.network      CNAME → custom.mintlify.com (external - Mintlify config)
 // VERCEL REQUIRED: Add each subdomain in Vercel project → Settings → Domains
 
@@ -16,6 +17,7 @@ const SUBDOMAIN_MAP: Record<string, string> = {
   'node': '/node',
   'admin': '/admin',
   'status': '/status',
+  'ops': '/ops',
 }
 
 export function middleware(req: NextRequest) {
@@ -30,6 +32,26 @@ export function middleware(req: NextRequest) {
   if (subdomain === 'admin' && url.pathname === '/') {
     url.pathname = '/admin/command-center'
     return NextResponse.redirect(url)
+  }
+
+  // ops subdomain: root lands on the command center; all other paths are
+  // rewritten under /ops. The pathname is forwarded as a request header so the
+  // server-side auth gate in app/ops/layout.tsx can exempt /ops/login (an
+  // httpOnly session cookie is unreadable client-side, and layouts don't
+  // otherwise receive the pathname — without this the login page would loop).
+  if (subdomain === 'ops') {
+    if (url.pathname === '/') {
+      url.pathname = '/ops/command-center'
+      return NextResponse.redirect(url)
+    }
+    const opsPath = url.pathname.startsWith('/ops') ? url.pathname : `/ops${url.pathname}`
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set('x-ops-pathname', opsPath)
+    if (!url.pathname.startsWith('/ops')) {
+      url.pathname = opsPath
+      return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+    }
+    return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
   // node subdomain root lands on the setup flow.
