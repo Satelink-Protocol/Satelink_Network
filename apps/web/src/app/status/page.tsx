@@ -26,7 +26,7 @@ export default function StatusPage() {
 
     const check = async () => {
       try {
-        const res = await fetch('/health', { cache: 'no-store' });
+        const res = await fetch('https://rpc.satelink.network/health', { cache: 'no-store', mode: 'cors' });
         if (!cancelled) setGateway(res.ok ? 'operational' : 'degraded');
       } catch {
         if (!cancelled) setGateway('degraded');
