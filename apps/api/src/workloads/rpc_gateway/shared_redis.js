@@ -1,44 +1,80 @@
 /**
  * Shared Redis Client for RPC Gateway
- * DEPRECATED: Redis eliminated — all caching is in-memory (Maps)
+ * Single connection shared across all RPC gateway modules.
+ * REDIS_URL is set in Railway — do not stub this.
  *
- * This module now returns null for all operations.
- * Kept for backward compatibility with any code that still imports it.
+ * Uses ioredis (the project's Redis client); the node-redis `redis`
+ * package is not a dependency here.
  */
+import Redis from 'ioredis';
 
-const OPERATION_TIMEOUT_MS = 500;
+let client = null;
+let connectionAttempted = false;
 
-// Always return null — Redis is disabled
+async function connect() {
+  if (connectionAttempted) return;
+  connectionAttempted = true;
+
+  const url = process.env.REDIS_URL;
+  if (!url || url === 'redis://') {
+    console.warn('[SharedRedis] REDIS_URL not set — cache disabled');
+    return;
+  }
+
+  try {
+    client = new Redis(url, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      retryStrategy: times => Math.min(times * 100, 3000),
+    });
+    client.on('error', err => console.error('[SharedRedis] Error:', err.message));
+    client.on('ready', () => console.log('[SharedRedis] Connected'));
+    client.on('reconnecting', () => console.warn('[SharedRedis] Reconnecting...'));
+    await client.connect();
+  } catch (err) {
+    console.error('[SharedRedis] Connection failed:', err.message);
+    client = null;
+  }
+}
+
+// Connect on module load
+connect();
+
+function isReady() {
+  return client?.status === 'ready';
+}
+
 export function getSharedRedis() {
-  return null;
+  return isReady() ? client : null;
 }
 
 export function getRedisStatus() {
-  return { status: 'disabled', reconnectAttempts: 0, reason: 'Redis eliminated - using in-memory' };
+  if (!client) return { status: 'disconnected', reason: 'never connected' };
+  return { status: isReady() ? 'connected' : 'connecting' };
 }
 
 export function isRedisHealthy() {
-  return false;
+  return isReady();
 }
 
+export const OPERATION_TIMEOUT_MS = 500;
+
 export async function withTimeout(promise, timeoutMs = OPERATION_TIMEOUT_MS, fallback = null) {
-  return fallback;
+  return Promise.race([promise, new Promise(r => setTimeout(() => r(fallback), timeoutMs))]);
 }
 
 export async function safeGet(key, fallback = null) {
-  return fallback;
+  try { return (await client?.get(key)) ?? fallback; } catch { return fallback; }
 }
 
 export async function safeSet(key, value, ttl = 3600) {
-  return false;
+  try { await client?.set(key, value, 'EX', ttl); return true; } catch { return false; }
 }
 
 export async function safeIncr(key) {
-  return 0;
+  try { return (await client?.incr(key)) ?? 0; } catch { return 0; }
 }
 
 export async function safeMget(...keys) {
-  return keys.map(() => null);
+  try { return (await client?.mget(keys)) ?? keys.map(() => null); } catch { return keys.map(() => null); }
 }
-
-export { OPERATION_TIMEOUT_MS };
