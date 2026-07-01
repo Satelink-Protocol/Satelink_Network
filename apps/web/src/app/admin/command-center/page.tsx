@@ -8,7 +8,7 @@ import {
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
 import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
-import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers } from "lucide-react";
+import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers, Zap } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 
 // Lead pipeline is paginated — developer_intel can hold 24k+ rows. Loading the
@@ -367,85 +367,165 @@ function AdminCommandCenter() {
 
         {/* 1. EXECUTIVE OVERVIEW VIEW */}
         {view === "executive" && (
-          <div className="space-y-4">
+          <div className="px-6 py-6">
             {execErr && <Notice tone="danger">Executive Summary fetch failed: {execErr}</Notice>}
             
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <SparklineKPICard label="Revenue Today" value={execSummary ? `$${usdt5(execSummary.revenue_today_usdt)}` : "—"} caption="USDT real earnings" sparkData={Array(6).fill(0).concat([execSummary?.revenue_today_usdt ?? 0])} status={(execSummary?.revenue_today_usdt ?? 0) > 0 ? "good" : "neutral"} />
-              <SparklineKPICard label="Revenue MTD" value={execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"} caption="USDT Month-To-Date" sparkData={Array(6).fill(0).concat([execSummary?.revenue_mtd_usdt ?? 0])} status={(execSummary?.revenue_mtd_usdt ?? 0) > 0 ? "good" : "neutral"} />
-              <SparklineKPICard label="Active IPs (24h)" value={execSummary ? fmt.num(execSummary.active_ips_24h) : "—"} caption="Unique developer nodes" sparkData={Array(6).fill(0).concat([execSummary?.active_ips_24h ?? 0])} status="good" />
-              <SparklineKPICard label="Total Requests" value={execSummary ? fmt.num(execSummary.total_requests_24h) : "—"} caption="Cumulative 24h calls" sparkData={Array(6).fill(0).concat([execSummary?.total_requests_24h ?? 0])} status="good" />
-              <SparklineKPICard label="Paying Customers" value={execSummary ? fmt.num(execSummary.paying_customers) : "—"} caption="Deposits > 0" sparkData={Array(6).fill(0).concat([execSummary?.paying_customers ?? 0])} status={(execSummary?.paying_customers ?? 0) > 0 ? "good" : "warning"} />
-              <SparklineKPICard label="Network Health" value={execSummary ? `${execSummary.network_health_pct}%` : "—"} caption="Uptime SLA" sparkData={Array(6).fill(0).concat([execSummary?.network_health_pct ?? 0])} status={execSummary?.network_health_pct === 100 ? "good" : "warning"} />
-              <SparklineKPICard label="Open Alerts" value={execSummary ? fmt.num(execSummary.open_alerts) : "—"} caption="Active gas alerts" sparkData={Array(6).fill(0).concat([execSummary?.open_alerts ?? 0])} status={(execSummary?.open_alerts ?? 0) > 0 ? "warning" : "good"} />
-              <SparklineKPICard label="Signer Gas Balance" value={execSummary && execSummary.signer_balance_pol ? `${fmt.bal(execSummary.signer_balance_pol)} POL` : "—"} caption={execSummary?.settlement_mode || "Mode"} sparkData={Array(6).fill(0).concat([execSummary?.signer_balance_pol ?? 0])} status="warning" />
+            {/* ROW 1 — KPI strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Card 1: REAL REVENUE (MTD) */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Real Revenue (MTD)</span>
+                  <DollarSign className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  {(execSummary?.revenue_mtd_usdt ?? 0) > 0 ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-500/15 text-green-400">▲ +0%</span>
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+                  )}
+                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                </div>
+              </div>
+
+              {/* Card 2: TOTAL REQUESTS (24H) */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Total Requests (24h)</span>
+                  <Activity className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.total_requests_24h) : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                </div>
+              </div>
+
+              {/* Card 3: ACTIVE IPs (24H) */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs (24h)</span>
+                  <Users className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.active_ips_24h) : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                </div>
+              </div>
+
+              {/* Card 4: SIGNER GAS BALANCE */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Signer Gas Balance</span>
+                  <Zap className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary && execSummary.signer_balance_pol != null ? `${fmt.bal(execSummary.signer_balance_pol)} POL` : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  {(execSummary?.signer_balance_pol ?? 0) === 0 ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-400">Unfunded</span>
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+                  )}
+                  <span className="text-xs text-zinc-500">{execSummary?.settlement_mode || "Mode"}</span>
+                </div>
+              </div>
             </div>
 
-            <AlertBand
-              alerts={[
-                { code: "SETTLEMENT_DRY_RUN", message: "Settlement in DRY_RUN — no on-chain broadcast", severity: "high" },
-                { code: "SIGNER_UNFUNDED", message: "Signer balance unreadable / unfunded", severity: "high" },
-                { code: "BLOCKED_BATCHES", message: "1954 blocked_unfunded settlement batches", severity: "high" },
-                { code: "REVENUE_ANCHOR", message: "Real revenue below $0.50 anchor threshold", severity: "warning" },
-              ]}
-            />
-
-            <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-              <TimeseriesPanel
-                title="Gateway Traffic"
-                subtitle="Request volume over time"
-                data={demandByLead.map((d: any, i: number) => ({
-                  ts: Date.now() - (demandByLead.length - 1 - i) * 3600000,
-                  requests: d.calls,
-                }))}
-                series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
-                height={240}
+            {/* ROW 2 — Alert strip */}
+            <div className="mb-6">
+              <AlertBand
+                alerts={[
+                  { code: "SETTLEMENT_DRY_RUN", message: "Settlement in DRY_RUN — no on-chain broadcast", severity: "high" },
+                  { code: "SIGNER_UNFUNDED", message: "Signer balance unreadable / unfunded", severity: "high" },
+                  { code: "BLOCKED_BATCHES", message: "1954 blocked_unfunded settlement batches", severity: "high" },
+                  { code: "REVENUE_ANCHOR", message: "Real revenue below $0.50 anchor threshold", severity: "warning" },
+                ]}
+                className="[&>div]:h-9 [&>div]:py-0 [&>div]:min-h-9"
               />
+            </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Abuse Classifier Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {abuseOverview && abuseOverview.summary ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div className="p-2 bg-zinc-900/40 rounded border border-border">
-                          <span className="text-muted-foreground">Classified IPs</span>
-                          <p className="text-lg font-bold text-foreground">{abuseOverview.summary.total_classified}</p>
-                        </div>
-                        <div className="p-2 bg-zinc-900/40 rounded border border-border">
-                          <span className="text-muted-foreground">Blocked ASNs</span>
-                          <p className="text-lg font-bold text-foreground">{abuseOverview.summary.blocked_asns}</p>
-                        </div>
+            {/* ROW 3 — Two column grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <div className="col-span-1 lg:col-span-2">
+                <TimeseriesPanel
+                  title="Gateway Traffic"
+                  subtitle="Request volume over time"
+                  data={demandByLead.map((d: any, i: number) => ({
+                    ts: Date.now() - (demandByLead.length - 1 - i) * 3600000,
+                    requests: d.calls,
+                  }))}
+                  series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
+                  className="h-full min-h-[280px]"
+                />
+              </div>
+              <div className="col-span-1">
+                {/* System Status List */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 h-full">
+                  <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">System Status</div>
+                  <div className="space-y-0">
+                    {[
+                      { label: "API Gateway", status: "operational" },
+                      { label: "RPC", status: "operational" },
+                      { label: "Database", status: "operational" },
+                      { label: "Redis", status: "operational" },
+                      { label: "Polygon", status: netHealth?.chain_status?.[0]?.status === "operational" ? "operational" : "degraded" },
+                    ].map(s => (
+                      <div key={s.label} className="flex justify-between items-center py-3 border-b border-zinc-800/50 last:border-0">
+                        <span className="text-sm text-zinc-300">{s.label}</span>
+                        <StatusBadge label={s.status.toUpperCase()} tone={s.status === "operational" ? "success" : "warning"} />
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-muted-foreground">Recent Subnet Hotspots</p>
-                        <div className="max-h-[120px] overflow-y-auto rounded border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-[10px] py-1">Subnet</TableHead>
-                                <TableHead className="text-[10px] py-1">IP Count</TableHead>
-                                <TableHead className="text-[10px] py-1 text-right">Calls Today</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {(abuseOverview.subnet_hotspots || []).map((h: any, i: number) => (
-                                <TableRow key={i}>
-                                  <TableCell className="text-[10px] py-1 font-mono">{h.subnet}</TableCell>
-                                  <TableCell className="text-[10px] py-1 font-mono">{h.ip_count}</TableCell>
-                                  <TableCell className="text-[10px] py-1 font-mono text-right">{fmt.num(h.total_calls_today)}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </div>
-                    </div>
-                  ) : <EmptyState label="No abuse metrics loaded" />}
-                </CardContent>
-              </Card>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ROW 4 — Second KPI row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              {/* Card 1: PAYING CUSTOMERS */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Paying Customers</span>
+                  <Users className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.paying_customers) : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-zinc-500">Deposits {'>'} 0</span>
+                </div>
+              </div>
+
+              {/* Card 2: NETWORK HEALTH % */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Network Health</span>
+                  <Activity className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `${execSummary.network_health_pct}%` : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-zinc-500">Uptime SLA</span>
+                </div>
+              </div>
+
+              {/* Card 3: OPEN ALERTS count */}
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Open Alerts</span>
+                  <ShieldAlert className="h-4 w-4 text-zinc-600" />
+                </div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.open_alerts) : "—"}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-zinc-500">Active gas alerts</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
