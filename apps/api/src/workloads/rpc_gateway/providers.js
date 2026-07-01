@@ -68,8 +68,8 @@ const PROVIDER_CONFIGS = {
     name: "Polygon PoS Mainnet",
     providers: [
       {
-        id: "polygon-official",
-        url: process.env.RPC_POLYGON_1 || "https://polygon.drpc.org",
+        id: "llamarpc-polygon",
+        url: process.env.RPC_POLYGON_1 || "https://polygon.llamarpc.com",
         priority: 1,
         rateLimit: 100,
         type: "public",
@@ -85,6 +85,14 @@ const PROVIDER_CONFIGS = {
         rateLimit: 25,
         type: "alchemy",
         enabled: !!(process.env.ALCHEMY_POLYGON_URL || process.env.ALCHEMY_POLYGON_KEY || process.env.ALCHEMY_API_KEY),
+      },
+      {
+        id: "publicnode-polygon",
+        url: process.env.PUBLICNODE_POLYGON_URL || "https://polygon-bor-rpc.publicnode.com",
+        priority: 3,
+        rateLimit: 100,
+        type: "public",
+        enabled: true,
       },
       {
         id: "ankr-polygon",
@@ -110,6 +118,14 @@ const PROVIDER_CONFIGS = {
     chainId: 1,
     name: "Ethereum Mainnet",
     providers: [
+      {
+        id: "llamarpc-eth",
+        url: process.env.LLAMARPC_ETH_URL || "https://eth.llamarpc.com",
+        priority: 1,
+        rateLimit: 100,
+        type: "public",
+        enabled: true,
+      },
       {
         id: "alchemy-eth",
         url:
