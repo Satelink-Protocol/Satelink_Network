@@ -62,7 +62,7 @@ export function KPIStat({
       data-slot="kpi-stat"
       data-state={state}
       className={cn(
-        "relative flex flex-col overflow-hidden rounded-lg border border-[hsl(var(--card-border))] bg-card p-4 shadow-[var(--elev-panel)] transition-tokens panel-hover",
+        "relative flex flex-col overflow-hidden rounded-none border border-border bg-card p-3 transition-tokens panel-hover",
         className
       )}
     >
@@ -89,11 +89,11 @@ export function KPIStat({
       </div>
 
       {loading ? (
-        <Skeleton className="mt-2 h-8 w-24" />
+        <Skeleton className="mt-2 h-10 w-32" />
       ) : error ? (
         <span className="numeric mt-2 text-sm text-state-critical">{error}</span>
       ) : (
-        <span className="numeric mt-2 flex items-baseline gap-1 text-[28px] font-bold leading-none text-foreground">
+        <span className="numeric mt-1 flex items-baseline gap-1 text-[36px] font-mono leading-none text-foreground">
           {hasValue ? value : "—"}
           {hasValue && unit ? (
             <span className="text-sm font-medium text-muted-foreground">{unit}</span>
@@ -125,10 +125,10 @@ export function KPIStat({
         </div>
       ) : null}
 
-      <div className="relative mt-auto flex items-center justify-between pt-3">
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="relative mt-auto flex items-center justify-between pt-4">
+        <span className="flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground">
           <span
-            className="inline-block size-1.5 rounded-full"
+            className="inline-block size-2 rounded-none"
             style={{ backgroundColor: meta.hsl }}
           />
           {caption ?? meta.label}
@@ -136,10 +136,10 @@ export function KPIStat({
         {!loading && !error && typeof delta === "number" ? (
           <span
             className={cn(
-              "numeric inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold",
+              "numeric inline-flex items-center gap-0.5 rounded-none px-1.5 py-0.5 text-[11px] font-mono",
               delta >= 0
-                ? "bg-[hsl(var(--state-healthy)/0.12)] text-state-healthy"
-                : "bg-[hsl(var(--state-critical)/0.12)] text-state-critical"
+                ? "bg-[hsl(var(--state-healthy)/0.15)] text-state-healthy"
+                : "bg-[hsl(var(--state-critical)/0.15)] text-state-critical"
             )}
           >
             {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)}%

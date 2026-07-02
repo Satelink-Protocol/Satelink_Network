@@ -94,7 +94,7 @@ export default function MonitoringPage() {
   const [status, setStatus] = useState<StatusData | null>(null);
   const [treasury, setTreasury] = useState<TreasuryData | null>(null);
   const [freeTier, setFreeTier] = useState<FreeTierData | null>(null);
-  const [rpc, setRpc] = useState<RpcHealth | null>(null);
+  const [rpc, setRpc] = useState<any | null>(null);
   const [err, setErr] = useState(false);
 
 

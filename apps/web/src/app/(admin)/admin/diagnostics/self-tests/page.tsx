@@ -57,11 +57,11 @@ export default function AdminSelfTestsPage() {
 
     setTimeout(() => {
       const updated = tests.map((t) => {
-        const isSuccess = Math.random() > 0.1;
+        const isSuccess = false; // TODO: fetch real result
         return {
           ...t,
-          status: isSuccess ? "success" : ("failed" as const),
-          latencyMs: Math.floor(Math.random() * 200) + 2,
+          status: isSuccess ? "success" : ("failed" as any),
+          latencyMs: 0,
           message: isSuccess ? "Healthy status response verified" : "Connection timeout occurred during test request",
         };
       });
@@ -146,7 +146,7 @@ export default function AdminSelfTestsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">
           <DashboardSection
-            title="Subsystem Test Harness"
+            label="Subsystem Test Harness"
             description="Run automatic self-tests against critical components"
             actions={
               <Button size="sm" onClick={runDiagnostics} disabled={running}>
@@ -161,7 +161,7 @@ export default function AdminSelfTestsPage() {
         </div>
 
         <div>
-          <DashboardSection title="Live Runner Logs" description="Standard stdout telemetry stream" flush>
+          <DashboardSection label="Live Runner Logs" description="Standard stdout telemetry stream" flush>
             <div className="bg-black/60 backdrop-blur border border-border p-4 font-mono text-[11px] leading-relaxed rounded-b-md">
               <div className="flex items-center gap-1.5 text-zinc-500 mb-3 border-b border-zinc-800 pb-2">
                 <Terminal className="h-3 w-3" />

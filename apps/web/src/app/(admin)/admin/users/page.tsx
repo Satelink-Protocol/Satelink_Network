@@ -23,13 +23,7 @@ interface UserRecord {
   lastActive: string;
 }
 
-const INITIAL_USERS: UserRecord[] = [
-  { id: "USR-001", email: "pradeep@satelink.network", role: "admin_super", keyCount: 4, walletAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", status: "active", lastActive: "Active now" },
-  { id: "USR-002", email: "alex@satelink.network", role: "admin_ops", keyCount: 2, walletAddress: "0x35Cc6634C0532925a3b844Bc454e4438f44e742d", status: "active", lastActive: "12 mins ago" },
-  { id: "USR-003", email: "corp_indexer@polygon.io", role: "developer", keyCount: 5, walletAddress: "0xCc6634C0532925a3b844Bc454e4438f44e742d35", status: "active", lastActive: "1 hour ago" },
-  { id: "USR-004", email: "validator_host_44@gmail.com", role: "node_operator", keyCount: 1, walletAddress: "0x844Bc454e4438f44e742d35Cc6634C0532925a3b", status: "active", lastActive: "1 day ago" },
-  { id: "USR-005", email: "crawler_tester@spam.com", role: "developer", keyCount: 10, walletAddress: "0x532925a3b844Bc454e4438f44e742d35Cc6634C0", status: "suspended", lastActive: "5 days ago" },
-];
+const INITIAL_USERS: UserRecord[] = [];
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRecord[]>(INITIAL_USERS);

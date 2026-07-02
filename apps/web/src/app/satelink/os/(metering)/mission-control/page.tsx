@@ -118,159 +118,162 @@ export default function MissionControlPage() {
 
   return (
     <div className="px-6 py-6">
-      {/* ROW 1 — KPI strip */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-        {/* Card 1: REAL REVENUE */}
-        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Real Revenue</span>
-            <DollarSign className="h-4 w-4 text-zinc-600" />
+      {/* GLOBAL HEALTH STRIP */}
+      <div className="flex flex-wrap items-center justify-between bg-zinc-900 border border-zinc-800 p-2.5 rounded-sm mb-6">
+        <div className="flex items-center gap-6 text-[10px] font-mono tracking-wider uppercase text-zinc-400">
+          <div className="flex items-center gap-2">
+            <div className="size-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span>RPC Gateway Operational</span>
           </div>
-          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{fin ? usd5(fin.metered_value_usdt) : "—"}</div>
-          <div className="flex items-center gap-1.5">
-            {(fin?.metered_value_usdt ?? 0) > 0 ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-500/15 text-green-400">▲ +0%</span>
-            ) : (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            )}
-            <span className="text-xs text-zinc-500">Metered value</span>
+          <div className="flex items-center gap-2">
+            <div className="size-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span>Polygon RPC Sync</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="size-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span>Billing Engine Sync</span>
           </div>
         </div>
-
-        {/* Card 2: API REQUESTS (24H) */}
-        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">API Requests (24h)</span>
-            <Activity className="h-4 w-4 text-zinc-600" />
-          </div>
-          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.total_requests_24h) : "—"}</div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            <span className="text-xs text-zinc-500">Total requests</span>
-          </div>
-        </div>
-
-        {/* Card 3: ACTIVE IPs */}
-        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs</span>
-            <Users className="h-4 w-4 text-zinc-600" />
-          </div>
-          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_24h) : "—"}</div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            <span className="text-xs text-zinc-500">Unique callers</span>
-          </div>
-        </div>
-
-        {/* Card 4: SETTLEMENT BATCHES */}
-        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Settlement Batches</span>
-            <Server className="h-4 w-4 text-zinc-600" />
-          </div>
-          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{fin ? confirmedBatches : "—"}</div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            <span className="text-xs text-zinc-500">Confirmed on-chain</span>
-          </div>
+        <div className="flex items-center gap-4 text-[10px] font-mono tracking-wider uppercase">
+           <div className="px-2 py-0.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-sm flex items-center gap-1.5">
+             <span className="size-1.5 rounded-full bg-violet-500" />
+             {execSummary?.settlement_mode || "DRY_RUN"}
+           </div>
         </div>
       </div>
 
-      {/* ROW 2 — Full width chart */}
-      <div className="mb-6">
-        <TimeseriesPanel
-          title="Gateway Traffic"
-          subtitle="Request rate over time"
-          data={[]}
-          series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
-          className="w-full min-h-[300px]"
-          showLegend={false}
-          emptyHint="No request-history endpoint yet — 24h totals appear in the KPI strip above."
-        />
+      <div className="grid grid-cols-12 gap-4 mb-4">
+        {/* ROW 1 — KPI strip */}
+        <div className="col-span-12 md:col-span-4">
+          <KPIStat
+            label="Real Revenue"
+            value={fin ? usd5(fin.metered_value_usdt) : null}
+            delta={fin && fin.metered_value_usdt > 0 ? 0 : null}
+            state={(fin?.metered_value_usdt ?? 0) > 0 ? "healthy" : "unknown"}
+            caption="Metered value"
+            icon={DollarSign}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <KPIStat
+            label="API Requests (24h)"
+            value={execSummary ? compact(execSummary.total_requests_24h) : null}
+            state="unknown"
+            caption="Total requests"
+            icon={Activity}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <KPIStat
+            label="Active IPs"
+            value={execSummary ? compact(execSummary.active_ips_24h) : null}
+            state="unknown"
+            caption="Unique callers"
+            icon={Users}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-2">
+          <KPIStat
+            label="Settlements"
+            value={fin ? confirmedBatches : null}
+            state={confirmedBatches > 0 ? "healthy" : "unknown"}
+            caption="Confirmed"
+            icon={Server}
+          />
+        </div>
       </div>
 
-      {/* ROW 3 — Two columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Left — Revenue Pipeline */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
-          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Revenue Pipeline</div>
-          <div className="space-y-3">
-            <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
-            <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
-            <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
-            {eco ? (
-              <PipelineRow
-                label="Last Closed Epoch"
-                value={`#${eco.lastEpochId} · ${usd5(eco.lastEpochRevenueUsdt)}`}
-              />
-            ) : null}
-            {pipeline?.bottleneck_reason ? (
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-zinc-500">Bottleneck</span>
-                <span className="text-xs font-medium text-amber-400">
-                  {pipeline.bottleneck_reason}
-                </span>
-              </div>
-            ) : null}
-          </div>
+      <div className="grid grid-cols-12 gap-4 mb-4">
+        {/* ROW 2 — Primary Telemetry */}
+        <div className="col-span-12 lg:col-span-8 flex flex-col">
+          <TimeseriesPanel
+            title="Gateway Traffic Rate"
+            subtitle="Request volume per minute"
+            data={[]}
+            series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
+            className="w-full h-full min-h-[300px]"
+            showLegend={false}
+            emptyHint="No request-history endpoint yet — 24h totals appear in the KPI strip above."
+          />
         </div>
-
-        {/* Right — Quick Start */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
-          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Quick Start</div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs text-zinc-500">Your RPC endpoint</p>
-              <div className="mt-1 flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md bg-zinc-950 border border-zinc-800/50 px-3 py-2 font-mono text-sm text-zinc-300">
-                  {RPC_URL}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={copyEndpoint}
-                  aria-label="Copy RPC endpoint"
-                  className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800"
-                >
-                  <Copy className="size-4 text-zinc-400" />
-                </Button>
-              </div>
-              {copied ? <p className="mt-1 text-xs text-emerald-400">Copied</p> : null}
+        
+        {/* Secondary Context */}
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 h-full">
+            <div className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4 border-b border-zinc-800 pb-2">Revenue Pipeline</div>
+            <div className="space-y-4">
+              <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
+              <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
+              <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
+              {eco ? (
+                <PipelineRow
+                  label="Last Closed Epoch"
+                  value={`#${eco.lastEpochId} · ${usd5(eco.lastEpochRevenueUsdt)}`}
+                />
+              ) : null}
+              {pipeline?.bottleneck_reason ? (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-zinc-500">Bottleneck</span>
+                  <span className="text-xs font-medium text-amber-400">
+                    {pipeline.bottleneck_reason}
+                  </span>
+                </div>
+              ) : null}
             </div>
-            <p className="text-xs text-zinc-500">Chain: Polygon Mainnet (137)</p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild className="bg-[hsl(174,80%,38%)] text-white hover:bg-[hsl(174,80%,30%)] border-0">
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 3 — Alert strip & Quick Start */}
+      <div className="grid grid-cols-12 gap-4 mb-6">
+        <div className="col-span-12 lg:col-span-8">
+          <AlertBand
+            alerts={warnings.map((w) => ({
+              code: w.code,
+              message: w.message,
+              severity: w.severity === "critical" ? "critical" : "warning",
+            }))}
+            className="h-full"
+          />
+        </div>
+        
+        <div className="col-span-12 lg:col-span-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-4 h-full flex flex-col justify-center">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Gateway Access</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-sm border border-emerald-500/20">POLYGON 137</span>
+            </div>
+            <div className="flex items-center gap-2 mb-4">
+              <code className="flex-1 truncate rounded-sm bg-zinc-950 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300">
+                {RPC_URL}
+              </code>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyEndpoint}
+                aria-label="Copy RPC endpoint"
+                className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800 size-7"
+              >
+                <Copy className="size-3.5 text-zinc-400" />
+              </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button asChild className="flex-1 bg-[hsl(174,80%,38%)] text-white hover:bg-[hsl(174,80%,30%)] border-0 h-8 text-[11px]">
                 <Link href="/satelink/os/keys">
-                  <Key className="size-4 mr-2" />
-                  Get API Key
+                  <Key className="size-3 mr-1.5" />
+                  API Key
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800/50">
+              <Button asChild variant="outline" className="flex-1 border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800/50 h-8 text-[11px]">
                 <Link href="/satelink/os/deposit">
-                  <Wallet className="size-4 mr-2" />
-                  Add Credits
+                  <Wallet className="size-3 mr-1.5" />
+                  Credits
                 </Link>
               </Button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* ROW 4 — Alert strip */}
-      <div className="mb-6">
-        <AlertBand
-          alerts={warnings.map((w) => ({
-            code: w.code,
-            message: w.message,
-            severity: w.severity === "critical" ? "critical" : "warning",
-          }))}
-          className="[&>div]:h-9 [&>div]:py-0 [&>div]:min-h-9"
-        />
       </div>
     </div>
   );

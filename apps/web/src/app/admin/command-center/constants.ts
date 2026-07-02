@@ -41,17 +41,8 @@ export const HEADERS: Record<string, { title: string; subtitle: string; icon: an
   settings: { title: "System Config", subtitle: "Verified global constants & environment state variables", icon: Settings },
 };
 
-export const PROJECTIONS = [
-  { daily: "$0.50/day", who: "1 paying customer", monthly: "$15/month" },
-  { daily: "$1.50/day", who: "3 paying customers", monthly: "$45/month" },
-  { daily: "$5.00/day", who: "7 paying customers", monthly: "$150/month" }
-];
-
-export const PROJECTION_DATA = [
-  { label: "1 customer", daily: 0.5, monthly: 15 },
-  { label: "3 customers", daily: 1.5, monthly: 45 },
-  { label: "7 customers", daily: 5.0, monthly: 150 }
-];
+export const PROJECTIONS = [];
+export const PROJECTION_DATA = [];
 
 export const ARCH_TOPOLOGY = {
   width: 680, height: 220,

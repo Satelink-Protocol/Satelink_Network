@@ -116,12 +116,12 @@ export function Panel({
     <section
       data-slot="panel"
       className={cn(
-        "flex flex-col overflow-hidden rounded-lg border border-[hsl(var(--card-border))] bg-card text-card-foreground shadow-[var(--elev-panel)] transition-tokens panel-hover",
+        "flex flex-col overflow-hidden rounded-none border border-border bg-card text-card-foreground transition-tokens panel-hover",
         className
       )}
     >
       {hasHeader && (
-        <header className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <header className="flex items-start justify-between gap-3 border-b border-border/60 bg-[hsl(220_20%_8%)] px-3 py-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {title ? (
@@ -168,7 +168,7 @@ export function Panel({
         </header>
       )}
       <div
-        className={cn("min-h-0 flex-1", flush ? "p-0" : "p-4")}
+        className={cn("min-h-0 flex-1", flush ? "p-0" : "p-3")}
         style={height ? { height } : undefined}
       >
         {body}

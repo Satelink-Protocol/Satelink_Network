@@ -11,37 +11,37 @@
    ============================================================ */
 
 :root {
-  /* Satelink const C Unified Palette */
-  --primary: #5EEAD4;
-  --primary-hover: rgba(94, 234, 212, 0.8);
-  --accent: #5EEAD4;
-  --accent-glow: rgba(94, 234, 212, 0.25);
+  /* Satelink Grafana-grade Dark Theme */
+  --primary: hsl(174 80% 38%);
+  --primary-hover: hsl(174 80% 30%);
+  --accent: hsl(174 60% 20%);
+  --accent-glow: hsl(174 80% 38% / 0.15);
 
-  --bg-base: #050816;
-  --bg-subtle: #0E1628;
-  --bg-muted: #121C33;
-  --bg-elevated: #121C33;
-  --bg-card: #121C33;
-  --bg-glass: rgba(14, 22, 40, 0.8);
+  --bg-base: hsl(220 20% 4%);
+  --bg-subtle: hsl(220 20% 6%);
+  --bg-muted: hsl(220 20% 8%);
+  --bg-elevated: hsl(220 18% 10%);
+  --bg-card: hsl(220 20% 6%);
+  --bg-glass: hsl(220 20% 4% / 0.9);
 
-  --text-primary: #E5EEF8;
-  --text-secondary: #94A3B8;
-  --text-muted: rgba(148, 163, 184, 0.7);
+  --text-primary: hsl(210 20% 92%);
+  --text-secondary: hsl(215 15% 75%);
+  --text-muted: hsl(215 15% 55%);
 
-  --border: #1A2F50;
-  --border-subtle: rgba(26, 47, 80, 0.5);
+  --border: hsl(220 20% 12%);
+  --border-subtle: hsl(220 20% 10%);
 
-  --success: #34D399;
-  --warning: #F59E0B;
-  --error: #EF4444;
+  --success: hsl(152 65% 38%);
+  --warning: hsl(38 90% 52%);
+  --error: hsl(0 72% 52%);
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'SF Mono', monospace;
 
-  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease: cubic-bezier(0, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
 
-  --header-height: 64px;
+  --header-height: 56px;
 }
 
 [data-theme="light"] {

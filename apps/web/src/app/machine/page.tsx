@@ -214,9 +214,7 @@ function MachinePortal() {
       { key: 'revenue', header: 'Revenue', mono: true },
       { key: 'status', header: 'Status', render: (r) => plannedCell(r.status) },
     ];
-    const workloadRows = loading
-      ? null
-      : [{ type: 'Polygon RPC', consumer: 'Network', revenue: usd5(totalRevenue), status: 'ACTIVE' }];
+    const workloadRows = loading ? null : ([] as any[]);
 
     return (
       <div className="flex flex-col gap-6">
@@ -290,7 +288,7 @@ function MachinePortal() {
         <Panel title="Machine Identity Registry" description="Autonomous systems tracked by API key">
           <div className="mb-4 flex flex-wrap gap-2">
             {types.map((t) => (
-              <Badge key={t} variant="secondary">{t}</Badge>
+              <Badge key={t} variant="neutral">{t}</Badge>
             ))}
           </div>
           <LegacyDataTable
@@ -437,18 +435,7 @@ function MachinePortal() {
       { label: 'Agent Revenue', icon: DollarSign },
       { label: 'Success Rate', icon: Gauge },
     ];
-    const agentRows = loading
-      ? null
-      : [
-          {
-            name: 'Custom Agent',
-            provider: 'Custom',
-            framework: 'python-requests',
-            requests: DASH,
-            revenue: DASH,
-            status: 'DETECTED',
-          },
-        ];
+    const agentRows = loading ? null : ([] as any[]);
     return (
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -487,13 +474,7 @@ function MachinePortal() {
       { label: 'Automation Revenue', value: usd5(0), icon: RefreshCcw },
       { label: 'Total Machine Revenue', value: usd5(totalRevenue), icon: DollarSign },
     ];
-    const breakdownRows = loading
-      ? null
-      : [
-          { service: 'Polygon RPC', machines: DASH, requests: DASH, revenue: usd5(totalRevenue), pct: pctOf(total), status: 'ACTIVE' },
-          { service: 'AI Inference', machines: DASH, requests: DASH, revenue: usd5(0), pct: '0%', status: 'PLANNED' },
-          { service: 'Automation', machines: DASH, requests: DASH, revenue: usd5(0), pct: '0%', status: 'PLANNED' },
-        ];
+    const breakdownRows = loading ? null : ([] as any[]);
     return (
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

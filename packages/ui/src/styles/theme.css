@@ -1,73 +1,58 @@
 @import "../tokens/tokens.css";
 
-/* ============================================================
-   @satelink/ui — canonical design tokens (SINGLE SOURCE OF TRUTH)
-
-   Dark, neutral/slate dashboard surface (Signoz / Datadog / Railway)
-   with a single emerald accent for primary actions + active state.
-
-   Scope: `.satelink-os`. Every OS surface is wrapped by <AppShell>,
-   which applies this class. Components consume ONLY semantic Tailwind
-   tokens (bg-card, text-muted-foreground, bg-primary, …) which the
-   app's `@theme inline` block maps to the variables defined here.
-
-   Do NOT add hardcoded colors in components — extend tokens here.
-   ============================================================ */
-
 .satelink-os {
-  --radius: 0.5rem;
+  --radius: 0rem; /* Flat, sharp edges for Grafana look */
 
-  --background: 220 20% 4%;           /* #090D15 — near-black with blue tint, Grafana-style */
-  --foreground: 210 20% 92%;          /* #E8ECF4 — cool white text */
+  --background: 220 20% 4%;           /* Deep dark background */
+  --foreground: 210 20% 92%;          /* High contrast text */
 
-  --card: 220 18% 8%;                 /* #111827 — dark card surface */
+  --card: 220 20% 6%;                 /* Slightly lighter surface */
   --card-foreground: 210 20% 92%;
 
-  --card-border: 217 25% 16%;         /* #1E2A40 — subtle blue-grey border */
-  --card-shadow: 0 1px 4px 0 rgba(0,0,0,0.6), 0 0 0 1px hsl(217 25% 13%);
+  --card-border: 220 20% 12%;         /* Sharp 1px border */
+  --card-shadow: none;                /* No shadows */
 
   --popover: 220 18% 10%;
   --popover-foreground: 210 20% 92%;
 
-  --primary: 174 80% 38%;             /* #13B8A8 — Satelink teal, slightly deeper than before */
+  --primary: 174 80% 38%;             /* Satelink teal */
   --primary-foreground: 220 20% 4%;
 
   --secondary: 220 18% 12%;
   --secondary-foreground: 210 20% 80%;
 
-  --muted: 220 15% 11%;               /* Panel backgrounds */
-  --muted-foreground: 215 15% 55%;    /* Subdued labels */
+  --muted: 220 15% 11%;
+  --muted-foreground: 215 15% 55%;
 
-  --accent: 174 60% 20%;              /* Teal tint for hover states */
+  --accent: 174 60% 20%;
   --accent-foreground: 174 80% 75%;
 
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
 
-  --success: 152 65% 38%;             /* #1FA86A */
-  --warning: 38 90% 52%;              /* #F5A623 */
+  --success: 152 65% 38%;
+  --warning: 38 90% 52%;
   --danger: 0 72% 52%;
 
-  --border: 217 22% 18%;              /* Subtle borders everywhere */
+  --border: 220 20% 12%;              /* 1px flat borders */
   --input: 220 18% 12%;
   --ring: 174 80% 38%;
 
   /* Grafana-inspired chart palette */
-  --chart-1: 174 80% 48%;             /* Primary teal */
-  --chart-2: 200 85% 55%;             /* Electric blue */
-  --chart-3: 38 90% 55%;              /* Amber/warning */
-  --chart-4: 152 65% 45%;             /* Green/success */
-  --chart-5: 280 60% 65%;             /* Purple for 5th series */
-  --chart-6: 0 72% 55%;               /* Red/critical */
+  --chart-1: 174 80% 38%;
+  --chart-2: 200 85% 55%;
+  --chart-3: 38 90% 55%;
+  --chart-4: 152 65% 45%;
+  --chart-5: 280 60% 65%;
+  --chart-6: 0 72% 55%;
 
-  /* Sidebar: slightly lighter than background */
-  --sidebar-background: 220 18% 6%;
+  --sidebar-background: 220 20% 4%;
   --sidebar-foreground: 210 20% 85%;
   --sidebar-primary: 174 80% 38%;
   --sidebar-primary-foreground: 220 20% 4%;
   --sidebar-accent: 220 18% 10%;
   --sidebar-accent-foreground: 210 20% 92%;
-  --sidebar-border: 217 22% 14%;
+  --sidebar-border: 220 20% 12%;
   --sidebar-ring: 174 80% 38%;
 
   background-color: hsl(var(--background));
@@ -79,40 +64,36 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { 
   background: hsl(var(--border)); 
-  border-radius: 2px; 
+  border-radius: 0px; 
 }
 
-/* Grafana-style panel glow on hover */
+/* Grafana-style panel hover - strict border changes, NO shadows */
 .panel-hover {
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 .panel-hover:hover {
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4), 0 4px 16px rgba(0,0,0,0.4);
-  border-color: hsl(var(--primary) / 0.3);
+  border-color: hsl(var(--primary) / 0.5);
 }
 
 /* Grafana-style metric value */
 .metric-value {
-  font-family: ui-monospace, 'Roboto Mono', monospace;
+  font-family: ui-monospace, 'Roboto Mono', 'JetBrains Mono', monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
 /* Status dot indicators */
 .status-dot-green { 
-  display: inline-block; width: 6px; height: 6px; 
-  border-radius: 50%; background: hsl(var(--success));
-  box-shadow: 0 0 6px hsl(var(--success) / 0.8);
+  display: inline-block; width: 8px; height: 8px; 
+  background: hsl(var(--success));
 }
 .status-dot-amber { 
-  display: inline-block; width: 6px; height: 6px;
-  border-radius: 50%; background: hsl(var(--warning));
-  box-shadow: 0 0 6px hsl(var(--warning) / 0.8);
+  display: inline-block; width: 8px; height: 8px;
+  background: hsl(var(--warning));
 }
 .status-dot-red { 
-  display: inline-block; width: 6px; height: 6px;
-  border-radius: 50%; background: hsl(var(--danger));
-  box-shadow: 0 0 6px hsl(var(--danger) / 0.8);
+  display: inline-block; width: 8px; height: 8px;
+  background: hsl(var(--danger));
 }
 
 /* Grafana-style top accent bar on active panel */
@@ -120,40 +101,14 @@
   border-top: 2px solid hsl(var(--primary));
 }
 
-/* Micro-animations */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
 .animate-fade-in {
-  animation: fadeIn var(--motion-slow, 200ms) var(--ease-out, ease-out) forwards;
+  animation: fadeIn 150ms ease-out forwards;
 }
 
-/* Opacity-only pulse — motion tokens forbid scale/bounce effects. */
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Removed legacy glass/glow effects to adhere to strict flat Shadcn design */
-
-/* Typography standardization */
 .font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
-

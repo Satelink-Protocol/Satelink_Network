@@ -174,7 +174,7 @@ export default function AdminIncidentsPage() {
       </KPIGrid>
 
       <DashboardSection
-        title="Incident Dashboard"
+        label="Incident Dashboard"
         description="Real-time incident response management center"
         actions={
           <div className="flex gap-2">

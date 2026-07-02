@@ -4,8 +4,7 @@ import { useState } from "react";
 import { CircleDollarSign, CalendarDays, TrendingUp, HelpCircle } from "lucide-react";
 import {
   Button,
-  KPIGrid,
-  StatCard,
+  KPIStat,
   DashboardSection,
   DataTable,
   StatusBadge,
@@ -22,25 +21,9 @@ interface CustomerCohort {
   avgLatencyMs: number;
 }
 
-const COHORTS: CustomerCohort[] = [
-  { apiKey: "sk_live_f89c...", name: "Polygon Indexer Ingress", totalCalls: 1849102, billedUsdt: 55.4730, marginPercent: 94.2, avgLatencyMs: 42 },
-  { apiKey: "sk_live_9a22...", name: "MEV Searcher Bot 01", totalCalls: 981244, billedUsdt: 29.4373, marginPercent: 88.6, avgLatencyMs: 38 },
-  { apiKey: "sk_live_1bc8...", name: "Local Dev Test Key", totalCalls: 12450, billedUsdt: 0.3735, marginPercent: 98.1, avgLatencyMs: 82 },
-  { apiKey: "sk_live_44aa...", name: "Public Dapp Endpoint", totalCalls: 4501, billedUsdt: 0.1350, marginPercent: 91.4, avgLatencyMs: 45 },
-];
-
 export default function AdminRevenuePage() {
-  const [cohorts] = useState<CustomerCohort[]>(COHORTS);
-
-  const chartData = [
-    { x: "06-19", y: 12.45 },
-    { x: "06-20", y: 15.62 },
-    { x: "06-21", y: 18.91 },
-    { x: "06-22", y: 22.45 },
-    { x: "06-23", y: 24.12 },
-    { x: "06-24", y: 28.56 },
-    { x: "06-25", y: 32.41 },
-  ];
+  const [cohorts] = useState<CustomerCohort[]>([]);
+  const chartData: any[] = [];
 
   const cols = [
     {
@@ -76,59 +59,76 @@ export default function AdminRevenuePage() {
       header: "Net Profit Margin",
       align: "right" as const,
       cell: (r: CustomerCohort) => (
-        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[11px] font-mono">
+        <Badge variant="outline" className="text-[11px] font-mono">
           {r.marginPercent}%
         </Badge>
       ),
     },
   ];
 
-  const totalBilled = cohorts.reduce((sum, c) => sum + c.billedUsdt, 0);
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      <KPIGrid columns={4}>
-        <StatCard
-          label="Cumulative Billed Revenue"
-          value={`$${totalBilled.toFixed(4)} USDT`}
-          caption="Total billed across all api keys"
-          icon={CircleDollarSign}
-          accent
-        />
-        <StatCard
-          label="Average Margin"
-          value="93.1%"
-          caption="Margins factoring validator gas overhead"
-          icon={TrendingUp}
-          accent
-        />
-        <StatCard
-          label="Today's Revenue Runrate"
-          value="$32.41 USDT"
-          caption="Daily growth trajectory rate"
-          icon={CalendarDays}
-          trend={{ label: "+14.2% daily", direction: "up" }}
-        />
-        <StatCard
-          label="Gas Expense (POL)"
-          value="0.065 POL"
-          caption="Accrued payout transaction fees"
-        />
-      </KPIGrid>
+    <div className="px-6 py-6">
+      <div className="grid grid-cols-12 gap-4 mb-4">
+        {/* ROW 1 — KPI strip */}
+        <div className="col-span-12 md:col-span-4">
+          <KPIStat
+            label="Cumulative Billed Revenue"
+            value={null}
+            caption="Total billed across all api keys"
+            icon={CircleDollarSign}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <KPIStat
+            label="Average Margin"
+            value={null}
+            caption="Margins factoring validator gas overhead"
+            icon={TrendingUp}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <KPIStat
+            label="Today's Revenue Runrate"
+            value={null}
+            caption="Daily growth trajectory rate"
+            icon={CalendarDays}
+          />
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <DashboardSection title="Tenants Consumption Summary" description="Core billing breakdown per API key cohort" flush>
-            <DataTable columns={cols} rows={cohorts} rowKey={(r) => r.apiKey} />
-          </DashboardSection>
+      <div className="grid grid-cols-12 gap-4 mb-6">
+        {/* ROW 2 — Core Operations */}
+        <div className="col-span-12 lg:col-span-9 flex flex-col">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 h-full min-h-[350px]">
+            <div className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4 border-b border-zinc-800 pb-2">Daily Billing Revenue Timeline</div>
+            <SeriesChart label="USDT Spent" data={chartData} type="area" height={260} />
+          </div>
         </div>
 
-        <div>
-          <DashboardSection title="Daily Billing Revenue Timeline" description="Metered USDT credit consumption history" flush>
-            <div className="p-4 bg-zinc-900/40 border border-border border-t-0 rounded-b-md">
-              <SeriesChart title="USDT Spent" data={chartData} type="area" height={200} />
+        <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 h-full">
+            <div className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4 border-b border-zinc-800 pb-2">Overhead</div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-400">Gas Expense (POL)</span>
+                <span className="font-mono text-sm font-medium text-zinc-300">—</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-400">Network Fees</span>
+                <span className="font-mono text-sm font-medium text-zinc-300">—</span>
+              </div>
             </div>
-          </DashboardSection>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-4 mb-6">
+        {/* ROW 3 — Data Tables */}
+        <div className="col-span-12">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
+            <div className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4 border-b border-zinc-800 pb-2">Tenants Consumption Summary</div>
+            <DataTable columns={cols} rows={cohorts} rowKey={(r) => r.apiKey} emptyTitle="No data yet" />
+          </div>
         </div>
       </div>
     </div>

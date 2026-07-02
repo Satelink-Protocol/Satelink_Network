@@ -21,12 +21,7 @@ interface JobQueueRow {
   durationMs: number;
 }
 
-const JOBS: JobQueueRow[] = [
-  { jobName: "ip-classifier", schedule: "*/5 * * * *", status: "idle", lastRun: "3 mins ago", durationMs: 450 },
-  { jobName: "customer-zero-detector", schedule: "*/1 * * * *", status: "running", lastRun: "Just now", durationMs: 120 },
-  { jobName: "merkle-root-generator", schedule: "*/10 * * * *", status: "idle", lastRun: "8 mins ago", durationMs: 1850 },
-  { jobName: "outreach-scheduler", schedule: "0 * * * *", status: "failed", lastRun: "1 hour ago", durationMs: 3400 },
-];
+const JOBS: JobQueueRow[] = [];
 
 export default function AdminCommandCenterPage() {
   const [nodesOnline, setNodesOnline] = useState<number | null>(null);
@@ -64,15 +59,7 @@ export default function AdminCommandCenterPage() {
     }, 800);
   };
 
-  const chartData = [
-    { x: "06:00", y: 42 },
-    { x: "06:05", y: 48 },
-    { x: "06:10", y: 45 },
-    { x: "06:15", y: 62 },
-    { x: "06:20", y: 55 },
-    { x: "06:25", y: 74 },
-    { x: "06:30", y: 68 },
-  ];
+  const chartData: any[] = [];
 
   const cols = [
     {
@@ -156,15 +143,15 @@ export default function AdminCommandCenterPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">
-          <DashboardSection title="Scheduler Job Telemetry" description="Active scheduler policies and task queue status" flush>
+          <DashboardSection label="Scheduler Job Telemetry" description="Active scheduler policies and task queue status" flush>
             <DataTable columns={cols} rows={jobs} rowKey={(r) => r.jobName} />
           </DashboardSection>
         </div>
 
         <div>
-          <DashboardSection title="System Loading Monitor" description="API Gateway CPU utilization (last 30 minutes)" flush>
+          <DashboardSection label="System Loading Monitor" description="API Gateway CPU utilization (last 30 minutes)" flush>
             <div className="p-4 bg-zinc-900/40 border border-border border-t-0 rounded-b-md">
-              <SeriesChart title="CPU Usage" data={chartData} type="area" height={190} />
+              <SeriesChart label="CPU Usage" data={chartData} type="area" height={190} />
             </div>
           </DashboardSection>
         </div>

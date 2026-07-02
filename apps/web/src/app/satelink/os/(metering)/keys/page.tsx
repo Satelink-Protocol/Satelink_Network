@@ -293,7 +293,7 @@ export default function KeysPage() {
 
       {/* Quick Actions Bar */}
       <div className="flex gap-2 justify-end py-2">
-        <Button variant="primary" onClick={() => { setError(null); setShowCreate(true); }}>
+        <Button variant="default" onClick={() => { setError(null); setShowCreate(true); }}>
           Add New Key
         </Button>
         <Button variant="destructive" onClick={() => {
