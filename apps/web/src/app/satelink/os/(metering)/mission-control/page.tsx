@@ -117,105 +117,89 @@ export default function MissionControlPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Section 2 — KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPIStat
-          label="Real Revenue"
-          timeWindow="MTD"
-          icon={DollarSign}
-          value={fin ? usd5(fin.metered_value_usdt) : null}
-          caption="Metered value"
-          loading={financial.loading}
-          error={financial.error}
-          state={(fin?.metered_value_usdt ?? 0) > 0 ? "healthy" : "unknown"}
-        />
-        <KPIStat
-          label="API Requests"
-          timeWindow="24h"
-          icon={Activity}
-          value={execSummary ? compact(execSummary.total_requests_24h) : null}
-          caption="Total requests"
-          loading={!execSummary}
-        />
-        <KPIStat
-          label="Active IPs"
-          timeWindow="24h"
-          icon={Users}
-          value={execSummary ? compact(execSummary.active_ips_24h) : null}
-          caption="Unique callers"
-          loading={!execSummary}
-        />
-        <KPIStat
-          label="Settlement Batches"
-          icon={Server}
-          value={fin ? confirmedBatches : null}
-          caption="Confirmed on-chain"
-          loading={financial.loading}
-          error={financial.error}
+    <div className="px-6 py-6">
+      {/* ROW 1 — KPI strip */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+        {/* Card 1: REAL REVENUE */}
+        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+          <div className="flex items-start justify-between mb-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Real Revenue</span>
+            <DollarSign className="h-4 w-4 text-zinc-600" />
+          </div>
+          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{fin ? usd5(fin.metered_value_usdt) : "—"}</div>
+          <div className="flex items-center gap-1.5">
+            {(fin?.metered_value_usdt ?? 0) > 0 ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-500/15 text-green-400">▲ +0%</span>
+            ) : (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+            )}
+            <span className="text-xs text-zinc-500">Metered value</span>
+          </div>
+        </div>
+
+        {/* Card 2: API REQUESTS (24H) */}
+        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+          <div className="flex items-start justify-between mb-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">API Requests (24h)</span>
+            <Activity className="h-4 w-4 text-zinc-600" />
+          </div>
+          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.total_requests_24h) : "—"}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+            <span className="text-xs text-zinc-500">Total requests</span>
+          </div>
+        </div>
+
+        {/* Card 3: ACTIVE IPs */}
+        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+          <div className="flex items-start justify-between mb-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs</span>
+            <Users className="h-4 w-4 text-zinc-600" />
+          </div>
+          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_24h) : "—"}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+            <span className="text-xs text-zinc-500">Unique callers</span>
+          </div>
+        </div>
+
+        {/* Card 4: SETTLEMENT BATCHES */}
+        <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
+          <div className="flex items-start justify-between mb-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Settlement Batches</span>
+            <Server className="h-4 w-4 text-zinc-600" />
+          </div>
+          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{fin ? confirmedBatches : "—"}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
+            <span className="text-xs text-zinc-500">Confirmed on-chain</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 2 — Full width chart */}
+      <div className="mb-6">
+        <TimeseriesPanel
+          title="Gateway Traffic"
+          subtitle="Request rate over time"
+          data={[]}
+          series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
+          className="w-full min-h-[300px]"
+          showLegend={false}
+          emptyHint="No request-history endpoint yet — 24h totals appear in the KPI strip above."
         />
       </div>
 
-      {/* Section 2.5 — Gateway traffic.
-          TODO: no data source yet — empty by design. There is no historical
-          request-rate endpoint (only 24h totals), so this panel renders its
-          honest empty state instead of a chart padded with invented zeros. */}
-      <TimeseriesPanel
-        title="Gateway Traffic"
-        subtitle="Request rate over time"
-        data={[]}
-        series={[{ key: "requests", label: "Requests", type: "area" }]}
-        height={160}
-        showLegend={false}
-        emptyHint="No request-history endpoint yet — 24h totals appear in the KPI strip above."
-      />
-
-      {/* Section 3 — Warnings */}
-      <AlertBand
-        alerts={warnings.map((w) => ({
-          code: w.code,
-          message: w.message,
-          severity: w.severity === "critical" ? "critical" : "warning",
-        }))}
-      />
-
-      {/* Section 3.5 — Operational stat strip */}
-      <StatRow
-        stats={[
-          {
-            label: "Network Health",
-            value: execSummary?.network_health_pct ?? "—",
-            unit: "%",
-            status: execSummary?.network_health_pct === 100 ? "good" : "warning",
-            colorize: true,
-          },
-          {
-            label: "Paying Customers",
-            value: execSummary?.paying_customers ?? "—",
-            status: "neutral",
-          },
-          {
-            label: "Open Alerts",
-            value: execSummary?.open_alerts ?? "—",
-            status: (execSummary?.open_alerts ?? 0) > 0 ? "warning" : "good",
-            colorize: true,
-          },
-          {
-            label: "Settlement Mode",
-            value: execSummary?.settlement_mode ?? "DRY_RUN",
-            status: execSummary?.settlement_mode === "LIVE" ? "good" : "warning",
-          },
-        ]}
-      />
-
-      {/* Section 4 — Two-column grid */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ROW 3 — Two columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Left — Revenue Pipeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue Pipeline</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Revenue Pipeline</div>
+          <div className="space-y-3">
             <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
             <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
             <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
@@ -227,25 +211,23 @@ export default function MissionControlPage() {
             ) : null}
             {pipeline?.bottleneck_reason ? (
               <div className="flex items-center justify-between pt-1">
-                <span className="text-sm text-muted-foreground">Bottleneck</span>
-                <span className="text-sm font-medium text-amber-400">
+                <span className="text-xs text-zinc-500">Bottleneck</span>
+                <span className="text-xs font-medium text-amber-400">
                   {pipeline.bottleneck_reason}
                 </span>
               </div>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Right — Quick Start */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Start</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Quick Start</div>
+          <div className="space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground">Your RPC endpoint</p>
+              <p className="text-xs text-zinc-500">Your RPC endpoint</p>
               <div className="mt-1 flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md bg-muted px-3 py-2 font-mono text-sm">
+                <code className="flex-1 truncate rounded-md bg-zinc-950 border border-zinc-800/50 px-3 py-2 font-mono text-sm text-zinc-300">
                   {RPC_URL}
                 </code>
                 <Button
@@ -253,31 +235,43 @@ export default function MissionControlPage() {
                   size="icon"
                   onClick={copyEndpoint}
                   aria-label="Copy RPC endpoint"
+                  className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800"
                 >
-                  <Copy className="size-4" />
+                  <Copy className="size-4 text-zinc-400" />
                 </Button>
               </div>
               {copied ? <p className="mt-1 text-xs text-emerald-400">Copied</p> : null}
             </div>
-            <p className="text-sm text-muted-foreground">Chain: Polygon Mainnet (137)</p>
+            <p className="text-xs text-zinc-500">Chain: Polygon Mainnet (137)</p>
             <div className="flex flex-wrap gap-2">
-              <Button asChild>
+              <Button asChild className="bg-[hsl(174,80%,38%)] text-white hover:bg-[hsl(174,80%,30%)] border-0">
                 <Link href="/satelink/os/keys">
-                  <Key className="size-4" />
+                  <Key className="size-4 mr-2" />
                   Get API Key
                 </Link>
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800/50">
                 <Link href="/satelink/os/deposit">
-                  <Wallet className="size-4" />
+                  <Wallet className="size-4 mr-2" />
                   Add Credits
                 </Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
+      {/* ROW 4 — Alert strip */}
+      <div className="mb-6">
+        <AlertBand
+          alerts={warnings.map((w) => ({
+            code: w.code,
+            message: w.message,
+            severity: w.severity === "critical" ? "critical" : "warning",
+          }))}
+          className="[&>div]:h-9 [&>div]:py-0 [&>div]:min-h-9"
+        />
+      </div>
     </div>
   );
 }
