@@ -118,13 +118,14 @@ export default function MissionControlPage() {
 
   return (
     <div className="px-6 py-6">
-      {/* ROW 1 — KPI strip */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-        {/* Card 1: REAL REVENUE */}
+      {/* ROW 1 — KPI strip (network-wide stats, NOT per-customer) */}
+      <div className="mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Card 1: NETWORK REVENUE (TOTAL) */}
         <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
           <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Real Revenue</span>
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Network Revenue (Total)</span>
             <DollarSign className="h-4 w-4 text-zinc-600" />
           </div>
           <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{fin ? usd5(fin.metered_value_usdt) : "—"}</div>
@@ -138,11 +139,16 @@ export default function MissionControlPage() {
           </div>
         </div>
 
-        {/* Card 2: API REQUESTS (24H) */}
+        {/* Card 2: NETWORK REQUESTS (24H) */}
         <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
           <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">API Requests (24h)</span>
+            <span
+              className="text-xs font-medium uppercase tracking-wider text-zinc-500 cursor-help"
+              title="Total across all API keys"
+            >
+              Network Requests (24h)
+            </span>
             <Activity className="h-4 w-4 text-zinc-600" />
           </div>
           <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.total_requests_24h) : "—"}</div>
@@ -152,11 +158,11 @@ export default function MissionControlPage() {
           </div>
         </div>
 
-        {/* Card 3: ACTIVE IPs */}
+        {/* Card 3: ACTIVE CALLERS (24H) */}
         <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
           <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs</span>
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active Callers (24h)</span>
             <Users className="h-4 w-4 text-zinc-600" />
           </div>
           <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_24h) : "—"}</div>
@@ -180,6 +186,8 @@ export default function MissionControlPage() {
           </div>
         </div>
       </div>
+      <p className="text-xs text-zinc-600 mt-2">Network-wide statistics. Your personal usage appears in Usage Metering.</p>
+      </div>
 
       {/* ROW 2 — Full width chart */}
       <div className="mb-6">
@@ -194,33 +202,8 @@ export default function MissionControlPage() {
         />
       </div>
 
-      {/* ROW 3 — Two columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Left — Revenue Pipeline */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
-          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Revenue Pipeline</div>
-          <div className="space-y-3">
-            <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
-            <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
-            <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
-            {eco ? (
-              <PipelineRow
-                label="Last Closed Epoch"
-                value={`#${eco.lastEpochId} · ${usd5(eco.lastEpochRevenueUsdt)}`}
-              />
-            ) : null}
-            {pipeline?.bottleneck_reason ? (
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-zinc-500">Bottleneck</span>
-                <span className="text-xs font-medium text-amber-400">
-                  {pipeline.bottleneck_reason}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Right — Quick Start */}
+      {/* ROW 3 — Quick Start */}
+      <div className="mb-6">
         <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
           <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Quick Start</div>
           <div className="space-y-4">
@@ -244,7 +227,7 @@ export default function MissionControlPage() {
             </div>
             <p className="text-xs text-zinc-500">Chain: Polygon Mainnet (137)</p>
             <div className="flex flex-wrap gap-2">
-              <Button asChild className="bg-[hsl(174,80%,38%)] text-white hover:bg-[hsl(174,80%,30%)] border-0">
+              <Button asChild className="bg-[hsl(174,80%,38%)] text-black font-medium hover:bg-[hsl(174,80%,45%)] border-0">
                 <Link href="/satelink/os/keys">
                   <Key className="size-4 mr-2" />
                   Get API Key
@@ -261,7 +244,35 @@ export default function MissionControlPage() {
         </div>
       </div>
 
-      {/* ROW 4 — Alert strip */}
+      {/* ROW 4 — Network Settlement Status (network-wide settlement state, not the
+          developer's personal revenue — kept below the divider to make scope clear) */}
+      <div className="border-t border-zinc-800 pt-4 mb-6">
+        <div className="text-xs text-zinc-600 uppercase tracking-wider mb-2">Network Settlement Status</div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 lg:max-w-[50%]">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Revenue Pipeline</div>
+          <div className="space-y-3">
+            <PipelineRow label="Metered Events" value={pipeline?.revenue_events_v2.count ?? 0} />
+            <PipelineRow label="Open Epochs" value={pipeline?.epoch_ledger.open ?? 0} />
+            <PipelineRow label="Confirmed Batches" value={confirmedBatches} />
+            {eco ? (
+              <PipelineRow
+                label="Last Closed Epoch"
+                value={`#${eco.lastEpochId} · ${usd5(eco.lastEpochRevenueUsdt)}`}
+              />
+            ) : null}
+            {pipeline?.bottleneck_reason ? (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs text-zinc-500">Bottleneck</span>
+                <span className="text-xs font-medium text-amber-400">
+                  {pipeline.bottleneck_reason}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 5 — Alert strip */}
       <div className="mb-6">
         <AlertBand
           alerts={warnings.map((w) => ({
@@ -279,8 +290,8 @@ export default function MissionControlPage() {
 function PipelineRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-mono text-sm font-medium text-foreground">{value}</span>
+      <span className="text-sm text-zinc-500">{label}</span>
+      <span className="font-mono text-sm font-medium text-white">{value}</span>
     </div>
   );
 }

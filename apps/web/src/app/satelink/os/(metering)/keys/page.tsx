@@ -276,16 +276,16 @@ export default function KeysPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-400 block">Daily Budget Cap (USDT)</label>
-                <Input value={configBudget} onChange={(e) => setConfigBudget(e.target.value)} className="font-mono text-xs" />
+                <Input value={configBudget} onChange={(e) => setConfigBudget(e.target.value)} className="font-mono text-xs bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-400 block">IP Whitelist Subnets</label>
-                <Input value={configWhitelist} onChange={(e) => setConfigWhitelist(e.target.value)} className="font-mono text-xs" />
+                <Input value={configWhitelist} onChange={(e) => setConfigWhitelist(e.target.value)} className="font-mono text-xs bg-zinc-800 border-zinc-700 text-white" />
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setConfigKey(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => { alert("Gateway access rules updated."); setConfigKey(null); }}>Save Rules</Button>
+              <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:border-zinc-600" onClick={() => setConfigKey(null)}>Cancel</Button>
+              <Button size="sm" className="bg-[hsl(174,80%,38%)] text-black font-medium hover:bg-[hsl(174,80%,45%)]" onClick={() => { alert("Gateway access rules updated."); setConfigKey(null); }}>Save Rules</Button>
             </div>
           </CardContent>
         </Card>
@@ -293,7 +293,7 @@ export default function KeysPage() {
 
       {/* Quick Actions Bar */}
       <div className="flex gap-2 justify-end py-2">
-        <Button variant="primary" onClick={() => { setError(null); setShowCreate(true); }}>
+        <Button className="bg-[hsl(174,80%,38%)] text-black font-medium hover:bg-[hsl(174,80%,45%)]" onClick={() => { setError(null); setShowCreate(true); }}>
           Add New Key
         </Button>
         <Button variant="destructive" onClick={() => {
@@ -303,7 +303,7 @@ export default function KeysPage() {
         }}>
           Bulk Revoke
         </Button>
-        <Button variant="secondary" onClick={() => {
+        <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:border-zinc-600" onClick={() => {
           const csv = rows.map(r => [r.name, r.key, r.tier, r.limit, r.requestsToday, r.creditsConsumed, r.status].join(",")).join("\n");
           const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
           const url = URL.createObjectURL(blob);
@@ -318,43 +318,52 @@ export default function KeysPage() {
       {/* Create Key Modal */}
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
           onClick={() => setShowCreate(false)}
         >
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <Card className="glow-card glass-panel border-primary/20 bg-background">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Create API Key</CardTitle>
-                <CardDescription className="text-xs">Generate a new free-tier key. Opt in to updates if you like.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Label</label>
-                  <Input
-                    placeholder="My API Key"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Email (optional)</label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
-                </div>
-                {error && <p className="text-xs text-destructive">{error}</p>}
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-                  <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
-                </div>
-              </CardContent>
-            </Card>
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-900 border border-zinc-800 rounded-sm p-6 w-full max-w-md shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4">Create API Key</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Label</label>
+                <input
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-sm px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[hsl(174,80%,38%)] focus:ring-1 focus:ring-[hsl(174,80%,38%)]"
+                  placeholder="My API Key"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Email (optional)</label>
+                <input
+                  type="email"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-sm px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[hsl(174,80%,38%)] focus:ring-1 focus:ring-[hsl(174,80%,38%)]"
+                  placeholder="you@example.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
+                <p className="text-xs text-zinc-500 mt-1">Receive network updates and usage alerts</p>
+              </div>
+              {error && <p className="text-xs text-red-400">{error}</p>}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  className="px-4 py-2 text-sm text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-600 rounded-sm"
+                  onClick={() => setShowCreate(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 text-sm bg-[hsl(174,80%,38%)] text-black font-semibold rounded-sm hover:bg-[hsl(174,80%,45%)] disabled:opacity-50 disabled:pointer-events-none"
+                  onClick={handleCreateKey}
+                  disabled={creating}
+                >
+                  {creating ? "Creating…" : "Create Key"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

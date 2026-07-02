@@ -128,7 +128,7 @@ export default function UsagePage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", fontSize: 12, borderRadius: 6 }} />
+                    <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #27272a", color: "#fff", fontSize: 12, borderRadius: 6 }} labelStyle={{ color: "#a1a1aa" }} />
                     <Area type="monotone" dataKey="calls" name="Requests" stroke="var(--primary)" strokeWidth={1.5} fill="url(#uCalls)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -153,7 +153,7 @@ export default function UsagePage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", fontSize: 12, borderRadius: 6 }} formatter={(v) => [`$${Number(v).toFixed(6)}`, "Cost"]} />
+                    <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #27272a", color: "#fff", fontSize: 12, borderRadius: 6 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v) => [`$${Number(v).toFixed(6)}`, "Cost"]} />
                     <Area type="monotone" dataKey="cost" name="Cost" stroke="var(--success)" strokeWidth={1.5} fill="url(#uCost)" />
                   </AreaChart>
                 </ResponsiveContainer>
