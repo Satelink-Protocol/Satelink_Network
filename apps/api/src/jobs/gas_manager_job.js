@@ -108,13 +108,21 @@ export async function runGasCheck(pool, options = {}) {
         gasManagerStatus.last_alerted = belowThreshold;
         gasManagerStatus.last_error = null;
 
-        // Record the check either way.
+        // Record the check, deduped: at most one gas_alerts row per signer per hour.
         await ensureGasAlertsTable(pool);
-        await pool.query(
-            `INSERT INTO gas_alerts (signer_address, balance_pol, threshold_pol)
-             VALUES ($1, $2, $3)`,
-            [address, balancePol, thresholdPol]
+        const recent = await pool.query(
+            `SELECT 1 FROM gas_alerts
+             WHERE signer_address = $1 AND alerted_at >= now() - interval '1 hour'
+             LIMIT 1`,
+            [address]
         );
+        if (recent.rowCount === 0) {
+            await pool.query(
+                `INSERT INTO gas_alerts (signer_address, balance_pol, threshold_pol)
+                 VALUES ($1, $2, $3)`,
+                [address, balancePol, thresholdPol]
+            );
+        }
 
         if (belowThreshold) {
             const shortfall = thresholdPol - balancePol;

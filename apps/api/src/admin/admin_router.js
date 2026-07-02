@@ -316,7 +316,7 @@ export function createAdminRouter(pool, redis) {
       const rev = await one(
         `SELECT
            COALESCE(SUM(amount_usdt) FILTER (WHERE to_timestamp(created_at) >= date_trunc('day', now())),0)::float   AS today,
-           COALESCE(SUM(amount_usdt) FILTER (WHERE to_timestamp(created_at) >= date_trunc('month', now())),0)::float AS mtd
+           COALESCE(SUM(amount_usdt),0)::float AS mtd
          FROM revenue_events_v2 WHERE NOT is_test_data`);
       const demand = await one(
         `SELECT COUNT(*) FILTER (WHERE calls_today > 0)::int AS active_ips,
@@ -339,6 +339,7 @@ export function createAdminRouter(pool, redis) {
       ok(res, {
         revenue_today_usdt: num(rev.today),
         revenue_mtd_usdt: num(rev.mtd),
+        revenue_label: 'Lifetime',
         active_ips_24h: num(demand.active_ips),
         total_requests_24h: num(demand.total_calls),
         paying_customers: num(paying.c),
