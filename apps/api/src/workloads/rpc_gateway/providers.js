@@ -73,6 +73,7 @@ const PROVIDER_CONFIGS = {
         priority: 1,
         rateLimit: 100,
         type: "public",
+        enabled: false, // Disabled: endpoint permanently down, tripped circuit breaker 2550+ times
       },
       {
         id: "alchemy-polygon",
@@ -124,7 +125,7 @@ const PROVIDER_CONFIGS = {
         priority: 1,
         rateLimit: 100,
         type: "public",
-        enabled: true,
+        enabled: false, // Disabled: llamarpc endpoints down, see llamarpc-polygon
       },
       {
         id: "alchemy-eth",

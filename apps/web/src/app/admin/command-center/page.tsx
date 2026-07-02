@@ -374,11 +374,11 @@ function AdminCommandCenter() {
             
             {/* ROW 1 — KPI strip */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {/* Card 1: REAL REVENUE (MTD) */}
+              {/* Card 1: LIFETIME REVENUE */}
               <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
                 <div className="flex items-start justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Real Revenue (MTD)</span>
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">{execSummary?.revenue_label ?? "Lifetime"} Revenue</span>
                   <DollarSign className="h-4 w-4 text-zinc-600" />
                 </div>
                 <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"}</div>
