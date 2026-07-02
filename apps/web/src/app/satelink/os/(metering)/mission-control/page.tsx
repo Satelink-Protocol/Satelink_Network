@@ -22,7 +22,12 @@ import {
   CardContent,
   Button,
   useEndpoint,
+  StatusPill,
+  EmptyState,
+  LogFeed,
+  type SystemState,
 } from "@satelink/ui";
+import { useApiKeys } from "@/lib/api-keys";
 
 // ---------------------------------------------------------------------------
 // API contracts (real endpoints — no mock/fallback values)
@@ -66,6 +71,48 @@ interface ExecutiveSummary {
   settlement_mode: string;
 }
 
+interface RpcStatsProvider {
+  id: string;
+  type?: string;
+  latency: number | null;
+  weight: number;
+  requests: number;
+  circuit: { state: string; failures: number; timeUntilReset: number };
+}
+
+interface RpcStatsResponse {
+  ok: boolean;
+  chain: string;
+  providers: RpcStatsProvider[];
+  cache: { hits: number; misses: number; hitRate: string };
+}
+
+function circuitToState(raw: string): SystemState {
+  switch (raw) {
+    case "CLOSED":
+      return "healthy";
+    case "HALF_OPEN":
+      return "degraded";
+    case "OPEN":
+      return "critical";
+    default:
+      return "unknown";
+  }
+}
+
+function circuitLabel(raw: string): string {
+  switch (raw) {
+    case "CLOSED":
+      return "Healthy";
+    case "HALF_OPEN":
+      return "Recovering";
+    case "OPEN":
+      return "Down";
+    default:
+      return raw;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------
@@ -87,6 +134,8 @@ export default function MissionControlPage() {
   const economics = useEndpoint<EconomicsSummary>(["/api/economics/summary"]);
   const [execSummary, setExecSummary] = useState<ExecutiveSummary | null>(null);
   const [copied, setCopied] = useState(false);
+  const [rpcStats, setRpcStats] = useState<RpcStatsResponse | null>(null);
+  const { keys } = useApiKeys();
 
   // Executive KPIs come through the admin proxy.
   useEffect(() => {
@@ -98,6 +147,16 @@ export default function MissionControlPage() {
       .then((r) => r.json())
       .then((res) => {
         if (res?.ok && res.data) setExecSummary(res.data as ExecutiveSummary);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Provider health + cache hit rate — real, already-live gateway telemetry.
+  useEffect(() => {
+    fetch(`${RPC_URL}/rpc/stats/polygon`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        if (res?.ok) setRpcStats(res as RpcStatsResponse);
       })
       .catch(() => {});
   }, []);
@@ -194,6 +253,58 @@ export default function MissionControlPage() {
         />
       </div>
 
+      {/* ROW 2.5 — Provider Health / Cache Performance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {/* Left — Provider Health */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Provider Health</div>
+          {rpcStats?.providers?.length ? (
+            <div className="space-y-2.5">
+              {rpcStats.providers.map((p) => (
+                <div key={p.id} className="flex items-center justify-between">
+                  <span className="font-mono text-sm text-zinc-300">{p.id}</span>
+                  <div className="flex items-center gap-2">
+                    {p.latency != null ? (
+                      <span className="text-xs text-zinc-500 tabular-nums">{p.latency}ms</span>
+                    ) : null}
+                    <StatusPill
+                      status={p.circuit.state}
+                      state={circuitToState(p.circuit.state)}
+                      label={circuitLabel(p.circuit.state)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No provider telemetry yet"
+              description="Provider health populates once the RPC gateway reports circuit-breaker stats."
+            />
+          )}
+        </div>
+
+        {/* Right — Cache Performance */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Cache Performance</div>
+          {rpcStats?.cache ? (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-zinc-500">Hit Rate</span>
+                <span className="font-mono text-2xl font-bold text-white tabular-nums">{rpcStats.cache.hitRate}</span>
+              </div>
+              <PipelineRow label="Cache Hits" value={rpcStats.cache.hits.toLocaleString()} />
+              <PipelineRow label="Cache Misses" value={rpcStats.cache.misses.toLocaleString()} />
+            </div>
+          ) : (
+            <EmptyState
+              title="No cache telemetry yet"
+              description="Cache stats populate once RPC requests start hitting the gateway."
+            />
+          )}
+        </div>
+      </div>
+
       {/* ROW 3 — Two columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Left — Revenue Pipeline */}
@@ -270,6 +381,19 @@ export default function MissionControlPage() {
             severity: w.severity === "critical" ? "critical" : "warning",
           }))}
           className="[&>div]:h-9 [&>div]:py-0 [&>div]:min-h-9"
+        />
+      </div>
+
+      {/* ROW 5 — Recent Activity */}
+      <div className="mb-6">
+        <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Recent Activity</div>
+        <LogFeed
+          logs={[]}
+          emptyMessage={
+            keys.length > 0
+              ? "No per-key activity log endpoint available yet."
+              : "No activity yet — create an API key to start"
+          }
         />
       </div>
     </div>

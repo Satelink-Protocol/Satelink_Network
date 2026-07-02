@@ -245,6 +245,29 @@ export default function KeysPage() {
 
         {/* Right: Key Health Panel */}
         <div className="space-y-6 min-w-0">
+          {/* Quick Reference — static product info, not live metrics */}
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Rate Limits &amp; Tiers</CardTitle>
+              <CardDescription className="text-xs">Reference — static plan limits, not live usage</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[
+                { name: "Free", limit: "500 calls/day", price: "$0" },
+                { name: "Basic", limit: "10,000 calls/day", price: "$10/mo" },
+                { name: "Pro", limit: "100,000 calls/day", price: "$50/mo" },
+                { name: "Enterprise", limit: "1,000,000 calls/day", price: "$200/mo" },
+              ].map((tier) => (
+                <div key={tier.name} className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{tier.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{tier.limit}</p>
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground">{tier.price}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
           <div className="min-w-0 h-[220px] relative">
             <BarChartPanel
               title="Daily Throughput per Key"
@@ -318,7 +341,7 @@ export default function KeysPage() {
       {/* Create Key Modal */}
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setShowCreate(false)}
         >
           <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
