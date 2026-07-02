@@ -10,6 +10,8 @@ import {
 import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers, Zap } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
+import SelfTestsView from "./self-tests/SelfTestsView";
+import RewardEpochsView from "./reward-epochs/RewardEpochsView";
 
 // Lead pipeline is paginated — developer_intel can hold 24k+ rows. Loading the
 // whole table at once froze the dashboard, so we fetch one page and let the
@@ -1257,6 +1259,12 @@ function AdminCommandCenter() {
             </Panel>
           </Stack>
         )}
+
+        {/* REWARD EPOCHS VIEW — real epoch accounting (no fabricated payouts) */}
+        {view === "reward-epochs" && <RewardEpochsView />}
+
+        {/* SELF-TESTS VIEW — real subsystem health checks */}
+        {view === "self-tests" && <SelfTestsView />}
       </Stack>
     </DashboardShell>
   );
