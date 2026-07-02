@@ -21,7 +21,10 @@ import {
   CardTitle,
   CardContent,
   Button,
+  StatusPill,
+  EmptyState,
   useEndpoint,
+  type SystemState,
 } from "@satelink/ui";
 
 // ---------------------------------------------------------------------------
@@ -66,6 +69,50 @@ interface ExecutiveSummary {
   settlement_mode: string;
 }
 
+interface RpcProviderStat {
+  id: string;
+  type?: string;
+  latency: number | null;
+  weight: number;
+  requests: number;
+  circuit: { state: string; failures: number; timeUntilReset: number };
+}
+
+interface RpcStats {
+  ok: boolean;
+  chain: string;
+  providers: RpcProviderStat[];
+  cache: { hits: number; misses: number; hitRate: string };
+}
+
+// Circuit-breaker state → design-system SystemState + human label.
+// CLOSED = serving normally, HALF_OPEN = probing recovery, OPEN = tripped.
+function circuitState(raw: string): SystemState {
+  switch (raw) {
+    case "CLOSED":
+      return "healthy";
+    case "HALF_OPEN":
+      return "degraded";
+    case "OPEN":
+      return "critical";
+    default:
+      return "unknown";
+  }
+}
+
+function circuitLabel(raw: string): string {
+  switch (raw) {
+    case "CLOSED":
+      return "Operational";
+    case "HALF_OPEN":
+      return "Degraded";
+    case "OPEN":
+      return "Down";
+    default:
+      return "Unknown";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------
@@ -86,6 +133,7 @@ export default function MissionControlPage() {
   const financial = useEndpoint<FinancialTruth>(["/api/financial/truth"]);
   const economics = useEndpoint<EconomicsSummary>(["/api/economics/summary"]);
   const [execSummary, setExecSummary] = useState<ExecutiveSummary | null>(null);
+  const [rpcStats, setRpcStats] = useState<RpcStats | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Executive KPIs come through the admin proxy.
@@ -102,12 +150,34 @@ export default function MissionControlPage() {
       .catch(() => {});
   }, []);
 
+  // Provider health + cache metrics — real, already-live gateway telemetry
+  // (public GET, CORS-open). Refreshed every 30s.
+  useEffect(() => {
+    const load = () => {
+      fetch(`${RPC_URL}/rpc/stats/polygon`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((res) => {
+          if (res?.ok) setRpcStats(res as RpcStats);
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const fin = financial.data;
   const eco = economics.data;
   const pipeline = fin?.pipeline;
   const warnings = fin?.warnings ?? [];
   const confirmedBatches =
     pipeline?.settlement_batches?.confirmed ?? fin?.settlement?.batches_confirmed ?? 0;
+  const openEpochs = pipeline?.epoch_ledger.open ?? 0;
+  const pendingRevenue = pipeline?.revenue_events_v2.sum_usdt ?? 0;
+  const settlementMode = execSummary?.settlement_mode ?? "";
+  const isDryRun = /dry.?run/i.test(settlementMode);
+  const cache = rpcStats?.cache;
+  const providers = rpcStats?.providers ?? [];
 
   const copyEndpoint = () => {
     navigator.clipboard?.writeText(RPC_URL).then(() => {
@@ -194,6 +264,67 @@ export default function MissionControlPage() {
         />
       </div>
 
+      {/* ROW 2.5 — Provider health + cache performance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {/* Left — RPC Provider Status */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">RPC Provider Status</div>
+          {providers.length > 0 ? (
+            <div>
+              {providers.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between items-center py-2 border-b border-zinc-800/50 last:border-0"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-zinc-300 truncate">{p.id}</span>
+                    {p.latency != null && (
+                      <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{p.latency}ms</span>
+                    )}
+                  </div>
+                  <StatusPill
+                    status={p.circuit.state}
+                    state={circuitState(p.circuit.state)}
+                    label={circuitLabel(p.circuit.state)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="Provider health not yet tracked"
+              description="Circuit-breaker status appears once the gateway reports provider stats."
+            />
+          )}
+        </div>
+
+        {/* Right — Cache Performance */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Cache Performance (24h)</div>
+          {cache ? (
+            <div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-800/50">
+                <span className="text-xs text-zinc-500">Hit Rate</span>
+                <span className="text-sm font-mono text-white tabular-nums">{cache.hitRate}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-800/50">
+                <span className="text-xs text-zinc-500">Hits</span>
+                <span className="text-sm font-mono text-white tabular-nums">{cache.hits.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-800/50 last:border-0">
+                <span className="text-xs text-zinc-500">Misses</span>
+                <span className="text-sm font-mono text-white tabular-nums">{cache.misses.toLocaleString()}</span>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="Cache metrics unavailable"
+              description="Hit-rate telemetry appears once requests flow through the gateway cache."
+            />
+          )}
+        </div>
+      </div>
+
       {/* ROW 3 — Two columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Left — Revenue Pipeline */}
@@ -258,6 +389,38 @@ export default function MissionControlPage() {
               </Button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ROW 3.5 — Settlement pipeline accounting (network-wide) */}
+      <div className="mb-6">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
+            Settlement Pipeline
+            <span className="ml-2 normal-case tracking-normal text-zinc-600">· network-wide</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-sm bg-zinc-950/40 p-3">
+              <div className="text-xs text-zinc-500 mb-1">Open Epochs</div>
+              <div className="text-2xl font-mono text-white tabular-nums">{fin ? openEpochs.toLocaleString() : "—"}</div>
+            </div>
+            <div className="rounded-sm bg-zinc-950/40 p-3">
+              <div className="text-xs text-zinc-500 mb-1">Confirmed Batches</div>
+              <div className="text-2xl font-mono text-white tabular-nums">{fin ? confirmedBatches.toLocaleString() : "—"}</div>
+            </div>
+            <div className="rounded-sm bg-zinc-950/40 p-3">
+              <div className="text-xs text-zinc-500 mb-1">Pending Revenue</div>
+              <div className="text-2xl font-mono text-white tabular-nums">{fin ? usd5(pendingRevenue) : "—"}</div>
+            </div>
+          </div>
+          {isDryRun && (
+            <div className="mt-3 flex items-center gap-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+              <span className="size-1.5 shrink-0 rounded-full bg-amber-400" />
+              <span className="text-xs text-amber-300">
+                Settlement in DRY_RUN — on-chain execution disabled.
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
