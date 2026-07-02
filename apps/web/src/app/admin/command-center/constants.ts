@@ -1,26 +1,57 @@
-import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle, Mail, Network, Server, Users } from "lucide-react";
+import { LayoutDashboard, Radar, Building, DollarSign, Settings, Bot, Activity, CreditCard, ShieldAlert, AlertTriangle, Mail, Network, Server, Users, Trophy, ShieldCheck } from "lucide-react";
 
+// Sectioned IA — the 15 existing tabs regrouped under labeled headers, plus two
+// new real-data tabs (reward-epochs → REVENUE, self-tests → OPERATIONS). Section
+// labels are rendered by DashboardShell's SidebarGroupLabel; no route or id was
+// renamed — this is purely a visual grouping.
 export const NAV = [
   {
-    label: "Command Center",
+    label: "Overview",
     items: [
       { id: "executive", icon: LayoutDashboard, label: "Executive" },
       { id: "radar", icon: Radar, label: "Demand Radar" },
+    ],
+  },
+  {
+    label: "Revenue",
+    items: [
       { id: "treasury", icon: Building, label: "Treasury" },
       { id: "revenue", icon: DollarSign, label: "Revenue Control" },
+      { id: "reward-epochs", icon: Trophy, label: "Reward Epochs" },
+      { id: "billing", icon: CreditCard, label: "Billing & Credits" },
+    ],
+  },
+  {
+    label: "Network",
+    items: [
       { id: "network", icon: Activity, label: "Network Health" },
       { id: "providers", icon: Network, label: "Providers" },
       { id: "nodes", icon: Server, label: "Node Operations" },
+    ],
+  },
+  {
+    label: "Customers",
+    items: [
       { id: "customers", icon: Users, label: "Customer Ops" },
-      { id: "observability", icon: Activity, label: "Observability" },
-      { id: "billing", icon: CreditCard, label: "Billing & Credits" },
-      { id: "agents", icon: Bot, label: "Agents Fleet" },
-      { id: "security", icon: ShieldAlert, label: "Security Ops" },
       { id: "outreach", icon: Mail, label: "Outreach" },
+    ],
+  },
+  {
+    label: "Security",
+    items: [
+      { id: "security", icon: ShieldAlert, label: "Security Ops" },
       { id: "incidents", icon: AlertTriangle, label: "Incidents & Audits" },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { id: "observability", icon: Activity, label: "Observability" },
+      { id: "self-tests", icon: ShieldCheck, label: "Self-Tests" },
+      { id: "agents", icon: Bot, label: "Agents Fleet" },
       { id: "settings", icon: Settings, label: "System Config" },
-    ]
-  }
+    ],
+  },
 ];
 
 export const HEADERS: Record<string, { title: string; subtitle: string; icon: any }> = {
@@ -28,6 +59,8 @@ export const HEADERS: Record<string, { title: string; subtitle: string; icon: an
   radar: { title: "Demand Radar", subtitle: "IP analysis, conversion funnel & leads tracking", icon: Radar },
   treasury: { title: "Treasury Operations", subtitle: "On-chain settlements, wallet states & dry-run switches", icon: Building },
   revenue: { title: "Revenue Control", subtitle: "Lifetime income logs, billing rates & ledger events", icon: DollarSign },
+  "reward-epochs": { title: "Reward Epochs", subtitle: "Real epoch accounting, reward split & settlement pipeline state", icon: Trophy },
+  "self-tests": { title: "Subsystem Self-Tests", subtitle: "Live Redis, Postgres, signer & Polygon RPC health checks", icon: ShieldCheck },
   network: { title: "Network Status", subtitle: "API latency metrics, node list & availability tracking", icon: Activity },
   providers: { title: "Provider Operations", subtitle: "RPC provider routing, health, costs and fallback tracking", icon: Network },
   nodes: { title: "Node Operations", subtitle: "Registered node performance, reputation and economics", icon: Server },
