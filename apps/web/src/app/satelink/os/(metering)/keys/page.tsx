@@ -245,6 +245,25 @@ export default function KeysPage() {
 
         {/* Right: Key Health Panel */}
         <div className="space-y-6 min-w-0">
+          {/* Free Tier Limits — static product spec, not live metrics */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Free Tier Limits</div>
+            <div className="flex justify-between items-center py-2 border-b border-zinc-800/50">
+              <span className="text-xs text-zinc-500">Daily quota (per IP)</span>
+              <span className="text-sm font-mono text-white tabular-nums">500 calls/day</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-zinc-800/50">
+              <span className="text-xs text-zinc-500">Shared quota (per /24 subnet)</span>
+              <span className="text-sm font-mono text-white tabular-nums">500 calls/day</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-zinc-800/50 last:border-0">
+              <span className="text-xs text-zinc-500">Metered rate</span>
+              <span className="text-sm font-mono text-white tabular-nums">$0.00003 / call</span>
+            </div>
+            <p className="mt-3 text-[11px] text-zinc-600">
+              Reference — static tier spec. Deposit USDT on the Credits page to continue past the free tier.
+            </p>
+          </div>
           <div className="min-w-0 h-[220px] relative">
             <BarChartPanel
               title="Daily Throughput per Key"
@@ -318,7 +337,7 @@ export default function KeysPage() {
       {/* Create Key Modal */}
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setShowCreate(false)}
         >
           <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
