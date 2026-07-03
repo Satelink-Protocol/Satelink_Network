@@ -110,7 +110,7 @@ export function createCreditGate(db, logger) {
             chain_name: 'Polygon',
             minimum_deposit_usdt: parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50'),
             deposit_url: `${API_BASE}/credits/initiate?amount=10`,
-            docs: 'https://docs.satelink.network/paid-tier'
+            docs: 'https://satelink.network/docs'
           },
           message: 'Deposit USDT to RevenueVault to continue. Low-balance auto-refill recommended.'
         }));
