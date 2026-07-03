@@ -355,6 +355,10 @@ export function createFreeTierGate(logger, redis) {
               chain_name: 'Polygon',
               minimum_deposit_usdt: MIN_DEPOSIT,
               deposit_url: upgradeUrl,
+              // Anonymous self-onboarding: POST wallet_address + EIP-191
+              // signature, no prior key needed — returns the api_key that
+              // deposits from that wallet auto-credit.
+              register_url: `${API_BASE}/v1/machine/register`,
               // Human-clickable self-service deposit page, alongside the machine
               // deposit_url above (kept as-is for clients already parsing it).
               deposit_page: 'https://app.satelink.network/satelink/os/deposit',
