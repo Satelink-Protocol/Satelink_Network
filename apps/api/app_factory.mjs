@@ -21,6 +21,7 @@ import { createAdminMalRouter } from "./src/routes/admin_mal_route.mjs";
 import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
+import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
@@ -353,6 +354,10 @@ app.get("/api/mode", (req, res) => {
   app.use("/v1/credits", createDepositEconomicsRouter(pool, console));
   app.use("/v1/vault", createVaultRouter(console));
 
+  // Autonomous machine onboarding — /v1/pricing + /v1/machine/register.
+  // Mounted BEFORE the "/v1" ai-gateway so its paths are not shadowed.
+  app.use("/v1", express.json({ limit: '16kb' }), createMachineV1Router(pool));
+
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
 
@@ -360,6 +365,8 @@ app.get("/api/mode", (req, res) => {
   app.use("/v1/tools", createLangChainAdapterRouter(pool, redis));
 
   // OpenAI Plugin Manifest (S3-005) — AI ecosystem integration
+  // + Satelink machine manifest (/.well-known/satelink.json)
+  app.use("/.well-known", createWellKnownSatelinkRouter());
   app.use("/.well-known", createPluginManifestRouter());
   app.use("/openapi.json", createOpenApiRouter());
 

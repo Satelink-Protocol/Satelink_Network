@@ -225,13 +225,18 @@ export function createRpcGateway(db) {
             if (!verdict.ok) {
                 const payload = { ok: false, error: verdict.code, message: verdict.message };
                 if (verdict.http === 402) {
+                    const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
                     payload.payment = {
                         vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
                         token: 'USDT',
                         token_address: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
                         chain_id: 137,
-                        deposit_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/api/keys/deposit-info`
+                        minimum_deposit_usdt: parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50'),
+                        deposit_url: `${apiBase}/api/keys/deposit-info`,
+                        calldata_url: `${apiBase}/credits/deposit/initiate?amount=1.00`
                     };
+                    payload.manifest_url = `${apiBase}/.well-known/satelink.json`;
+                    payload.pricing_url = `${apiBase}/v1/pricing`;
                 }
                 return res.status(verdict.http || 402).json(payload);
             }

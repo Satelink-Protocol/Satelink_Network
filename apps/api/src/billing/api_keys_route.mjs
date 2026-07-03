@@ -47,6 +47,10 @@ const TIER_PRICES = {
   enterprise: 199,
 };
 
+// Pay-as-you-go floor — must match what the 402 bodies advertise
+// (credit_gate/payment_required: minimum_deposit_usdt 0.50).
+const MIN_DEPOSIT_USDT = parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50');
+
 const TIER_LIMITS = {
   free: 500,
   basic: 10000,
@@ -337,12 +341,17 @@ export function createSimpleApiKeysRouter(pool) {
         newTier = 'pro'; newLimit = TIER_LIMITS.pro;
       } else if (depositAmount >= TIER_PRICES.basic) {
         newTier = 'basic'; newLimit = TIER_LIMITS.basic;
+      } else if (depositAmount >= MIN_DEPOSIT_USDT) {
+        // Pay-as-you-go: any deposit >= the advertised minimum buys spendable
+        // credits. Free-tier calls bill $0, so lift the account to basic
+        // (per-call billing) — otherwise the credits could never be consumed.
+        if (newTier === 'free') { newTier = 'basic'; newLimit = TIER_LIMITS.basic; }
       } else {
         return res.status(400).json({
           ok: false,
           error: 'insufficient_deposit',
-          message: `Deposit of $${depositAmount} is below minimum tier price ($${TIER_PRICES.basic})`,
-          minimum_required: TIER_PRICES.basic,
+          message: `Deposit of $${depositAmount} is below the minimum (${MIN_DEPOSIT_USDT} USDT)`,
+          minimum_required: MIN_DEPOSIT_USDT,
           deposited: depositAmount,
         });
       }

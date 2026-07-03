@@ -33,7 +33,11 @@ export function paymentRequiredFields() {
             free_tier_resets_at: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString()
         },
         docs: 'https://docs.satelink.network/deposit',
-        notify_url: 'https://rpc.satelink.network/api/deposit/notify'
+        notify_url: 'https://rpc.satelink.network/api/deposit/notify',
+        // Machine-readable service discovery — an agent that hits a 402 can
+        // fetch these to learn pricing, deposit flow, and registration.
+        manifest_url: 'https://rpc.satelink.network/.well-known/satelink.json',
+        pricing_url: 'https://rpc.satelink.network/v1/pricing'
     };
 }
 
