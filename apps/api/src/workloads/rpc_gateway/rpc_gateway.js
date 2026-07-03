@@ -308,7 +308,10 @@ export function createRpcGateway(db) {
                     requestId: request_id,
                     amountUsdt: billedUsdt
                 }).catch(() => {});
-                return res.status(200).json(cachedResponse);
+                // JSON-RPC 2.0: the response id MUST equal the caller's request
+                // id. The cached body carries the ORIGINAL requester's id — echo
+                // the current one instead so concurrent machines correlate.
+                return res.status(200).json({ ...cachedResponse, id: body.id ?? null });
             }
 
             const routeResult = await routeRpcRequest(chain, method, params, body.id, {
