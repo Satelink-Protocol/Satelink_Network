@@ -31,9 +31,11 @@ const USDT_DECIMALS = 6;
 const LOG_PREFIX = '[DepositListener]';
 
 const DEFAULTS = {
-  pollIntervalMs: 60_000,
-  confirmations: MIN_CONFIRMATIONS,     // single source of truth with the claim route
-  chunkBlocks: 5_000,                   // max block span per eth_getLogs call
+  pollIntervalMs: parseInt(process.env.DEPOSIT_POLL_INTERVAL_MS || '60000'),
+  confirmations: parseInt(process.env.DEPOSIT_CONFIRMATIONS || String(MIN_CONFIRMATIONS)), // single source of truth with the claim route
+  // Max block span per eth_getLogs call. Free RPC providers reject ranges
+  // larger than 10–500 blocks, so 5_000 made every poll fail.
+  chunkBlocks: parseInt(process.env.DEPOSIT_CHUNK_BLOCKS || '500'),
   maxLookbackBlocks: 50_000,            // ~1 day on Polygon; caps a cold-start scan
   initialLookbackBlocks: 10_000,        // first-run window when no cursor exists
 };
@@ -84,6 +86,8 @@ export class DepositListener {
       `${LOG_PREFIX} started chain=${this.chainId} vault=${this.vaultAddress} ` +
       `confirmations=${this.opts.confirmations} poll=${this.opts.pollIntervalMs}ms`
     );
+    const { chunkBlocks, confirmations, pollIntervalMs } = this.opts;
+    this.log.info(`${LOG_PREFIX} config: chunk=${chunkBlocks} confirms=${confirmations} poll=${pollIntervalMs}ms`);
 
     // Immediate first scan, then steady polling.
     await this._pollSafe();
