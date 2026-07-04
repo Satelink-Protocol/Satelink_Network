@@ -171,12 +171,26 @@ export function createFreeTierGate(logger, redis) {
         const asnPrefix = extractAsnPrefix(asnField);
         if (asnPrefix && BAD_ASNS.has(asnPrefix)) {
           log.warn(`${LOG_PREFIX} Bad ASN blocked: ip=${ip} asn=${asnPrefix}`);
-          return res.status(429).json({
-            ok: false,
-            error: 'network_blocked',
-            message: 'This network is blocked due to abuse patterns.',
-            code: 429
-          });
+          // 402, not a bare 429: these are machines, and a machine that gets a
+          // structured 402 can register + deposit and come back as a paying
+          // key (keyed callers bypass this gate entirely, so the ASN block
+          // never touches them). A bodyless hard block converts nobody.
+          // Free tier stays denied for these networks — only the paid path
+          // is offered.
+          return res.status(402).json(paymentRequiredResponse({
+            jsonrpc: '2.0',
+            id: req.body?.id ?? null,
+            error: {
+              code: -32005,
+              message:
+                'Free tier is unavailable for this network due to abuse patterns. ' +
+                'Paid access is available: register a wallet, deposit USDT, and retry with X-API-Key.',
+              data: {
+                error_code: 'NETWORK_FREE_TIER_BLOCKED',
+                asn: asnPrefix,
+              },
+            },
+          }));
         }
       } catch (_) { /* non-critical — fail open */ }
     }

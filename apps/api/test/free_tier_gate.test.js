@@ -106,4 +106,35 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     const unknown = await invoke(gate, { ip: '10.0.0.5', headers: { 'x-api-key': 'sk_unknown_xyz' } });
     expect(unknown.nextCalled).to.equal(true);
   });
+
+  it('bad-ASN network → structured 402 with self-onboarding path, not a bodyless block', async () => {
+    // Minimal Redis stub: only asn:<ip> matters — the gate returns at Layer 1
+    // before touching the subnet/counter keys.
+    const store = new Map([['asn:10.0.0.6', 'AS135905 Vietnam Posts and Telecommunications Group']]);
+    const redisStub = {
+      async get(k) { return store.get(k) ?? null; },
+      async set() {}, async incr(k) { const v = (parseInt(store.get(k)) || 0) + 1; store.set(k, String(v)); return v; },
+      async expire() {}, async zadd() {}, async zremrangebyscore() {}, async zcard() { return 0; },
+    };
+    const gate = createFreeTierGate(console, redisStub);
+    const r = await invoke(gate, { ip: '10.0.0.6' });
+    expect(r.nextCalled).to.equal(false);
+    expect(r.statusCode).to.equal(402);
+    expect(r.payload?.error?.data?.error_code).to.equal('NETWORK_FREE_TIER_BLOCKED');
+    // The 402 must carry the full machine onboarding path (canonical builder)
+    expect(r.payload.manifest_url).to.match(/\/\.well-known\/satelink\.json$/);
+    expect(r.payload.pricing_url).to.match(/\/v1\/pricing$/);
+    expect(r.payload.deposit?.vault_address).to.match(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  it('unclassified IP (no asn key yet) is never ASN-blocked', async () => {
+    const redisStub = {
+      async get() { return null; },
+      async set() {}, async incr() { return 1; }, async expire() {},
+      async zadd() {}, async zremrangebyscore() {}, async zcard() { return 0; },
+    };
+    const gate = createFreeTierGate(console, redisStub);
+    const r = await invoke(gate, { ip: '10.0.0.7' });
+    expect(r.nextCalled).to.equal(true);
+  });
 });
