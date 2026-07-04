@@ -74,6 +74,28 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     expect(payment?.vault_address).to.match(/^0x[0-9a-fA-F]{40}$/);
   });
 
+  it('402 body is self-contained: calldata endpoint, example curls, consistent minimum', async () => {
+    const { paymentRequiredFields } = await import('../src/utils/payment_required.js');
+    const body = paymentRequiredFields();
+    // Deposit block: exact calldata endpoint + confirmation semantics inline —
+    // a machine must not need the manifest to find the deposit transaction data.
+    expect(body.deposit.calldata_url).to.match(/\/credits\/deposit\/initiate\?amount=/);
+    expect(body.deposit.calldata_example).to.match(/\/credits\/deposit\/initiate\?amount=1\.00$/);
+    expect(body.deposit.confirmations_required).to.be.a('number').and.to.be.at.least(1);
+    // Minimum must match /v1/pricing (MIN_DEPOSIT_USDT, default 0.50) — was '1.00'.
+    expect(body.deposit.minimum_usdt).to.equal(
+      parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50').toFixed(2)
+    );
+    // Copy-paste onboarding: register + deposit-calldata + retry curls.
+    expect(body.examples['1_register']).to.include('/v1/machine/register');
+    expect(body.examples['1_register']).to.include('personal_sign');
+    expect(body.examples['2_deposit_calldata']).to.include('/credits/deposit/initiate');
+    expect(body.examples['3_retry_with_key']).to.include('X-API-Key');
+    // Register block still spells out the exact POST body schema.
+    expect(body.register.body.wallet_address).to.be.a('string');
+    expect(body.register.body.signature).to.include('satelink:register:');
+  });
+
   it('wallet-authenticated → bypasses the gate even when the IP is over limit', async () => {
     const gate = createFreeTierGate(console);
     await exhaust(gate, '10.0.0.3'); // IP now over limit
