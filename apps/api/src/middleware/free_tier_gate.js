@@ -375,8 +375,11 @@ export function createFreeTierGate(logger, redis) {
               register_url: `${API_BASE}/v1/machine/register`,
               // Human-clickable self-service deposit page, alongside the machine
               // deposit_url above (kept as-is for clients already parsing it).
-              deposit_page: 'https://app.satelink.network/satelink/os/deposit',
-              docs: 'https://docs.satelink.network/paid-tier'
+              // Apex domain: app.satelink.network is a dead Vercel alias
+              // (DEPLOYMENT_NOT_FOUND) and docs.satelink.network/paid-tier
+              // never existed — both 404'd as of 2026-07-04.
+              deposit_page: 'https://satelink.network/satelink/os/deposit',
+              docs: 'https://satelink.network/docs'
             }
           }
         },

@@ -274,7 +274,7 @@ export function createRpcGateway(db) {
                     upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
                     deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
                     network: 'Polygon Mainnet',
-                    docs: 'https://docs.satelink.network/paid-tier'
+                    docs: 'https://satelink.network/docs'
                 });
             }
 

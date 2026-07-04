@@ -27,12 +27,16 @@ export function paymentRequiredFields() {
             // Human-clickable self-service deposit page (machine fields above/below
             // stay as-is). A developer hitting this 402 in their terminal/logs can
             // open this to deposit without already having a wallet-signing tool wired.
-            deposit_page: 'https://app.satelink.network/satelink/os/deposit',
+            // NOTE: served from the apex domain — app.satelink.network returns
+            // Vercel DEPLOYMENT_NOT_FOUND (dead domain alias) as of 2026-07-04.
+            deposit_page: 'https://satelink.network/satelink/os/deposit',
             minimum_usdt: '1.00',
             free_tier_limit: 500,
             free_tier_resets_at: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString()
         },
-        docs: 'https://docs.satelink.network/deposit',
+        // docs.satelink.network/deposit never existed (404) — /docs is the
+        // real developer-docs page.
+        docs: 'https://satelink.network/docs',
         notify_url: 'https://rpc.satelink.network/api/deposit/notify',
         // Machine-readable service discovery — an agent that hits a 402 can
         // fetch these to learn pricing, deposit flow, and registration.
