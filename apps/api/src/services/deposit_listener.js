@@ -36,8 +36,8 @@ const DEFAULTS = {
   // Max block span per eth_getLogs call. Free RPC providers reject ranges
   // larger than 10–500 blocks, so 5_000 made every poll fail.
   chunkBlocks: parseInt(process.env.DEPOSIT_CHUNK_BLOCKS || '500'),
-  maxLookbackBlocks: 50_000,            // ~1 day on Polygon; caps a cold-start scan
-  initialLookbackBlocks: 10_000,        // first-run window when no cursor exists
+  maxLookbackBlocks: parseInt(process.env.DEPOSIT_MAX_LOOKBACK_BLOCKS || '2000'),            // ~1 day on Polygon; caps a cold-start scan
+  initialLookbackBlocks: parseInt(process.env.DEPOSIT_INITIAL_LOOKBACK_BLOCKS || '2000'),        // first-run window when no cursor exists
 };
 
 export class DepositListener {
