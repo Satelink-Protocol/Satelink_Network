@@ -52,6 +52,28 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     expect(r.nextCalled).to.equal(false);
   });
 
+  it('anonymous over-limit 402 carries the full self-onboarding path (register_url)', async () => {
+    // Robust to import order: if another test file already loaded the gate
+    // module, FREE_TIER_DAILY_LIMIT=2 from before() never applied — so read
+    // the module's actual limit and drive one call past it.
+    const { getFreeTierStats } = await import('../src/middleware/free_tier_gate.js');
+    const { limit } = await getFreeTierStats();
+    const gate = createFreeTierGate(console);
+    let r;
+    for (let i = 0; i <= limit; i++) r = await invoke(gate, { ip: '10.0.0.9' });
+    expect(r.statusCode).to.equal(402);
+    // Top-level machine-readable fields from the canonical 402 builder
+    expect(r.payload.manifest_url).to.match(/\/\.well-known\/satelink\.json$/);
+    expect(r.payload.pricing_url).to.match(/\/v1\/pricing$/);
+    expect(r.payload.register_url).to.match(/\/v1\/machine\/register$/);
+    expect(r.payload.register?.method).to.equal('POST');
+    expect(r.payload.deposit_address).to.match(/^0x[0-9a-fA-F]{40}$/);
+    // JSON-RPC error.data.payment block (what RPC clients parse)
+    const payment = r.payload?.error?.data?.payment;
+    expect(payment?.register_url).to.match(/\/v1\/machine\/register$/);
+    expect(payment?.vault_address).to.match(/^0x[0-9a-fA-F]{40}$/);
+  });
+
   it('wallet-authenticated → bypasses the gate even when the IP is over limit', async () => {
     const gate = createFreeTierGate(console);
     await exhaust(gate, '10.0.0.3'); // IP now over limit

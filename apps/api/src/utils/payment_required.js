@@ -37,7 +37,20 @@ export function paymentRequiredFields() {
         // Machine-readable service discovery — an agent that hits a 402 can
         // fetch these to learn pricing, deposit flow, and registration.
         manifest_url: 'https://rpc.satelink.network/.well-known/satelink.json',
-        pricing_url: 'https://rpc.satelink.network/v1/pricing'
+        pricing_url: 'https://rpc.satelink.network/v1/pricing',
+        // Anonymous self-onboarding — no prior key or account needed. Without
+        // this, an over-limit anonymous machine has a deposit address but no
+        // way to obtain the API key its deposit would credit.
+        register_url: 'https://rpc.satelink.network/v1/machine/register',
+        register: {
+            method: 'POST',
+            url: 'https://rpc.satelink.network/v1/machine/register',
+            body: {
+                wallet_address: '0x<your-funding-wallet>',
+                signature: 'personal_sign of "satelink:register:<lowercase wallet_address>"'
+            },
+            returns: 'api_key — send as X-API-Key header on all subsequent calls'
+        }
     };
 }
 
