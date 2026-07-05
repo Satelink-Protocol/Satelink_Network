@@ -1,0 +1,26 @@
+# Example erpc config using Satelink as a native upstream provider.
+# Requires the Satelink vendor (thirdparty/satelink.go) — see README.md.
+#
+# URL scheme:
+#   satelink://<api_key>@polygon   — paid tier, key sent as X-API-Key
+#   satelink://free@polygon        — keyless free tier (500 calls/day per IP)
+#
+# Until the native vendor ships in an erpc release, Satelink also works today
+# as a plain HTTP upstream (no adapter needed):
+#   endpoint: https://rpc.satelink.network/rpc/polygon
+
+logLevel: info
+
+projects:
+  - id: my-project
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 137
+    upstreams:
+      - id: satelink-polygon
+        endpoint: satelink://sk_YOUR_API_KEY@polygon
+        # Free tier (no registration, 500 calls/day per IP):
+        # endpoint: satelink://free@polygon
+        evm:
+          chainId: 137
