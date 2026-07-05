@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Input,
@@ -20,6 +20,7 @@ import { DepositHistory } from "@/components/deposit/DepositHistory";
 import { WalletProvider } from "@/components/deposit/wallet/WalletProvider";
 import { ConnectWalletButton } from "@/components/deposit/wallet/ConnectWalletButton";
 import { useAccount } from "wagmi";
+import { registeredWallets, registrationFor } from "@/lib/wallet-registration";
 
 const API_BASE = "https://rpc.satelink.network";
 
@@ -83,6 +84,18 @@ function DepositPageInner() {
   const { address } = useAccount();
   const wallet = address ?? null;
 
+  // Wrong-wallet guard: deposits credit the SENDING wallet's account, so if the
+  // connected wallet isn't the one an API key was registered to (from this
+  // browser), sending would fund a different account. Read after mount —
+  // localStorage isn't available during SSR/hydration.
+  const [knownWallets, setKnownWallets] = useState<string[]>([]);
+  useEffect(() => {
+    setKnownWallets(registeredWallets());
+  }, []);
+  const walletMismatch =
+    wallet !== null && knownWallets.length > 0 && !registrationFor(wallet);
+  const expectedWallet = knownWallets[0] ?? null;
+
   const handleGetInstructions = async () => {
     const parsed = parseFloat(amount);
     if (!amount || isNaN(parsed) || parsed <= 0) {
@@ -133,7 +146,23 @@ function DepositPageInner() {
           {/* P0 — trust + economics panels */}
           <WalletBalanceCard wallet={wallet} />
 
-          {/* AMOUNT INPUT */}
+          {/* WRONG-WALLET GUARD — deposits credit the sending wallet's account.
+              Steps stay hidden until the registered wallet is connected. */}
+          {walletMismatch && expectedWallet && (
+            <Notice tone="danger">
+              <strong>Wrong wallet connected.</strong> Your API key is registered
+              to{" "}
+              <code className="font-mono text-[11px] break-all">{expectedWallet}</code>
+              {" "}but MetaMask is connected as{" "}
+              <code className="font-mono text-[11px] break-all">{wallet}</code>.
+              Switch to wallet {expectedWallet.slice(0, 6)}…{expectedWallet.slice(-4)}{" "}
+              in MetaMask before depositing — USDT sent from this wallet would
+              credit a different account.
+            </Notice>
+          )}
+
+          {/* AMOUNT INPUT — hidden while the wrong wallet is connected */}
+          {!walletMismatch && (
           <Panel title="Amount">
             <form
               onSubmit={(e) => {
@@ -164,9 +193,10 @@ function DepositPageInner() {
               </Stack>
             </form>
           </Panel>
+          )}
 
-          {/* DEPOSIT INSTRUCTIONS */}
-          {instructions && (
+          {/* DEPOSIT INSTRUCTIONS — also gated on the right wallet */}
+          {instructions && !walletMismatch && (
             <>
               {/* SUMMARY */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
@@ -257,9 +287,9 @@ function DepositPageInner() {
                 <Stack gap="sm">
                   <ol className="m-0 pl-[18px] flex flex-col gap-2 text-xs text-foreground/70 leading-relaxed">
                     <li>
-                      Credits appear automatically within{" "}
-                      <strong className="text-green-400">~30 seconds</strong> of
-                      transaction confirmation (2 Polygon blocks).
+                      Credits appear within{" "}
+                      <strong className="text-green-400">~5 minutes</strong> after
+                      transaction confirmation (25 block confirmations required).
                     </li>
                     <li>
                       Add{" "}

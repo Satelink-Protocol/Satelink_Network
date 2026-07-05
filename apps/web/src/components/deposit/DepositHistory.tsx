@@ -25,20 +25,32 @@ export function DepositHistory({ wallet }: { wallet: string | null }) {
     setPage(1);
   }, [wallet]);
 
+  // Fetch on mount/page change, then poll every 30s so a fresh deposit shows
+  // up without a manual reload (crediting is ~25 confirmations + listener poll,
+  // so the user is typically staring at "No deposits yet" while it lands).
   React.useEffect(() => {
     if (!wallet) {
       setState({ status: 'idle' });
       return;
     }
     let cancelled = false;
-    setState({ status: 'loading' });
-    getDepositHistory(wallet, page, PAGE_SIZE).then(({ data, error }) => {
-      if (cancelled) return;
-      if (data) setState({ status: 'ok', data });
-      else setState({ status: 'error', message: error ?? 'unknown error' });
-    });
+    let first = true;
+    const load = () => {
+      if (first) setState({ status: 'loading' });
+      getDepositHistory(wallet, page, PAGE_SIZE).then(({ data, error }) => {
+        if (cancelled) return;
+        if (data) setState({ status: 'ok', data });
+        // Only surface an error on the initial load — a failed background
+        // refresh keeps showing the last good data instead of flashing red.
+        else if (first) setState({ status: 'error', message: error ?? 'unknown error' });
+        first = false;
+      });
+    };
+    load();
+    const timer = setInterval(load, 30_000);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [wallet, page]);
 
@@ -59,7 +71,8 @@ export function DepositHistory({ wallet }: { wallet: string | null }) {
       {state.status === 'error' && <ErrorNote>Couldn&apos;t load history ({state.message}).</ErrorNote>}
       {data && data.deposits.length === 0 && (
         <div style={{ color: TOKENS.muted, fontFamily: TOKENS.sans, fontSize: 13 }}>
-          No deposits yet for this wallet.
+          No deposits yet for this wallet. This list refreshes automatically every
+          30 seconds — a new deposit appears once it reaches 25 confirmations.
         </div>
       )}
       {data && data.deposits.length > 0 && (

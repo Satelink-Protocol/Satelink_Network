@@ -21,6 +21,7 @@ import {
 } from "@satelink/ui";
 import { useApiKeys, maskKey, type UsageSummary } from "@/lib/api-keys";
 import { CopyButton } from "@/components/billing/shared";
+import { WalletRegisterCard } from "@/components/keys/WalletRegisterCard";
 
 interface KeyRow {
   key: string;
@@ -182,6 +183,14 @@ export default function KeysPage() {
   // ----- Render -----
   return (
     <div className="space-y-6">
+      {/* One-click wallet onboarding — MetaMask signature → /v1/machine/register */}
+      <WalletRegisterCard
+        onRegistered={(apiKey, wallet) => {
+          addKey(apiKey, `Wallet ${wallet.slice(0, 6)}…${wallet.slice(-4)}`);
+          setRevealKey(apiKey);
+        }}
+      />
+
       {/* KPI Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard
@@ -219,9 +228,11 @@ export default function KeysPage() {
             <Card className="glow-card glass-panel border-success/40 bg-success/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-success">
-                  <ShieldCheck className="size-4" /> Key created — copy it now
+                  <ShieldCheck className="size-4" /> Your API key — copy it now
                 </CardTitle>
-                <CardDescription>This is the only time the full key is shown. Store it securely.</CardDescription>
+                <CardDescription>
+                  Save this key — it cannot be recovered. This is the only time the full key is shown.
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-2">
                 <code className="block flex-1 break-all rounded-md border border-border bg-background/60 px-3 py-2 font-mono text-xs text-foreground">{revealKey}</code>

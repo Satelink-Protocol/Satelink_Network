@@ -248,7 +248,7 @@ export default function Home() {
             <a href="/satelink/os/overview" className="btn btn-ghost">
               Login
             </a>
-            <a href="/satelink/os/deposit" className="btn btn-primary">
+            <a href="/satelink/os/keys" className="btn btn-primary">
               Get API Key
             </a>
           </div>
@@ -1069,7 +1069,7 @@ export default function Home() {
             </div>
 
             <div className="code-cta fade-up">
-              <a href="/satelink/os/deposit" className="btn btn-primary btn-lg">
+              <a href="/satelink/os/keys" className="btn btn-primary btn-lg">
                 Get API Key
                 <ArrowIcon />
               </a>
@@ -1111,7 +1111,7 @@ export default function Home() {
                     <CheckIcon /> No credit card required
                   </li>
                 </ul>
-                <a href="/satelink/os/deposit" className="btn btn-secondary pricing-cta">
+                <a href="/satelink/os/keys" className="btn btn-secondary pricing-cta">
                   Start Free
                 </a>
               </div>
@@ -1383,7 +1383,7 @@ export default function Home() {
                 internet. Get your API key in seconds.
               </p>
               <div className="cta-buttons">
-                <a href="/satelink/os/deposit" className="btn btn-primary btn-lg">
+                <a href="/satelink/os/keys" className="btn btn-primary btn-lg">
                   Get API Key
                 </a>
                 <a href="/docs" className="btn btn-secondary btn-lg">
