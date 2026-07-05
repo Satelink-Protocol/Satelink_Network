@@ -90,7 +90,7 @@ export function createCreditGate(db, logger) {
 
         // Real deployed addresses as fallback — never tell a paying caller "not deployed yet"
         // (the vault IS live at 0x80AF…; an unset env must not block deposits).
-        const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+        const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
         const USDT = process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
         const API_BASE = process.env.API_BASE_URL || 'https://rpc.satelink.network';
 

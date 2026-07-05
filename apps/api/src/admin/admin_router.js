@@ -305,7 +305,7 @@ export function createAdminRouter(pool, redis) {
   const ok   = (res, data) => res.json({ ok: true, data, ts: Date.now() });
   const fail = (res, e) => res.status(500).json({ ok: false, error: e.message, ts: Date.now() });
 
-  const VAULT_ADDRESS    = process.env.REVENUE_VAULT || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+  const VAULT_ADDRESS    = process.env.REVENUE_VAULT || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
   const USDT_ADDRESS     = process.env.USDT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
   const TREASURY_FALLBACK = '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
   const BILLING_RATE     = parseFloat(process.env.PRICE_PER_CALL || '0.00003');

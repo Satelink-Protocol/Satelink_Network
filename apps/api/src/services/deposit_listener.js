@@ -56,10 +56,15 @@ export class DepositListener {
 
   async start() {
     const rpcUrl = process.env.POLYGON_RPC_URL || process.env.RPC_URL;
-    const vaultAddress = process.env.REVENUE_VAULT_ADDRESS;
+    // RevenueVaultV2 (Polygon 137). Read from VAULT_ADDRESS, falling back to the
+    // legacy REVENUE_VAULT_ADDRESS var, then to the deployed V2 address so the
+    // listener stays active even before the Railway env var is set.
+    const vaultAddress = process.env.VAULT_ADDRESS
+      || process.env.REVENUE_VAULT_ADDRESS
+      || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
 
     if (!vaultAddress) {
-      this.log.warn(`${LOG_PREFIX} REVENUE_VAULT_ADDRESS not set — listener disabled`);
+      this.log.warn(`${LOG_PREFIX} VAULT_ADDRESS not set — listener disabled`);
       return;
     }
     if (!this.provider && !rpcUrl) {

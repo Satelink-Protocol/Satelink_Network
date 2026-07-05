@@ -37,7 +37,7 @@ import {
   MIN_CONFIRMATIONS
 } from './deposit_validation.mjs';
 
-const TREASURY = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+const TREASURY = process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
 const USDT_POLYGON = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const POLYGON_RPC = 'https://polygon.drpc.org';
 

@@ -18,7 +18,7 @@ const API_BASE = process.env.API_BASE || 'https://rpc.satelink.network';
 const DEPOSIT_USDT = parseFloat(process.env.DEPOSIT_AMOUNT || '0.1');
 
 const USDT_ADDRESS = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
-const VAULT_ADDRESS = '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+const VAULT_ADDRESS = '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
 
 if (!PRIVATE_KEY) {
   console.error('ERROR: POLYGON_SIGNER_KEY env var required');

@@ -227,7 +227,7 @@ export function createRpcGateway(db) {
                 if (verdict.http === 402) {
                     const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
                     payload.payment = {
-                        vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                        vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
                         token: 'USDT',
                         token_address: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
                         chain_id: 137,
@@ -272,7 +272,7 @@ export function createRpcGateway(db) {
                 return res.status(429).json({
                     error: 'rate_limit_exceeded',
                     upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
-                    deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                    deposit_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
                     network: 'Polygon Mainnet',
                     docs: 'https://satelink.network/docs'
                 });

@@ -115,7 +115,7 @@ app.get("/api/mode", (req, res) => {
       pricing_model: "pay_per_use",
       settlement_token: "USDT",
       settlement_chain: "Polygon",
-      deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3",
+      deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x577D3716d6Ad5b676d230f5409deF9838FABaCEF",
       methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : DEFAULT_METHODS,
       free_tier: { requests_per_day: 500, api_key_required: false },
       status_url: "https://rpc.satelink.network/api/status"
@@ -124,7 +124,7 @@ app.get("/api/mode", (req, res) => {
 
   // GET /api/treasury/status — vault balance + deposit totals for agents and dashboards
   app.get("/api/treasury/status", async (req, res) => {
-    const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+    const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
     const USDT  = process.env.USDT_CONTRACT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
     const RPC   = process.env.POLYGON_RPC             || 'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
 
@@ -289,7 +289,7 @@ app.get("/api/mode", (req, res) => {
       settlement: {
         token: "USDT",
         chain: "Polygon",
-        contract: process.env.REVENUE_VAULT_ADDRESS || "0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3"
+        contract: process.env.REVENUE_VAULT_ADDRESS || "0x577D3716d6Ad5b676d230f5409deF9838FABaCEF"
       },
       freeTier: {
         requestsPerDay: 500,
