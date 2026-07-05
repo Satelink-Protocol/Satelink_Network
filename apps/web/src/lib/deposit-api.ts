@@ -144,7 +144,7 @@ export async function getDepositHistory(wallet: string, page = 1, limit = 20) {
 }
 
 export async function getVaultProof() {
-  const address = '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+  const address = '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
   const explorerUrl = `https://polygonscan.com/address/${address}`;
   const { data } = await safeGet<{ balanceUsdt: number }>(`${API_BASE}/v1/vault/balance`);
   return {

@@ -591,7 +591,7 @@ async function start() {
   const SELF_NODE_ID = 'NODE-ap-south-1-a09becbb';
   const SELF_NODE_WALLET = process.env.SELF_NODE_WALLET
     || process.env.TREASURY_ADDRESS
-    || '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3';
+    || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
   const selfHeartbeat = async () => {
     try {
       const now = Math.floor(Date.now() / 1000);

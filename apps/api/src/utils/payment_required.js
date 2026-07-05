@@ -32,7 +32,7 @@ export function paymentRequiredFields() {
         deposit: {
             vault_address:
                 process.env.REVENUE_VAULT_ADDRESS ||
-                '0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3',
+                '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
             usdt_contract:
                 process.env.POLYGON_USDT_ADDRESS ||
                 '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
