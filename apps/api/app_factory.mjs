@@ -209,37 +209,46 @@ app.get("/api/mode", (req, res) => {
       // of epochs. total_requests_24h reads the same Redis free-tier counters that
       // /stats/free-tier exposes; the revenue_events_v2 count only captures billed
       // calls and undercounts real request volume by ~30x.
-      const [nodesResult, regNodesResult, billedResult, epochResult, freeTierStats] = await Promise.all([
+      const [nodesResult, regNodesResult, billedResult, epochResult, freeTierStats, healthResult] = await Promise.all([
         pool.query(`SELECT COUNT(*) as count FROM nodes WHERE status = 'online' OR status = 'active'`),
         pool.query(`SELECT COUNT(*) as count FROM registered_nodes WHERE status = 'active'`),
         pool.query(`SELECT COUNT(*) as total FROM revenue_events_v2 WHERE created_at > extract(epoch from now()) - 86400 AND is_test_data = false`),
         pool.query(`SELECT id FROM epoch_ledger ORDER BY id DESC LIMIT 1`),
-        getFreeTierStats().catch(() => null)
+        getFreeTierStats().catch(() => null),
+        // Measured uptime/latency from the 24h health-log sample. These were
+        // the hardcoded constants 99.5 / 85 until the 2026-07 data-truth audit
+        // (docs/DATA_TRUTH_AUDIT.md #25). null when there is no sample.
+        pool.query(
+          `SELECT ROUND(100.0*COUNT(*) FILTER (WHERE status IN ('healthy','ok','up','online'))/NULLIF(COUNT(*),0),2)::float AS uptime,
+                  ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY response_time_ms))::int AS p50
+             FROM node_health_logs WHERE checked_at >= extract(epoch from now())-86400`
+        ).catch(() => null)
       ]);
       const billed24h = parseInt(billedResult.rows?.[0]?.total || 0);
       const freeTierCalls = parseInt(freeTierStats?.totalCalls || 0);
       const requests24h = freeTierCalls > 0 ? freeTierCalls : billed24h;
       const nodesOnline = parseInt(nodesResult.rows[0]?.count || 0) + parseInt(regNodesResult.rows[0]?.count || 0);
+      const measured = healthResult?.rows?.[0] || {};
 
       res.json({
         status: "operational",
-        uptime_pct: 99.5,
+        uptime_pct: measured.uptime ?? null,
         nodes_online: nodesOnline,
         current_epoch: epochResult.rows[0]?.id || 0,
         total_requests_24h: requests24h,
-        avg_latency_ms: 85,
+        avg_latency_ms: measured.p50 ?? null,
         chains_supported: ["polygon", "ethereum", "arbitrum", "base"],
         settlement: "USDT on Polygon PoS"
       });
     } catch (e) {
       console.error("[Status] Error:", e.message);
       res.json({
-        status: "operational",
-        uptime_pct: 99.5,
-        nodes_online: 1,
+        status: "degraded",
+        uptime_pct: null,
+        nodes_online: null,
         current_epoch: 0,
         total_requests_24h: 0,
-        avg_latency_ms: 85,
+        avg_latency_ms: null,
         chains_supported: ["polygon", "ethereum", "arbitrum", "base"],
         settlement: "USDT on Polygon PoS"
       });

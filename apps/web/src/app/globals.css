@@ -1409,7 +1409,7 @@ input[type="range"]::-webkit-slider-thumb {
    ============================================================ */
 @custom-variant dark (&:is(.theme-shadcn, .theme-shadcn *, .satelink-os, .satelink-os *));
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

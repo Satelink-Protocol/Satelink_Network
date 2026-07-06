@@ -120,7 +120,16 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <AsyncBoundary loading={loading} error={error} isEmpty={!loading && series.length === 0} loadingVariant="block"
-              emptyTitle="No usage recorded yet" emptyDescription="Send requests through the gateway to populate this chart." onRetry={() => load(selected)}>
+              emptyTitle="No usage recorded yet" emptyDescription="Make your first call — this exact command works as-is:"
+              emptyAction={
+                <code className="block max-w-full overflow-x-auto whitespace-pre rounded-md border border-border bg-background px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-foreground/80">
+{`curl -X POST https://rpc.satelink.network/rpc \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${selected || "<your-api-key>"}" \\
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`}
+                </code>
+              }
+              onRetry={() => load(selected)}>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={series} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

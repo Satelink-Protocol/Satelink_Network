@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { KeyRound, Wallet, Send, ShieldCheck, AlertTriangle, TrendingUp } from "lucide-react";
+import { KeyRound, Wallet, Send, ShieldCheck, AlertTriangle, TrendingUp, Activity } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -17,6 +17,7 @@ import {
   KPICard,
   BarChartPanel,
   DonutChart,
+  Modal,
   type DataTableColumn,
 } from "@satelink/ui";
 import { useApiKeys, maskKey, type UsageSummary } from "@/lib/api-keys";
@@ -46,11 +47,6 @@ export default function KeysPage() {
   const [newEmail, setNewEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [revealKey, setRevealKey] = useState<string | null>(null);
-
-  // ----- UI state for Access Rules modal -----
-  const [configKey, setConfigKey] = useState<KeyRow | null>(null);
-  const [configBudget, setConfigBudget] = useState("10.0");
-  const [configWhitelist, setConfigWhitelist] = useState("157.45.**.**");
 
   // ----- Fetch usage for each key -----
   const fetchRows = useCallback(async (list: string[]) => {
@@ -122,15 +118,15 @@ export default function KeysPage() {
     }
   };
 
-  // ----- KPI calculations -----
+  // ----- KPI calculations — all derived from real /api/keys/usage rows.
+  // (A fabricated "Revenue Impact = spend × 1.2" card and a backend-less
+  // "Alerts" card lived here — removed in the 2026-07 data-truth audit.)
   const keysNearLimit = useMemo(() => {
     return rows.filter((r) => r.creditsRemaining / r.limit < 0.1 || r.requestsToday > r.limit * 0.9).length;
   }, [rows]);
   const totalSpendingToday = useMemo(() => rows.reduce((sum, r) => sum + r.creditsConsumed, 0), [rows]);
-  const alerts = keysNearLimit > 0 ? 1 : 0;
-  const revenueImpact = useMemo(() => {
-    return (totalSpendingToday * 1.2).toFixed(2);
-  }, [totalSpendingToday]);
+  const totalRequestsToday = useMemo(() => rows.reduce((sum, r) => sum + r.requestsToday, 0), [rows]);
+  const totalCreditsRemaining = useMemo(() => rows.reduce((sum, r) => sum + r.creditsRemaining, 0), [rows]);
 
   const throughputData = useMemo(() => {
     return rows.map((r) => ({ x: r.name, y: r.requestsToday }));
@@ -169,9 +165,8 @@ export default function KeysPage() {
       align: "right",
       cell: (k) => (
         <div className="flex gap-1.5">
-          <Button variant="outline" size="xs" onClick={() => { setConfigKey(k); setConfigBudget("10.0"); setConfigWhitelist("157.45.**.**"); }}>
-            Budget
-          </Button>
+          {/* Per-key budget caps need a real gateway endpoint before a control
+              can exist here — the old modal faked its save (audit #31). */}
           <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={() => { if (confirm(`Revoke "${k.name}" from this device? The key string is removed locally.`)) removeKey(k.key); }}>
             Revoke
           </Button>
@@ -202,20 +197,20 @@ export default function KeysPage() {
         <KPICard
           label="Spending Today"
           icon={TrendingUp}
-          value={`$${totalSpendingToday.toFixed(2)}`}
+          value={`$${totalSpendingToday.toFixed(5)}`}
           caption={rows.length ? `${rows.length} active key(s)` : "—"}
         />
         <KPICard
-          label="Alerts"
-          icon={AlertTriangle}
-          value={alerts}
-          caption={alerts ? "Budget exceeded" : "No alerts"}
+          label="Requests Today"
+          icon={Activity}
+          value={totalRequestsToday.toLocaleString()}
+          caption="across your keys"
         />
         <KPICard
-          label="Revenue Impact"
+          label="Credits Remaining"
           icon={Wallet}
-          value={`$${revenueImpact}`}
-          caption="Potential loss if limits hit"
+          value={`$${totalCreditsRemaining.toFixed(5)}`}
+          caption={totalCreditsRemaining > 0 ? `≈ ${Math.floor(totalCreditsRemaining / 0.00003).toLocaleString()} calls left` : "Deposit to add credits"}
         />
       </div>
 
@@ -292,38 +287,9 @@ export default function KeysPage() {
         </div>
       </div>
 
-      {/* Access Rules Modal (inline) */}
-      {configKey && (
-        <Card className="glow-card glass-panel border-primary/20 bg-primary/5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-sm font-semibold">Access Rules: {configKey.name}</CardTitle>
-              <CardDescription className="text-xs">Configure daily spending caps and whitelist restrictions</CardDescription>
-            </div>
-            <Button size="xs" variant="ghost" onClick={() => setConfigKey(null)}>Close</Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block">Daily Budget Cap (USDT)</label>
-                <Input value={configBudget} onChange={(e) => setConfigBudget(e.target.value)} className="font-mono text-xs" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block">IP Whitelist Subnets</label>
-                <Input value={configWhitelist} onChange={(e) => setConfigWhitelist(e.target.value)} className="font-mono text-xs" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setConfigKey(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => { alert("Gateway access rules updated."); setConfigKey(null); }}>Save Rules</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Quick Actions Bar */}
       <div className="flex gap-2 justify-end py-2">
-        <Button variant="primary" onClick={() => { setError(null); setShowCreate(true); }}>
+        <Button onClick={() => { setError(null); setShowCreate(true); }}>
           Add New Key
         </Button>
         <Button variant="destructive" onClick={() => {
@@ -345,49 +311,44 @@ export default function KeysPage() {
         </Button>
       </div>
 
-      {/* Create Key Modal */}
-      {showCreate && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setShowCreate(false)}
-        >
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <Card className="glow-card glass-panel border-primary/20 bg-background">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Create API Key</CardTitle>
-                <CardDescription className="text-xs">Generate a new free-tier key. Opt in to updates if you like.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Label</label>
-                  <Input
-                    placeholder="My API Key"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Email (optional)</label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
-                </div>
-                {error && <p className="text-xs text-destructive">{error}</p>}
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-                  <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Create Key Modal — canonical @satelink/ui Modal (opaque surface,
+          blurred backdrop, right-aligned actions; fixes the transparent-modal bug) */}
+      <Modal
+        open={showCreate}
+        onOpenChange={(o) => { if (!o) setShowCreate(false); }}
+        title="Create API Key"
+        description="Generate a new free-tier key. Opt in to updates if you like."
+        footer={
+          <>
+            <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground">Label</label>
+            <Input
+              placeholder="My API Key"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              className="text-xs"
+            />
           </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground">Email (optional)</label>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

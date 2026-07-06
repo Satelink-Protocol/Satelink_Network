@@ -11,7 +11,7 @@ import {
   Notice,
   StatusBadge,
 } from "@/components/satelink-os";
-import { KPICard } from "@satelink/ui";
+import { KPICard, CopyField as UICopyField } from "@satelink/ui";
 
 // P0 revenue-activation panels (own TOKENS design system — see PR notes re: token mismatch)
 import { CreditEstimator } from "@/components/deposit/CreditEstimator";
@@ -19,8 +19,10 @@ import { WalletBalanceCard } from "@/components/deposit/WalletBalanceCard";
 import { DepositHistory } from "@/components/deposit/DepositHistory";
 import { WalletProvider } from "@/components/deposit/wallet/WalletProvider";
 import { ConnectWalletButton } from "@/components/deposit/wallet/ConnectWalletButton";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
 import { registeredWallets, registrationFor } from "@/lib/wallet-registration";
+
+const POLYGON_CHAIN_ID = 137;
 
 const API_BASE = "https://rpc.satelink.network";
 
@@ -83,6 +85,10 @@ function DepositPageInner() {
   // WalletBalanceCard / DepositHistory render their honest "not connected" states.
   const { address } = useAccount();
   const wallet = address ?? null;
+  // Chain guard: USDT + RevenueVault live on Polygon PoS (137). A deposit sent
+  // on any other network is unrecoverable by us — block the flow, don't warn softly.
+  const chainId = useChainId();
+  const wrongChain = wallet !== null && chainId !== POLYGON_CHAIN_ID;
 
   // Wrong-wallet guard: deposits credit the SENDING wallet's account, so if the
   // connected wallet isn't the one an API key was registered to (from this
@@ -146,6 +152,17 @@ function DepositPageInner() {
           {/* P0 — trust + economics panels */}
           <WalletBalanceCard wallet={wallet} />
 
+          {/* WRONG-CHAIN GUARD — vault + USDT exist only on Polygon 137 */}
+          {wrongChain && (
+            <Notice tone="danger">
+              <strong>Wrong network.</strong> Your wallet is on chain{" "}
+              <code className="font-mono text-[11px]">{chainId}</code>, but Satelink
+              deposits settle on <strong>Polygon PoS (chain 137)</strong>. Switch
+              networks in your wallet before depositing — USDT sent on another
+              chain cannot be credited.
+            </Notice>
+          )}
+
           {/* WRONG-WALLET GUARD — deposits credit the sending wallet's account.
               Steps stay hidden until the registered wallet is connected. */}
           {walletMismatch && expectedWallet && (
@@ -161,8 +178,8 @@ function DepositPageInner() {
             </Notice>
           )}
 
-          {/* AMOUNT INPUT — hidden while the wrong wallet is connected */}
-          {!walletMismatch && (
+          {/* AMOUNT INPUT — hidden while the wrong wallet or wrong chain is connected */}
+          {!walletMismatch && !wrongChain && (
           <Panel title="Amount">
             <form
               onSubmit={(e) => {
@@ -195,8 +212,8 @@ function DepositPageInner() {
           </Panel>
           )}
 
-          {/* DEPOSIT INSTRUCTIONS — also gated on the right wallet */}
-          {instructions && !walletMismatch && (
+          {/* DEPOSIT INSTRUCTIONS — also gated on the right wallet + chain */}
+          {instructions && !walletMismatch && !wrongChain && (
             <>
               {/* SUMMARY */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
@@ -213,11 +230,11 @@ function DepositPageInner() {
               {/* ADDRESSES */}
               <Panel title="Contract Addresses">
                 <Stack gap="md">
-                  <CopyField
+                  <UICopyField
                     label="RevenueVault Address"
                     value={instructions.revenueVaultAddress}
                   />
-                  <CopyField
+                  <UICopyField
                     label="USDT Contract Address"
                     value={instructions.usdtAddress}
                   />

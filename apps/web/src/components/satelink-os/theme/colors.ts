@@ -2,37 +2,37 @@
  * Satelink-OS color tokens.
  *
  * Single source of truth for JS that needs raw values (recharts series, SVG).
- * The SAME values are mirrored as CSS variables in `theme.css` — keep them in
- * sync. Do not hardcode hex anywhere else in the design system.
+ * The SAME values are mirrored as CSS variables in @satelink/ui theme.css —
+ * keep them in sync with that file (the canonical token source). Do not hardcode hex anywhere else in the design system.
  *
  * Brand (Phase 4): teal-forward, never generic enterprise blue.
  */
 export const colors = {
   // Brand
-  primary: '#5EEAD4', // teal — Satelink identity
-  secondary: '#00C8FF', // cyan
-  accent: '#0090FF', // azure (accent only, not the dominant blue)
+  primary: '#2DD4BF', // teal — Satelink identity (@satelink/ui --primary)
+  secondary: '#3B82F6', // info blue (@satelink/ui --info)
+  accent: '#3B82F6', // info blue — accent duty only
 
   // Semantic
-  success: '#34D399',
+  success: '#22C55E',
   warn: '#F59E0B',
   danger: '#EF4444',
-  info: '#7DD3FC',
+  info: '#3B82F6',
 
   // SigNoz-style dark surface hierarchy (bg0 deepest → bg3 raised)
-  bg0: '#050816',
-  bg1: '#0E1628',
-  bg2: '#121C33',
-  bg3: '#1A2740',
+  bg0: '#0A0A0B',
+  bg1: '#111113',
+  bg2: '#18181B',
+  bg3: '#1F1F23',
 
   // Lines / borders
-  border: '#1A2F50',
-  borderStrong: '#26406B',
+  border: '#27272A',
+  borderStrong: '#3F3F46',
 
   // Text
-  text: '#E5EEF8',
-  textMuted: '#94A3B8',
-  textDim: '#4A5A72',
+  text: '#FAFAFA',
+  textMuted: '#A1A1AA',
+  textDim: '#71717A',
 } as const;
 
 /** Ordered palette for chart series (teal-forward, brand-consistent). */

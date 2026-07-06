@@ -310,42 +310,106 @@ export function createAdminRouter(pool, redis) {
   const TREASURY_FALLBACK = '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
   const BILLING_RATE     = parseFloat(process.env.PRICE_PER_CALL || '0.00003');
 
+  // Traffic truth source (audit 2026-07-06, docs/DATA_TRUTH_AUDIT.md #2/#3):
+  // developer_intel.calls_today is only overwritten when an IP reappears in the
+  // Redis counters, so SUM(calls_today) over the whole table double-counts every
+  // IP that went quiet (81% of the sum at audit time). The live counters are the
+  // Redis ft:* keys (reset at UTC midnight); the DB fallback filters on last_seen.
+  const trafficToday = async () => {
+    if (redis) {
+      try {
+        const keys = await scanKeys(redis, 'ft:*');
+        const ipKeys = keys.filter((k) => !k.startsWith('ftua:'));
+        let calls = 0;
+        if (ipKeys.length) {
+          const vals = await redis.mget(...ipKeys);
+          for (const v of vals) calls += parseInt(v, 10) || 0;
+        }
+        return { requests: calls, active_ips: ipKeys.length, source: 'redis_utc_day' };
+      } catch { /* fall through to DB */ }
+    }
+    const r = await one(
+      `SELECT COUNT(*) FILTER (WHERE calls_today > 0)::int AS ips,
+              COALESCE(SUM(calls_today) FILTER (WHERE calls_today > 0),0)::int AS calls
+         FROM developer_intel WHERE last_seen >= now() - interval '24 hours'`);
+    return { requests: num(r.calls), active_ips: num(r.ips), source: 'developer_intel_last_seen_24h' };
+  };
+
+  // Revenue split: internal = usage metered against API keys owned by the
+  // treasury wallet itself (self-usage is not customer revenue).
+  const REVENUE_SPLIT_SQL = `
+    SELECT
+      COALESCE(SUM(e.amount_usdt),0)::float AS lifetime,
+      COALESCE(SUM(e.amount_usdt) FILTER (WHERE t.api_key IS NOT NULL),0)::float AS internal,
+      COALESCE(SUM(e.amount_usdt) FILTER (WHERE t.api_key IS NULL),0)::float    AS external,
+      COALESCE(SUM(e.amount_usdt) FILTER (WHERE to_timestamp(e.created_at) >= date_trunc('day', now())),0)::float AS today
+    FROM revenue_events_v2 e
+    LEFT JOIN api_credits t
+      ON t.api_key = e.client_id AND lower(t.wallet_address) = lower($1)
+    WHERE NOT e.is_test_data`;
+
   // OBSERVER — Executive Summary (CEO screen, single call)
   router.get('/executive/summary', async (req, res) => {
     try {
-      const rev = await one(
-        `SELECT
-           COALESCE(SUM(amount_usdt) FILTER (WHERE to_timestamp(created_at) >= date_trunc('day', now())),0)::float   AS today,
-           COALESCE(SUM(amount_usdt),0)::float AS mtd
-         FROM revenue_events_v2 WHERE NOT is_test_data`);
-      const demand = await one(
-        `SELECT COUNT(*) FILTER (WHERE calls_today > 0)::int AS active_ips,
-                COALESCE(SUM(calls_today),0)::int            AS total_calls
-         FROM developer_intel`);
-      const paying = await one(`SELECT COUNT(*) FILTER (WHERE total_deposited > 0)::int AS c FROM api_credits`);
+      const treasuryAddr = process.env.TREASURY_ADDRESS || TREASURY_FALLBACK;
+      const rev = await one(REVENUE_SPLIT_SQL, [treasuryAddr]);
+      const traffic = await trafficToday();
+      const paying = await one(
+        `SELECT COUNT(*) FILTER (WHERE total_deposited > 0 AND lower(wallet_address) <> lower($1))::int AS external,
+                COUNT(*) FILTER (WHERE total_deposited > 0 AND lower(wallet_address) =  lower($1))::int AS internal
+         FROM api_credits`, [treasuryAddr]);
       const health = await one(
-        `SELECT ROUND(100.0*COUNT(*) FILTER (WHERE status IN ('healthy','ok','up','online'))/NULLIF(COUNT(*),0),2)::float AS pct
+        `SELECT ROUND(100.0*COUNT(*) FILTER (WHERE status IN ('healthy','ok','up','online'))/NULLIF(COUNT(*),0),2)::float AS pct,
+                COUNT(DISTINCT node_id)::int AS nodes
          FROM node_health_logs WHERE checked_at >= extract(epoch from now())-86400`);
       const alerts = await one(`SELECT COUNT(*) FILTER (WHERE alerted_at >= now()-interval '24 hours')::int AS c FROM gas_alerts`);
       const settle = await new SettlementControl(pool).getStatus();
       const blocked = await one(`SELECT COUNT(*)::int AS c FROM settlement_batches WHERE status='blocked_unfunded'`);
 
       const top_risks = [];
-      if (settle.dryRun)                  top_risks.push({ label: 'Settlement in DRY_RUN — no on-chain broadcast', severity: 'high' });
-      if (settle.signerBalance === null)  top_risks.push({ label: 'Signer balance unreadable / unfunded', severity: 'high' });
-      if (num(blocked.c) > 0)             top_risks.push({ label: `${num(blocked.c)} blocked_unfunded settlement batches`, severity: 'high' });
-      if (num(rev.mtd) < 0.5)             top_risks.push({ label: 'Real revenue below $0.50 anchor threshold', severity: 'medium' });
+      if (settle.dryRun)                  top_risks.push({ code: 'SETTLEMENT_DRY_RUN', label: 'Settlement in DRY_RUN — no on-chain broadcast', severity: 'high', unblock: 'Clears at real external metered revenue > $0.50 + funded signer + human decision' });
+      if (settle.signerBalance === null || Number(settle.signerBalance) === 0)
+                                          top_risks.push({ code: 'SIGNER_UNFUNDED', label: 'Signer balance unreadable / unfunded', severity: 'high', unblock: `Fund signer ${settle.signerAddress || ''} with POL for gas` });
+      if (num(blocked.c) > 0)             top_risks.push({ code: 'BLOCKED_BATCHES', label: `${num(blocked.c)} blocked_unfunded settlement batches`, severity: 'high', unblock: 'Fund the settlement signer to release blocked batches' });
+      if (num(rev.external) < 0.5)        top_risks.push({ code: 'REVENUE_ANCHOR', label: 'Real external revenue below $0.50 anchor threshold', severity: 'medium', unblock: 'Convert free-tier traffic to metered deposits' });
+
+      // Health score = f(node availability, settlement state, funding state) —
+      // not the raw single-node heartbeat, which reads a vacuous 100%
+      // (audit #5). Components are returned so the UI can show the formula.
+      const nodeAvail = health.pct === null || health.pct === undefined ? 0 : num(health.pct);
+      const signerUnfunded = settle.signerBalance === null || Number(settle.signerBalance) === 0;
+      const penalties = {
+        signer_unfunded: signerUnfunded ? -30 : 0,
+        blocked_batches: num(blocked.c) > 0 ? -20 : 0,
+        dry_run: settle.dryRun ? -10 : 0,
+      };
+      const healthScore = Math.max(0, Math.round(
+        nodeAvail + penalties.signer_unfunded + penalties.blocked_batches + penalties.dry_run));
 
       ok(res, {
         revenue_today_usdt: num(rev.today),
-        revenue_mtd_usdt: num(rev.mtd),
+        // Kept for dashboard compatibility; this has always been the lifetime
+        // real (non-test) sum, now split into external vs internal below.
+        revenue_mtd_usdt: num(rev.lifetime),
+        revenue_lifetime_usdt: num(rev.lifetime),
+        revenue_external_usdt: num(rev.external),
+        revenue_internal_usdt: num(rev.internal),
         revenue_label: 'Lifetime',
-        active_ips_24h: num(demand.active_ips),
-        total_requests_24h: num(demand.total_calls),
-        paying_customers: num(paying.c),
+        active_ips_24h: traffic.active_ips,
+        total_requests_24h: traffic.requests,
+        requests_source: traffic.source,
+        requests_window: traffic.source === 'redis_utc_day' ? 'since UTC midnight' : 'last 24 hours',
+        paying_customers: num(paying.external) + num(paying.internal),
+        paying_customers_external: num(paying.external),
+        paying_customers_internal: num(paying.internal),
         settlement_mode: settle.dryRun ? 'DRY_RUN' : 'LIVE',
         signer_balance_pol: settle.signerBalance,
-        network_health_pct: num(health.pct),
+        network_health_pct: healthScore,
+        health_components: {
+          node_availability_pct: nodeAvail,
+          node_sample_count: num(health.nodes),
+          ...penalties,
+        },
         open_alerts: num(alerts.c),
         top_risks,
       });
@@ -364,16 +428,20 @@ export function createAdminRouter(pool, redis) {
            COUNT(*) FILTER (WHERE is_test_data)::int    AS test_count,
            COUNT(*) FILTER (WHERE NOT is_test_data)::int AS real_count
          FROM revenue_events_v2`);
-      const calls = await one(`SELECT COALESCE(SUM(calls_today),0)::int AS c FROM developer_intel`);
+      const split = await one(REVENUE_SPLIT_SQL, [process.env.TREASURY_ADDRESS || TREASURY_FALLBACK]);
+      const traffic = await trafficToday();
       ok(res, {
         today_usdt: num(r.today),
         mtd_usdt: num(r.mtd),
         total_real_usdt: num(r.total_real),
+        external_usdt: num(split.external),
+        internal_usdt: num(split.internal),
         events_count: num(r.events_count),
         is_test_data_count: num(r.test_count),
         real_data_count: num(r.real_count),
         billing_rate: BILLING_RATE,
-        free_tier_calls_24h: num(calls.c),
+        free_tier_calls_24h: traffic.requests,
+        requests_source: traffic.source,
       });
     } catch (e) { fail(res, e); }
   });
@@ -395,13 +463,14 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Revenue Funnel (request → billed → settled → withdrawable)
   router.get('/revenue/funnel', async (req, res) => {
     try {
-      const calls = await one(`SELECT COALESCE(SUM(calls_today),0)::int AS c FROM developer_intel`);
+      const traffic = await trafficToday();
       const ev = await one(`SELECT COUNT(*) FILTER (WHERE to_timestamp(created_at) >= now()-interval '24 hours')::int AS c FROM revenue_events_v2 WHERE NOT is_test_data`);
       const spent = await one(`SELECT COALESCE(SUM(total_spent),0)::float AS c FROM api_credits`);
       const settled = await one(`SELECT COALESCE(SUM(total_amount_usdt) FILTER (WHERE status='confirmed'),0)::float AS c FROM settlement_batches`);
       const treas = await one(`SELECT COALESCE(SUM(total_to_claims_usdt),0)::float AS c FROM treasury_state`);
       ok(res, {
-        requests_24h: num(calls.c),
+        requests_24h: traffic.requests,
+        requests_source: traffic.source,
         billable_24h: num(ev.c),
         revenue_events_24h: num(ev.c),
         credits_consumed_usdt: num(spent.c),
@@ -436,13 +505,24 @@ export function createAdminRouter(pool, redis) {
       const rows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
       const by = Object.fromEntries(rows.map(r => [r.classification || 'unknown', r.c]));
       const total = await one(`SELECT COUNT(*)::int AS c FROM developer_intel`);
-      const top = await one(`SELECT ip, calls_today FROM developer_intel ORDER BY calls_today DESC NULLS LAST LIMIT 1`);
+      const traffic = await trafficToday();
+      // Top lead restricted to IPs actually seen in the window — a stale
+      // calls_today from a long-gone IP is not a lead (audit #15).
+      const top = await one(
+        `SELECT ip, calls_today FROM developer_intel
+          WHERE last_seen >= now() - interval '24 hours'
+          ORDER BY calls_today DESC NULLS LAST LIMIT 1`);
       ok(res, {
         machine_count: num(by.machine),
         developer_count: num(by.developer),
         unknown_count: num(by.unknown),
         scanner_count: num(by.scanner),
-        total_active_ips: num(total.c),
+        // total_active_ips was COUNT(*) over every IP ever recorded (audit #15).
+        // It now reports IPs active in the current window; the historical
+        // rowcount moves to total_tracked_ips.
+        total_active_ips: traffic.active_ips,
+        total_tracked_ips: num(total.c),
+        requests_source: traffic.source,
         top_lead_ip: top.ip || null,
         top_lead_calls_per_day: num(top.calls_today),
       });
@@ -458,22 +538,30 @@ export function createAdminRouter(pool, redis) {
            percentile_cont(0.5) WITHIN GROUP (ORDER BY response_time_ms)::float AS p50,
            ROUND(100.0*COUNT(*) FILTER (WHERE status NOT IN ('healthy','ok','up','online'))/NULLIF(COUNT(*),0),2)::float AS err
          FROM node_health_logs WHERE checked_at >= extract(epoch from now())-86400`);
-      const calls = await one(`SELECT COALESCE(SUM(calls_today),0)::int AS c FROM developer_intel`);
+      const traffic = await trafficToday();
       const nodes = await one(`SELECT COUNT(*) FILTER (WHERE status='active')::int AS c FROM registered_nodes`);
+      const sample = await one(
+        `SELECT COUNT(DISTINCT node_id)::int AS nodes FROM node_health_logs
+          WHERE checked_at >= extract(epoch from now())-86400`);
       const chains = await q(
         `SELECT DISTINCT jsonb_array_elements_text(chain_ids) AS chain_id FROM registered_nodes WHERE status='active'`);
       const chainNames = { '137': 'Polygon', '1': 'Ethereum', '80002': 'Polygon Amoy' };
       ok(res, {
         availability_pct: num(h.avail),
+        // Availability/p50 describe the health-log sample, which today is a
+        // single self-heartbeat node — the UI must label the sample size
+        // (audit #17), so it is included here.
+        availability_sample_nodes: num(sample.nodes),
         p50_latency_ms: num(h.p50),
         error_rate_pct: num(h.err),
-        requests_24h: num(calls.c),
+        requests_24h: traffic.requests,
+        requests_source: traffic.source,
         active_nodes: num(nodes.c),
         chain_status: chains.map(c => ({
           chain_id: parseInt(c.chain_id, 10),
           name: chainNames[c.chain_id] || `chain-${c.chain_id}`,
           status: num(nodes.c) > 0 ? 'operational' : 'degraded',
-          requests_24h: num(calls.c),
+          requests_24h: traffic.requests,
         })),
       });
     } catch (e) { fail(res, e); }
@@ -552,8 +640,17 @@ export function createAdminRouter(pool, redis) {
         `SELECT wallet_address AS wallet, credits_usdt::float AS credits_usdt,
                 total_deposited::float AS total_deposited, total_spent::float AS total_spent, created_at
          FROM api_credits WHERE total_deposited > 0 ORDER BY total_deposited DESC`);
+      // Conversion pipeline: active free-tier machines with the fields the
+      // Customer Ops table needs — first seen, last call, and whether the
+      // lead converted (stage advanced to deposited/paid). last_seen filter
+      // keeps stale calls_today counters out (audit #2).
       const free_tier = await q(
-        `SELECT ip, calls_today AS calls_24h FROM developer_intel WHERE calls_today > 0 ORDER BY calls_today DESC LIMIT 20`);
+        `SELECT ip, calls_today AS calls_24h, first_seen, last_seen,
+                classification, status,
+                (status IN ('deposited','paid')) AS converted
+           FROM developer_intel
+          WHERE calls_today > 0 AND last_seen >= now() - interval '24 hours'
+          ORDER BY calls_today DESC LIMIT 50`);
       ok(res, { paying, free_tier, total_paying: paying.length });
     } catch (e) { fail(res, e); }
   });

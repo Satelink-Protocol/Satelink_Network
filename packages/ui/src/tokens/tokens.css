@@ -15,12 +15,14 @@
    ============================================================ */
 
 .satelink-os {
-  /* ---- state colors ---- */
-  --state-healthy: 152 65% 42%;
-  --state-degraded: 38 90% 52%;
-  --state-critical: 0 72% 52%;
-  --state-unknown: 220 9% 55%;
-  --state-dry-run: 270 60% 62%;
+  /* ---- state colors (aligned to the semantic palette in theme.css) ----
+     green #22C55E · amber #F59E0B · red #EF4444 · zinc unknown.
+     dry-run shares amber with warning per the design spec (amber = warning/dry-run). */
+  --state-healthy: 142 71% 45%;
+  --state-degraded: 38 92% 50%;
+  --state-critical: 0 84% 60%;
+  --state-unknown: 240 4% 46%;
+  --state-dry-run: 38 92% 50%;
 
   /* ---- spacing scale (4px base) ---- */
   --space-1: 0.25rem;

@@ -7,7 +7,7 @@ import {
   Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
-import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
+import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, DataTable as ModernDataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers, Zap } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 import SelfTestsView from "./self-tests/SelfTestsView";
@@ -164,9 +164,6 @@ function AdminCommandCenter() {
   const [abuseOverviewErr, setAbuseOverviewErr] = useState<string | null>(null);
 
   const [strictShield, setStrictShield] = useState(true);
-  const [merkleChecked, setMerkleChecked] = useState(false);
-  const [merkleChecking, setMerkleChecking] = useState(false);
-  const [selectedJobTrace, setSelectedJobTrace] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [feed, setFeed] = useState<any[]>([]);
@@ -324,19 +321,10 @@ function AdminCommandCenter() {
   const liveJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "success").length;
   const failedJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "danger").length;
   const staleJobs = (jobs || []).filter((j: any) => jobDotTone(j) === "warn").length;
-  // Downsample to <=50 points so the area chart stays cheap regardless of how
-  // many lead pages are loaded.
-  const demandByLead = useMemo(() => {
-    const full = [...(devs || [])].sort((a: any, b: any) => (a.days_active || 0) - (b.days_active || 0)).map((d: any) => ({ label: String(d.ip || "").split(".").pop() || "?", calls: d.avg_daily_calls || 0 }));
-    const MAX_POINTS = 50;
-    if (full.length <= MAX_POINTS) return full;
-    const step = Math.ceil(full.length / MAX_POINTS);
-    return full.filter((_: any, i: number) => i % step === 0);
-  }, [devs]);
   const maxCalls = useMemo(() => Math.max(...(devs || []).map((d: any) => d.avg_daily_calls || 1), 150000), [devs]);
   const filteredDevs = useMemo(() => devs == null ? null : devs.filter((d: any) => (stages[d.status] ?? false) && (d.classification ? (classes[d.classification] ?? true) : true)), [devs, stages, classes]);
   const counts = useMemo(() => (devs || []).reduce((a: any, d: any) => ((a[d.status] = (a[d.status] || 0) + 1), a), {}), [devs]);
-  const funnelData = useMemo(() => [{ name: "Classified", value: (devs || []).length, fill: "#4e9eff" }, { name: "Identified", value: counts.identified || 0, fill: "#53b1fd" }, { name: "Contacted", value: counts.contacted || 0, fill: "#f5a623" }, { name: "Deposited", value: counts.deposited || 0, fill: "#32d583" }, { name: "Paid", value: counts.paid || 0, fill: "#0aab53" }], [devs, counts]);
+  const funnelData = useMemo(() => [{ name: "Classified", value: (devs || []).length, fill: "hsl(var(--chart-2))" }, { name: "Identified", value: counts.identified || 0, fill: "hsl(var(--chart-5))" }, { name: "Contacted", value: counts.contacted || 0, fill: "hsl(var(--chart-3))" }, { name: "Deposited", value: counts.deposited || 0, fill: "hsl(var(--chart-4))" }, { name: "Paid", value: counts.paid || 0, fill: "hsl(var(--success))" }], [devs, counts]);
 
   const H = HEADERS[view] || { title: "Command Center", subtitle: "Management NOC Console", icon: Server };
 
@@ -365,6 +353,17 @@ function AdminCommandCenter() {
       }
     >
       <Stack gap="sm">
+        {/* Persistent DRY_RUN banner — every admin view, as long as settlement
+            is simulated. States the exit condition explicitly. */}
+        {status?.dryRun && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+            <span className="size-1.5 shrink-0 rounded-full bg-state-degraded" aria-hidden />
+            <span className="text-xs text-state-degraded">
+              <strong>SETTLEMENT_DRY_RUN=1</strong> — no on-chain broadcasts. Clears when real
+              external metered revenue exceeds $0.50, the signer is funded, and a human flips it.
+            </span>
+          </div>
+        )}
         {notice && <Notice>{notice}</Notice>}
 
         {/* 1. EXECUTIVE OVERVIEW VIEW */}
@@ -381,14 +380,13 @@ function AdminCommandCenter() {
                   <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">{execSummary?.revenue_label ?? "Lifetime"} Revenue</span>
                   <DollarSign className="h-4 w-4 text-zinc-600" />
                 </div>
-                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `$${usdt5(execSummary.revenue_mtd_usdt)}` : "—"}</div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `$${usdt5(execSummary.revenue_lifetime_usdt ?? execSummary.revenue_mtd_usdt)}` : "—"}</div>
                 <div className="flex items-center gap-1.5">
-                  {(execSummary?.revenue_mtd_usdt ?? 0) > 0 ? (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-500/15 text-green-400">▲ +0%</span>
-                  ) : (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-                  )}
-                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                  <span className="text-xs text-zinc-500">
+                    {execSummary && execSummary.revenue_external_usdt != null
+                      ? `$${usdt5(execSummary.revenue_external_usdt)} external · $${usdt5(execSummary.revenue_internal_usdt)} internal`
+                      : "real metered, non-test"}
+                  </span>
                 </div>
               </div>
 
@@ -396,13 +394,12 @@ function AdminCommandCenter() {
               <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
                 <div className="flex items-start justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Total Requests (24h)</span>
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Total Requests</span>
                   <Activity className="h-4 w-4 text-zinc-600" />
                 </div>
                 <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.total_requests_24h) : "—"}</div>
                 <div className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                  <span className="text-xs text-zinc-500">{execSummary?.requests_window || "24h window"}</span>
                 </div>
               </div>
 
@@ -410,13 +407,12 @@ function AdminCommandCenter() {
               <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
                 <div className="flex items-start justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs (24h)</span>
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs</span>
                   <Users className="h-4 w-4 text-zinc-600" />
                 </div>
                 <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.active_ips_24h) : "—"}</div>
                 <div className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-                  <span className="text-xs text-zinc-500">vs last epoch</span>
+                  <span className="text-xs text-zinc-500">{execSummary?.requests_window || "24h window"}</span>
                 </div>
               </div>
 
@@ -429,8 +425,10 @@ function AdminCommandCenter() {
                 </div>
                 <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary && execSummary.signer_balance_pol != null ? `${fmt.bal(execSummary.signer_balance_pol)} POL` : "—"}</div>
                 <div className="flex items-center gap-1.5">
-                  {(execSummary?.signer_balance_pol ?? 0) === 0 ? (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-400">Unfunded</span>
+                  {execSummary && (execSummary.signer_balance_pol == null || Number(execSummary.signer_balance_pol) === 0) ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-400">
+                      {execSummary.signer_balance_pol == null ? "Unreadable / unfunded" : "Unfunded"}
+                    </span>
                   ) : (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
                   )}
@@ -439,15 +437,16 @@ function AdminCommandCenter() {
               </div>
             </div>
 
-            {/* ROW 2 — Alert strip */}
+            {/* ROW 2 — Alert strip. Live top_risks from /admin/executive/summary —
+                never a hardcoded list (audit #8). Each risk carries its unblock
+                condition from the API. */}
             <div className="mb-6">
               <AlertBand
-                alerts={[
-                  { code: "SETTLEMENT_DRY_RUN", message: "Settlement in DRY_RUN — no on-chain broadcast", severity: "high" },
-                  { code: "SIGNER_UNFUNDED", message: "Signer balance unreadable / unfunded", severity: "high" },
-                  { code: "BLOCKED_BATCHES", message: "1954 blocked_unfunded settlement batches", severity: "high" },
-                  { code: "REVENUE_ANCHOR", message: "Real revenue below $0.50 anchor threshold", severity: "warning" },
-                ]}
+                alerts={(execSummary?.top_risks || []).map((r: any) => ({
+                  code: r.code || "RISK",
+                  message: r.unblock ? `${r.label} — ${r.unblock}` : r.label,
+                  severity: r.severity === "high" ? "critical" : "warning",
+                }))}
                 className="[&>div]:h-9 [&>div]:py-0 [&>div]:min-h-9"
               />
             </div>
@@ -455,32 +454,39 @@ function AdminCommandCenter() {
             {/* ROW 3 — Two column grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
               <div className="col-span-1 lg:col-span-2">
+                {/* Honest empty state — there is no request-history endpoint yet.
+                    The previous chart re-timestamped per-lead averages as an hourly
+                    series (audit #10, fabricated). */}
                 <TimeseriesPanel
                   title="Gateway Traffic"
                   subtitle="Request volume over time"
-                  data={demandByLead.map((d: any, i: number) => ({
-                    ts: Date.now() - (demandByLead.length - 1 - i) * 3600000,
-                    requests: d.calls,
-                  }))}
+                  data={[]}
                   series={[{ key: "requests", label: "Requests", type: "area", color: "hsl(var(--chart-1))" }]}
                   className="h-full min-h-[280px]"
+                  showLegend={false}
+                  emptyHint="No request-history endpoint yet — the KPI strip above shows the verified totals."
                 />
               </div>
               <div className="col-span-1">
                 {/* System Status List */}
                 <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 h-full">
                   <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">System Status</div>
+                  {/* Every row is a live probe — /admin/observability/metrics runs
+                      SELECT 1 / redis.ping(); nothing is a string literal (audit #9). */}
                   <div className="space-y-0">
                     {[
-                      { label: "API Gateway", status: "operational" },
-                      { label: "RPC", status: "operational" },
-                      { label: "Database", status: "operational" },
-                      { label: "Redis", status: "operational" },
-                      { label: "Polygon", status: netHealth?.chain_status?.[0]?.status === "operational" ? "operational" : "degraded" },
+                      { label: "API Gateway", status: execSummary ? "operational" : execErr ? "degraded" : "unknown" },
+                      { label: "Database", status: obsMetrics ? (obsMetrics.db_status === "ok" ? "operational" : "degraded") : "unknown" },
+                      { label: "Redis", status: obsMetrics ? (obsMetrics.redis_status === "ok" ? "operational" : obsMetrics.redis_status === "not_configured" ? "unknown" : "degraded") : "unknown" },
+                      { label: "Settlement", status: status ? (status.dryRun ? "dry_run" : "operational") : "unknown" },
+                      { label: "Polygon", status: netHealth ? (netHealth.chain_status?.[0]?.status === "operational" ? "operational" : "degraded") : "unknown" },
                     ].map(s => (
                       <div key={s.label} className="flex justify-between items-center py-3 border-b border-zinc-800/50 last:border-0">
                         <span className="text-sm text-zinc-300">{s.label}</span>
-                        <StatusBadge label={s.status.toUpperCase()} tone={s.status === "operational" ? "success" : "warning"} />
+                        <StatusBadge
+                          label={s.status === "dry_run" ? "DRY_RUN" : s.status === "unknown" ? "…" : s.status.toUpperCase()}
+                          tone={s.status === "operational" ? "success" : s.status === "dry_run" ? "warn" : s.status === "unknown" ? "muted" : "danger"}
+                        />
                       </div>
                     ))}
                   </div>
@@ -497,9 +503,17 @@ function AdminCommandCenter() {
                   <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Paying Customers</span>
                   <Users className="h-4 w-4 text-zinc-600" />
                 </div>
-                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? fmt.num(execSummary.paying_customers) : "—"}</div>
+                <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">
+                  {execSummary
+                    ? (execSummary.paying_customers_external != null ? fmt.num(execSummary.paying_customers_external) : fmt.num(execSummary.paying_customers))
+                    : "—"}
+                </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-zinc-500">Deposits {'>'} 0</span>
+                  <span className="text-xs text-zinc-500">
+                    {execSummary && execSummary.paying_customers_internal != null
+                      ? `external · +${fmt.num(execSummary.paying_customers_internal)} internal (treasury)`
+                      : "Deposits > 0"}
+                  </span>
                 </div>
               </div>
 
@@ -512,7 +526,14 @@ function AdminCommandCenter() {
                 </div>
                 <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? `${execSummary.network_health_pct}%` : "—"}</div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-zinc-500">Uptime SLA</span>
+                  <span
+                    className="text-xs text-zinc-500"
+                    title={execSummary?.health_components
+                      ? `node availability ${execSummary.health_components.node_availability_pct}% (${execSummary.health_components.node_sample_count} node sample) ${execSummary.health_components.signer_unfunded} signer unfunded ${execSummary.health_components.blocked_batches} blocked batches ${execSummary.health_components.dry_run} dry-run`
+                      : undefined}
+                  >
+                    {execSummary?.health_components ? "availability − alert penalties (hover for formula)" : "computed score"}
+                  </span>
                 </div>
               </div>
 
@@ -538,10 +559,10 @@ function AdminCommandCenter() {
             {/* KPI cards span the full width across the top — no overlap. */}
             {demStats && (
               <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-                <KPICard label="Total Active IPs" value={fmt.num(demStats.total_active_ips)} />
-                <KPICard label="Developers" value={fmt.num(demStats.developer_count)} />
-                <KPICard label="Machines" value={fmt.num(demStats.machine_count)} />
-                <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} />
+                <KPICard label="Active IPs" value={fmt.num(demStats.total_active_ips)} caption={demStats.total_tracked_ips ? `${fmt.num(demStats.total_tracked_ips)} tracked all-time` : undefined} />
+                <KPICard label="Developers" value={fmt.num(demStats.developer_count)} caption="all-time classified" />
+                <KPICard label="Machines" value={fmt.num(demStats.machine_count)} caption="all-time classified" />
+                <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} caption="all-time classified" />
                 <KPICard label="Top IP calls" value={`${fmt.num(demStats.top_lead_calls_per_day)}/d`} caption={demStats.top_lead_ip || ""} />
               </div>
             )}
@@ -581,8 +602,8 @@ function AdminCommandCenter() {
                     {devs && devs.length > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <FunnelChart>
-                          <Tooltip contentStyle={{ background: "#183D3D", border: "1px solid #5C8374", fontSize: 11, fontFamily: "JetBrains Mono", borderRadius: 4 }} />
-                          <Funnel dataKey="value" data={funnelData} isAnimationActive><LabelList position="right" fill="#93B1A6" stroke="none" dataKey="name" fontSize={10} /></Funnel>
+                          <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono", borderRadius: 4 }} />
+                          <Funnel dataKey="value" data={funnelData} isAnimationActive><LabelList position="right" fill="hsl(var(--muted-foreground))" stroke="none" dataKey="name" fontSize={10} /></Funnel>
                         </FunnelChart>
                       </ResponsiveContainer>
                     ) : <EmptyState variant="line" label="funnel" note="loading…" />}
@@ -629,6 +650,15 @@ function AdminCommandCenter() {
                 <KPICard label="Blocked Unfunded" value={fmt.num(treasStatus.blocked_unfunded_batches)} caption={`${fmt.bal(treasStatus.blocked_unfunded_usdt)} USDT blocked`} />
               </div>
             )}
+            {treasStatus && treasStatus.blocked_unfunded_batches > 0 && (
+              <p className="mx-1 text-xs text-muted-foreground">
+                <strong className="text-foreground">What "blocked unfunded" means:</strong>{" "}
+                epochs were aggregated into payable settlement batches, but the signer wallet{" "}
+                <span className="font-mono">{fmt.addr(treasStatus.signer_address)}</span> has no POL
+                for gas, so none can broadcast — funding the signer releases all{" "}
+                {fmt.num(treasStatus.blocked_unfunded_batches)} batches.
+              </p>
+            )}
 
             <Panel title="Settlement Control">
               {status && <Stack gap="sm">
@@ -642,35 +672,6 @@ function AdminCommandCenter() {
                   <Button tone="muted" disabled={busy.dryRun} onClick={() => { setShowLiveConfirm(false); setConfirmLive(""); }}>Cancel</Button>
                 </Inline>}
               </Stack>}
-            </Panel>
-
-            <Panel title="Merkle Proof Integrity Auditing" headerRight={<StatusBadge label={merkleChecked ? "RECONCILED" : "NOT VERIFIED"} tone={merkleChecked ? "success" : "warn"} />}>
-              <div className="p-4 bg-zinc-900/40 rounded-lg border border-border flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-foreground">Verify Unsettled Epoch Merkle Trees</p>
-                    <p className="text-[10px] text-muted-foreground">Aggregates all raw client logs to compute matching Merkle roots with smart contract logs.</p>
-                  </div>
-                  <Button size="sm" tone={merkleChecked ? "muted" : "primary"} disabled={merkleChecking} onClick={() => {
-                    setMerkleChecking(true);
-                    setTimeout(() => {
-                      setMerkleChecking(false);
-                      setMerkleChecked(true);
-                      flash("Merkle Tree verified! All roots match Polygon blockchain states.");
-                    }, 1200);
-                  }}>
-                    {merkleChecking ? "Verifying..." : merkleChecked ? "Re-verify Roots" : "Verify Epoch Roots"}
-                  </Button>
-                </div>
-                {merkleChecked && (
-                  <div className="pt-2 border-t border-border flex justify-between items-center">
-                    <span className="text-[10px] text-emerald-400 font-mono">Merkle Root: 0x98fca327dbbf43702a...1298d</span>
-                    <Button size="sm" tone="success" onClick={() => { flash("Submitted root verification proof signature to Polygon POS network."); setMerkleChecked(false); }}>
-                      Sign On-Chain Settlement
-                    </Button>
-                  </div>
-                )}
-              </div>
             </Panel>
 
             {treasStatus && (
@@ -932,6 +933,25 @@ function AdminCommandCenter() {
                       <KPICard label="Free" value={fmt.num(segFree)} caption="No deposits (free-tier IPs)" />
                     </div>
                   </Panel>
+
+                  {/* THE MONEY SCREEN — active free-tier machines are the
+                      conversion pipeline: who calls, since when, converted? */}
+                  <Panel title="Conversion Pipeline — Active Free-Tier Machines" headerRight={<StatusBadge label={`${free.length} active (24h)`} tone="info" />}>
+                    <ModernDataTable
+                      columns={[
+                        { key: "ip", header: "IP", cell: (m: any) => <span className="font-mono text-xs">{m.ip}</span>, sortValue: (m: any) => m.ip },
+                        { key: "classification", header: "Class", cell: (m: any) => <span className="text-xs text-muted-foreground">{m.classification || "—"}</span> },
+                        { key: "first_seen", header: "First Seen", cell: (m: any) => <span className="font-mono text-xs">{m.first_seen ? new Date(m.first_seen).toLocaleDateString() : "—"}</span>, sortValue: (m: any) => m.first_seen || "" },
+                        { key: "calls_24h", header: "Calls Today", align: "right", cell: (m: any) => <span className="font-mono text-xs">{fmt.num(m.calls_24h)}</span>, sortValue: (m: any) => m.calls_24h || 0 },
+                        { key: "last_seen", header: "Last Call", cell: (m: any) => <span className="font-mono text-xs">{fmt.time(m.last_seen)}</span>, sortValue: (m: any) => m.last_seen || "" },
+                        { key: "converted", header: "Converted", cell: (m: any) => <StatusBadge label={m.converted ? "DEPOSITED" : "NOT YET"} tone={m.converted ? "success" : "muted"} /> }
+                      ]}
+                      rows={free}
+                      rowKey={(m: any) => m.ip}
+                      emptyTitle="No active free-tier machines"
+                      emptyDescription="Machines appear here once they call the gateway (last 24h)."
+                    />
+                  </Panel>
                 </>
               );
             })() : <EmptyState label="No customer data loaded" />}
@@ -955,7 +975,7 @@ function AdminCommandCenter() {
                   <Card>
                     <CardHeader><CardTitle>Database</CardTitle></CardHeader>
                     <CardContent>
-                      <p className={`text-sm font-mono ${obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400"}`}>
+                      <p className={`text-sm font-mono ${obsMetrics.db_status === "ok" ? "text-primary" : "text-red-400"}`}>
                         {obsMetrics.db_status === "ok" ? "CONNECTED" : (obsMetrics.db_status || "—").toUpperCase()}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-1">Connection pool metrics not exposed by endpoint.</p>
@@ -964,7 +984,7 @@ function AdminCommandCenter() {
                   <Card>
                     <CardHeader><CardTitle>Cache (Redis)</CardTitle></CardHeader>
                     <CardContent>
-                      <p className={`text-sm font-mono ${obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400"}`}>
+                      <p className={`text-sm font-mono ${obsMetrics.redis_status === "ok" ? "text-primary" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400"}`}>
                         {obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : (obsMetrics.redis_status || "—").toUpperCase()}
                       </p>
                     </CardContent>
@@ -1074,20 +1094,11 @@ function AdminCommandCenter() {
                   { key: "action", header: "Last execution outcome" },
                   { key: "created_at", header: "Timestamp", mono: true, cell: (j: any) => <span>{fmt.time(j.created_at)}</span> },
                   {
-                    key: "actions",
-                    header: "",
-                    align: "right",
-                    cell: (j: any) => (
-                      <Button size="xs" variant="outline" onClick={() => {
-                        if (j.action && /error|fail/i.test(j.action)) {
-                          setSelectedJobTrace(`Error: Worker encountered a system crash\n    at Job.${j.job_name} (scheduler/jobs/${j.job_name}.js:78:12)\n    at Queue.process (scheduler/queue.js:142:19)\n    at Engine.run (scheduler/engine.js:45:9)\n  Detail: database connection pools timed out after 3000ms`);
-                        } else {
-                          setSelectedJobTrace(`Job run completed with exit code 0\n  Output logs:\n    [INFO] Fetching task dependencies...\n    [INFO] Accrued ledger balances finalized.\n    [SUCCESS] Finished in 142ms.`);
-                        }
-                      }}>
-                        Diagnostics Log
-                      </Button>
-                    )
+                    // The last real outcome is already in automation_logs — show it
+                    // verbatim. (A fake stack-trace generator lived here; audit.)
+                    key: "result",
+                    header: "Result",
+                    cell: (j: any) => <span className="font-mono text-[10px] text-muted-foreground">{typeof j.result === "string" ? j.result.slice(0, 120) : j.result ? JSON.stringify(j.result).slice(0, 120) : "—"}</span>
                   }
                 ]}
                 rows={jobs}
@@ -1095,14 +1106,6 @@ function AdminCommandCenter() {
                 emptyLabel="scheduler jobs"
               />
             </Panel>
-
-            {selectedJobTrace && (
-              <Panel title="Scheduler Stack Trace Analysis" headerRight={<Button size="xs" variant="ghost" onClick={() => setSelectedJobTrace(null)}>Close</Button>}>
-                <pre className="bg-black/60 p-4 border border-border rounded-lg font-mono text-[10px] text-zinc-300 leading-relaxed overflow-x-auto whitespace-pre">
-                  {selectedJobTrace}
-                </pre>
-              </Panel>
-            )}
 
             <Panel title="Live Server Operations Stream" headerRight={<StatusBadge label={feedState.toUpperCase()} tone={feedState === "live" ? "success" : "warn"} />}>
               <div className="max-h-[300px] overflow-y-auto rounded-md border font-mono text-[11px]">
@@ -1119,7 +1122,7 @@ function AdminCommandCenter() {
                       feedEvents.map((ev, idx) => (
                         <TableRow key={idx}>
                           <TableCell className="text-muted-foreground w-24">{ev.time}</TableCell>
-                          <TableCell className="text-[#00ADB5] w-36">{ev.source}</TableCell>
+                          <TableCell className="text-primary w-36">{ev.source}</TableCell>
                           <TableCell className="text-zinc-200">{ev.message}</TableCell>
                         </TableRow>
                       ))
@@ -1148,7 +1151,7 @@ function AdminCommandCenter() {
                 <KPICard label="Developer IPs" value={fmt.num(secClassStats.developer)} />
                 <KPICard label="Machine Agents" value={fmt.num(secClassStats.machine)} />
                 <KPICard label="Vulnerability Scanners" value={fmt.num(secClassStats.scanner)} />
-                <KPICard label="Classified Scans (24h)" value={fmt.num(secClassStats.unknown)} />
+                <KPICard label="Unclassified IPs" value={fmt.num(secClassStats.unknown)} caption="awaiting classifier" />
               </div>
             )}
 
@@ -1234,7 +1237,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>API Database (PostgreSQL)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400") : "text-muted-foreground"}`}>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.db_status === "ok" ? "text-primary" : "text-red-400") : "text-muted-foreground"}`}>
                       {obsMetrics ? (obsMetrics.db_status === "ok" ? "CONNECTED (Railway-managed PG)" : "UNREACHABLE") : "checking…"}
                     </p>
                   </CardContent>
@@ -1242,7 +1245,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>Key-Value Store (Redis)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400") : "text-muted-foreground"}`}>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.redis_status === "ok" ? "text-primary" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400") : "text-muted-foreground"}`}>
                       {obsMetrics ? (obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : "ERROR") : "checking…"}
                     </p>
                   </CardContent>
@@ -1250,7 +1253,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>API Response (p50, 24h)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className="text-xs font-mono text-[#00ADB5]">
+                    <p className="text-xs font-mono text-primary">
                       {obsMetrics && typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms} ms median` : "checking…"}
                     </p>
                   </CardContent>
