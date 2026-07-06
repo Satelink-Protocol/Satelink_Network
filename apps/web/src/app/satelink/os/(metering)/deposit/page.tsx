@@ -323,7 +323,7 @@ function DepositPageInner() {
                   </ol>
                   <div>
                     <a
-                      href="/satelink/os/overview"
+                      href="/satelink/os/mission-control"
                       className="text-xs font-semibold text-primary no-underline"
                     >
                       Open the console →

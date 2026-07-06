@@ -53,7 +53,7 @@
   --bg-glass: rgba(255, 255, 255, 0.7);
   --text-primary: #18181B;
   --text-secondary: #52525B;
-  --text-muted: #A1A1AA;
+  --text-muted: #71717A;
   --border: rgba(0, 0, 0, 0.08);
   --border-subtle: rgba(0, 0, 0, 0.04);
 }
@@ -1179,10 +1179,10 @@ input[type="range"]::-webkit-slider-thumb {
 
 .social-icon svg { width: 18px; height: 18px; }
 
-.footer-column h4 {
+.footer-column .footer-heading {
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 20px;
@@ -1198,11 +1198,11 @@ input[type="range"]::-webkit-slider-thumb {
 
 .footer-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 32px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 16px; }
 
-.footer-copyright { font-size: 14px; color: var(--text-muted); }
+.footer-copyright { font-size: 14px; color: var(--text-secondary); }
 
 .footer-legal { display: flex; gap: 24px; }
 
-.footer-legal a { font-size: 14px; color: var(--text-muted); transition: color 0.2s ease; }
+.footer-legal a { font-size: 14px; color: var(--text-secondary); transition: color 0.2s ease; }
 
 .footer-legal a:hover { color: var(--accent); }
 
@@ -1211,11 +1211,33 @@ input[type="range"]::-webkit-slider-thumb {
 
 .fade-up.visible { opacity: 1; transform: translateY(0); }
 
+/* Mobile navigation drawer (hamburger). Hidden on desktop where the inline
+   nav renders; the button toggles it via React state. */
+.mobile-nav { display: none; }
+
 /* Responsive */
 @media (max-width: 1024px) {
   .nav-links { display: none; }
+  .nav-actions .btn-ghost, .nav-actions .btn-primary { display: none; }
   .mobile-menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: transparent; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
   .mobile-menu-btn svg { width: 20px; height: 20px; stroke: var(--text-secondary); }
+  .mobile-nav {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 20px 16px;
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-nav-link {
+    display: block;
+    padding: 12px 4px;
+    min-height: 44px;
+    font-size: 16px;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .mobile-nav-link:last-child { border-bottom: none; }
   .footer-grid { grid-template-columns: repeat(2, 1fr); }
   .footer-brand { grid-column: span 2; }
   .node-grid { grid-template-columns: 1fr; }

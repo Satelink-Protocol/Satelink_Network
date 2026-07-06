@@ -6,15 +6,25 @@
   "rewrites": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "status.satelink.network" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "status.satelink.network"
+        }
+      ],
       "destination": "/_status/:path*"
     }
   ],
   "redirects": [
     {
       "source": "/",
-      "has": [{ "type": "host", "value": "app.satelink.network" }],
-      "destination": "/satelink/os/overview",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.satelink.network"
+        }
+      ],
+      "destination": "/satelink/os/mission-control",
       "permanent": false
     }
   ]

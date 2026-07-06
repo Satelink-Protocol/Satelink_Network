@@ -35,6 +35,7 @@ const CheckIcon = () => (
 export default function Home() {
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [calls, setCalls] = useState(1_000_000);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Live metrics — real data only, from /api/status (proxied to the API).
   useEffect(() => {
@@ -194,6 +195,14 @@ export default function Home() {
   const requests24h =
     status != null ? status.total_requests_24h.toLocaleString("en-US") : "—";
   const nodesOnline = status != null ? String(status.nodes_online) : "—";
+  // Measured values only — /api/status derives these from health-log samples
+  // and returns null when there is no sample. Never render a stand-in number.
+  const uptimePct =
+    status != null && status.uptime_pct != null ? `${status.uptime_pct}%` : "—";
+  const latencyMs =
+    status != null && status.avg_latency_ms != null
+      ? `${status.avg_latency_ms}ms`
+      : "—";
 
   return (
     <>
@@ -214,18 +223,23 @@ export default function Home() {
                 </a>
               </li>
               <li>
-                <a href="/satelink/os/deposit" className="nav-link">
+                <a href="#pricing" className="nav-link">
                   Pricing
                 </a>
               </li>
               <li>
-                <a href="/satelink/os/nodes" className="nav-link">
+                <a href="/node" className="nav-link">
                   Node Operators
                 </a>
               </li>
               <li>
                 <a href="/docs" className="nav-link">
                   Docs
+                </a>
+              </li>
+              <li>
+                <a href="/status" className="nav-link">
+                  Status
                 </a>
               </li>
             </ul>
@@ -245,7 +259,7 @@ export default function Home() {
                 <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
               </svg>
             </button>
-            <a href="/satelink/os/overview" className="btn btn-ghost">
+            <a href="/satelink/os/mission-control" className="btn btn-ghost">
               Login
             </a>
             <a href="/satelink/os/keys" className="btn btn-primary">
@@ -253,12 +267,48 @@ export default function Home() {
             </a>
           </div>
 
-          <button className="mobile-menu-btn" aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
-              <path d="M3 6h18M3 12h18M3 18h18" />
-            </svg>
+          <button
+            className="mobile-menu-btn"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="mobileNav"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? (
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
+            )}
           </button>
         </div>
+
+        {/* Mobile navigation drawer — the hamburger previously had no handler */}
+        {menuOpen && (
+          <nav id="mobileNav" className="mobile-nav" aria-label="Mobile">
+            {[
+              { href: "#products", label: "Products" },
+              { href: "#pricing", label: "Pricing" },
+              { href: "/node", label: "Node Operators" },
+              { href: "/docs", label: "Docs" },
+              { href: "/status", label: "Status" },
+              { href: "/satelink/os/mission-control", label: "Login" },
+              { href: "/satelink/os/keys", label: "Get API Key" },
+            ].map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className="mobile-nav-link"
+                onClick={() => setMenuOpen(false)}
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        )}
       </header>
 
       <main>
@@ -269,25 +319,26 @@ export default function Home() {
             <div className="hero-content">
               <div className="hero-badge fade-up">
                 <span className="badge-dot" />
-                v1.0 Live on Polygon Mainnet
+                Live on Polygon PoS Mainnet
               </div>
 
               <h1 className="hero-title fade-up">
-                Infrastructure for the
+                Pay-per-call RPC for the
                 <br />
                 <span className="hero-title-gradient">
-                  Decentralized Internet
+                  Machine Economy
                 </span>
               </h1>
 
               <p className="hero-subtitle fade-up">
-                Run real workloads on distributed hardware. Developers pay per
-                call, node operators earn USDT, platform settles on-chain.
+                A DePIN RPC gateway with on-chain USDT metering. Developers and
+                autonomous machines pay $0.00003 per call — no subscriptions,
+                no accounts, one HTTP 402 away from your first request.
               </p>
 
               <div className="hero-cta fade-up">
                 <a
-                  href="/satelink/os/overview"
+                  href="/satelink/os/mission-control"
                   className="btn btn-primary btn-lg"
                 >
                   Launch Console
@@ -296,7 +347,7 @@ export default function Home() {
                 <a href="/docs" className="btn btn-secondary btn-lg">
                   View Docs
                 </a>
-                <a href="/satelink/os/nodes" className="btn btn-ghost btn-lg">
+                <a href="/node" className="btn btn-ghost btn-lg">
                   Run a Node
                 </a>
               </div>
@@ -306,7 +357,7 @@ export default function Home() {
                   <div className="metric-value" id="metricCalls">
                     {requests24h}
                   </div>
-                  <div className="metric-label">API Requests (24h)</div>
+                  <div className="metric-label">API Requests (today)</div>
                 </div>
                 <div className="metric-card">
                   <div className="metric-value" id="metricNodes">
@@ -316,75 +367,50 @@ export default function Home() {
                 </div>
                 <div className="metric-card">
                   <div className="metric-value" id="metricUptime">
-                    99.8%
+                    {uptimePct}
                   </div>
-                  <div className="metric-label">Uptime</div>
+                  <div className="metric-label">Measured Uptime (24h)</div>
                 </div>
                 <div className="metric-card">
                   <div className="metric-value" id="metricLatency">
-                    85ms
+                    {latencyMs}
                   </div>
-                  <div className="metric-label">Avg Latency</div>
+                  <div className="metric-label">p50 Latency (24h)</div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Social Proof */}
+        {/* Live network — real numbers from /api/status; no invented social proof */}
         <section className="section social-proof">
           <div className="container">
             <div className="section-header fade-up">
-              <div className="section-eyebrow">Trusted by Developers</div>
-              <h2 className="section-title">Growing Every Day</h2>
+              <div className="section-eyebrow">Live Network</div>
+              <h2 className="section-title">Numbers You Can Verify</h2>
+              <p className="section-subtitle">
+                Every figure below is fetched live from the gateway API and
+                backed by on-chain settlement records — nothing is a marketing
+                estimate.
+              </p>
             </div>
 
             <div className="social-stats fade-up">
               <div className="social-stat">
                 <div className="social-stat-value">{requests24h}</div>
-                <div className="social-stat-label">Daily API Calls</div>
+                <div className="social-stat-label">API Calls Today</div>
               </div>
               <div className="social-stat">
                 <div className="social-stat-value">{nodesOnline}</div>
                 <div className="social-stat-label">Active Nodes</div>
               </div>
               <div className="social-stat">
-                <div className="social-stat-value">99.8%</div>
-                <div className="social-stat-label">Network Uptime</div>
+                <div className="social-stat-value">{uptimePct}</div>
+                <div className="social-stat-label">Measured Uptime (24h)</div>
               </div>
               <div className="social-stat">
-                <div className="social-stat-value">85ms</div>
-                <div className="social-stat-label">Avg Latency</div>
-              </div>
-            </div>
-
-            <div className="testimonials fade-up">
-              <div className="testimonial-card">
-                <p className="testimonial-quote">
-                  &quot;Switched from Infura to Satelink. 40% cheaper and more
-                  reliable. The pay-per-call model makes so much more sense for
-                  our usage patterns.&quot;
-                </p>
-                <div className="testimonial-author">
-                  <div className="testimonial-avatar">AD</div>
-                  <div>
-                    <div className="testimonial-name">Anonymous Developer</div>
-                    <div className="testimonial-role">DeFi Protocol Team</div>
-                  </div>
-                </div>
-              </div>
-              <div className="testimonial-card">
-                <p className="testimonial-quote">
-                  &quot;Running a Satelink node covers my VPS costs. Passive
-                  income that actually works. Setup took 10 minutes.&quot;
-                </p>
-                <div className="testimonial-author">
-                  <div className="testimonial-avatar">NO</div>
-                  <div>
-                    <div className="testimonial-name">Node Operator</div>
-                    <div className="testimonial-role">Singapore</div>
-                  </div>
-                </div>
+                <div className="social-stat-value">{latencyMs}</div>
+                <div className="social-stat-label">p50 Latency (24h)</div>
               </div>
             </div>
           </div>
@@ -403,8 +429,8 @@ export default function Home() {
                 <div className="feature-icon">&#9889;</div>
                 <h3 className="feature-title">Low Latency</h3>
                 <p className="feature-desc">
-                  &lt;100ms average response time with intelligent routing to
-                  the nearest node.
+                  Measured p50 response times published live on the status
+                  page — no marketing averages.
                 </p>
               </div>
               <div className="feature-card">
@@ -440,9 +466,10 @@ export default function Home() {
               </div>
               <div className="feature-card">
                 <div className="feature-icon">&#127758;</div>
-                <h3 className="feature-title">Global</h3>
+                <h3 className="feature-title">Permissionless</h3>
                 <p className="feature-desc">
-                  Distributed node network spanning multiple continents.
+                  Anyone can deposit USDT to buy capacity, and anyone can
+                  register a node to serve it. No sales calls, no approval.
                 </p>
               </div>
             </div>
@@ -471,11 +498,11 @@ export default function Home() {
                 <tr>
                   <td>Cost per 1M calls</td>
                   <td className="satelink-col">
-                    <strong>$30</strong>
+                    <strong>$30 flat</strong>
                   </td>
-                  <td>$50</td>
-                  <td>$40</td>
-                  <td>$60</td>
+                  <td>varies by plan</td>
+                  <td>varies by plan</td>
+                  <td>varies by plan</td>
                 </tr>
                 <tr>
                   <td>Decentralized</td>
@@ -524,17 +551,17 @@ export default function Home() {
                 </tr>
                 <tr>
                   <td>Free Tier</td>
-                  <td className="satelink-col">200/day</td>
-                  <td>100K/mo</td>
-                  <td>300K/mo</td>
-                  <td>50K/mo</td>
+                  <td className="satelink-col">500 calls/day</td>
+                  <td>plan-based</td>
+                  <td>plan-based</td>
+                  <td>plan-based</td>
                 </tr>
               </tbody>
             </table>
 
             <div style={{ textAlign: "center", marginTop: 32 }} className="fade-up">
-              <a href="/compare.html" className="btn btn-secondary">
-                Full Comparison
+              <a href="/docs/pricing" className="btn btn-secondary">
+                Full Pricing Details
               </a>
             </div>
           </div>
@@ -561,8 +588,9 @@ export default function Home() {
                 </div>
                 <h3 className="proof-title">First USDT Claim</h3>
                 <p className="proof-desc">
-                  $1.296464 verified on Polygon mainnet. Real money, real
-                  settlement, proven on-chain.
+                  Historical first settlement claim of $1.296464, verified on
+                  Polygon mainnet — the proof-of-concept that the settlement
+                  path works end to end.
                 </p>
                 <a
                   href="https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b"
@@ -582,13 +610,14 @@ export default function Home() {
                     <path d="M7 11V7a5 5 0 0110 0v4" />
                   </svg>
                 </div>
-                <h3 className="proof-title">Smart Contract</h3>
+                <h3 className="proof-title">RevenueVault V2</h3>
                 <p className="proof-desc">
-                  ClaimsContract deployed and verified. Autonomous settlement
-                  with EIP-712 signatures.
+                  The production vault contract on Polygon. Permissionless USDT
+                  deposits credit your account on-chain — verify every deposit
+                  yourself.
                 </p>
                 <a
-                  href="https://polygonscan.com/address/0x6987921e2453f360e314e4424F6c2789F10a1CC9"
+                  href="https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="proof-link"
@@ -625,11 +654,11 @@ export default function Home() {
 
             <div className="proof-footer fade-up">
               <a
-                href="https://polygonscan.com/address/0x6987921e2453f360e314e4424F6c2789F10a1CC9"
+                href="https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                All settlements verifiable on blockchain &#8594;
+                All deposits verifiable on Polygonscan &#8594;
               </a>
             </div>
           </div>
@@ -652,21 +681,22 @@ export default function Home() {
                 <span className="product-badge">Live</span>
                 <h3 className="product-title">RPC Gateway</h3>
                 <p className="product-desc">
-                  Multi-chain RPC infrastructure across Polygon, Ethereum, Base,
-                  and Arbitrum. Decentralized routing with automatic failover.
+                  Multi-chain RPC across Polygon, Ethereum, Base, and Arbitrum
+                  with provider health monitoring, circuit breakers, and
+                  automatic failover.
                 </p>
-                <a href="/docs" className="product-link">
+                <a href="/docs/api-reference" className="product-link">
                   API Reference
                   <ArrowIcon />
                 </a>
               </div>
 
               <div className="product-card fade-up">
-                <span className="product-badge coming">Coming Soon</span>
+                <span className="product-badge coming">Roadmap</span>
                 <h3 className="product-title">AI Inference Proxy</h3>
                 <p className="product-desc">
-                  Route AI workloads to distributed GPUs. Cost-effective
-                  inference at scale with automatic load balancing.
+                  Planned: route AI workloads to distributed GPUs with the same
+                  pay-per-call USDT metering. Not yet available.
                 </p>
                 <a href="#roadmap" className="product-link">
                   View Roadmap
@@ -675,11 +705,11 @@ export default function Home() {
               </div>
 
               <div className="product-card fade-up">
-                <span className="product-badge coming">Coming Soon</span>
+                <span className="product-badge coming">Roadmap</span>
                 <h3 className="product-title">Webhook Delivery</h3>
                 <p className="product-desc">
-                  Reliable webhook routing with 99.9% delivery guarantee.
-                  Automatic retries and dead letter queues.
+                  Planned: reliable webhook routing with automatic retries and
+                  dead-letter queues. Not yet available.
                 </p>
                 <a href="#roadmap" className="product-link">
                   View Roadmap
@@ -688,11 +718,11 @@ export default function Home() {
               </div>
 
               <div className="product-card fade-up">
-                <span className="product-badge coming">Coming Soon</span>
+                <span className="product-badge coming">Roadmap</span>
                 <h3 className="product-title">Compute Jobs</h3>
                 <p className="product-desc">
-                  Run serverless functions on distributed nodes. Auto-scaling
-                  compute with per-second billing.
+                  Planned: serverless functions on distributed nodes with
+                  per-second billing. Not yet available.
                 </p>
                 <a href="#roadmap" className="product-link">
                   View Roadmap
@@ -716,7 +746,7 @@ export default function Home() {
             <div className="how-diagrams fade-up">
               {/* Request Flow Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Request Flow</h4>
+                <h3 className="diagram-title">Request Flow</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <defs>
                     <marker
@@ -777,7 +807,7 @@ export default function Home() {
 
               {/* Settlement Flow Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Settlement Flow</h4>
+                <h3 className="diagram-title">Settlement Flow</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <rect className="node" x="10" y="30" width="55" height="35" rx="6" />
                   <text x="37" y="52" textAnchor="middle" fontSize="9">
@@ -862,14 +892,14 @@ export default function Home() {
                     strokeWidth="2"
                   />
                   <text x="140" y="150" textAnchor="middle" fontSize="11" fill="#9BA1A6">
-                    Every 60 seconds on Polygon
+                    Epochs aggregate ~10 min · settle on Polygon
                   </text>
                 </svg>
               </div>
 
               {/* Revenue Split Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Revenue Split</h4>
+                <h3 className="diagram-title">Revenue Split</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <circle cx="140" cy="70" r="55" fill="none" stroke="#2D5A4A" strokeWidth="20" />
                   <circle
@@ -941,7 +971,8 @@ export default function Home() {
                 </div>
                 <h3 className="how-step-title">Platform</h3>
                 <p className="how-step-desc">
-                  Routes workloads and settles on-chain every 60s.
+                  Routes calls, meters usage, and aggregates revenue into
+                  on-chain settlement epochs.
                 </p>
               </div>
 
@@ -979,17 +1010,17 @@ export default function Home() {
               <div className="stat-card">
                 <div className="stat-label">Active Nodes</div>
                 <div className="stat-value">{nodesOnline}</div>
-                <div className="stat-subtitle">More coming soon</div>
+                <div className="stat-subtitle">Permissionless onboarding open</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Network Uptime</div>
-                <div className="stat-value green">99.8%</div>
-                <div className="stat-subtitle">Last 30 days</div>
+                <div className="stat-label">Measured Uptime</div>
+                <div className="stat-value green">{uptimePct}</div>
+                <div className="stat-subtitle">Last 24 hours</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Avg Latency</div>
-                <div className="stat-value">85ms</div>
-                <div className="stat-subtitle">Global average</div>
+                <div className="stat-label">p50 Latency</div>
+                <div className="stat-value">{latencyMs}</div>
+                <div className="stat-subtitle">Last 24 hours</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">API Requests</div>
@@ -1004,14 +1035,14 @@ export default function Home() {
                 <div className="stat-subtitle">Settles continuously</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Epoch Interval</div>
-                <div className="stat-value">60s</div>
-                <div className="stat-subtitle">Settlement frequency</div>
+                <div className="stat-label">Metered Rate</div>
+                <div className="stat-value">$0.00003</div>
+                <div className="stat-subtitle">Per call, USDT</div>
               </div>
             </div>
 
             <div className="stats-footer fade-up">
-              <a href="/satelink/os/overview">
+              <a href="/status">
                 View Full Status Page
                 <ArrowIcon />
               </a>
@@ -1099,13 +1130,13 @@ export default function Home() {
                 </p>
                 <ul className="pricing-features">
                   <li>
-                    <CheckIcon /> 200 requests/day
+                    <CheckIcon /> 500 requests/day per IP
                   </li>
                   <li>
                     <CheckIcon /> All chains included
                   </li>
                   <li>
-                    <CheckIcon /> Community support
+                    <CheckIcon /> No account required
                   </li>
                   <li>
                     <CheckIcon /> No credit card required
@@ -1126,16 +1157,16 @@ export default function Home() {
                 </p>
                 <ul className="pricing-features">
                   <li>
-                    <CheckIcon /> Unlimited requests
+                    <CheckIcon /> $1 &asymp; 33,333 calls
                   </li>
                   <li>
-                    <CheckIcon /> Priority routing
+                    <CheckIcon /> Permissionless USDT deposits
                   </li>
                   <li>
-                    <CheckIcon /> 24/7 support
+                    <CheckIcon /> Credits never expire
                   </li>
                   <li>
-                    <CheckIcon /> USDT settlement
+                    <CheckIcon /> On-chain deposit verification
                   </li>
                 </ul>
                 <a href="/satelink/os/deposit" className="btn btn-primary pricing-cta">
@@ -1174,6 +1205,7 @@ export default function Home() {
                   <input
                     type="range"
                     id="callsSlider"
+                    aria-label="Monthly API calls"
                     min="100000"
                     max="10000000"
                     value={calls}
@@ -1192,8 +1224,8 @@ export default function Home() {
                 </div>
 
                 <div style={{ textAlign: "center", marginTop: 24 }}>
-                  <a href="/calculator.html" className="btn btn-secondary">
-                    Advanced Calculator
+                  <a href="/node/earnings" className="btn btn-secondary">
+                    View Live Earnings
                   </a>
                 </div>
               </div>
@@ -1232,7 +1264,7 @@ export default function Home() {
                   </li>
                 </ul>
                 <div className="node-cta">
-                  <a href="/docs" className="btn btn-primary btn-lg">
+                  <a href="/node/setup" className="btn btn-primary btn-lg">
                     Run a Node
                   </a>
                 </div>
@@ -1273,14 +1305,14 @@ export default function Home() {
 
             <div className="contract-card fade-up">
               <div className="contract-info">
-                <div className="contract-label">Claims Contract</div>
+                <div className="contract-label">RevenueVault V2</div>
                 <div className="contract-value">
                   <a
-                    href="https://polygonscan.com/address/0x6987921e2453f360e314e4424F6c2789F10a1CC9"
+                    href="https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    0x6987921e2453f360e314e4424F6c2789F10a1CC9
+                    0x577D3716d6Ad5b676d230f5409deF9838FABaCEF
                   </a>
                 </div>
               </div>
@@ -1312,13 +1344,16 @@ export default function Home() {
                 <div className="roadmap-dot" />
                 <div className="roadmap-content">
                   <div className="roadmap-header">
-                    <span className="roadmap-stage">Stage S0</span>
-                    <span className="roadmap-status done">Complete</span>
+                    <span className="roadmap-stage">Completed</span>
+                    <span className="roadmap-status done">Shipped</span>
                   </div>
-                  <h3 className="roadmap-title">v1.0 Settlement Working</h3>
+                  <h3 className="roadmap-title">Core Economic Engine</h3>
                   <p className="roadmap-desc">
-                    First USDT claim on-chain. Smart contracts deployed. Core
-                    infrastructure proven.
+                    RPC gateway with per-call USDT metering, credit system with
+                    permissionless RevenueVault deposits, epoch-based revenue
+                    ledger, wallet + API-key authentication, HTTP 402 machine
+                    onboarding, admin command center, node and developer
+                    portals, live status page, and monitoring.
                   </p>
                 </div>
               </div>
@@ -1327,13 +1362,15 @@ export default function Home() {
                 <div className="roadmap-dot" />
                 <div className="roadmap-content">
                   <div className="roadmap-header">
-                    <span className="roadmap-stage">Stage S1</span>
-                    <span className="roadmap-status progress">In Progress</span>
+                    <span className="roadmap-stage">In Progress</span>
+                    <span className="roadmap-status progress">Active</span>
                   </div>
-                  <h3 className="roadmap-title">Public Node Onboarding</h3>
+                  <h3 className="roadmap-title">Production Hardening</h3>
                   <p className="roadmap-desc">
-                    Opening node operator program. Documentation, tooling, and
-                    monitoring dashboard.
+                    Settlement automation is in final verification (dry-run
+                    mode). Active work: customer onboarding polish,
+                    documentation overhaul, infrastructure dashboards, and
+                    data-truth verification across every surface.
                   </p>
                 </div>
               </div>
@@ -1342,13 +1379,14 @@ export default function Home() {
                 <div className="roadmap-dot" />
                 <div className="roadmap-content">
                   <div className="roadmap-header">
-                    <span className="roadmap-stage">Stage S2</span>
-                    <span className="roadmap-status planned">Q3 2026</span>
+                    <span className="roadmap-stage">Next</span>
+                    <span className="roadmap-status planned">Milestones</span>
                   </div>
-                  <h3 className="roadmap-title">Multi-Chain Expansion</h3>
+                  <h3 className="roadmap-title">Scale the Two-Sided Market</h3>
                   <p className="roadmap-desc">
-                    Expanding beyond Polygon. AI inference layer. Webhook
-                    delivery network.
+                    Grow external paying customers, first fully autonomous
+                    machine-to-machine payment, public node operator
+                    onboarding at scale, and multi-provider execution.
                   </p>
                 </div>
               </div>
@@ -1357,13 +1395,14 @@ export default function Home() {
                 <div className="roadmap-dot" />
                 <div className="roadmap-content">
                   <div className="roadmap-header">
-                    <span className="roadmap-stage">Stage S9</span>
-                    <span className="roadmap-status planned">Q4 2026</span>
+                    <span className="roadmap-stage">Planned</span>
+                    <span className="roadmap-status planned">Roadmap</span>
                   </div>
-                  <h3 className="roadmap-title">Production Launch</h3>
+                  <h3 className="roadmap-title">Expanded Workload Marketplace</h3>
                   <p className="roadmap-desc">
-                    100+ nodes globally. Enterprise features. Full production
-                    readiness.
+                    Beyond RPC: AI inference proxy, webhook delivery, and
+                    distributed compute jobs — each with the same transparent
+                    on-chain metering. Timelines depend on network growth.
                   </p>
                 </div>
               </div>
@@ -1420,59 +1459,47 @@ export default function Home() {
                   </svg>
                 </a>
                 <a
-                  href="https://twitter.com/satelinknet"
+                  href="mailto:satelinknetwork@gmail.com"
                   className="social-icon"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Twitter"
+                  aria-label="Email"
                 >
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                </a>
-                <a
-                  href="https://discord.gg/satelink"
-                  className="social-icon"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Discord"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M22 7l-10 6L2 7" />
                   </svg>
                 </a>
               </div>
             </div>
 
             <div className="footer-column">
-              <h4>Product</h4>
+              <h3 className="footer-heading">Product</h3>
               <ul className="footer-links">
                 <li>
                   <a href="#products">RPC Gateway</a>
                 </li>
                 <li>
-                  <a href="#products">AI Inference</a>
+                  <a href="#pricing">Pricing</a>
                 </li>
                 <li>
-                  <a href="#products">Webhooks</a>
+                  <a href="#roadmap">Roadmap</a>
                 </li>
                 <li>
-                  <a href="/satelink/os/overview">Status Page</a>
+                  <a href="/status">Status Page</a>
                 </li>
               </ul>
             </div>
 
             <div className="footer-column">
-              <h4>Developers</h4>
+              <h3 className="footer-heading">Developers</h3>
               <ul className="footer-links">
                 <li>
                   <a href="/docs">Documentation</a>
                 </li>
                 <li>
-                  <a href="/docs">API Reference</a>
+                  <a href="/docs/api-reference">API Reference</a>
                 </li>
                 <li>
-                  <a href="/wiki.html">Wiki</a>
+                  <a href="/docs/quick-start">Quick Start</a>
                 </li>
                 <li>
                   <a href="https://github.com/Satelink-Protocol/Satelink_Network">
@@ -1483,37 +1510,39 @@ export default function Home() {
             </div>
 
             <div className="footer-column">
-              <h4>Company</h4>
+              <h3 className="footer-heading">Network</h3>
               <ul className="footer-links">
                 <li>
-                  <a href="/about.html">About</a>
+                  <a href="/node">Node Operators</a>
                 </li>
                 <li>
-                  <a href="/careers.html">Careers</a>
+                  <a href="/machine">Machine Economy</a>
                 </li>
                 <li>
-                  <a href="/blog.html">Blog</a>
+                  <a href="/docs/revenue-model">Revenue Model</a>
                 </li>
                 <li>
-                  <a href="/press.html">Press</a>
+                  <a href="https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF">
+                    Vault on Polygonscan
+                  </a>
                 </li>
               </ul>
             </div>
 
             <div className="footer-column">
-              <h4>Resources</h4>
+              <h3 className="footer-heading">Resources</h3>
               <ul className="footer-links">
                 <li>
-                  <a href="/calculator.html">Calculator</a>
+                  <a href="/docs/faq">FAQ</a>
                 </li>
                 <li>
-                  <a href="/compare.html">Compare</a>
+                  <a href="/docs/changelog">Changelog</a>
                 </li>
                 <li>
-                  <a href="https://discord.gg/satelink">Discord</a>
+                  <a href="/docs/security">Security</a>
                 </li>
                 <li>
-                  <a href="https://twitter.com/satelinknet">Twitter</a>
+                  <a href="mailto:satelinknetwork@gmail.com">Contact</a>
                 </li>
               </ul>
             </div>

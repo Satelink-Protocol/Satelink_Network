@@ -1,41 +1,46 @@
 # Satelink Network
-> Decentralized Physical Infrastructure (DePIN) for RPC, AI, and machine APIs.
 
-Satelink is an autonomous economic protocol. Machines and protocols
-consume infrastructure services and pay in USDT automatically.
-No human sales or approval required.
+> Satelink is a DePIN (Decentralized Physical Infrastructure) RPC gateway on
+> Polygon PoS. Developers and autonomous machines pay a flat $0.00003 USDT per
+> blockchain RPC call (prepaid credits, permissionless on-chain deposits);
+> node operators earn 50% of the revenue their nodes serve. Machine customers
+> can onboard fully autonomously via an HTTP 402 flow. Live status and all
+> published metrics are measured, never estimated.
 
-## RPC Gateway
-Public Polygon Mainnet RPC: https://rpc.satelink.network/rpc/polygon
-Chain ID: 137 | Free: 1000 req/day | No API key required
+Key facts:
+- Metered rate: $0.00003 per call ($30 per million calls), flat, no plans.
+- Free tier: 500 calls/day per IP, no account required.
+- Chains: Polygon PoS (137), Ethereum (1), Arbitrum (42161), Base (8453), Polygon Amoy (80002).
+- Payments: USDT on Polygon PoS to RevenueVault V2 0x577D3716d6Ad5b676d230f5409deF9838FABaCEF (permissionless; ~25 confirmations).
+- Revenue split: 50% node operators / 30% platform / 20% distribution pool.
+- Machine onboarding: HTTP 402 responses contain the registration endpoint (POST /v1/machine/register), deposit calldata, and working examples.
+- SDK: @satelink/sdk on npm (JS/TS). Standard JSON-RPC 2.0 — works with ethers.js, viem, web3.py.
+- API base: https://rpc.satelink.network
+- Settlement status: epoch accounting live (~10-minute epochs); on-chain broadcast automation in final verification (dry-run) behind explicit safety gates.
 
-Supported chains:
-- Polygon Mainnet (137): /rpc/polygon
-- Polygon Amoy Testnet (80002): /rpc/amoy
-- Ethereum Mainnet (1): /rpc/ethereum
-- Arbitrum One (42161): /rpc/arbitrum
-- Base (8453): /rpc/base
+## Docs
 
-## Settlement
-Revenue settles as USDT on Polygon every 60 seconds automatically.
-Node operators earn 50% of epoch revenue.
+- [Quick Start](https://docs.satelink.network/docs/quick-start): first metered RPC call in under two minutes
+- [Architecture](https://docs.satelink.network/docs/architecture): gateway → metering → epochs → on-chain settlement
+- [Authentication](https://docs.satelink.network/docs/authentication): API keys, wallet-bound keys, machine identity
+- [API Reference](https://docs.satelink.network/docs/api-reference): all public HTTP endpoints
+- [SDK](https://docs.satelink.network/docs/sdk): @satelink/sdk usage
+- [Machine Customers](https://docs.satelink.network/docs/machine-customers): the HTTP 402 autonomous onboarding flow
+- [Billing & Credits](https://docs.satelink.network/docs/billing): metering, deposits, capacity math
+- [Pricing](https://docs.satelink.network/docs/pricing): free tier + flat metered rate
+- [Revenue Model](https://docs.satelink.network/docs/revenue-model): 50/30/20 split and settlement lifecycle
+- [Node Operators](https://docs.satelink.network/docs/node-operators): requirements, registration, economics
+- [Developer Guide](https://docs.satelink.network/docs/developer-guide): integration patterns, 402/429 handling, failover
+- [Security](https://docs.satelink.network/docs/security): responsible disclosure + security model
+- [Troubleshooting](https://docs.satelink.network/docs/troubleshooting): common errors and fixes
+- [FAQ](https://docs.satelink.network/docs/faq): honest answers from production state
+- [Glossary](https://docs.satelink.network/docs/glossary): canonical terminology
+- [Changelog](https://docs.satelink.network/docs/changelog): notable changes
+- [Roadmap](https://docs.satelink.network/docs/roadmap): completed / in progress / planned
 
-## APIs
-- Status: https://rpc.satelink.network/api/status
-- Pricing: https://rpc.satelink.network/api/pricing
-- Provider info: https://rpc.satelink.network/provider.json
+## Optional
 
-## Integration
-Standard JSON-RPC 2.0 interface. EIP-1193 compliant.
-Works with: ethers.js, web3.js, viem, wagmi, web3.py
-
-## Example
-```bash
-curl -X POST https://rpc.satelink.network/rpc/polygon \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-```
-
-## Contact
-Website: https://satelink.network
-GitHub: https://github.com/satelinkinternet-collab/Satelink_Network
+- [Homepage](https://satelink.network): product overview with live network metrics
+- [Status](https://satelink.network/status): live measured uptime and latency
+- [GitHub](https://github.com/Satelink-Protocol/Satelink_Network): full open-source monorepo
+- [Provider health](https://rpc.satelink.network/rpc/health): live per-provider health JSON
