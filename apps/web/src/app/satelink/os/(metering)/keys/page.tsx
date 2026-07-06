@@ -17,6 +17,7 @@ import {
   KPICard,
   BarChartPanel,
   DonutChart,
+  Modal,
   type DataTableColumn,
 } from "@satelink/ui";
 import { useApiKeys, maskKey, type UsageSummary } from "@/lib/api-keys";
@@ -288,7 +289,7 @@ export default function KeysPage() {
 
       {/* Quick Actions Bar */}
       <div className="flex gap-2 justify-end py-2">
-        <Button variant="primary" onClick={() => { setError(null); setShowCreate(true); }}>
+        <Button onClick={() => { setError(null); setShowCreate(true); }}>
           Add New Key
         </Button>
         <Button variant="destructive" onClick={() => {
@@ -310,49 +311,44 @@ export default function KeysPage() {
         </Button>
       </div>
 
-      {/* Create Key Modal */}
-      {showCreate && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setShowCreate(false)}
-        >
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <Card className="glow-card glass-panel border-primary/20 bg-background">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Create API Key</CardTitle>
-                <CardDescription className="text-xs">Generate a new free-tier key. Opt in to updates if you like.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Label</label>
-                  <Input
-                    placeholder="My API Key"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 block">Email (optional)</label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
-                </div>
-                {error && <p className="text-xs text-destructive">{error}</p>}
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-                  <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Create Key Modal — canonical @satelink/ui Modal (opaque surface,
+          blurred backdrop, right-aligned actions; fixes the transparent-modal bug) */}
+      <Modal
+        open={showCreate}
+        onOpenChange={(o) => { if (!o) setShowCreate(false); }}
+        title="Create API Key"
+        description="Generate a new free-tier key. Opt in to updates if you like."
+        footer={
+          <>
+            <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleCreateKey} disabled={creating}>{creating ? "Creating…" : "Create Key"}</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground">Label</label>
+            <Input
+              placeholder="My API Key"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              className="text-xs"
+            />
           </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground">Email (optional)</label>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">Receive network updates and usage alerts</p>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

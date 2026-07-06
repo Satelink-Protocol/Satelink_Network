@@ -61,7 +61,16 @@ export function DepositHistory({ wallet }: { wallet: string | null }) {
   const canNext = !!data?.hasMore;
 
   return (
-    <Panel title="Deposit History">
+    <Panel
+      title="Deposit History"
+      right={
+        // Subtle "live" pulse — the list background-refreshes every 30s.
+        <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-state-healthy animate-pulse-glow" aria-hidden />
+          live · 30s
+        </span>
+      }
+    >
       {state.status === 'loading' && (
         <div className="space-y-2">
           <Skeleton height={16} />

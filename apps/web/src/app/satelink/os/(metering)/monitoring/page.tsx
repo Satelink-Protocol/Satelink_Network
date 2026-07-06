@@ -80,6 +80,9 @@ interface FreeTierData {
   nearLimitIPs: number;
   limit: number;
 }
+interface RpcHealth {
+  summary?: { healthy: number; unhealthy: number; total: number; healthPercent: string };
+}
 
 function num(n: number | undefined | null): string {
   if (n == null) return "—";
