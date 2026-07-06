@@ -51,6 +51,20 @@ export {
   TooltipProvider,
 } from "./components/ui/tooltip";
 export {
+  Dialog,
+  DialogTrigger,
+  DialogPortal,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./components/ui/dialog";
+export { Modal } from "./components/modal";
+export type { ModalProps } from "./components/modal";
+export { CopyField } from "./components/copy-field";
+export type { CopyFieldProps } from "./components/copy-field";
+export {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
