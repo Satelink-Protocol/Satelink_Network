@@ -14,17 +14,19 @@
 
 import React from 'react';
 
+// Values resolve against the @satelink/ui theme (.satelink-os scope) at
+// runtime — this file no longer owns any color of its own.
 export const TOKENS = {
-  canvas: '#060910',
-  panel: '#0C1120',
-  border: '#1C2333',
-  teal: '#4ECDC4',
-  green: '#22C55E',
-  amber: '#F59E0B',
-  red: '#EF4444',
-  text: '#E2E8F0',
-  muted: '#8892A4',
-  mono: "'JetBrains Mono', 'Fira Code', monospace",
+  canvas: 'hsl(var(--background))',
+  panel: 'hsl(var(--card))',
+  border: 'hsl(var(--border))',
+  teal: 'hsl(var(--primary))',
+  green: 'hsl(var(--success))',
+  amber: 'hsl(var(--warning))',
+  red: 'hsl(var(--danger))',
+  text: 'hsl(var(--foreground))',
+  muted: 'hsl(var(--muted-foreground))',
+  mono: "var(--font-mono-numeric, 'JetBrains Mono', monospace)",
   sans: "'Inter', system-ui, sans-serif",
 };
 

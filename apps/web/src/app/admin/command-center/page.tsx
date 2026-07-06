@@ -324,7 +324,7 @@ function AdminCommandCenter() {
   const maxCalls = useMemo(() => Math.max(...(devs || []).map((d: any) => d.avg_daily_calls || 1), 150000), [devs]);
   const filteredDevs = useMemo(() => devs == null ? null : devs.filter((d: any) => (stages[d.status] ?? false) && (d.classification ? (classes[d.classification] ?? true) : true)), [devs, stages, classes]);
   const counts = useMemo(() => (devs || []).reduce((a: any, d: any) => ((a[d.status] = (a[d.status] || 0) + 1), a), {}), [devs]);
-  const funnelData = useMemo(() => [{ name: "Classified", value: (devs || []).length, fill: "#4e9eff" }, { name: "Identified", value: counts.identified || 0, fill: "#53b1fd" }, { name: "Contacted", value: counts.contacted || 0, fill: "#f5a623" }, { name: "Deposited", value: counts.deposited || 0, fill: "#32d583" }, { name: "Paid", value: counts.paid || 0, fill: "#0aab53" }], [devs, counts]);
+  const funnelData = useMemo(() => [{ name: "Classified", value: (devs || []).length, fill: "hsl(var(--chart-2))" }, { name: "Identified", value: counts.identified || 0, fill: "hsl(var(--chart-5))" }, { name: "Contacted", value: counts.contacted || 0, fill: "hsl(var(--chart-3))" }, { name: "Deposited", value: counts.deposited || 0, fill: "hsl(var(--chart-4))" }, { name: "Paid", value: counts.paid || 0, fill: "hsl(var(--success))" }], [devs, counts]);
 
   const H = HEADERS[view] || { title: "Command Center", subtitle: "Management NOC Console", icon: Server };
 
@@ -602,8 +602,8 @@ function AdminCommandCenter() {
                     {devs && devs.length > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <FunnelChart>
-                          <Tooltip contentStyle={{ background: "#183D3D", border: "1px solid #5C8374", fontSize: 11, fontFamily: "JetBrains Mono", borderRadius: 4 }} />
-                          <Funnel dataKey="value" data={funnelData} isAnimationActive><LabelList position="right" fill="#93B1A6" stroke="none" dataKey="name" fontSize={10} /></Funnel>
+                          <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono", borderRadius: 4 }} />
+                          <Funnel dataKey="value" data={funnelData} isAnimationActive><LabelList position="right" fill="hsl(var(--muted-foreground))" stroke="none" dataKey="name" fontSize={10} /></Funnel>
                         </FunnelChart>
                       </ResponsiveContainer>
                     ) : <EmptyState variant="line" label="funnel" note="loading…" />}
@@ -975,7 +975,7 @@ function AdminCommandCenter() {
                   <Card>
                     <CardHeader><CardTitle>Database</CardTitle></CardHeader>
                     <CardContent>
-                      <p className={`text-sm font-mono ${obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400"}`}>
+                      <p className={`text-sm font-mono ${obsMetrics.db_status === "ok" ? "text-primary" : "text-red-400"}`}>
                         {obsMetrics.db_status === "ok" ? "CONNECTED" : (obsMetrics.db_status || "—").toUpperCase()}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-1">Connection pool metrics not exposed by endpoint.</p>
@@ -984,7 +984,7 @@ function AdminCommandCenter() {
                   <Card>
                     <CardHeader><CardTitle>Cache (Redis)</CardTitle></CardHeader>
                     <CardContent>
-                      <p className={`text-sm font-mono ${obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400"}`}>
+                      <p className={`text-sm font-mono ${obsMetrics.redis_status === "ok" ? "text-primary" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400"}`}>
                         {obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : (obsMetrics.redis_status || "—").toUpperCase()}
                       </p>
                     </CardContent>
@@ -1122,7 +1122,7 @@ function AdminCommandCenter() {
                       feedEvents.map((ev, idx) => (
                         <TableRow key={idx}>
                           <TableCell className="text-muted-foreground w-24">{ev.time}</TableCell>
-                          <TableCell className="text-[#00ADB5] w-36">{ev.source}</TableCell>
+                          <TableCell className="text-primary w-36">{ev.source}</TableCell>
                           <TableCell className="text-zinc-200">{ev.message}</TableCell>
                         </TableRow>
                       ))
@@ -1237,7 +1237,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>API Database (PostgreSQL)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.db_status === "ok" ? "text-[#00ADB5]" : "text-red-400") : "text-muted-foreground"}`}>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.db_status === "ok" ? "text-primary" : "text-red-400") : "text-muted-foreground"}`}>
                       {obsMetrics ? (obsMetrics.db_status === "ok" ? "CONNECTED (Railway-managed PG)" : "UNREACHABLE") : "checking…"}
                     </p>
                   </CardContent>
@@ -1245,7 +1245,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>Key-Value Store (Redis)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.redis_status === "ok" ? "text-[#00ADB5]" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400") : "text-muted-foreground"}`}>
+                    <p className={`text-xs font-mono ${obsMetrics ? (obsMetrics.redis_status === "ok" ? "text-primary" : obsMetrics.redis_status === "not_configured" ? "text-muted-foreground" : "text-red-400") : "text-muted-foreground"}`}>
                       {obsMetrics ? (obsMetrics.redis_status === "ok" ? "OPERATIONAL" : obsMetrics.redis_status === "not_configured" ? "NOT CONFIGURED" : "ERROR") : "checking…"}
                     </p>
                   </CardContent>
@@ -1253,7 +1253,7 @@ function AdminCommandCenter() {
                 <Card>
                   <CardHeader><CardTitle>API Response (p50, 24h)</CardTitle></CardHeader>
                   <CardContent>
-                    <p className="text-xs font-mono text-[#00ADB5]">
+                    <p className="text-xs font-mono text-primary">
                       {obsMetrics && typeof obsMetrics.api_p50_ms === "number" ? `${obsMetrics.api_p50_ms} ms median` : "checking…"}
                     </p>
                   </CardContent>

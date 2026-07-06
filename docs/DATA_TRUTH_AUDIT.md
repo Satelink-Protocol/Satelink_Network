@@ -179,4 +179,30 @@ UTC-day window, cf. `/stats/free-tier` = 64,016 calls / 3,046 IPs). Actual outpu
 
 Every FALSE verdict in §1 is now either corrected at the query (#1–#5, #14, #15, #17, #25)
 or removed/replaced with an honest empty state in the UI (#8, #9, #10, #12, #27, #28, #30, #31).
-Zero UNVERIFIABLE metrics remain. Re-run scheduled again at the Phase 4 QA gate.
+Zero UNVERIFIABLE metrics remain.
+
+## 5. Phase 4 QA gate — final verification (2026-07-06, later same day)
+
+Queries re-run against production Postgres via the same router harness:
+
+```
+/admin/executive/summary → revenue_lifetime 0.00015 (external 0.00012 / internal 0.00003)
+  total_requests_24h: 104,463   active_ips_24h: 5,165   (DB fallback path; window had rolled)
+  paying_customers: 1 external + 1 internal   network_health_pct: 40
+/admin/demand/stats → total_active_ips 5,165 · total_tracked_ips 55,672
+/admin/customers/list → 50 active free-tier machines w/ first_seen/last_seen/converted
+/api/status health SQL → uptime 100 (measured, 1-node sample) · p50 63ms
+```
+
+Gates:
+- `Math.random` in dashboard surfaces (`apps/web` portal+admin+design, `packages/ui`): **0 hits**
+- hardcoded metric literals: **0** (single remaining "1,878" string is the labeled
+  historical INC-013 incident record — explicitly permitted as history, never a live metric)
+- hex colors outside token files: **0** in portal/admin/design app code; the two JS-side
+  token mirrors (`components/satelink-os/theme/colors.ts`, `components/deposit/primitives.tsx`)
+  were retargeted to the @satelink/ui palette / CSS vars
+- Lighthouse accessibility: **keys page 100 · admin command center 95** (both ≥ 90);
+  reduced-motion honored globally (tokens.css media query); focus-visible rings on all
+  interactive elements in the OS scope
+- Responsive: portal + admin screenshotted at 390 / 768 / 1440 — single-column stacking,
+  no horizontal scroll
