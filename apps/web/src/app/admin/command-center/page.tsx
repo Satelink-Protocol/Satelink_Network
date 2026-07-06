@@ -7,7 +7,7 @@ import {
   Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
-import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
+import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, DataTable as ModernDataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers, Zap } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 import SelfTestsView from "./self-tests/SelfTestsView";
@@ -353,6 +353,17 @@ function AdminCommandCenter() {
       }
     >
       <Stack gap="sm">
+        {/* Persistent DRY_RUN banner — every admin view, as long as settlement
+            is simulated. States the exit condition explicitly. */}
+        {status?.dryRun && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+            <span className="size-1.5 shrink-0 rounded-full bg-state-degraded" aria-hidden />
+            <span className="text-xs text-state-degraded">
+              <strong>SETTLEMENT_DRY_RUN=1</strong> — no on-chain broadcasts. Clears when real
+              external metered revenue exceeds $0.50, the signer is funded, and a human flips it.
+            </span>
+          </div>
+        )}
         {notice && <Notice>{notice}</Notice>}
 
         {/* 1. EXECUTIVE OVERVIEW VIEW */}
@@ -639,6 +650,15 @@ function AdminCommandCenter() {
                 <KPICard label="Blocked Unfunded" value={fmt.num(treasStatus.blocked_unfunded_batches)} caption={`${fmt.bal(treasStatus.blocked_unfunded_usdt)} USDT blocked`} />
               </div>
             )}
+            {treasStatus && treasStatus.blocked_unfunded_batches > 0 && (
+              <p className="mx-1 text-xs text-muted-foreground">
+                <strong className="text-foreground">What "blocked unfunded" means:</strong>{" "}
+                epochs were aggregated into payable settlement batches, but the signer wallet{" "}
+                <span className="font-mono">{fmt.addr(treasStatus.signer_address)}</span> has no POL
+                for gas, so none can broadcast — funding the signer releases all{" "}
+                {fmt.num(treasStatus.blocked_unfunded_batches)} batches.
+              </p>
+            )}
 
             <Panel title="Settlement Control">
               {status && <Stack gap="sm">
@@ -912,6 +932,25 @@ function AdminCommandCenter() {
                       <KPICard label="Trial" value={fmt.num(segTrial)} caption="Deposited, no spend yet" />
                       <KPICard label="Free" value={fmt.num(segFree)} caption="No deposits (free-tier IPs)" />
                     </div>
+                  </Panel>
+
+                  {/* THE MONEY SCREEN — active free-tier machines are the
+                      conversion pipeline: who calls, since when, converted? */}
+                  <Panel title="Conversion Pipeline — Active Free-Tier Machines" headerRight={<StatusBadge label={`${free.length} active (24h)`} tone="info" />}>
+                    <ModernDataTable
+                      columns={[
+                        { key: "ip", header: "IP", cell: (m: any) => <span className="font-mono text-xs">{m.ip}</span>, sortValue: (m: any) => m.ip },
+                        { key: "classification", header: "Class", cell: (m: any) => <span className="text-xs text-muted-foreground">{m.classification || "—"}</span> },
+                        { key: "first_seen", header: "First Seen", cell: (m: any) => <span className="font-mono text-xs">{m.first_seen ? new Date(m.first_seen).toLocaleDateString() : "—"}</span>, sortValue: (m: any) => m.first_seen || "" },
+                        { key: "calls_24h", header: "Calls Today", align: "right", cell: (m: any) => <span className="font-mono text-xs">{fmt.num(m.calls_24h)}</span>, sortValue: (m: any) => m.calls_24h || 0 },
+                        { key: "last_seen", header: "Last Call", cell: (m: any) => <span className="font-mono text-xs">{fmt.time(m.last_seen)}</span>, sortValue: (m: any) => m.last_seen || "" },
+                        { key: "converted", header: "Converted", cell: (m: any) => <StatusBadge label={m.converted ? "DEPOSITED" : "NOT YET"} tone={m.converted ? "success" : "muted"} /> }
+                      ]}
+                      rows={free}
+                      rowKey={(m: any) => m.ip}
+                      emptyTitle="No active free-tier machines"
+                      emptyDescription="Machines appear here once they call the gateway (last 24h)."
+                    />
                   </Panel>
                 </>
               );

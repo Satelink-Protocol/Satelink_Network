@@ -640,8 +640,17 @@ export function createAdminRouter(pool, redis) {
         `SELECT wallet_address AS wallet, credits_usdt::float AS credits_usdt,
                 total_deposited::float AS total_deposited, total_spent::float AS total_spent, created_at
          FROM api_credits WHERE total_deposited > 0 ORDER BY total_deposited DESC`);
+      // Conversion pipeline: active free-tier machines with the fields the
+      // Customer Ops table needs — first seen, last call, and whether the
+      // lead converted (stage advanced to deposited/paid). last_seen filter
+      // keeps stale calls_today counters out (audit #2).
       const free_tier = await q(
-        `SELECT ip, calls_today AS calls_24h FROM developer_intel WHERE calls_today > 0 ORDER BY calls_today DESC LIMIT 20`);
+        `SELECT ip, calls_today AS calls_24h, first_seen, last_seen,
+                classification, status,
+                (status IN ('deposited','paid')) AS converted
+           FROM developer_intel
+          WHERE calls_today > 0 AND last_seen >= now() - interval '24 hours'
+          ORDER BY calls_today DESC LIMIT 50`);
       ok(res, { paying, free_tier, total_paying: paying.length });
     } catch (e) { fail(res, e); }
   });
