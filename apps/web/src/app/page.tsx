@@ -746,7 +746,7 @@ export default function Home() {
             <div className="how-diagrams fade-up">
               {/* Request Flow Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Request Flow</h4>
+                <h3 className="diagram-title">Request Flow</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <defs>
                     <marker
@@ -807,7 +807,7 @@ export default function Home() {
 
               {/* Settlement Flow Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Settlement Flow</h4>
+                <h3 className="diagram-title">Settlement Flow</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <rect className="node" x="10" y="30" width="55" height="35" rx="6" />
                   <text x="37" y="52" textAnchor="middle" fontSize="9">
@@ -899,7 +899,7 @@ export default function Home() {
 
               {/* Revenue Split Diagram */}
               <div className="diagram-card">
-                <h4 className="diagram-title">Revenue Split</h4>
+                <h3 className="diagram-title">Revenue Split</h3>
                 <svg className="diagram-svg" viewBox="0 0 280 160">
                   <circle cx="140" cy="70" r="55" fill="none" stroke="#2D5A4A" strokeWidth="20" />
                   <circle
@@ -1205,6 +1205,7 @@ export default function Home() {
                   <input
                     type="range"
                     id="callsSlider"
+                    aria-label="Monthly API calls"
                     min="100000"
                     max="10000000"
                     value={calls}
@@ -1471,7 +1472,7 @@ export default function Home() {
             </div>
 
             <div className="footer-column">
-              <h4>Product</h4>
+              <h3 className="footer-heading">Product</h3>
               <ul className="footer-links">
                 <li>
                   <a href="#products">RPC Gateway</a>
@@ -1489,7 +1490,7 @@ export default function Home() {
             </div>
 
             <div className="footer-column">
-              <h4>Developers</h4>
+              <h3 className="footer-heading">Developers</h3>
               <ul className="footer-links">
                 <li>
                   <a href="/docs">Documentation</a>
@@ -1509,7 +1510,7 @@ export default function Home() {
             </div>
 
             <div className="footer-column">
-              <h4>Network</h4>
+              <h3 className="footer-heading">Network</h3>
               <ul className="footer-links">
                 <li>
                   <a href="/node">Node Operators</a>
@@ -1529,7 +1530,7 @@ export default function Home() {
             </div>
 
             <div className="footer-column">
-              <h4>Resources</h4>
+              <h3 className="footer-heading">Resources</h3>
               <ul className="footer-links">
                 <li>
                   <a href="/docs/faq">FAQ</a>
