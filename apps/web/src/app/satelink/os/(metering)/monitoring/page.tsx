@@ -96,6 +96,15 @@ export default function MonitoringPage() {
   const [freeTier, setFreeTier] = useState<FreeTierData | null>(null);
   const [rpc, setRpc] = useState<RpcHealth | null>(null);
   const [err, setErr] = useState(false);
+  // Grafana is behind /api/grafana (needs GRAFANA_URL/GRAFANA_TOKEN server-side).
+  // Until it's deployed the panels would render as dead iframes (audit #27), so
+  // probe once and show one honest empty state instead.
+  const [grafanaReady, setGrafanaReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/grafana/api/health", { cache: "no-store" })
+      .then((r) => setGrafanaReady(r.ok))
+      .catch(() => setGrafanaReady(false));
+  }, []);
 
 
 
@@ -135,14 +144,39 @@ export default function MonitoringPage() {
           <p className="text-sm text-muted-foreground">Live platform health — sourced directly from the gateway API</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KPICard label="Requests (24h)" icon={Activity} value={num(status?.total_requests_24h)} caption={status ? `${status.uptime_pct}% uptime` : "gateway metering"} />
-          <KPICard label="Avg Latency" icon={Gauge} value={status ? `${status.avg_latency_ms} ms` : "—"} caption={status ? `${status.chains_supported?.length ?? 0} chains` : ""} />
+          {/* uptime_pct / avg_latency_ms are measured (node_health_logs 24h) and
+              may be null when there is no sample — show "—", never a stand-in. */}
+          <KPICard label="Requests (today, UTC)" icon={Activity} value={num(status?.total_requests_24h)} caption={status?.uptime_pct != null ? `${status.uptime_pct}% measured uptime` : "uptime sample unavailable"} />
+          <KPICard label="Latency (p50, 24h)" icon={Gauge} value={status?.avg_latency_ms != null ? `${status.avg_latency_ms} ms` : "—"} caption={status ? `${status.chains_supported?.length ?? 0} chains` : ""} />
           <KPICard label="Nodes Online" icon={Server} value={num(status?.nodes_online)} caption={`epoch ${status?.current_epoch ?? "—"}`} />
           <KPICard label="Vault Balance" icon={Landmark} value={treasury ? `$${treasury.vault_balance_usdt} USDT` : "—"} caption={treasury ? `${treasury.active_wallets} active wallet(s)` : ""} />
         </div>
       </div>
 
-      {/* EMBEDDED GRAFANA PANELS */}
+      {/* Free-tier + treasury KPIs — real API values, independent of Grafana */}
+      {freeTier ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KPICard label="Active IPs" icon={Wifi} value={num(freeTier.activeIPs)} caption="today (UTC)" />
+          <KPICard label="Near Limit" value={num(freeTier.nearLimitIPs)} caption={`limit ${freeTier.limit}/day`} />
+          <KPICard label="Total Calls" icon={Activity} value={num(freeTier.totalCalls)} caption="free tier, today (UTC)" />
+          <KPICard label="Deposited" icon={DollarSign} value={treasury ? `$${treasury.total_deposited_usdt}` : "—"} caption="USDT lifetime" />
+        </div>
+      ) : null}
+
+      {/* EMBEDDED GRAFANA PANELS — rendered only when the /api/grafana proxy is
+          actually configured; otherwise one honest empty state (audit #27). */}
+      {grafanaReady === false && (
+        <div className="mt-8 border-t border-border pt-8">
+          <div className="rounded-md border border-border bg-card p-8 text-center">
+            <p className="text-sm font-medium text-foreground">Grafana dashboards not connected yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Time-series panels appear here once the monitoring stack is deployed
+              (GRAFANA_URL + GRAFANA_TOKEN). The KPIs above are live from the gateway API.
+            </p>
+          </div>
+        </div>
+      )}
+      {grafanaReady && (
       <div className="space-y-6 mt-8 border-t border-border pt-8">
           <GrafanaPanel
             title="Platform Overview"
@@ -213,16 +247,9 @@ export default function MonitoringPage() {
               src={panel(UID.alerts, 1)}
               height={260}
             />
-            {freeTier ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-4">
-                <KPICard label="Active IPs" icon={Wifi} value={num(freeTier.activeIPs)} caption="last 24h" />
-                <KPICard label="Near Limit" value={num(freeTier.nearLimitIPs)} caption={`limit ${freeTier.limit}/day`} />
-                <KPICard label="Total Calls" icon={Activity} value={num(freeTier.totalCalls)} caption="free tier" />
-                <KPICard label="Deposited" icon={DollarSign} value={treasury ? `$${treasury.total_deposited_usdt}` : "—"} caption="USDT lifetime" />
-              </div>
-            ) : null}
           </DashboardSection>
         </div>
+      )}
       </div>
   );
 }

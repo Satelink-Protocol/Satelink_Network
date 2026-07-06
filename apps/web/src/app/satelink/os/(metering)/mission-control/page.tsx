@@ -212,13 +212,12 @@ export default function MissionControlPage() {
         <div className="relative bg-zinc-900 border border-zinc-800 rounded-sm p-5 overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-[hsl(174,80%,38%)]" />
           <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">API Requests (24h)</span>
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">API Requests</span>
             <Activity className="h-4 w-4 text-zinc-600" />
           </div>
           <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.total_requests_24h) : "—"}</div>
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            <span className="text-xs text-zinc-500">Total requests</span>
+            <span className="text-xs text-zinc-500">{(execSummary as any)?.requests_window || "24h window"}</span>
           </div>
         </div>
 
@@ -231,8 +230,7 @@ export default function MissionControlPage() {
           </div>
           <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_24h) : "—"}</div>
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-500/15 text-zinc-400">—</span>
-            <span className="text-xs text-zinc-500">Unique callers</span>
+            <span className="text-xs text-zinc-500">Unique callers, {(execSummary as any)?.requests_window || "24h window"}</span>
           </div>
         </div>
 
