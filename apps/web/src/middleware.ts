@@ -18,6 +18,9 @@ const SUBDOMAIN_MAP: Record<string, string> = {
   'admin': '/admin',
   'status': '/status',
   'ops': '/ops',
+  // docs.satelink.network serves the in-app documentation portal.
+  // DNS: CNAME docs -> cname.vercel-dns.com + add the domain in Vercel.
+  'docs': '/docs',
 }
 
 export function middleware(req: NextRequest) {

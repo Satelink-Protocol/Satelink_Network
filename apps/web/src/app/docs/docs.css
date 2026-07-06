@@ -1,0 +1,220 @@
+/* Documentation portal — server-rendered, fast, readable. Uses the marketing
+   site's :root variables (globals.css) so light/dark stay consistent. */
+
+.docs-root {
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.docs-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+}
+.docs-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.docs-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.docs-logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent, #2dd4bf);
+  color: #06110f;
+  font-size: 15px;
+}
+.docs-logo-suffix { color: var(--text-muted); font-weight: 500; }
+.docs-header-nav { display: flex; gap: 20px; }
+.docs-header-nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.docs-header-nav a:hover { color: var(--text-primary); }
+
+.docs-shell {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 40px;
+  padding: 32px 24px 80px;
+}
+
+.docs-sidebar { position: sticky; top: 76px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; }
+.docs-nav-group { margin-bottom: 24px; }
+.docs-nav-group ul { list-style: none; margin: 0; padding: 0; }
+.docs-nav-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.docs-nav-link {
+  display: block;
+  padding: 6px 10px;
+  margin-left: -10px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  line-height: 1.4;
+}
+.docs-nav-link:hover { color: var(--text-primary); background: var(--bg-subtle); }
+
+.docs-main { min-width: 0; }
+
+.docs-breadcrumbs {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+.docs-breadcrumbs a { color: var(--text-muted); text-decoration: none; }
+.docs-breadcrumbs a:hover { color: var(--text-primary); }
+
+/* Article typography — short line lengths, generous spacing, honest hierarchy */
+.docs-article { max-width: 760px; }
+.docs-article h1 { font-size: 34px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -0.02em; }
+.docs-article .docs-lede { font-size: 17px; color: var(--text-secondary); margin: 0 0 32px; line-height: 1.6; }
+.docs-article h2 { font-size: 22px; margin: 40px 0 12px; letter-spacing: -0.01em; scroll-margin-top: 90px; }
+.docs-article h3 { font-size: 17px; margin: 28px 0 8px; scroll-margin-top: 90px; }
+.docs-article p, .docs-article li { font-size: 15px; line-height: 1.75; color: var(--text-secondary); }
+.docs-article strong { color: var(--text-primary); }
+.docs-article a { color: var(--accent, #2dd4bf); text-decoration: none; }
+.docs-article a:hover { text-decoration: underline; }
+.docs-article ul, .docs-article ol { padding-left: 24px; margin: 12px 0; }
+.docs-article li { margin: 6px 0; }
+.docs-article hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+.docs-article blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--accent, #2dd4bf);
+  background: var(--bg-subtle);
+  border-radius: 0 8px 8px 0;
+}
+.docs-article blockquote p { margin: 0; }
+
+/* Machine values in mono — code spans and blocks */
+.docs-article code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+.docs-article pre {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.docs-article pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+/* Tables scroll inside their own container — the page never scrolls sideways */
+.docs-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  display: block;
+  overflow-x: auto;
+}
+.docs-article th, .docs-article td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.docs-article th { color: var(--text-primary); background: var(--bg-subtle); }
+
+.docs-footer { border-top: 1px solid var(--border); }
+.docs-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.docs-footer-inner nav { display: flex; gap: 18px; }
+.docs-footer-inner a { color: var(--text-muted); text-decoration: none; }
+.docs-footer-inner a:hover { color: var(--text-primary); }
+
+/* Index cards */
+.docs-index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+.docs-index-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  text-decoration: none;
+  background: var(--bg-subtle);
+  transition: border-color 140ms ease;
+}
+.docs-index-card:hover { border-color: var(--accent, #2dd4bf); }
+.docs-index-card h3 { margin: 0 0 6px; font-size: 15px; color: var(--text-primary); }
+.docs-index-card p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+
+/* Mobile */
+@media (max-width: 900px) {
+  .docs-shell { grid-template-columns: 1fr; gap: 24px; padding: 20px 16px 64px; }
+  .docs-sidebar { position: static; max-height: none; order: 2; border-top: 1px solid var(--border); padding-top: 20px; }
+  .docs-main { order: 1; }
+  .docs-article h1 { font-size: 27px; }
+  .docs-header-nav { gap: 14px; }
+  .docs-header-nav a { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-index-card { transition: none; }
+}

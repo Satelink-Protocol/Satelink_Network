@@ -7,11 +7,24 @@ const FAVICON =
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://satelink.network"),
-  title: "Satelink - Decentralized Infrastructure Network | DePIN",
+  title: {
+    default: "Satelink — Pay-per-call RPC for the Machine Economy | DePIN",
+    template: "%s | Satelink",
+  },
   description:
-    "Run real workloads on distributed hardware. Developers pay per call, node operators earn USDT. On-chain settlement on Polygon.",
-  keywords:
-    "DePIN, decentralized infrastructure, RPC gateway, Polygon, USDT settlement, node operator earnings, Web3, blockchain API",
+    "DePIN RPC gateway on Polygon PoS. Developers and autonomous machines pay $0.00003 USDT per call — no subscriptions. Node operators earn 50% of routed revenue, settled on-chain.",
+  keywords: [
+    "DePIN",
+    "decentralized infrastructure",
+    "RPC gateway",
+    "Polygon RPC",
+    "pay per call API",
+    "USDT settlement",
+    "node operator earnings",
+    "machine economy",
+    "HTTP 402",
+    "blockchain API",
+  ],
   authors: [{ name: "Satelink Network" }],
   robots: "index, follow",
   alternates: { canonical: "https://satelink.network" },
@@ -19,16 +32,17 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "https://satelink.network",
-    title: "Satelink - Decentralized Infrastructure Network",
+    siteName: "Satelink Network",
+    title: "Satelink — Pay-per-call RPC for the Machine Economy",
     description:
-      "Monetize idle hardware with real workloads. On-chain USDT settlement on Polygon.",
+      "DePIN RPC gateway on Polygon PoS. $0.00003 per call in USDT, permissionless deposits, 50% of revenue to node operators.",
     images: ["https://satelink.network/og-image.png"],
   },
   twitter: {
     card: "summary_large_image",
-    site: "@satelinknet",
-    title: "Satelink - Decentralized Infrastructure",
-    description: "Monetize idle hardware. Real workloads. On-chain settlement.",
+    title: "Satelink — Pay-per-call RPC for the Machine Economy",
+    description:
+      "DePIN RPC gateway on Polygon PoS. $0.00003 per call in USDT. Machines onboard via HTTP 402 — no human required.",
   },
 };
 
@@ -37,15 +51,28 @@ const ORG_JSON_LD = {
   "@type": "Organization",
   name: "Satelink Network",
   description:
-    "Decentralized infrastructure platform with on-chain USDT settlement on Polygon",
+    "DePIN RPC gateway on Polygon PoS with pay-per-call USDT metering, permissionless deposits, and on-chain revenue sharing for node operators.",
   url: "https://satelink.network",
-  logo: "https://satelink.network/logo.svg",
+  email: "satelinknetwork@gmail.com",
   foundingDate: "2025",
-  sameAs: [
-    "https://github.com/Satelink-Protocol",
-    "https://twitter.com/satelinknet",
-    "https://discord.gg/satelink",
-  ],
+  sameAs: ["https://github.com/Satelink-Protocol/Satelink_Network"],
+};
+
+const PRODUCT_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Satelink RPC Gateway",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Any (HTTP API)",
+  url: "https://rpc.satelink.network",
+  description:
+    "Multi-chain JSON-RPC gateway (Polygon, Ethereum, Arbitrum, Base) metered at a flat $0.00003 USDT per call with a 500-calls/day free tier.",
+  offers: {
+    "@type": "Offer",
+    price: "0.00003",
+    priceCurrency: "USD",
+    description: "Flat metered rate per RPC call, prepaid in USDT on Polygon PoS.",
+  },
 };
 
 // Runs before paint to avoid a flash of the wrong theme (same logic as the
@@ -71,6 +98,16 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(PRODUCT_JSON_LD) }}
+        />
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="Satelink Changelog"
+          href="https://satelink.network/feed.xml"
         />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
