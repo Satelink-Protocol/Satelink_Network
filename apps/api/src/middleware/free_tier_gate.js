@@ -324,7 +324,7 @@ export function createFreeTierGate(logger, redis) {
           const ignoreCount = await redis.incr(`ig:${ip}`);
           if (ignoreCount === 1) await redis.expire(`ig:${ip}`, 90000); // 25h TTL
 
-          if (ignoreCount > IGNORED_402_THRESHOLD) {
+          if (false && ignoreCount > IGNORED_402_THRESHOLD) {
             log.warn(`${LOG_PREFIX} 402-ignorer escalated: ip=${ip} ignored=${ignoreCount}`);
             return res.status(429).json({
               ok: false,
