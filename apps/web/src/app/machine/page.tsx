@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Card,
@@ -12,7 +12,12 @@ import {
   StatusBadge,
   Badge,
   LegacyDataTable,
+  TimeRangeFilter,
+  SpendThresholdFilter,
+  windowParams,
   type Column,
+  type TimeWindow,
+  type SpendThreshold,
 } from '@satelink/ui';
 import {
   Area,
@@ -62,9 +67,27 @@ async function getJson(path: string): Promise<Json | null> {
   }
 }
 
-function useEconomyData() {
+// Windowed executive summary via the admin proxy (adds the X-Admin-Token
+// server-side) — same path the developer mission-control page uses.
+async function adminProxyGet(path: string): Promise<Json | null> {
+  try {
+    const res = await fetch('/api/admin-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, method: 'GET' }),
+    });
+    const j = await res.json();
+    return j?.ok && j.data ? (j.data as Json) : null;
+  } catch {
+    return null;
+  }
+}
+
+function useEconomyData(windowQS: string) {
   const [economics, setEconomics] = useState<Json | null>(null);
   const [truth, setTruth] = useState<Json | null>(null);
+  const [exec, setExec] = useState<Json | null>(null);
+  const [execLoading, setExecLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,7 +107,22 @@ function useEconomyData() {
     };
   }, []);
 
-  return { economics, truth, loading };
+  // Windowed revenue re-fetches whenever the time filter changes.
+  useEffect(() => {
+    let alive = true;
+    setExecLoading(true);
+    (async () => {
+      const res = await adminProxyGet(`/executive/summary?${windowQS}`);
+      if (!alive) return;
+      setExec(res);
+      setExecLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [windowQS]);
+
+  return { economics, truth, exec, execLoading, loading };
 }
 
 const usd5 = (n: unknown) =>
@@ -182,7 +220,27 @@ const plannedCell = (s: string) =>
 function MachinePortal() {
   const params = useSearchParams();
   const view = params.get('view') || 'mission-control';
-  const { economics, truth, loading } = useEconomyData();
+
+  // Dashboard filters. Time window drives windowed revenue via /executive/summary
+  // ?window=; spend threshold filters the machine-spend tables. State only.
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>('24h');
+  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const [spend, setSpend] = useState<SpendThreshold>('all');
+  const windowQS = useMemo(
+    () => new URLSearchParams(windowParams(timeWindow, customFrom, customTo)).toString(),
+    [timeWindow, customFrom, customTo],
+  );
+  const onTimeChange = useCallback((v: TimeWindow, from?: string, to?: string) => {
+    setTimeWindow(v);
+    setCustomFrom(from);
+    setCustomTo(to);
+  }, []);
+  const spendMin = spend === 'all' ? 0 : Number(spend);
+
+  const { economics, truth, exec, execLoading, loading } = useEconomyData(windowQS);
+  const windowRevenue = exec?.revenue_window_usdt as number | undefined;
+  const windowEvents = exec?.revenue_window_events as number | undefined;
 
   // Revenue displayed on the machine dashboard must be REAL metered revenue —
   // SUM(revenue_events_v2.amount_usdt) with test data excluded — sourced from
@@ -206,11 +264,14 @@ function MachinePortal() {
       { label: 'Active Agents', icon: Bot },
       { label: 'Active Workloads', icon: Server },
     ];
+    // Revenue Generated reflects the selected time window (real metered revenue
+    // in that range); falls back to lifetime metered before the window loads.
+    const displayRevenue = windowRevenue ?? totalRevenue;
     const row2 = [
       { label: 'Current Spend Rate', value: DASH, icon: Gauge },
       { label: '24h Spend', value: DASH, icon: Timer },
       { label: 'Monthly Spend', value: DASH, icon: BarChart3 },
-      { label: 'Revenue Generated', value: usd5(totalRevenue), icon: DollarSign },
+      { label: 'Revenue Generated', value: usd5(displayRevenue), icon: DollarSign },
     ];
 
     const workloadCols: Column<any>[] = [
@@ -221,7 +282,9 @@ function MachinePortal() {
     ];
     const workloadRows = loading
       ? null
-      : [{ type: 'Polygon RPC', consumer: 'Network', revenue: usd5(totalRevenue), status: 'ACTIVE' }];
+      : [{ type: 'Polygon RPC', consumer: 'Network', revenue: usd5(displayRevenue), status: 'ACTIVE' }];
+    // Real per-machine spend rows (none tracked yet — traffic is anonymous).
+    const machineSpendRows: any[] = [];
 
     return (
       <div className="flex flex-col gap-6">
@@ -250,8 +313,11 @@ function MachinePortal() {
                 { key: 'requests', header: 'Requests' },
                 { key: 'spend', header: 'Spend', mono: true },
               ]}
-              rows={[]}
-              emptyLabel="No machine spend yet"
+              // Per-machine spend is not tracked yet (all traffic is anonymous),
+              // so the real row set is empty. The spend-threshold filter is wired
+              // over it for when this data lands — no placeholder rows.
+              rows={machineSpendRows.filter((m: any) => (Number(m.spend) || 0) >= spendMin)}
+              emptyLabel={spend === 'all' ? 'No machine spend yet' : `No machines above $${spend}`}
               emptyMessage="Machines appear here once they consume metered services."
             />
           </Panel>
@@ -651,11 +717,29 @@ function MachinePortal() {
       autonomous: Autonomous,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [loading, economics, truth]
+    [loading, economics, truth, exec, spend, windowQS]
   );
 
   const Active = views[view] ?? MissionControl;
-  return <Active />;
+  return (
+    <div className="flex flex-col gap-4">
+      {/* FILTER BAR — time window + spend threshold, shown on every machine view. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <TimeRangeFilter value={timeWindow} onChange={onTimeChange} customFrom={customFrom} customTo={customTo} />
+          <SpendThresholdFilter value={spend} onChange={setSpend} />
+        </div>
+        <span className="text-xs font-mono text-muted-foreground tabular-nums">
+          {execLoading
+            ? 'Loading window…'
+            : exec
+              ? `Window ${exec.window ?? timeWindow}: ${usd5(windowRevenue ?? 0)} · ${windowEvents ?? 0} events`
+              : 'No data for this period'}
+        </span>
+      </div>
+      <Active />
+    </div>
+  );
 }
 
 export default function MachinePage() {
