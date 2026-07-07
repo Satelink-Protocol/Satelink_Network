@@ -100,14 +100,31 @@ export function createAdminRouter(pool, redis) {
       const summaryRows = await q(
         `SELECT classification, COUNT(*)::int AS count FROM developer_intel GROUP BY classification`
       );
-      const summary = { total_classified: 0, developers: 0, machines: 0, scanners: 0, unknown: 0 };
+      const allTime = { total_classified: 0, developers: 0, machines: 0, scanners: 0, unknown: 0 };
       for (const row of summaryRows) {
-        summary.total_classified += row.count;
-        if (row.classification === 'developer') summary.developers = row.count;
-        else if (row.classification === 'machine') summary.machines = row.count;
-        else if (row.classification === 'scanner') summary.scanners = row.count;
-        else if (row.classification === 'unknown') summary.unknown = row.count;
+        allTime.total_classified += row.count;
+        if (row.classification === 'developer') allTime.developers = row.count;
+        else if (row.classification === 'machine') allTime.machines = row.count;
+        else if (row.classification === 'scanner') allTime.scanners = row.count;
+        else if (row.classification === 'unknown') allTime.unknown = row.count;
       }
+
+      const todayRows = await q(
+        `SELECT classification, COUNT(*)::int AS count FROM developer_intel WHERE last_seen > NOW() - INTERVAL '24 hours' GROUP BY classification`
+      );
+      const activeToday = { total_classified: 0, developers: 0, machines: 0, scanners: 0, unknown: 0 };
+      for (const row of todayRows) {
+        activeToday.total_classified += row.count;
+        if (row.classification === 'developer') activeToday.developers = row.count;
+        else if (row.classification === 'machine') activeToday.machines = row.count;
+        else if (row.classification === 'scanner') activeToday.scanners = row.count;
+        else if (row.classification === 'unknown') activeToday.unknown = row.count;
+      }
+
+      const summary = {
+        all_time: allTime,
+        active_today: activeToday
+      };
 
       const top_abusers = await q(
         `SELECT ip, user_agent, classification, score, calls_today, avg_daily_calls, country, isp
@@ -354,10 +371,7 @@ export function createAdminRouter(pool, redis) {
       const treasuryAddr = process.env.TREASURY_ADDRESS || TREASURY_FALLBACK;
       const rev = await one(REVENUE_SPLIT_SQL, [treasuryAddr]);
       const traffic = await trafficToday();
-      const paying = await one(
-        `SELECT COUNT(*) FILTER (WHERE total_deposited > 0 AND lower(wallet_address) <> lower($1))::int AS external,
-                COUNT(*) FILTER (WHERE total_deposited > 0 AND lower(wallet_address) =  lower($1))::int AS internal
-         FROM api_credits`, [treasuryAddr]);
+      const paying = await one(`SELECT COUNT(DISTINCT api_key)::int AS c FROM api_deposits`);
       const health = await one(
         `SELECT ROUND(100.0*COUNT(*) FILTER (WHERE status IN ('healthy','ok','up','online'))/NULLIF(COUNT(*),0),2)::float AS pct,
                 COUNT(DISTINCT node_id)::int AS nodes
@@ -399,9 +413,9 @@ export function createAdminRouter(pool, redis) {
         total_requests_24h: traffic.requests,
         requests_source: traffic.source,
         requests_window: traffic.source === 'redis_utc_day' ? 'since UTC midnight' : 'last 24 hours',
-        paying_customers: num(paying.external) + num(paying.internal),
-        paying_customers_external: num(paying.external),
-        paying_customers_internal: num(paying.internal),
+        paying_customers: num(paying.c),
+        paying_customers_external: num(paying.c),
+        paying_customers_internal: 0,
         settlement_mode: settle.dryRun ? 'DRY_RUN' : 'LIVE',
         signer_balance_pol: settle.signerBalance,
         network_health_pct: healthScore,
@@ -502,8 +516,10 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Demand Stats
   router.get('/demand/stats', async (req, res) => {
     try {
-      const rows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
-      const by = Object.fromEntries(rows.map(r => [r.classification || 'unknown', r.c]));
+      const allTimeRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
+      const allTime = Object.fromEntries(allTimeRows.map(r => [r.classification || 'unknown', r.c]));
+      const todayRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel WHERE last_seen > NOW() - INTERVAL '24 hours' GROUP BY classification`);
+      const today = Object.fromEntries(todayRows.map(r => [r.classification || 'unknown', r.c]));
       const total = await one(`SELECT COUNT(*)::int AS c FROM developer_intel`);
       const traffic = await trafficToday();
       // Top lead restricted to IPs actually seen in the window — a stale
@@ -513,10 +529,18 @@ export function createAdminRouter(pool, redis) {
           WHERE last_seen >= now() - interval '24 hours'
           ORDER BY calls_today DESC NULLS LAST LIMIT 1`);
       ok(res, {
-        machine_count: num(by.machine),
-        developer_count: num(by.developer),
-        unknown_count: num(by.unknown),
-        scanner_count: num(by.scanner),
+        all_time: {
+          machine: num(allTime.machine),
+          developer: num(allTime.developer),
+          unknown: num(allTime.unknown),
+          scanner: num(allTime.scanner),
+        },
+        active_today: {
+          machine: num(today.machine),
+          developer: num(today.developer),
+          unknown: num(today.unknown),
+          scanner: num(today.scanner),
+        },
         // total_active_ips was COUNT(*) over every IP ever recorded (audit #15).
         // It now reports IPs active in the current window; the historical
         // rowcount moves to total_tracked_ips.
@@ -668,14 +692,24 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Security: classifier stats
   router.get('/security/classifier-stats', async (req, res) => {
     try {
-      const rows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
-      const by = Object.fromEntries(rows.map(r => [r.classification || 'unknown', r.c]));
-      const total = rows.reduce((s, r) => s + r.c, 0);
+      const allTimeRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
+      const allTime = Object.fromEntries(allTimeRows.map(r => [r.classification || 'unknown', r.c]));
+      const todayRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel WHERE last_seen > NOW() - INTERVAL '24 hours' GROUP BY classification`);
+      const today = Object.fromEntries(todayRows.map(r => [r.classification || 'unknown', r.c]));
+      const total = allTimeRows.reduce((s, r) => s + r.c, 0);
       ok(res, {
-        machine: num(by.machine),
-        developer: num(by.developer),
-        unknown: num(by.unknown),
-        scanner: num(by.scanner),
+        all_time: {
+          machine: num(allTime.machine),
+          developer: num(allTime.developer),
+          unknown: num(allTime.unknown),
+          scanner: num(allTime.scanner),
+        },
+        active_today: {
+          machine: num(today.machine),
+          developer: num(today.developer),
+          unknown: num(today.unknown),
+          scanner: num(today.scanner),
+        },
         total,
       });
     } catch (e) { fail(res, e); }
