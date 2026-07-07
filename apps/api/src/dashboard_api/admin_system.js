@@ -88,7 +88,7 @@ export async function getSystemHealth(db, cache) {
 
     // ── Revenue last 24h ──
     const revenue24hRow = await queryOne(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND is_test_data = false AND created_at > $1",
         [oneDayAgoMs]
     );
     const revenue24h = parseFloat(revenue24hRow?.total || 0);
