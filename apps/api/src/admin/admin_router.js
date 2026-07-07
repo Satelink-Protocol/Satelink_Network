@@ -71,19 +71,31 @@ export function createAdminRouter(pool, redis) {
       // dashboard. Default to one page; clamp limit to a sane max.
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      // Optional ?classification= filter. 'all' (or unset) keeps the default
+      // developer+machine lead set; a specific class narrows to it. Value is
+      // matched against a fixed allow-list, never interpolated.
+      const cls = String(req.query.classification || 'all').toLowerCase();
+      const ALLOWED_CLASS = ['developer', 'machine', 'unknown', 'scanner'];
+      const clsFilter = ALLOWED_CLASS.includes(cls) ? cls : null;
+      // Placeholder index differs per query (list: $3 after limit/offset;
+      // count: $1), so build each clause with its own index.
+      const listWhere  = clsFilter ? `classification = $3` : `classification IN ('developer','machine')`;
+      const countWhere = clsFilter ? `classification = $1` : `classification IN ('developer','machine')`;
+      const listParams = clsFilter ? [limit, offset, clsFilter] : [limit, offset];
       const rows = await q(
         `SELECT id, ip, isp, country, classification, score, days_active, calls_today, avg_daily_calls, status, user_agent
            FROM developer_intel
-          WHERE classification IN ('developer','machine')
+          WHERE ${listWhere}
           ORDER BY score DESC, days_active DESC
           LIMIT $1 OFFSET $2`,
-        [limit, offset]
+        listParams
       );
       const totalRows = await q(
-        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE classification IN ('developer','machine')`
+        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE ${countWhere}`,
+        clsFilter ? [clsFilter] : []
       );
       const total = totalRows[0] ? Number(totalRows[0].c) : 0;
-      res.json({ ok: true, developers: rows, count: rows.length, total, limit, offset });
+      res.json({ ok: true, developers: rows, count: rows.length, total, classification: clsFilter || 'all', limit, offset });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
 
@@ -322,6 +334,35 @@ export function createAdminRouter(pool, redis) {
   const ok   = (res, data) => res.json({ ok: true, data, ts: Date.now() });
   const fail = (res, e) => res.status(500).json({ ok: false, error: e.message, ts: Date.now() });
 
+  // ── Time-window filter (dashboard ?window= param) ─────────────────────────
+  // Accepts ?window=1h|24h|7d|30d|custom, defaulting to 24h. For custom, ?from
+  // and ?to are ISO-8601 timestamps; invalid custom bounds fall back to 24h.
+  // Returns the normalized key plus a Postgres INTERVAL literal (from a fixed
+  // allow-list, never interpolated user input) and, for custom, explicit bounds.
+  const WINDOW_INTERVALS = { '1h': '1 hour', '24h': '24 hours', '7d': '7 days', '30d': '30 days' };
+  const parseWindow = (query) => {
+    const raw = String(query.window || '24h').toLowerCase();
+    if (raw === 'custom') {
+      const from = query.from ? new Date(query.from) : null;
+      const to   = query.to   ? new Date(query.to)   : null;
+      if (from && !isNaN(from.getTime()) && to && !isNaN(to.getTime())) {
+        return { key: 'custom', interval: null, from: from.toISOString(), to: to.toISOString() };
+      }
+    }
+    const key = WINDOW_INTERVALS[raw] ? raw : '24h';
+    return { key, interval: WINDOW_INTERVALS[key], from: null, to: null };
+  };
+  // Build a windowed WHERE predicate + params for a timestamp column expression.
+  // `col` is a SQL expression yielding timestamptz (e.g. 'last_seen' or
+  // 'to_timestamp(created_at)'); `startIdx` is the first $n placeholder to use.
+  // The INTERVAL literal is safe — it comes only from WINDOW_INTERVALS above.
+  const windowPredicate = (win, col, startIdx = 1) => {
+    if (win.key === 'custom') {
+      return { clause: `${col} >= $${startIdx} AND ${col} <= $${startIdx + 1}`, params: [win.from, win.to] };
+    }
+    return { clause: `${col} > NOW() - INTERVAL '${win.interval}'`, params: [] };
+  };
+
   const VAULT_ADDRESS    = process.env.REVENUE_VAULT || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
   const USDT_ADDRESS     = process.env.USDT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
   const TREASURY_FALLBACK = '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
@@ -368,8 +409,18 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Executive Summary (CEO screen, single call)
   router.get('/executive/summary', async (req, res) => {
     try {
+      const win = parseWindow(req.query);
       const treasuryAddr = process.env.TREASURY_ADDRESS || TREASURY_FALLBACK;
       const rev = await one(REVENUE_SPLIT_SQL, [treasuryAddr]);
+      // Real revenue inside the requested ?window= (default 24h). created_at is
+      // epoch SECONDS, so compare via to_timestamp(); test rows always excluded.
+      const wpRev = windowPredicate(win, 'to_timestamp(created_at)', 1);
+      const revWin = await one(
+        `SELECT COALESCE(SUM(amount_usdt),0)::float AS s, COUNT(*)::int AS c
+           FROM revenue_events_v2 WHERE NOT is_test_data AND ${wpRev.clause}`, wpRev.params);
+      // Active IPs seen inside the window (last_seen), so the KPI tracks ?window=.
+      const wpIps = windowPredicate(win, 'last_seen', 1);
+      const ipsWin = await one(`SELECT COUNT(*)::int AS c FROM developer_intel WHERE ${wpIps.clause}`, wpIps.params);
       const traffic = await trafficToday();
       const paying = await one(`SELECT COUNT(DISTINCT api_key)::int AS c FROM api_deposits`);
       const health = await one(
@@ -401,6 +452,13 @@ export function createAdminRouter(pool, redis) {
         nodeAvail + penalties.signer_unfunded + penalties.blocked_batches + penalties.dry_run));
 
       ok(res, {
+        window: win.key,
+        window_from: win.from,
+        window_to: win.to,
+        // Real (non-test) revenue and event count inside the selected window.
+        revenue_window_usdt: num(revWin.s),
+        revenue_window_events: num(revWin.c),
+        active_ips_window: num(ipsWin.c),
         revenue_today_usdt: num(rev.today),
         // Kept for dashboard compatibility; this has always been the lifetime
         // real (non-test) sum, now split into external vs internal below.
@@ -516,35 +574,48 @@ export function createAdminRouter(pool, redis) {
   // OBSERVER — Demand Stats
   router.get('/demand/stats', async (req, res) => {
     try {
+      const win = parseWindow(req.query);
       const allTimeRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel GROUP BY classification`);
       const allTime = Object.fromEntries(allTimeRows.map(r => [r.classification || 'unknown', r.c]));
-      const todayRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel WHERE last_seen > NOW() - INTERVAL '24 hours' GROUP BY classification`);
+      // active_today reflects the requested ?window= (default 24h): IPs whose
+      // last_seen falls inside the window, grouped by classification.
+      const wp = windowPredicate(win, 'last_seen', 1);
+      const todayRows = await q(`SELECT classification, COUNT(*)::int AS c FROM developer_intel WHERE ${wp.clause} GROUP BY classification`, wp.params);
       const today = Object.fromEntries(todayRows.map(r => [r.classification || 'unknown', r.c]));
       const total = await one(`SELECT COUNT(*)::int AS c FROM developer_intel`);
       const traffic = await trafficToday();
       // Top lead restricted to IPs actually seen in the window — a stale
       // calls_today from a long-gone IP is not a lead (audit #15).
+      const wpTop = windowPredicate(win, 'last_seen', 1);
       const top = await one(
         `SELECT ip, calls_today FROM developer_intel
-          WHERE last_seen >= now() - interval '24 hours'
-          ORDER BY calls_today DESC NULLS LAST LIMIT 1`);
+          WHERE ${wpTop.clause}
+          ORDER BY calls_today DESC NULLS LAST LIMIT 1`, wpTop.params);
+      const activeCounts = {
+        machine: num(today.machine),
+        developer: num(today.developer),
+        unknown: num(today.unknown),
+        scanner: num(today.scanner),
+      };
+      // Active IP total for the window = sum of the per-class active counts, so
+      // it tracks the same ?window= as active_today (traffic.active_ips is a
+      // fixed UTC-day Redis figure and only valid for the default 24h view).
+      const activeIpsWindow = win.key === '24h'
+        ? traffic.active_ips
+        : activeCounts.machine + activeCounts.developer + activeCounts.unknown + activeCounts.scanner;
       ok(res, {
+        window: win.key,
+        window_from: win.from,
+        window_to: win.to,
         all_time: {
           machine: num(allTime.machine),
           developer: num(allTime.developer),
           unknown: num(allTime.unknown),
           scanner: num(allTime.scanner),
         },
-        active_today: {
-          machine: num(today.machine),
-          developer: num(today.developer),
-          unknown: num(today.unknown),
-          scanner: num(today.scanner),
-        },
-        // total_active_ips was COUNT(*) over every IP ever recorded (audit #15).
-        // It now reports IPs active in the current window; the historical
-        // rowcount moves to total_tracked_ips.
-        total_active_ips: traffic.active_ips,
+        // Kept as `active_today` for dashboard compatibility; now windowed.
+        active_today: activeCounts,
+        total_active_ips: activeIpsWindow,
         total_tracked_ips: num(total.c),
         requests_source: traffic.source,
         top_lead_ip: top.ip || null,

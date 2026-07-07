@@ -201,6 +201,11 @@ export function createRpcGateway(db) {
         const clientIp = getClientIp(req);
         const canonical = CREDIT_CANONICAL();
 
+        // No credentials at all — never reaches billing, never serves the call.
+        if (!apiKey && !walletHdr) {
+            return res.status(402).json(PAYMENT_REQUIRED_BODY);
+        }
+
         // Validate chain + JSON-RPC body BEFORE any billing so an invalid
         // request is never charged or metered.
         if (!SUPPORTED_CHAINS.has(chain)) {

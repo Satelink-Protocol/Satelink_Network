@@ -114,6 +114,25 @@ export type { GrafanaPanelProps } from "./components/grafana-panel";
 export { LogPanel } from "./components/monitoring-panels";
 export type { MonitoringPanelProps } from "./components/monitoring-panels";
 
+// dashboard filters (time window + contextual)
+export {
+  TimeRangeFilter,
+  ClassificationFilter,
+  SpendThresholdFilter,
+  Segmented,
+  windowParams,
+} from "./components/TimeRangeFilter";
+export type {
+  TimeRangeFilterProps,
+  TimeWindow,
+  ClassificationFilterProps,
+  Classification,
+  SpendThresholdFilterProps,
+  SpendThreshold,
+  SegmentedProps,
+  SegmentedOption,
+} from "./components/TimeRangeFilter";
+
 // state primitives
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";

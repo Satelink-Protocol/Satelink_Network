@@ -7,7 +7,8 @@ import {
   Button, EmptyState, Inline, Input, Notice, Panel, Stack, StatusBadge, StatusDot,
   FilterGroup, FilterCheckbox
 } from "@/components/satelink-os";
-import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, DataTable as ModernDataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel } from "@satelink/ui";
+import { DashboardShell, RevenueProjectionChart, LeadPipelineTable, LegacyDataTable as DataTable, DataTable as ModernDataTable, Card, CardHeader, CardTitle, CardContent, ChartContainer, ChartTooltip, ChartTooltipContent, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, KPICard, SparklineKPICard, AlertBand, TimeseriesPanel, TimeRangeFilter, ClassificationFilter, windowParams } from "@satelink/ui";
+import type { TimeWindow, Classification } from "@satelink/ui";
 import { Activity, Server, Cpu, HardDrive, ArrowDownToLine, ArrowUpToLine, ShieldAlert, Key, DollarSign, Users, RefreshCw, Layers, Zap } from "lucide-react";
 import { NAV, HEADERS, PROJECTION_DATA, TEMPLATES, TRIGGERABLE_JOBS, stageTone, fmt } from "./constants";
 import SelfTestsView from "./self-tests/SelfTestsView";
@@ -112,6 +113,25 @@ function AdminCommandCenter() {
   const [confirmLive, setConfirmLive] = useState("");
   const [stages, setStages] = useState<Record<string, boolean>>({ identified: true, contacted: true, deposited: true, paid: true });
   const [classes, setClasses] = useState<Record<string, boolean>>({ developer: true, crawler: true, new: true });
+
+  // Dashboard filters (Command Center + Demand Radar). Time window maps to the
+  // API ?window= param on /executive/summary and /demand/stats; classification
+  // maps to ?classification= on /intel/developers. State only — not URL/storage.
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
+  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const [classification, setClassification] = useState<Classification>("all");
+  const windowQS = useMemo(
+    () => new URLSearchParams(windowParams(timeWindow, customFrom, customTo)).toString(),
+    [timeWindow, customFrom, customTo]
+  );
+  const onTimeChange = useCallback((v: TimeWindow, from?: string, to?: string) => {
+    setTimeWindow(v);
+    setCustomFrom(from);
+    setCustomTo(to);
+  }, []);
+  const [execLoading, setExecLoading] = useState(true);
+  const [demLoading, setDemLoading] = useState(true);
   
   // Standard UI States
   const [status, setStatus] = useState<any>(null);
@@ -176,11 +196,13 @@ function AdminCommandCenter() {
   const usdt5 = (n: number | string | undefined) =>
     n == null ? "—" : Number(n).toLocaleString("en-US", { minimumFractionDigits: 5, maximumFractionDigits: 5 });
 
+  // ?classification= suffix for the lead-pipeline endpoint ('all' → omitted).
+  const clsQS = classification === "all" ? "" : `&classification=${classification}`;
   const loadStatus = useCallback(async () => { setStatusErr(null); try { const r = await adminFetch("/settlement/status"); if (!r.ok) throw new Error(r.error || "failed"); setStatus(r); } catch (e: any) { setStatusErr(e.message); } }, []);
   const loadDevs = useCallback(async () => {
     setDevErr(null); setDevsLoading(true);
     try {
-      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=0`);
+      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=0${clsQS}`);
       if (!r.ok) throw new Error(r.error || "failed");
       const page = Array.isArray(r.developers) ? r.developers : [];
       setDevs(page);
@@ -188,12 +210,12 @@ function AdminCommandCenter() {
       setDevsOffset(0);
     } catch (e: any) { setDevErr(e.message); setDevs([]); setDevsTotal(0); }
     finally { setDevsLoading(false); }
-  }, []);
+  }, [clsQS]);
   const loadMoreDevs = useCallback(async () => {
     const nextOffset = devsOffset + DEVS_PAGE_SIZE;
     setDevsLoadingMore(true);
     try {
-      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=${nextOffset}`);
+      const r = await adminFetch(`/intel/developers?limit=${DEVS_PAGE_SIZE}&offset=${nextOffset}${clsQS}`);
       if (!r.ok) throw new Error(r.error || "failed");
       const more = Array.isArray(r.developers) ? r.developers : [];
       setDevs((prev: any) => [...(prev || []), ...more]);
@@ -201,7 +223,20 @@ function AdminCommandCenter() {
       if (typeof r.total === "number") setDevsTotal(r.total);
     } catch (e: any) { setDevErr(e.message); }
     finally { setDevsLoadingMore(false); }
-  }, [devsOffset]);
+  }, [devsOffset, clsQS]);
+  // Windowed loaders — re-fetch when the time filter changes (see effect below).
+  const loadExec = useCallback(async () => {
+    setExecLoading(true);
+    try { const r = await adminFetch(`/executive/summary?${windowQS}`); setExecSummary(r.ok ? r.data : null); setExecErr(r.ok ? null : r.error); }
+    catch (e: any) { setExecErr(e.message); }
+    finally { setExecLoading(false); }
+  }, [windowQS]);
+  const loadDemStats = useCallback(async () => {
+    setDemLoading(true);
+    try { const r = await adminFetch(`/demand/stats?${windowQS}`); setDemStats(r.ok ? r.data : null); setDemStatsErr(r.ok ? null : r.error); }
+    catch (e: any) { setDemStatsErr(e.message); }
+    finally { setDemLoading(false); }
+  }, [windowQS]);
   const loadJobs = useCallback(async () => { setJobsErr(null); try { const r = await adminFetch("/jobs/status"); if (!r.ok) throw new Error(r.error || "failed"); setJobs(Array.isArray(r.jobs) ? r.jobs : []); } catch (e: any) { setJobsErr(e.message); setJobs([]); } }, []);
 
   const refreshAll = useCallback(async () => {
@@ -209,10 +244,8 @@ function AdminCommandCenter() {
     loadDevs();
     loadJobs();
     
-    // Fetch all new observer endpoints
-    const loadExec = async () => {
-      try { const r = await adminFetch("/executive/summary"); setExecSummary(r.ok ? r.data : null); setExecErr(r.ok ? null : r.error); } catch (e: any) { setExecErr(e.message); }
-    };
+    // Fetch all new observer endpoints. (Windowed loaders loadExec/loadDemStats
+    // are hoisted above and driven by the time-filter effect, not refreshAll.)
     const loadRevSum = async () => {
       try { const r = await adminFetch("/revenue/summary"); setRevSummary(r.ok ? r.data : null); setRevSummaryErr(r.ok ? null : r.error); } catch (e: any) { setRevSummaryErr(e.message); }
     };
@@ -221,9 +254,6 @@ function AdminCommandCenter() {
     };
     const loadRevEvts = async () => {
       try { const r = await adminFetch("/revenue/events"); setRevEvents(r.ok ? r.data?.events : null); setRevEventsErr(r.ok ? null : r.error); } catch (e: any) { setRevEventsErr(e.message); }
-    };
-    const loadDemStats = async () => {
-      try { const r = await adminFetch("/demand/stats"); setDemStats(r.ok ? r.data : null); setDemStatsErr(r.ok ? null : r.error); } catch (e: any) { setDemStatsErr(e.message); }
     };
     const loadNetHealth = async () => {
       try { const r = await adminFetch("/network/health"); setNetHealth(r.ok ? r.data : null); setNetHealthErr(r.ok ? null : r.error); } catch (e: any) { setNetHealthErr(e.message); }
@@ -265,11 +295,9 @@ function AdminCommandCenter() {
       try { const r = await adminFetch("/intel/abuse-overview"); setAbuseOverview(r.ok ? r : null); setAbuseOverviewErr(r.ok ? null : r.error); } catch (e: any) { setAbuseOverviewErr(e.message); }
     };
 
-    loadExec();
     loadRevSum();
     loadRevFun();
     loadRevEvts();
-    loadDemStats();
     loadNetHealth();
     loadNodesList();
     loadBillCredits();
@@ -286,6 +314,11 @@ function AdminCommandCenter() {
   }, [loadStatus, loadDevs, loadJobs]);
 
   useEffect(() => { refreshAll(); const t = setInterval(() => setNow(new Date().toLocaleTimeString("en-US", { hour12: false })), 1000); return () => clearInterval(t); }, [refreshAll]);
+
+  // Windowed KPIs re-fetch whenever the time filter changes (loadExec/loadDemStats
+  // close over windowQS). Runs on mount too, so the executive strip and demand
+  // stats always reflect the selected window without a full refreshAll.
+  useEffect(() => { loadExec(); loadDemStats(); }, [loadExec, loadDemStats]);
   
   useEffect(() => {
     let es: EventSource; try { es = new EventSource("/api/admin-proxy?stream=live/feed"); es.onmessage = (ev) => { try { const msg = JSON.parse(ev.data); if (msg.type === "connected") setFeedState("live"); else if (msg.type === "log" && msg.data) { setFeedState("live"); setFeed((f) => [msg.data, ...f].slice(0, 80)); } } catch {} }; es.onerror = () => setFeedState("error"); } catch { setFeedState("error"); }
@@ -339,7 +372,7 @@ function AdminCommandCenter() {
       subtitle={H.subtitle}
       headerRight={
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={refreshAll} className="flex items-center gap-1">
+          <Button size="sm" onClick={() => { refreshAll(); loadExec(); loadDemStats(); }} className="flex items-center gap-1">
             <RefreshCw className="h-3 w-3" /> Refresh All
           </Button>
         </div>
@@ -370,7 +403,23 @@ function AdminCommandCenter() {
         {view === "executive" && (
           <div className="px-6 py-6">
             {execErr && <Notice tone="danger">Executive Summary fetch failed: {execErr}</Notice>}
-            
+
+            {/* FILTER BAR — time window + classification, wired to /executive/summary
+                and /demand/stats ?window= (and /intel/developers ?classification=). */}
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <TimeRangeFilter value={timeWindow} onChange={onTimeChange} customFrom={customFrom} customTo={customTo} />
+                <ClassificationFilter value={classification} onChange={setClassification} />
+              </div>
+              <span className="text-xs font-mono text-zinc-500 tabular-nums">
+                {execLoading
+                  ? "Loading window…"
+                  : execSummary
+                    ? `Window ${execSummary.window ?? timeWindow}: $${usdt5(execSummary.revenue_window_usdt)} · ${execSummary.revenue_window_events ?? 0} events · ${(execSummary.active_ips_window ?? 0).toLocaleString()} active IPs`
+                    : "No data for this period"}
+              </span>
+            </div>
+
             {/* ROW 1 — KPI strip */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {/* Card 1: LIFETIME REVENUE */}
@@ -556,13 +605,30 @@ function AdminCommandCenter() {
         {/* 2. DEMAND RADAR VIEW */}
         {view === "radar" && (
           <Stack gap="sm">
-            {/* KPI cards span the full width across the top — no overlap. */}
-            {demStats && (
+            {/* FILTER BAR — time window + classification. Window drives the
+                /demand/stats active counts; classification drives the lead
+                pipeline (/intel/developers ?classification=). */}
+            <div className="px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <TimeRangeFilter value={timeWindow} onChange={onTimeChange} customFrom={customFrom} customTo={customTo} />
+                <ClassificationFilter value={classification} onChange={setClassification} />
+              </div>
+              <span className="text-xs font-mono text-zinc-500 tabular-nums">
+                {demLoading ? "Loading window…" : demStats ? `Window: ${demStats.window ?? timeWindow}` : "No data for this period"}
+              </span>
+            </div>
+            {/* KPI cards: value = active count in the selected window; caption =
+                all-time classified. Both come from /demand/stats (real fields). */}
+            {demLoading && !demStats ? (
+              <div className="px-6 text-xs text-zinc-500">Loading demand stats…</div>
+            ) : !demStats ? (
+              <div className="px-6"><EmptyState title="No demand data" description="No classified IPs for this period." /></div>
+            ) : (
               <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
                 <KPICard label="Active IPs" value={fmt.num(demStats.total_active_ips)} caption={demStats.total_tracked_ips ? `${fmt.num(demStats.total_tracked_ips)} tracked all-time` : undefined} />
-                <KPICard label="Developers" value={fmt.num(demStats.developer_count)} caption="all-time classified" />
-                <KPICard label="Machines" value={fmt.num(demStats.machine_count)} caption="all-time classified" />
-                <KPICard label="Scanners" value={fmt.num(demStats.scanner_count)} caption="all-time classified" />
+                <KPICard label="Developers" value={fmt.num(demStats.active_today?.developer)} caption={`${fmt.num(demStats.all_time?.developer)} all-time`} />
+                <KPICard label="Machines" value={fmt.num(demStats.active_today?.machine)} caption={`${fmt.num(demStats.all_time?.machine)} all-time`} />
+                <KPICard label="Unknown" value={fmt.num(demStats.active_today?.unknown)} caption={`${fmt.num(demStats.all_time?.unknown)} all-time`} />
                 <KPICard label="Top IP calls" value={`${fmt.num(demStats.top_lead_calls_per_day)}/d`} caption={demStats.top_lead_ip || ""} />
               </div>
             )}
