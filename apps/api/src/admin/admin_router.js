@@ -71,19 +71,31 @@ export function createAdminRouter(pool, redis) {
       // dashboard. Default to one page; clamp limit to a sane max.
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      // Optional ?classification= filter. 'all' (or unset) keeps the default
+      // developer+machine lead set; a specific class narrows to it. Value is
+      // matched against a fixed allow-list, never interpolated.
+      const cls = String(req.query.classification || 'all').toLowerCase();
+      const ALLOWED_CLASS = ['developer', 'machine', 'unknown', 'scanner'];
+      const clsFilter = ALLOWED_CLASS.includes(cls) ? cls : null;
+      // Placeholder index differs per query (list: $3 after limit/offset;
+      // count: $1), so build each clause with its own index.
+      const listWhere  = clsFilter ? `classification = $3` : `classification IN ('developer','machine')`;
+      const countWhere = clsFilter ? `classification = $1` : `classification IN ('developer','machine')`;
+      const listParams = clsFilter ? [limit, offset, clsFilter] : [limit, offset];
       const rows = await q(
         `SELECT id, ip, isp, country, classification, score, days_active, calls_today, avg_daily_calls, status, user_agent
            FROM developer_intel
-          WHERE classification IN ('developer','machine')
+          WHERE ${listWhere}
           ORDER BY score DESC, days_active DESC
           LIMIT $1 OFFSET $2`,
-        [limit, offset]
+        listParams
       );
       const totalRows = await q(
-        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE classification IN ('developer','machine')`
+        `SELECT COUNT(*)::int AS c FROM developer_intel WHERE ${countWhere}`,
+        clsFilter ? [clsFilter] : []
       );
       const total = totalRows[0] ? Number(totalRows[0].c) : 0;
-      res.json({ ok: true, developers: rows, count: rows.length, total, limit, offset });
+      res.json({ ok: true, developers: rows, count: rows.length, total, classification: clsFilter || 'all', limit, offset });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
 
