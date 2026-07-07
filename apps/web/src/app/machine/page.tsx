@@ -184,8 +184,13 @@ function MachinePortal() {
   const view = params.get('view') || 'mission-control';
   const { economics, truth, loading } = useEconomyData();
 
-  const totalRevenue = economics?.totalRevenueUsdt as number | undefined;
+  // Revenue displayed on the machine dashboard must be REAL metered revenue —
+  // SUM(revenue_events_v2.amount_usdt) with test data excluded — sourced from
+  // /api/financial/truth (metered_value_usdt). The epochs-table aggregate
+  // (economics/summary.totalRevenueUsdt) cannot exclude test rows and overstates
+  // the real figure ($0.00036 vs verified real $0.00033), so it is NOT used here.
   const metered = truth?.metered_value_usdt as number | undefined;
+  const totalRevenue = metered;
   const withdrawable = truth?.withdrawable_now_usdt as number | undefined;
   const confirmedBatches = truth?.settlement?.batches_confirmed as number | undefined;
   const eventCount = truth?.pipeline?.revenue_events_v2?.count as number | undefined;
