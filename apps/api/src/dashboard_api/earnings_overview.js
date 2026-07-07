@@ -52,25 +52,25 @@ export async function getEarningsOverview(db, cache) {
 
     // ── Total revenue (all time) ──
     const totalRevenueRow = await queryOne(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success'"
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND is_test_data = false"
     );
     const totalRevenue = parseFloat(totalRevenueRow?.total || 0);
 
     // ── Revenue by time window ──
     const revenue24hRow = await queryOne(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND is_test_data = false AND created_at > $1",
         [oneDayAgo]
     );
     const revenue24h = parseFloat(revenue24hRow?.total || 0);
 
     const revenue7dRow = await queryOne(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND is_test_data = false AND created_at > $1",
         [sevenDaysAgo]
     );
     const revenue7d = parseFloat(revenue7dRow?.total || 0);
 
     const revenue30dRow = await queryOne(
-        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND created_at > $1",
+        "SELECT COALESCE(SUM(amount_usdt), 0) as total FROM revenue_events_v2 WHERE status = 'success' AND is_test_data = false AND created_at > $1",
         [thirtyDaysAgo]
     );
     const revenue30d = parseFloat(revenue30dRow?.total || 0);
@@ -91,7 +91,7 @@ export async function getEarningsOverview(db, cache) {
     const byOpType = await query(
         `SELECT op_type, COUNT(*) as count, COALESCE(SUM(amount_usdt), 0) as total
          FROM revenue_events_v2
-         WHERE status = 'success'
+         WHERE status = 'success' AND is_test_data = false
          GROUP BY op_type
          ORDER BY total DESC
          LIMIT 10`
