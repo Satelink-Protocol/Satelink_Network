@@ -32,6 +32,20 @@ const CHAIN_PRICING_USDT = {
 
 const DEFAULT_RPC_REWARD_USDT = 0.00003;
 
+// 402 contract for any request that never resolves to a billable account
+// (no credentials at all, or credentials that don't match any account).
+const PAYMENT_REQUIRED_BODY = {
+    ok: false,
+    error: 'payment_required',
+    message: 'Deposit USDT to access Satelink RPC',
+    vault_address: '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
+    usdt_contract: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    minimum_deposit_usdt: '1',
+    chain: 'Polygon (137)',
+    deposit_url: 'https://developer.satelink.network/satelink/os/deposit',
+    docs: 'https://satelink.network/docs/quick-start'
+};
+
 function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
            req.headers['x-real-ip'] ||
@@ -187,6 +201,11 @@ export function createRpcGateway(db) {
         const clientIp = getClientIp(req);
         const canonical = CREDIT_CANONICAL();
 
+        // No credentials at all — never reaches billing, never serves the call.
+        if (!apiKey && !walletHdr) {
+            return res.status(402).json(PAYMENT_REQUIRED_BODY);
+        }
+
         // Validate chain + JSON-RPC body BEFORE any billing so an invalid
         // request is never charged or metered.
         if (!SUPPORTED_CHAINS.has(chain)) {
@@ -223,6 +242,9 @@ export function createRpcGateway(db) {
             }
             res.set('X-Credit-Source', 'api_credits');
             if (!verdict.ok) {
+                if (verdict.code === 'account_not_found') {
+                    return res.status(402).json(PAYMENT_REQUIRED_BODY);
+                }
                 const payload = { ok: false, error: verdict.code, message: verdict.message };
                 if (verdict.http === 402) {
                     const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
