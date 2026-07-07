@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   DollarSign,
@@ -24,7 +24,10 @@ import {
   StatusPill,
   EmptyState,
   useEndpoint,
+  TimeRangeFilter,
+  windowParams,
   type SystemState,
+  type TimeWindow,
 } from "@satelink/ui";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +70,10 @@ interface ExecutiveSummary {
   open_alerts: number;
   signer_balance_pol: number | null;
   settlement_mode: string;
+  window?: string;
+  revenue_window_usdt?: number;
+  revenue_window_events?: number;
+  active_ips_window?: number;
 }
 
 interface RpcProviderStat {
@@ -133,22 +140,39 @@ export default function MissionControlPage() {
   const financial = useEndpoint<FinancialTruth>(["/api/financial/truth"]);
   const economics = useEndpoint<EconomicsSummary>(["/api/economics/summary"]);
   const [execSummary, setExecSummary] = useState<ExecutiveSummary | null>(null);
+  const [execLoading, setExecLoading] = useState(true);
   const [rpcStats, setRpcStats] = useState<RpcStats | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Executive KPIs come through the admin proxy.
+  // Time window → /executive/summary ?window= (revenue in the selected range).
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
+  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const windowQS = useMemo(
+    () => new URLSearchParams(windowParams(timeWindow, customFrom, customTo)).toString(),
+    [timeWindow, customFrom, customTo]
+  );
+  const onTimeChange = useCallback((v: TimeWindow, from?: string, to?: string) => {
+    setTimeWindow(v);
+    setCustomFrom(from);
+    setCustomTo(to);
+  }, []);
+
+  // Executive KPIs come through the admin proxy; re-fetched on window change.
   useEffect(() => {
+    setExecLoading(true);
     fetch("/api/admin-proxy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: "/executive/summary", method: "GET" }),
+      body: JSON.stringify({ path: `/executive/summary?${windowQS}`, method: "GET" }),
     })
       .then((r) => r.json())
       .then((res) => {
         if (res?.ok && res.data) setExecSummary(res.data as ExecutiveSummary);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setExecLoading(false));
+  }, [windowQS]);
 
   // Provider health + cache metrics — real, already-live gateway telemetry
   // (public GET, CORS-open). Refreshed every 30s.
@@ -188,6 +212,18 @@ export default function MissionControlPage() {
 
   return (
     <div className="px-6 py-6">
+      {/* FILTER BAR — time window drives /executive/summary ?window= */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <TimeRangeFilter value={timeWindow} onChange={onTimeChange} customFrom={customFrom} customTo={customTo} />
+        <span className="text-xs font-mono text-zinc-500 tabular-nums">
+          {execLoading
+            ? "Loading window…"
+            : execSummary
+              ? `Window ${execSummary.window ?? timeWindow}: ${usd5(execSummary.revenue_window_usdt ?? 0)} · ${execSummary.revenue_window_events ?? 0} events`
+              : "No data for this period"}
+        </span>
+      </div>
+
       {/* ROW 1 — KPI strip */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
         {/* Card 1: REAL REVENUE */}
@@ -228,9 +264,9 @@ export default function MissionControlPage() {
             <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active IPs</span>
             <Users className="h-4 w-4 text-zinc-600" />
           </div>
-          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_24h) : "—"}</div>
+          <div className="font-mono text-2xl font-bold text-white tabular-nums mb-1">{execSummary ? compact(execSummary.active_ips_window ?? execSummary.active_ips_24h) : "—"}</div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-500">Unique callers, {(execSummary as any)?.requests_window || "24h window"}</span>
+            <span className="text-xs text-zinc-500">Unique callers, {execSummary?.window ?? "24h"} window</span>
           </div>
         </div>
 
