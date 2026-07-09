@@ -209,6 +209,46 @@ describe('x402 payment rail', function () {
     expect(out.body.error).to.equal('x402_payment_malformed');
   });
 
+  it('t9: keyless handler 402 (under-limit anonymous) is upgraded with x402 accepts', async () => {
+    process.env.X402_ENABLED = 'true';
+    // Simulate the chain where the gate passes (under limit) but the gateway
+    // handler 402s a keyless caller — in production this is the 402 a real
+    // machine actually receives (subnet cap fires before per-IP exhaustion).
+    const out = await new Promise((resolve) => {
+      const req = makeReq({ ip: '10.9.0.1' });
+      const res = makeRes(resolve);
+      Promise.resolve(
+        x402(req, res, () =>
+          gate(req, res, () =>
+            res.status(402).json({ ok: false, error: 'payment_required', message: 'Deposit USDT to access Satelink RPC' })
+          )
+        )
+      ).catch((err) => resolve({ error: err }));
+    });
+    expect(out.statusCode).to.equal(402);
+    expect(out.body.accepts).to.be.an('array').with.length.greaterThan(0);
+    expect(out.body.alternativePayment.error).to.equal('payment_required');
+    expect(out.headers['PAYMENT-REQUIRED']).to.be.a('string');
+  });
+
+  it('t10: keyed caller 402 (credit issue) is NOT upgraded', async () => {
+    process.env.X402_ENABLED = 'true';
+    const out = await new Promise((resolve) => {
+      const req = makeReq({ headers: { 'x-api-key': 'sk_broke' }, ip: '10.10.0.1' });
+      const res = makeRes(resolve);
+      Promise.resolve(
+        x402(req, res, () =>
+          gate(req, res, () =>
+            res.status(402).json({ ok: false, error: 'insufficient_credits' })
+          )
+        )
+      ).catch((err) => resolve({ error: err }));
+    });
+    expect(out.statusCode).to.equal(402);
+    expect(out.body).to.deep.equal({ ok: false, error: 'insufficient_credits' });
+    expect(out.headers).to.deep.equal({});
+  });
+
   it('t8: >30 payment attempts/min from one IP → 429', async () => {
     process.env.X402_ENABLED = 'true';
     let last;
