@@ -189,4 +189,34 @@ describe('x402 payment rail', function () {
     expect(out.nextCalled).to.equal(true);
     expect(out.headers).to.deep.equal({});
   });
+
+  // ── facilitator abuse guard (all reject BEFORE any facilitator call) ──
+  function paymentReq(header, ip) {
+    return makeReq({ headers: { 'x-payment': header }, ip });
+  }
+
+  it('t6: oversized payment header → 400, no facilitator call', async () => {
+    process.env.X402_ENABLED = 'true';
+    const out = await runChain(paymentReq('A'.repeat(9000), '10.6.0.1'));
+    expect(out.statusCode).to.equal(400);
+    expect(out.body.error).to.equal('x402_payment_header_too_large');
+  });
+
+  it('t7: malformed payment header → 400, no facilitator call', async () => {
+    process.env.X402_ENABLED = 'true';
+    const out = await runChain(paymentReq('not-valid-base64-json!!', '10.7.0.1'));
+    expect(out.statusCode).to.equal(400);
+    expect(out.body.error).to.equal('x402_payment_malformed');
+  });
+
+  it('t8: >30 payment attempts/min from one IP → 429', async () => {
+    process.env.X402_ENABLED = 'true';
+    let last;
+    for (let i = 0; i < 31; i++) last = await runChain(paymentReq('not-base64!!', '10.8.0.1'));
+    expect(last.statusCode).to.equal(429);
+    expect(last.body.error).to.equal('x402_verify_rate_limited');
+    // a different IP is unaffected
+    const other = await runChain(paymentReq('not-base64!!', '10.8.0.2'));
+    expect(other.statusCode).to.equal(400);
+  });
 });

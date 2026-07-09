@@ -202,7 +202,11 @@ export function createRpcGateway(db) {
         const canonical = CREDIT_CANONICAL();
 
         // No credentials at all — never reaches billing, never serves the call.
-        if (!apiKey && !walletHdr) {
+        // Exception: a facilitator-settled x402 payment (req.x402.settled is set
+        // server-side by the x402 middleware after verify+settle+record; it is
+        // not derivable from any request header). Revenue for that call was
+        // already recorded at settlement with demand_source='x402'.
+        if (!apiKey && !walletHdr && !req.x402?.settled) {
             return res.status(402).json(PAYMENT_REQUIRED_BODY);
         }
 
@@ -272,20 +276,27 @@ export function createRpcGateway(db) {
             billedUsdt = Number(verdict.cost) > 0 ? Number(verdict.cost) : 0;
         } else {
             // LEGACY: Redis rate-limit (flag off, or anonymous public traffic).
+            // An x402-settled call is paid per-request: the per-IP daily counter
+            // (which the payer already exhausted to reach the 402) must not 429
+            // it. Usage is still metered via incrementUsage below.
             let rateCheck = { allowed: true, tier: 'free', remaining: 500, limit: 500 };
-            try {
-                const ratePromise = checkRateLimit(apiKey, clientIp);
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Rate limit timeout')), 500)
-                );
-                rateCheck = await Promise.race([ratePromise, timeoutPromise]);
-            } catch (err) {
-                console.warn('[RPC Gateway] Rate check skipped (timeout)');
+            if (req.x402?.settled) {
+                rateCheck = { allowed: true, tier: 'x402', remaining: null, limit: null };
+            } else {
+                try {
+                    const ratePromise = checkRateLimit(apiKey, clientIp);
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Rate limit timeout')), 500)
+                    );
+                    rateCheck = await Promise.race([ratePromise, timeoutPromise]);
+                } catch (err) {
+                    console.warn('[RPC Gateway] Rate check skipped (timeout)');
+                }
             }
 
             res.set({
-                'X-RateLimit-Limit': rateCheck.limit,
-                'X-RateLimit-Remaining': rateCheck.remaining,
+                'X-RateLimit-Limit': rateCheck.limit ?? '',
+                'X-RateLimit-Remaining': rateCheck.remaining ?? '',
                 'X-RateLimit-Tier': rateCheck.tier
             });
 

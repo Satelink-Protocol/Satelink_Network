@@ -32,6 +32,54 @@ import { recordX402Settlement, DuplicateSettlementError } from './settlement.js'
 
 const LOG_PREFIX = '[x402]';
 
+// ── Facilitator abuse guard ─────────────────────────────────────────────────
+// Payment-bearing requests bypass the free-tier gate by design, so they need
+// their own pre-facilitator screen: size cap, shape check, and a per-IP
+// fixed-window rate limit — a forged-payment flood must not translate 1:1
+// into CDP verify calls.
+const MAX_PAYMENT_HEADER_BYTES = parseInt(process.env.X402_MAX_PAYMENT_HEADER_BYTES || '8192');
+const VERIFY_MAX_PER_WINDOW = parseInt(process.env.X402_VERIFY_MAX_PER_MIN || '30');
+const VERIFY_WINDOW_MS = 60_000;
+const VERIFY_MAP_MAX = 10_000; // same OOM cap pattern as free_tier_gate's ipCounters
+const verifyWindows = new Map(); // ip -> { count, resetAt }
+
+function verifyRateLimited(ip) {
+  const now = Date.now();
+  let win = verifyWindows.get(ip);
+  if (!win || now >= win.resetAt) {
+    if (!win && verifyWindows.size >= VERIFY_MAP_MAX) {
+      verifyWindows.delete(verifyWindows.keys().next().value);
+    }
+    win = { count: 0, resetAt: now + VERIFY_WINDOW_MS };
+    verifyWindows.set(ip, win);
+  }
+  win.count++;
+  return win.count > VERIFY_MAX_PER_WINDOW;
+}
+
+// Cheap structural screen before any facilitator traffic: the header must be
+// base64 of a JSON object carrying a numeric x402Version. This is NOT payment
+// verification (the facilitator owns that) — it only rejects garbage that
+// could never verify, without a network call.
+function paymentHeaderLooksStructural(header) {
+  try {
+    const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
+    return decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)
+      && typeof decoded.x402Version === 'number';
+  } catch {
+    return false;
+  }
+}
+
+function clientIpOf(req) {
+  return (
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.headers['x-real-ip'] ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+}
+
 // /rpc is a machine endpoint — always negotiate JSON, never the HTML paywall.
 class JsonAdapter extends ExpressAdapter {
   getAcceptHeader() {
@@ -58,7 +106,9 @@ function buildHttpServer(cfg) {
     },
     description: 'Satelink — Polygon (chain 137) JSON-RPC, pay-per-call',
     mimeType: 'application/json',
-    resource: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/rpc`,
+    // The serving endpoint is POST /rpc/:chain (bare POST /rpc has no handler),
+    // so discovery/catalog metadata must point at a URL that actually serves.
+    resource: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/rpc/polygon`,
     // Bazaar discovery — indexed into the CDP catalog once the facilitator
     // sees the declared extension on a settled payment.
     extensions: declareDiscoveryExtension({
@@ -156,6 +206,20 @@ export function createX402Middleware(pool, logger) {
 
     // ---- Rail 2: an x402 payment is attached — verify, settle, serve ----
     if (paymentHeader) {
+      // Abuse guard: reject before any facilitator round-trip. The rate limit
+      // counts every attempt (malformed included — that's the abuse) so a
+      // flood can't probe shapes for free.
+      if (paymentHeader.length > MAX_PAYMENT_HEADER_BYTES) {
+        return res.status(400).json({ ok: false, error: 'x402_payment_header_too_large', max_bytes: MAX_PAYMENT_HEADER_BYTES });
+      }
+      if (verifyRateLimited(clientIpOf(req))) {
+        res.set('Retry-After', '60');
+        return res.status(429).json({ ok: false, error: 'x402_verify_rate_limited', message: `more than ${VERIFY_MAX_PER_WINDOW} payment attempts per minute from this IP` });
+      }
+      if (!paymentHeaderLooksStructural(paymentHeader)) {
+        return res.status(400).json({ ok: false, error: 'x402_payment_malformed', message: 'payment header is not base64-encoded JSON with a numeric x402Version' });
+      }
+
       let result;
       try {
         const server = getServer(cfg);
@@ -189,6 +253,14 @@ export function createX402Middleware(pool, logger) {
         return res.status(502).json({ ok: false, error: 'x402_facilitator_error', message: err.message });
       }
       if (!settle.success) return writeSdkResponse(res, settle.response);
+
+      // A successful settle without a transaction id cannot be recorded
+      // (tx_hash is the replay guard; '' would collide across payments).
+      // Fail safely: loud log, no insert, no serve.
+      if (!settle.transaction || typeof settle.transaction !== 'string') {
+        log.error(`${LOG_PREFIX} settle succeeded but returned no transaction id (payer=${settle.payer}); refusing to record/serve`);
+        return res.status(502).json({ ok: false, error: 'x402_settlement_no_transaction', message: 'facilitator settled without a transaction id; contact support with your payment details' });
+      }
 
       const recorded = await recordSettlementOrReject(pool, res, {
         txHash: settle.transaction,
