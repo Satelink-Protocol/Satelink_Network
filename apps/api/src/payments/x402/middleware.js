@@ -4,11 +4,13 @@
 // Two jobs, both scoped to the exact code path where the gateway returns its
 // custom 402 today (no key + free tier exhausted, free_tier_gate.js):
 //
-//  1. No payment header → let the request flow through untouched; if the
-//     downstream free-tier gate emits its FREE_TIER_LIMIT_REACHED 402, upgrade
-//     that response to a spec-compliant x402 402 (PAYMENT-REQUIRED header +
-//     accepts in the JSON body) with the original USDT deposit body preserved
-//     under "alternativePayment" so the existing human/vault rail survives.
+//  1. No payment header → let the request flow through untouched; if any
+//     downstream ANONYMOUS 402 is emitted (free-tier exhausted, subnet cap,
+//     or the gateway's keyless payment-required), upgrade that response to a
+//     spec-compliant x402 402 (PAYMENT-REQUIRED header + accepts in the JSON
+//     body) with the original USDT deposit body preserved under
+//     "alternativePayment" so the existing human/vault rail survives.
+//     Keyed/wallet callers' 402s are never touched.
 //  2. x402 payment header present → facilitator verify + settle via the SDK
 //     (no hand-rolled crypto), record the settlement (payment_sources +
 //     revenue_events_v2 in one transaction, tx_hash UNIQUE → 409 on replay),
@@ -280,10 +282,20 @@ export function createX402Middleware(pool, logger) {
     // 402 into a spec x402 402, preserving the USDT body as alternativePayment.
     const originalJson = res.json.bind(res);
     res.json = function x402UpgradedJson(body) {
-      const isExhaustedTier402 =
+      // Upgrade every ANONYMOUS 402 (gate-exhausted, subnet-capped, or the
+      // gateway's keyless PAYMENT_REQUIRED_BODY), not just
+      // FREE_TIER_LIMIT_REACHED. In production that branch is unreachable:
+      // the /24 subnet check (fts >= 500) fires before the per-IP check
+      // (ft > 500) since both default to 500, and Cloudflare/Railway egress
+      // rotation smears one machine across many ft: buckets — so real
+      // machines only ever see the subnet or keyless-handler 402, which
+      // carried no x402 requirements (verified against prod 2026-07-10).
+      // Keyed/wallet callers' 402s (credit issues) are never touched.
+      const isAnonymous402 =
         res.statusCode === 402 &&
-        body?.error?.data?.error_code === 'FREE_TIER_LIMIT_REACHED';
-      if (!isExhaustedTier402) return originalJson(body);
+        !req.headers['x-api-key'] &&
+        !req.headers['x-wallet-address'];
+      if (!isAnonymous402) return originalJson(body);
       res.json = originalJson;
 
       return (async () => {
