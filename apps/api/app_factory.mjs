@@ -24,6 +24,7 @@ import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
+import { createX402Middleware } from "./src/payments/x402/middleware.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
@@ -349,10 +350,18 @@ app.get("/api/mode", (req, res) => {
   // Free tier monitoring endpoint (outside /api to avoid router conflicts)
   app.get("/stats/free-tier", async (req, res) => res.json(await getFreeTierStats()));
 
+  // x402 v2 parallel payment rail — inert bare next() unless X402_ENABLED='true'.
+  // With a settled x402 payment the request must not also consume free-tier
+  // quota, so the gate is skipped for exactly that case; every other request
+  // hits freeTierGate unchanged (the gate module itself is untouched).
+  const x402Middleware = createX402Middleware(pool, console);
+  const freeTierGateUnlessX402Paid = (req, res, next) =>
+    req.x402?.settled ? next() : freeTierGate(req, res, next);
+
   // RPC Gateway — freeTierGate runs before JSON parsing to reject rate-limited IPs
   // before their request body is allocated (prevents OOM from high-volume abusers).
   // Body limit 1mb covers all legitimate RPC batch calls; 50mb caused heap exhaustion.
-  app.use("/rpc", freeTierGate, express.json({ limit: '1mb' }), createRpcGateway(pool));
+  app.use("/rpc", x402Middleware, freeTierGateUnlessX402Paid, express.json({ limit: '1mb' }), createRpcGateway(pool));
 
   // MEV Private Relay (S3-001) — 10x pricing, requires API key
   app.use("/rpc/mev", createMevRelayRouter(pool, redis));

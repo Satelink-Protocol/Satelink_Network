@@ -82,6 +82,28 @@ export async function runMigrations(pool) {
       CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address);
       CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires ON auth_nonces(expires_at);
     `);
+    // 027 — x402 parallel payment rail: payment_sources ledger + demand_source columns
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payment_sources (
+        id BIGSERIAL PRIMARY KEY,
+        source TEXT NOT NULL CHECK (source IN ('polygon_usdt_vault','x402','marketplace','other')),
+        amount_usd NUMERIC(18,6) NOT NULL,
+        token TEXT NOT NULL,
+        network TEXT NOT NULL,
+        tx_hash TEXT UNIQUE NOT NULL,
+        payer TEXT NOT NULL,
+        credited_api_key TEXT,
+        is_test_data BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_sources_source ON payment_sources(source);
+      CREATE INDEX IF NOT EXISTS idx_payment_sources_created ON payment_sources(created_at);
+      ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS demand_source TEXT NOT NULL DEFAULT 'direct';
+      ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS demand_router_id BIGINT;
+      ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS partner_share_bps INT;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS demand_source TEXT NOT NULL DEFAULT 'direct';
+    `);
+
     const verify = await pool.query(`SELECT COUNT(*) as cnt FROM credit_balances`);
     console.log('[Migrate] Tables created. Rows in credit_balances:', verify.rows[0]?.cnt);
     console.log('========== MIGRATE DONE ==========\n\n');
