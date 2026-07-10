@@ -9,6 +9,7 @@ import { createMetricsRouter } from './metrics.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
 import { authorizeAndMeter } from '../../billing/credit_service.mjs';
+import { paymentRequiredResponse } from '../../utils/payment_required.js';
 
 // Customer Zero P0 recovery: when CREDIT_CANONICAL=true, authenticated callers
 // (X-API-Key or x-wallet-address) are authorized + metered + deducted against
@@ -33,18 +34,20 @@ const CHAIN_PRICING_USDT = {
 const DEFAULT_RPC_REWARD_USDT = 0.00003;
 
 // 402 contract for any request that never resolves to a billable account
-// (no credentials at all, or credentials that don't match any account).
-const PAYMENT_REQUIRED_BODY = {
-    ok: false,
-    error: 'payment_required',
-    message: 'Deposit USDT to access Satelink RPC',
-    vault_address: '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
-    usdt_contract: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-    minimum_deposit_usdt: '1',
-    chain: 'Polygon (137)',
-    deposit_url: 'https://developer.satelink.network/satelink/os/deposit',
-    docs: 'https://satelink.network/docs/quick-start'
-};
+// (credentials that match no account, or anonymous traffic while the free
+// taste is disabled). Built from the canonical 402 util so the vault,
+// minimum and calldata fields can never drift from what the deposit
+// listener actually credits — the static body this replaces advertised a
+// $1 minimum (real: $0.50) and a dead deposit URL, and machines that can't
+// parse an x402 accepts block had no plain-steps path to payment.
+const paymentRequiredBody = (message) => paymentRequiredResponse({
+    message,
+    how_to_pay: [
+        `Fastest (x402 SDKs): retry this call with an x402 payment header — one $0.10 USDC payment on Base buys a 1,000-call bundle. The 402 you received carries the exact requirements in "accepts".`,
+        'Prepaid (any HTTP client): register your wallet (see "register"), fetch deposit calldata (see "deposit.calldata_url"), send the USDT, retry with the X-API-Key you were issued.',
+        'Full machine-readable service manifest: see "manifest_url"; live pricing and market comparison: see "pricing_url".',
+    ],
+});
 
 function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -201,13 +204,24 @@ export function createRpcGateway(db) {
         const clientIp = getClientIp(req);
         const canonical = CREDIT_CANONICAL();
 
-        // No credentials at all — never reaches billing, never serves the call.
-        // Exception: a facilitator-settled x402 payment (req.x402.settled is set
-        // server-side by the x402 middleware after verify+settle+record; it is
-        // not derivable from any request header). Revenue for that call was
-        // already recorded at settlement with demand_source='x402'.
-        if (!apiKey && !walletHdr && !req.x402?.settled) {
-            return res.status(402).json(PAYMENT_REQUIRED_BODY);
+        // Anonymous (no key, no wallet, no settled x402 payment): serve the
+        // free taste. The free-tier gate mounted BEFORE this router has
+        // already enforced the per-IP daily limit (over-limit IPs got a 402
+        // there, x402-upgraded by the middleware), so a request reaching this
+        // point is under-limit — it flows to the legacy branch below, which
+        // rate-limits, meters, and bills $0 (no revenue event).
+        //
+        // War room 2026-07-10: the unconditional 402 here (83eeaea) rejected
+        // 100% of anonymous demand — ~96k 402s/day, 4 pricing views, zero
+        // external payments — because Chainlist-sourced clients never parse a
+        // 402 body. Value first, wall at the limit. Set
+        // ANON_FREE_TIER_ENABLED=false to restore the hard 402 without a
+        // deploy. x402-settled calls were always allowed through (revenue for
+        // those is recorded at settlement with demand_source='x402').
+        if (!apiKey && !walletHdr && !req.x402?.settled
+            && process.env.ANON_FREE_TIER_ENABLED === 'false') {
+            return res.status(402).json(paymentRequiredBody(
+                'Anonymous access is disabled. Register a wallet for prepaid credits, or pay per call with an x402 payment header.'));
         }
 
         // Validate chain + JSON-RPC body BEFORE any billing so an invalid
@@ -247,7 +261,8 @@ export function createRpcGateway(db) {
             res.set('X-Credit-Source', 'api_credits');
             if (!verdict.ok) {
                 if (verdict.code === 'account_not_found') {
-                    return res.status(402).json(PAYMENT_REQUIRED_BODY);
+                    return res.status(402).json(paymentRequiredBody(
+                        'The API key or wallet you sent matches no account. Register the wallet (see "register") or check the X-API-Key value.'));
                 }
                 const payload = { ok: false, error: verdict.code, message: verdict.message };
                 if (verdict.http === 402) {
