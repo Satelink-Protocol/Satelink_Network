@@ -31,8 +31,11 @@ import {
 } from '@x402/extensions/bazaar';
 import { getX402Config } from './config.js';
 import { recordX402Settlement, DuplicateSettlementError } from './settlement.js';
+import { bumpFunnel } from './funnel.js';
+import { PRICE_PER_CALL_USDT } from '../../billing/credit_service.mjs';
 
 const LOG_PREFIX = '[x402]';
+const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 
 // ── Facilitator abuse guard ─────────────────────────────────────────────────
 // Payment-bearing requests bypass the free-tier gate by design, so they need
@@ -101,12 +104,12 @@ function buildHttpServer(cfg) {
   const routeConfig = {
     accepts: {
       scheme: 'exact',
-      price: `$${cfg.pricePerCall}`,
+      price: `$${cfg.bundlePriceUsd}`,
       network: cfg.network,
       payTo: cfg.payTo,
       maxTimeoutSeconds: 60,
     },
-    description: 'Satelink — Polygon (chain 137) JSON-RPC, pay-per-call',
+    description: `Satelink — Polygon (chain 137) JSON-RPC: $${cfg.bundlePriceUsd} = ${cfg.bundleCalls.toLocaleString('en-US')} RPC calls`,
     mimeType: 'application/json',
     // The serving endpoint is POST /rpc/:chain (bare POST /rpc has no handler),
     // so discovery/catalog metadata must point at a URL that actually serves.
@@ -129,21 +132,30 @@ function buildHttpServer(cfg) {
       output: { example: { jsonrpc: '2.0', id: 1, result: '0x4523a9' } },
     }),
   };
+  // Discovery metadata lives ONLY on the concrete /rpc/polygon route so the
+  // Bazaar catalogs a working URL (a wildcard route template indexed as
+  // /rpc/:var1 — verified in the live catalog 2026-07-10). Payment stays
+  // accepted on every /rpc path via the extension-less entries below;
+  // first-match wins, so the explicit route is declared first.
+  const { extensions, ...payableOnly } = routeConfig;
   const routes = {
-    'POST /rpc': routeConfig,
-    'POST /rpc/*': routeConfig,
+    'POST /rpc/polygon': routeConfig,
+    'POST /rpc': payableOnly,
+    'POST /rpc/*': payableOnly,
   };
   validateBazaarRouteExtensions(routes);
   return new x402HTTPResourceServer(resourceServer, routes);
 }
 
-// Record a settled payment; on a replayed settlement id send 409 and report
-// not-served. Exported so tests can drive the duplicate path against the real
-// UNIQUE constraint without faking a facilitator.
+// Record a settled payment (payment_sources + revenue event + bundle credit,
+// one transaction); on a replayed settlement id send 409 and report
+// not-served. Returns the settlement result ({creditedKey, balanceAfter,
+// callsRemaining}) on success, false when a response was already sent.
+// Exported so tests can drive the duplicate path against the real UNIQUE
+// constraint without faking a facilitator.
 export async function recordSettlementOrReject(pool, res, params, log = console) {
   try {
-    await recordX402Settlement(pool, params);
-    return true;
+    return await recordX402Settlement(pool, params);
   } catch (err) {
     if (err instanceof DuplicateSettlementError) {
       log.warn(`${LOG_PREFIX} duplicate settlement rejected: ${err.txHash}`);
@@ -208,6 +220,7 @@ export function createX402Middleware(pool, logger) {
 
     // ---- Rail 2: an x402 payment is attached — verify, settle, serve ----
     if (paymentHeader) {
+      bumpFunnel(pool, 'attempts');
       // Abuse guard: reject before any facilitator round-trip. The rate limit
       // counts every attempt (malformed included — that's the abuse) so a
       // flood can't probe shapes for free.
@@ -268,14 +281,65 @@ export function createX402Middleware(pool, logger) {
         txHash: settle.transaction,
         payer: settle.payer || 'unknown',
         network: settle.network || cfg.network,
-        amountUsd: cfg.pricePerCall,
+        amountUsd: cfg.bundlePriceUsd,
+        bundleCalls: cfg.bundleCalls,
       }, log);
       if (!recorded) return;
+      bumpFunnel(pool, 'settlements');
 
       for (const [key, value] of Object.entries(settle.headers || {})) res.setHeader(key, value);
       req.x402 = { settled: true, txHash: settle.transaction, payer: settle.payer };
-      log.info(`${LOG_PREFIX} settled $${cfg.pricePerCall} USDC tx=${settle.transaction} payer=${settle.payer}`);
+
+      // The settled call itself is served through the credited account: alias
+      // the payer onto the existing wallet-identity path so authorizeAndMeter
+      // deducts one bundle credit like every subsequent x-payer-address call.
+      if (recorded.creditedKey && WALLET_RE.test(settle.payer || '')) {
+        req.headers['x-wallet-address'] = settle.payer;
+      }
+
+      // Tell the machine how to continue: credited identity + remaining calls
+      // appended to the JSON response body of this (served) request.
+      const credited = {
+        wallet: (settle.payer || '').toLowerCase(),
+        calls_remaining: recorded.callsRemaining,
+      };
+      const settleJson = res.json.bind(res);
+      res.json = (body) =>
+        settleJson(body && typeof body === 'object' && !Array.isArray(body) ? { ...body, credited } : body);
+
+      log.info(`${LOG_PREFIX} settled $${cfg.bundlePriceUsd} USDC tx=${settle.transaction} payer=${settle.payer} credited=${recorded.creditedKey} calls=${recorded.callsRemaining}`);
       return next();
+    }
+
+    // ---- Rail 1.5: credited identity — a wallet that already bought a
+    // bundle presents x-payer-address and is served through the EXISTING
+    // credit-consumption path (authorizeAndMeter), no payment needed.
+    // v1 tradeoff (stated in PR): the header alone is not proof of ownership;
+    // an address only ever gains credits via its own on-chain payment, so the
+    // worst case is bounded at one bundle price. No/exhausted credits → fall
+    // through to the normal anonymous flow (402 below).
+    const payerAddr = req.headers['x-payer-address'];
+    if (
+      payerAddr && WALLET_RE.test(payerAddr) &&
+      !req.headers['x-api-key'] && !req.headers['x-wallet-address']
+    ) {
+      try {
+        // Same resolution as credit_service.resolveAccount (oldest row wins),
+        // so the row checked here is the row authorizeAndMeter will deduct.
+        const r = await pool.query(
+          `SELECT credits_usdt, status FROM api_credits
+            WHERE lower(wallet_address) = lower($1)
+            ORDER BY created_at ASC LIMIT 1`,
+          [payerAddr]
+        );
+        const row = r.rows[0];
+        if (row && row.status === 'active' && parseFloat(row.credits_usdt || 0) >= PRICE_PER_CALL_USDT) {
+          req.headers['x-wallet-address'] = payerAddr;
+          return next();
+        }
+      } catch (err) {
+        log.warn(`${LOG_PREFIX} credited-identity lookup failed (continuing anonymous): ${err.message}`);
+      }
     }
 
     // ---- Rail 1: no payment attached — upgrade a downstream exhausted-tier
@@ -319,6 +383,7 @@ export function createX402Middleware(pool, logger) {
           const paymentRequired = encoded
             ? JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
             : {};
+          bumpFunnel(pool, 'issued');
           return originalJson({ ...paymentRequired, alternativePayment: body });
         } catch (err) {
           // Fail open to today's exact 402 — the USDT rail must never break
