@@ -13,6 +13,7 @@
 
 import { createHash } from 'crypto';
 import { paymentRequiredResponse } from '../utils/payment_required.js';
+import { createUpgradeContext } from './upgrade_context.js';
 
 const FREE_TIER_LIMIT = parseInt(process.env.FREE_TIER_DAILY_LIMIT || '500');
 // Above this many calls/day an IP is treated as an automated scraper, not a
@@ -135,9 +136,13 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
-export function createFreeTierGate(logger, redis) {
+export function createFreeTierGate(logger, redis, pool = null) {
   const log = logger || console;
   if (redis) _redis = redis;
+  // Conversion patch (2026-07-11): personalized honest upgrade math on the
+  // wall 402s. Synchronous cache read + background fill — adds no latency and
+  // no failure mode to the gate (see upgrade_context.js). Limits unchanged.
+  const upgradeContextFor = createUpgradeContext({ pool, redis, log });
 
   return async function freeTierGate(req, res, next) {
     // Authenticated callers (bound wallet OR API key) skip the per-IP free-tier
@@ -222,6 +227,11 @@ export function createFreeTierGate(logger, redis) {
           },
           calls_subnet_today: subnetCount,
           limit: SUBNET_FREE_LIMIT,
+          // Personalized honest upgrade math from THIS caller's measured
+          // usage (subnet total today + per-IP history when cached). The
+          // subnet budget equals the per-IP limit, so this is the wall most
+          // over-cap traffic actually sees.
+          upgrade: upgradeContextFor({ ip, subnet: subnet24, subnetCount }),
         }));
       }
 
@@ -385,7 +395,10 @@ export function createFreeTierGate(logger, redis) {
         },
         // legacy top-level fields kept for backward-compat with any existing consumer
         deposit_address: VAULT,
-        upgrade_url: upgradeUrl
+        upgrade_url: upgradeUrl,
+        // Personalized honest upgrade math from THIS caller's measured usage
+        // (today's counter + developer_intel history once cached).
+        upgrade: upgradeContextFor({ ip, requestsToday: count }),
       }));
     }
 
