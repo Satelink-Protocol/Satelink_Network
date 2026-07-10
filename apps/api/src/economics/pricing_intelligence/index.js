@@ -105,7 +105,7 @@ function whyChoose(market, perf, x402) {
     market.position.summary,
   ];
   if (x402.enabled) {
-    facts.push(`x402-native: HTTP 402 responses carry spec-compliant payment requirements; settle $${x402.pricePerCall}/call in USDC and retry in one round-trip.`);
+    facts.push(`x402-native: HTTP 402 responses carry spec-compliant payment requirements; one $${x402.bundlePriceUsd} USDC settlement buys a ${x402.bundleCalls.toLocaleString('en-US')}-call bundle (effective $${(parseFloat(x402.bundlePriceUsd) / x402.bundleCalls).toFixed(6)}/call) — pay and retry in one round-trip.`);
   }
   if (perf.p50_latency_ms != null) {
     facts.push(`Measured p50 latency ${perf.p50_latency_ms}ms with ${perf.availability_pct}% healthy checks over the last 24h (sample: ${perf.sample_nodes} node(s)).`);

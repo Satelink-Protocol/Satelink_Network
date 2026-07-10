@@ -113,8 +113,11 @@ export function createMachineIntelRouter(pool, redis) {
           ...(x402.enabled ? [{
             rail: 'x402',
             token: 'USDC', network: x402.network,
-            price_per_call_usd: parseFloat(x402.pricePerCall),
-            settlement: 'instant per-call via x402 facilitator',
+            // Bundle pricing (PR #241): one settlement buys a block of calls.
+            bundle_price_usd: parseFloat(x402.bundlePriceUsd),
+            bundle_calls: x402.bundleCalls,
+            effective_price_per_call_usd: parseFloat(x402.bundlePriceUsd) / x402.bundleCalls,
+            settlement: 'instant via x402 facilitator; one payment credits the full bundle',
             spec: 'https://www.x402.org',
           }] : []),
         ],
