@@ -13,6 +13,8 @@
 // Pricing must optimize paid conversion, not traffic — the brain consumes
 // paying_accounts / payments_30d, never raw request counts alone.
 
+import { FOUNDER_WALLETS } from '../../payments/founder_wallets.js';
+
 const FREE_TIER_LIMIT = () => parseInt(process.env.FREE_TIER_DAILY_LIMIT || '500', 10);
 
 const utcDay = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -91,6 +93,23 @@ async function pricingViews(redis) {
   }
 }
 
+// Conversion-patch stage counters (cz:<stage>:<yyyymmdd>, bumped by the gate
+// and the deposit-calldata path). Sums the last 7 day-keys.
+async function conversionStages(redis) {
+  if (!redis) return { seen_7d: null, pay_start_7d: null, source: 'unavailable_no_redis' };
+  try {
+    const sum = async (stage) => {
+      const keys = await scanKeys(redis, `cz:${stage}:*`);
+      if (!keys.length) return 0;
+      const vals = await redis.mget(...keys);
+      return vals.reduce((a, v) => a + (parseInt(v, 10) || 0), 0);
+    };
+    return { seen_7d: await sum('seen'), pay_start_7d: await sum('pay_start'), source: 'redis_cz_counters' };
+  } catch {
+    return { seen_7d: null, pay_start_7d: null, source: 'redis_error' };
+  }
+}
+
 export async function getConversionFunnel(pool, redis) {
   const [traffic, views] = await Promise.all([trafficAndWall(pool, redis), pricingViews(redis)]);
 
@@ -117,6 +136,21 @@ export async function getConversionFunnel(pool, redis) {
        FROM revenue_events_v2
       WHERE NOT is_test_data AND to_timestamp(created_at) >= now() - interval '30 days'`);
 
+  // payment_success = EXTERNAL money only: x402 settlements not flagged
+  // test-data, plus vault deposits from non-founder wallets. This is the war
+  // room's win condition — founder self-tests can never satisfy it.
+  const stages = await conversionStages(redis);
+  const extPay = await safeOne(
+    `SELECT COUNT(*)::int AS n, COALESCE(SUM(amount_usd),0)::float AS usd
+       FROM payment_sources
+      WHERE NOT is_test_data AND created_at >= now() - interval '30 days'`);
+  const extDep = await safeOne(
+    `SELECT COUNT(*)::int AS n, COALESCE(SUM(amount_usdt),0)::float AS usd
+       FROM api_deposits
+      WHERE created_at >= now() - interval '30 days'
+        AND lower(COALESCE(from_address,'')) <> ALL($1)`,
+    [FOUNDER_WALLETS]);
+
   const paymentsCompleted30d = (pay ? pay.n : 0) + (dep ? dep.n : 0);
   const paidUsd30d = (pay ? pay.usd : 0) + (dep ? dep.usd : 0);
   const payingAccounts = accounts ? accounts.paying : null;
@@ -134,6 +168,25 @@ export async function getConversionFunnel(pool, redis) {
       repeat_usage_accounts: accounts ? accounts.repeat : null,
       billed_calls_30d: billed ? billed.n : null,
       billed_usd_30d: billed ? billed.usd : null,
+    },
+    // Conversion patch (war room action): the 4-stage funnel toward the first
+    // external machine wallet. Every stage names its source; success is
+    // ledger-derived and founder-excluded by construction.
+    conversion_patch: {
+      personalized_402_seen_7d: stages.seen_7d,
+      pricing_opened_7d: views.views_7d,
+      payment_started_7d: stages.pay_start_7d,
+      payment_success_external_30d: {
+        x402_settlements: extPay ? extPay.n : null,
+        vault_deposits: extDep ? extDep.n : null,
+        external_usd: extPay && extDep ? parseFloat((extPay.usd + extDep.usd).toFixed(6)) : null,
+      },
+      sources: {
+        personalized_402_seen: `redis cz:seen (${stages.source})`,
+        pricing_opened: 'redis pi:v (discovery endpoint views)',
+        payment_started: 'redis cz:pay_start (GET /credits/deposit/initiate hits); x402 attempts tracked separately in x402_funnel',
+        payment_success: 'payment_sources(!is_test_data) + api_deposits(from_address not in FOUNDER_WALLETS), 30d',
+      },
     },
     // Wall→paid is the conversion the pricing brain optimizes: of the IPs that
     // hit the 402 wall today, how does that compare with paid conversions?

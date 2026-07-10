@@ -25,6 +25,7 @@ import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/rout
 import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
+import { bumpConversionStage } from "./src/middleware/upgrade_context.js";
 import { createX402Middleware } from "./src/payments/x402/middleware.js";
 import { createFunnelHandler } from "./src/payments/x402/funnel.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
@@ -34,8 +35,10 @@ import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 
 export function createApp(pool, redis) {
-  // Initialize free tier gate (Path C: 500 free calls/day per IP)
-  const freeTierGate = createFreeTierGate(console, redis);
+  // Initialize free tier gate (Path C: 500 free calls/day per IP).
+  // pool powers the personalized upgrade block on wall 402s (background-
+  // filled cache — the gate never waits on Postgres; limits unchanged).
+  const freeTierGate = createFreeTierGate(console, redis, pool);
   const app = express();
 
   // Attach base middleware (CORS, helmet, security headers)
@@ -430,6 +433,14 @@ app.get("/api/mode", (req, res) => {
 
   // Financial Truth - canonical source for all financial metrics
   app.use("/api/financial", createFinancialTruthRouter(pool));
+
+  // Conversion funnel: fetching deposit calldata is the "payment_started"
+  // signal (the URL every 402 advertises). Counting middleware only — the
+  // credits router itself is untouched.
+  app.use("/credits/deposit/initiate", (req, _res, next) => {
+    bumpConversionStage(redis, 'pay_start');
+    next();
+  });
 
   // Credits API - autonomous payer balance and deposit queries
   app.use("/credits", createCreditsRouter(pool, console));
