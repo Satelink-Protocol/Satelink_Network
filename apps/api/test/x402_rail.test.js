@@ -259,4 +259,146 @@ describe('x402 payment rail', function () {
     const other = await runChain(paymentReq('not-base64!!', '10.8.0.2'));
     expect(other.statusCode).to.equal(400);
   });
+
+  // ── founder-wallet ledger integrity + bundle credits (real DB, savepoint-
+  //    wrapped and rolled back — nothing persists, no facilitator faked) ──
+  describe('ledger integrity + bundle credits', function () {
+    let raw, dbPool, recordX402Settlement, isFounderWallet, authorizeAndMeter;
+    const PRICE = 0.00003;
+    const BUNDLE = 1000;
+    const payerA = '0xAaAA00000000000000000000000000000000AaAa';
+
+    before(async function () {
+      if (!process.env.DATABASE_URL) this.skip();
+      ({ recordX402Settlement } = await import('../src/payments/x402/settlement.js'));
+      ({ isFounderWallet } = await import('../src/payments/founder_wallets.js'));
+      ({ authorizeAndMeter } = await import('../src/billing/credit_service.mjs'));
+      const { default: pg } = await import('pg');
+      raw = new pg.Client({ connectionString: process.env.DATABASE_URL });
+      await raw.connect();
+      await raw.query('BEGIN'); // outer txn — rolled back in after()
+      let sp = 0;
+      const savepointClient = {
+        query(sql, params) {
+          if (sql === 'BEGIN') { sp++; return raw.query(`SAVEPOINT bundle_sp_${sp}`); }
+          if (sql === 'COMMIT') return raw.query(`RELEASE SAVEPOINT bundle_sp_${sp}`);
+          if (sql === 'ROLLBACK') return raw.query(`ROLLBACK TO SAVEPOINT bundle_sp_${sp}`);
+          return raw.query(sql, params);
+        },
+        release() {},
+      };
+      dbPool = {
+        connect: async () => savepointClient,
+        query: (sql, params) => raw.query(sql, params),
+      };
+    });
+
+    after(async () => {
+      if (raw) { await raw.query('ROLLBACK'); await raw.end(); }
+    });
+
+    it('founder check: mainnet settlement from a founder wallet is is_test_data=true', async () => {
+      expect(isFounderWallet('0x175727A8486A7Eb3Ac4bcf2A1A89FD2D58CA0DFd')).to.equal(true);
+      expect(isFounderWallet(payerA)).to.equal(false);
+      await recordX402Settlement(dbPool, {
+        txHash: '0xtest_founder_flag', payer: '0x175727A8486A7Eb3Ac4bcf2A1A89FD2D58CA0DFd',
+        network: 'eip155:8453', amountUsd: '0.10',
+      });
+      const r = await raw.query(`SELECT is_test_data FROM payment_sources WHERE tx_hash='0xtest_founder_flag'`);
+      expect(r.rows[0].is_test_data).to.equal(true);
+    });
+
+    it('t11: one settlement credits exactly N calls, once', async () => {
+      const out = await recordX402Settlement(dbPool, {
+        txHash: '0xtest_bundle_credit', payer: payerA,
+        network: 'eip155:8453', amountUsd: '0.10', bundleCalls: BUNDLE,
+      });
+      expect(out.creditedKey).to.equal(`x402_${payerA.toLowerCase()}`);
+      expect(out.callsRemaining).to.equal(BUNDLE);
+      const acct = await raw.query(
+        `SELECT tier, daily_limit, credits_usdt, total_deposited, demand_source
+           FROM api_credits WHERE api_key=$1`, [out.creditedKey]);
+      expect(acct.rows).to.have.length(1);
+      expect(acct.rows[0].tier).to.equal('x402');
+      expect(acct.rows[0].daily_limit).to.equal(BUNDLE);
+      expect(parseFloat(acct.rows[0].credits_usdt)).to.be.closeTo(BUNDLE * PRICE, 1e-9);
+      expect(acct.rows[0].demand_source).to.equal('x402');
+      const ps = await raw.query(`SELECT credited_api_key FROM payment_sources WHERE tx_hash='0xtest_bundle_credit'`);
+      expect(ps.rows[0].credited_api_key).to.equal(out.creditedKey);
+    });
+
+    it('t12: credited wallet is served without payment through authorizeAndMeter, balance decrements', async () => {
+      // alias step: middleware maps x-payer-address → x-wallet-address
+      const mw = createX402Middleware(dbPool, silent);
+      process.env.X402_ENABLED = 'true';
+      const req = makeReq({ headers: { 'x-payer-address': payerA }, ip: '10.12.0.1' });
+      const aliased = await new Promise((resolve) => {
+        const res = makeRes(resolve);
+        Promise.resolve(mw(req, res, () => resolve({ nextCalled: true }))).catch((e) => resolve({ error: e }));
+      });
+      expect(aliased.nextCalled).to.equal(true);
+      expect(req.headers['x-wallet-address']).to.equal(payerA);
+      // consumption step: the EXISTING credit path deducts one call
+      const verdict = await authorizeAndMeter(dbPool, { wallet: payerA });
+      expect(verdict.ok).to.equal(true);
+      expect(verdict.tier).to.equal('x402');
+      expect(verdict.cost).to.be.closeTo(PRICE, 1e-12);
+      expect(verdict.balanceAfter).to.be.closeTo(BUNDLE * PRICE - PRICE, 1e-9);
+    });
+
+    it('t13: exhausted credits → alias not applied → normal x402 402', async () => {
+      await raw.query(`UPDATE api_credits SET credits_usdt=0 WHERE api_key=$1`, [`x402_${payerA.toLowerCase()}`]);
+      const mw = createX402Middleware(dbPool, silent);
+      process.env.X402_ENABLED = 'true';
+      const req = makeReq({ headers: { 'x-payer-address': payerA }, ip: '10.13.0.1' });
+      const out = await new Promise((resolve) => {
+        const res = makeRes(resolve);
+        Promise.resolve(
+          mw(req, res, () =>
+            gate(req, res, () =>
+              res.status(402).json({ ok: false, error: 'payment_required' })
+            )
+          )
+        ).catch((e) => resolve({ error: e }));
+      });
+      expect(req.headers['x-wallet-address']).to.equal(undefined);
+      expect(out.statusCode).to.equal(402);
+      expect(out.body.accepts).to.be.an('array').with.length.greaterThan(0);
+    });
+
+    it('t14: duplicate settlement tx_hash → 409, no double-credit', async () => {
+      const before = await raw.query(`SELECT credits_usdt, total_deposited FROM api_credits WHERE api_key=$1`, [`x402_${payerA.toLowerCase()}`]);
+      const dup = await new Promise((resolve) => {
+        const res = makeRes(resolve);
+        recordSettlementOrReject(dbPool, res, {
+          txHash: '0xtest_bundle_credit', payer: payerA,
+          network: 'eip155:8453', amountUsd: '0.10', bundleCalls: BUNDLE,
+        }, silent);
+      });
+      expect(dup.statusCode).to.equal(409);
+      const after = await raw.query(`SELECT credits_usdt, total_deposited FROM api_credits WHERE api_key=$1`, [`x402_${payerA.toLowerCase()}`]);
+      expect(after.rows[0].credits_usdt).to.equal(before.rows[0].credits_usdt);
+      expect(after.rows[0].total_deposited).to.equal(before.rows[0].total_deposited);
+      const count = await raw.query(`SELECT COUNT(*)::int AS n FROM payment_sources WHERE tx_hash='0xtest_bundle_credit'`);
+      expect(count.rows[0].n).to.equal(1);
+    });
+
+    it('t15: keyed and free-tier traffic untouched (x-payer-address never overrides a key)', async () => {
+      const mw = createX402Middleware(dbPool, silent);
+      process.env.X402_ENABLED = 'true';
+      const req = makeReq({ headers: { 'x-api-key': 'sk_existing', 'x-payer-address': payerA }, ip: '10.15.0.1' });
+      const out = await new Promise((resolve) => {
+        const res = makeRes(resolve);
+        Promise.resolve(
+          mw(req, res, () => gate(req, res, () => resolve({ nextCalled: true, headers: res.headers })))
+        ).catch((e) => resolve({ error: e }));
+      });
+      expect(out.nextCalled).to.equal(true);
+      expect(req.headers['x-wallet-address']).to.equal(undefined); // no alias
+      // anonymous free-tier request without any headers still passes untouched
+      const anon = await runChain(makeReq({ ip: '10.15.0.2' }));
+      expect(anon.nextCalled).to.equal(true);
+      expect(anon.headers).to.deep.equal({});
+    });
+  });
 });

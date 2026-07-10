@@ -22,11 +22,13 @@ export function resolveNetwork(network) {
 export function getX402Config() {
   return {
     enabled: process.env.X402_ENABLED === 'true',
-    // USD price per RPC call on the x402 rail (USDC has 6 decimals; the
-    // ExactEvmScheme money parser converts "$0.001" to atomic units).
-    // Floor: the CDP facilitator rejects verify with amount_too_low below
-    // $0.001 (empirically confirmed 2026-07-09; $0.0005 is refused).
-    pricePerCall: process.env.X402_PRICE_PER_CALL || '0.001',
+    // BUNDLE pricing (replaces the old per-call X402_PRICE_PER_CALL): one
+    // settlement of bundlePriceUsd credits bundleCalls RPC calls to the
+    // payer's account, consumed through the existing credit path.
+    // CDP facilitator floor: verify rejects amounts below $0.001
+    // (amount_too_low, empirically confirmed 2026-07-09).
+    bundlePriceUsd: process.env.X402_BUNDLE_PRICE_USD || '0.10',
+    bundleCalls: parseInt(process.env.X402_BUNDLE_CALLS || '1000'),
     payTo: process.env.X402_PAY_TO || '0x966E1Ae22996545015b1414B35234b10719d7Ad4',
     network: resolveNetwork(process.env.X402_NETWORK || 'base'),
     facilitatorUrl:
