@@ -20,6 +20,7 @@ import cron from 'node-cron';
 import { IpClassifier }         from './jobs/ip_classifier.js';
 import { CustomerZeroDetector } from './jobs/customer_zero_detector.js';
 import { OutreachEngine }       from './jobs/outreach_engine.js';
+import { evaluatePricing }      from '../economics/pricing_intelligence/index.js';
 
 export function startAdminCrons(pool, redis) {
   // IP classification — every 15 minutes
@@ -42,5 +43,15 @@ export function startAdminCrons(pool, redis) {
     catch (e) { console.error('[CRON] outreach ERROR:', e.message); }
   });
 
-  console.log('[ADMIN] Crons started: ip-classifier(15m), customer-zero(5m), outreach(6h)');
+  // Pricing intelligence — every 6 hours, offset from outreach. Advisory only:
+  // records a floor-clamped recommendation in pricing_decisions; never touches
+  // billing (see docs/PRICING_INTELLIGENCE.md).
+  cron.schedule('30 */6 * * *', async () => {
+    try {
+      const d = await evaluatePricing(pool, redis);
+      console.log(`[CRON] pricing-intel: ${d.action} → $${d.recommended_price_usd} (${d.reason})`);
+    } catch (e) { console.error('[CRON] pricing-intel ERROR:', e.message); }
+  });
+
+  console.log('[ADMIN] Crons started: ip-classifier(15m), customer-zero(5m), outreach(6h), pricing-intel(6h)');
 }

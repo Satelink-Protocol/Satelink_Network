@@ -24,6 +24,7 @@ import {
 } from '../billing/credit_service.mjs';
 import { MIN_CONFIRMATIONS } from '../billing/deposit_validation.mjs';
 import { apiKeyCreateLimiter } from '../security/middleware/rate_limits.js';
+import { getIntelSummary, recordPricingView } from '../economics/pricing_intelligence/index.js';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
 const VAULT = () => process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
@@ -134,6 +135,10 @@ function manifestBody() {
     openapi: `${base}/openapi.json`,
     pricing_url: `${base}/v1/pricing`,
     manifest_url: `${base}/.well-known/satelink.json`,
+    // Machine decision surface — market comparison + live capabilities so an
+    // autonomous buyer can rank Satelink against alternatives from APIs alone.
+    compare_url: `${base}/v1/compare`,
+    capabilities_url: `${base}/v1/capabilities`,
   };
 }
 
@@ -148,13 +153,29 @@ export function createWellKnownSatelinkRouter() {
 }
 
 /** GET /v1/pricing + POST /v1/machine/register — mounted BEFORE the /v1 ai-gateway */
-export function createMachineV1Router(pool) {
+export function createMachineV1Router(pool, redis = null) {
   const router = Router();
   ensureCreditTables(pool);
 
-  router.get('/pricing', (_req, res) => {
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.json(pricingBody());
+  router.get('/pricing', async (_req, res) => {
+    recordPricingView(redis, 'pricing');
+    const body = pricingBody();
+    // Market/trust enrichment is best-effort: the base pricing body (what the
+    // serving path actually bills) must always return, even if intel is down.
+    try {
+      const intel = await getIntelSummary(pool, redis);
+      body.market_position = intel.market.position;
+      body.market_median_usd_per_million = intel.market.market_median_usd_per_million;
+      body.effective_usd_per_million = intel.market.satelink.effective_usd_per_million;
+      body.machine_preference_score = intel.machine_preference_score;
+      body.why_choose_satelink = intel.why_choose_satelink;
+      body.compare_url = `${API_BASE()}/v1/compare`;
+      body.capabilities_url = `${API_BASE()}/v1/capabilities`;
+    } catch (err) {
+      console.error('[MachineV1] pricing intel enrichment skipped:', err.message);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json(body);
   });
 
   router.post('/machine/register', apiKeyCreateLimiter, async (req, res) => {

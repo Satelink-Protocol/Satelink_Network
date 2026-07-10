@@ -17,6 +17,12 @@ import { OutreachEngine }       from './jobs/outreach_engine.js';
 import { SettlementControl }    from './jobs/settlement_control.js';
 import { CustomerZeroDetector } from './jobs/customer_zero_detector.js';
 import { emailRouter }          from './email.js';
+import {
+  evaluatePricing, latestDecision, pricingMode,
+  getMarketSnapshot, getConversionFunnel, getIntelSummary,
+  upsertCompetitorPricePoint,
+} from '../economics/pricing_intelligence/index.js';
+import { PRICE_PER_CALL_USDT } from '../billing/credit_service.mjs';
 
 // Mirrors BAD_ASNS in apps/api/src/middleware/free_tier_gate.js — kept as a
 // separate literal here rather than imported so the admin router has no
@@ -294,6 +300,7 @@ export function createAdminRouter(pool, redis) {
       'ip-classifier': () => new IpClassifier(pool, redis).run(),
       'customer-zero': () => new CustomerZeroDetector(pool).run(),
       'outreach':      () => new OutreachEngine(pool).run(),
+      'pricing-intel': () => evaluatePricing(pool, redis),
     };
     const fn = jobs[req.params.jobId];
     if (!fn) return res.status(404).json({ ok: false, error: `Unknown job: ${req.params.jobId}` });
@@ -302,6 +309,69 @@ export function createAdminRouter(pool, redis) {
       await log(req.params.jobId, 'manual', result);
       res.json({ ok: true, jobId: req.params.jobId, result });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  // ── Pricing Intelligence (Pricing Command Center) ─────────────────────────
+  // The pricing engine is ADVISORY: recommendations are recorded in
+  // pricing_decisions; the billed price stays PRICE_PER_CALL_USDT until a
+  // human changes it in code. See docs/PRICING_INTELLIGENCE.md.
+  router.get('/pricing/command-center', async (req, res) => {
+    try {
+      const [intel, funnel, decision] = await Promise.all([
+        getIntelSummary(pool, redis),
+        getConversionFunnel(pool, redis),
+        latestDecision(pool),
+      ]);
+      res.json({
+        ok: true,
+        data: {
+          mode: pricingMode(),
+          current_price_usd: PRICE_PER_CALL_USDT,
+          current_usd_per_million: PRICE_PER_CALL_USDT * 1_000_000,
+          market: {
+            median_usd_per_million: intel.market.market_median_usd_per_million,
+            average_usd_per_million: intel.market.market_average_usd_per_million,
+            position: intel.market.position,
+            providers: intel.market.providers,
+          },
+          machine_preference_score: intel.machine_preference_score,
+          price_floor: intel.price_floor,
+          conversion_funnel: funnel,
+          latest_decision: decision,
+          recommended_action: decision
+            ? { action: decision.action, recommended_price_usd: decision.recommended_price_usd, reason: decision.reason, decided_at: decision.created_at }
+            : { action: 'evaluate', reason: 'no decision recorded yet — POST /admin/pricing/evaluate' },
+        },
+        ts: Date.now(),
+      });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message, ts: Date.now() }); }
+  });
+
+  // Run a pricing evaluation now (also available as jobs/trigger/pricing-intel).
+  router.post('/pricing/evaluate', async (req, res) => {
+    try {
+      const result = await evaluatePricing(pool, redis);
+      await log('pricing-intel', 'manual-evaluate', result);
+      res.json({ ok: true, data: result, ts: Date.now() });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message, ts: Date.now() }); }
+  });
+
+  // Add or update a tracked competitor price point. source_url + confidence
+  // are mandatory — unsourced numbers are not accepted into the market model.
+  router.post('/pricing/competitor', async (req, res) => {
+    try {
+      const row = await upsertCompetitorPricePoint(pool, req.body || {});
+      await log('pricing-intel', 'competitor-upsert', row);
+      res.json({ ok: true, data: row, ts: Date.now() });
+    } catch (e) { res.status(400).json({ ok: false, error: e.message, ts: Date.now() }); }
+  });
+
+  // Raw market snapshot (same data the public /v1/compare serves).
+  router.get('/pricing/market', async (req, res) => {
+    try {
+      const snapshot = await getMarketSnapshot(pool, PRICE_PER_CALL_USDT);
+      res.json({ ok: true, data: snapshot, ts: Date.now() });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message, ts: Date.now() }); }
   });
 
   // ── SSE Live Feed ───────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
+import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
 import { createX402Middleware } from "./src/payments/x402/middleware.js";
@@ -374,7 +375,11 @@ app.get("/api/mode", (req, res) => {
 
   // Autonomous machine onboarding — /v1/pricing + /v1/machine/register.
   // Mounted BEFORE the "/v1" ai-gateway so its paths are not shadowed.
-  app.use("/v1", express.json({ limit: '16kb' }), createMachineV1Router(pool));
+  app.use("/v1", express.json({ limit: '16kb' }), createMachineV1Router(pool, redis));
+
+  // Machine decision APIs — /v1/compare + /v1/capabilities (pricing intel).
+  // Read-only; mounted BEFORE the "/v1" ai-gateway for the same shadowing reason.
+  app.use("/v1", createMachineIntelRouter(pool, redis));
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
