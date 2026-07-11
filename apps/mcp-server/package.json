@@ -1,0 +1,50 @@
+{
+  "name": "satelink-mcp",
+  "version": "1.0.0",
+  "description": "Satelink MCP server — give AI agents pay-per-call Polygon (chain 137) JSON-RPC access. Free tier, then micropayments in USDT/USDC.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "satelink-mcp": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "satelink",
+    "rpc",
+    "polygon",
+    "ethereum",
+    "json-rpc",
+    "web3",
+    "ai-agent",
+    "x402",
+    "depin"
+  ],
+  "homepage": "https://satelink.network",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Satelink-Protocol/Satelink_Network.git",
+    "directory": "apps/mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/Satelink-Protocol/Satelink_Network/issues"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.1.1"
+  }
+}
