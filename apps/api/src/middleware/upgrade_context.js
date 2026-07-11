@@ -21,7 +21,7 @@
 // subsequent ones (these callers retry constantly) carry full history.
 // The 402 path NEVER waits on the database.
 
-import { PRICE_PER_CALL_USDT } from '../billing/credit_service.mjs';
+import { PRICE_PER_CALL_USDT, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
 import { getX402Config } from '../payments/x402/config.js';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
@@ -175,6 +175,18 @@ export function createUpgradeContext({ pool = null, redis = null, log = console 
       basis: hist
         ? 'developer_intel history + today\'s live counter'
         : 'today\'s live counter only (history loads on your next request)',
+      // The zero-cost rung (friction audit 2026-07-11): keyed callers bypass
+      // the IP/subnet gate entirely — registering alone restores service
+      // today, no payment. Leading with a free ask converts anonymous
+      // machines into named wallets; paying comes when the key's own quota
+      // binds. Every prior option here cost money upfront.
+      free_first_step: {
+        cost_usd: 0,
+        action:
+          `POST ${API_BASE()}/v1/machine/register with a wallet signature (no payment, no email) — issues an ` +
+          `API key with its own ${TIER_DAILY_LIMIT.free} calls/day quota, independent of this IP/subnet limit. ` +
+          'Deposit only when you need more than that.',
+      },
       ...offer,
     };
 
