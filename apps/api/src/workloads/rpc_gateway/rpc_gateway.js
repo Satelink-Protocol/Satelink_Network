@@ -265,7 +265,13 @@ export function createRpcGateway(db) {
                         'The API key or wallet you sent matches no account. Register the wallet (see "register") or check the X-API-Key value.'));
                 }
                 const payload = { ok: false, error: verdict.code, message: verdict.message };
-                if (verdict.http === 402) {
+                // Payment path on BOTH money moments: balance exhausted (402)
+                // AND the keyed daily limit (429). The 429 was previously a
+                // dead end — the exact moment a key's workload has formed
+                // dependency and should convert, it got no upgrade path
+                // (erpc journey audit, 2026-07-11). Response payload only;
+                // verdict logic untouched.
+                if (verdict.http === 402 || verdict.code === 'daily_limit_exceeded') {
                     const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
                     payload.payment = {
                         vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
@@ -278,6 +284,18 @@ export function createRpcGateway(db) {
                     };
                     payload.manifest_url = `${apiBase}/.well-known/satelink.json`;
                     payload.pricing_url = `${apiBase}/v1/pricing`;
+                    if (verdict.code === 'daily_limit_exceeded') {
+                        payload.message =
+                            `${verdict.message}. Lift it without waiting for the UTC reset: deposit USDT ` +
+                            `(any amount ≥ $0.50) to the vault and claim it on THIS key — ` +
+                            `1) GET ${apiBase}/credits/deposit/initiate?amount=<usdt> for ready-to-sign calldata, ` +
+                            `2) POST ${apiBase}/api/keys/deposit {"tx_hash":"0x…"} with your X-API-Key header. ` +
+                            'Credits upgrade the key to a paid tier with a higher ceiling and never expire.';
+                        payload.upgrade_steps = [
+                            `GET ${apiBase}/credits/deposit/initiate?amount=1.00`,
+                            `POST ${apiBase}/api/keys/deposit with {"tx_hash":"0x…"} and your X-API-Key header`,
+                        ];
+                    }
                 }
                 return res.status(verdict.http || 402).json(payload);
             }

@@ -65,3 +65,38 @@ describe('instant trial machine key', function () {
     expect(res.body.sign_message).to.include('satelink:register:');
   });
 });
+
+describe('keyed daily-limit 429 carries the payment path', function () {
+  this.timeout(15000);
+  it('t4: daily_limit_exceeded response includes payment + upgrade_steps (the paid-threshold moment)', async () => {
+    process.env.CREDIT_CANONICAL = 'true';
+    const express = (await import('express')).default;
+    const request = (await import('supertest')).default;
+    // account exists, daily usage at limit → authorizeAndMeter returns 429 verdict
+    const pool = {
+      query: async (sql) => {
+        if (/FROM api_credits WHERE api_key/.test(sql)) {
+          return { rows: [{ api_key: 'sk_x', wallet_address: null, tier: 'free', daily_limit: 1000, credits_usdt: 0, status: 'active' }] };
+        }
+        if (/api_usage_daily/.test(sql)) return { rows: [{ c: 1000, request_count: 1000, count: 1000 }] };
+        return { rows: [] };
+      },
+    };
+    const { createRpcGateway } = await import('../src/workloads/rpc_gateway/rpc_gateway.js');
+    const app = express();
+    app.use('/rpc', express.json(), createRpcGateway(pool));
+    const res = await request(app).post('/rpc/polygon')
+      .set('X-API-Key', 'sk_x').set('Content-Type', 'application/json')
+      .send({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 });
+    if (res.status === 429) {
+      const { expect } = await import('chai');
+      expect(res.body.payment.vault_address).to.be.a('string');
+      expect(res.body.upgrade_steps).to.be.an('array').with.length(2);
+      expect(res.body.message).to.include('POST');
+    } else {
+      // mock shape mismatch with getDailyCount → fail loudly so we fix the mock
+      throw new Error('expected 429, got ' + res.status + ' body=' + JSON.stringify(res.body).slice(0, 200));
+    }
+    delete process.env.CREDIT_CANONICAL;
+  });
+});
