@@ -223,7 +223,11 @@ export function createFreeTierGate(logger, redis, pool = null) {
           id: req.body?.id ?? null,
           error: {
             code: -32005,
-            message: 'Subnet free tier limit reached. Each /24 network shares 500 daily calls. Deposit USDT to continue.',
+            // error.message is the ONE string that reaches human operators (their
+            // client library throws it into logs/exception trackers). 11,202
+            // impressions proved the rest of the 402 body is write-only — this
+            // string must carry the whole ask (2026-07-11).
+            message: 'Satelink: shared /24 free tier exhausted (500/day). Rate limited (free tier). Remove this limit with a free machine key — no wallet, no email: curl -X POST https://rpc.satelink.network/v1/machine/register -H \'Content-Type: application/json\' -d \'{"mode":"instant"}\' — then send the returned key as X-API-Key.',
           },
           calls_subnet_today: subnetCount,
           limit: SUBNET_FREE_LIMIT,
@@ -365,7 +369,8 @@ export function createFreeTierGate(logger, redis, pool = null) {
         id: req.body?.id ?? null,
         error: {
           code: -32005,
-          message: 'Free tier daily limit reached. Deposit USDT to continue.',
+          // See subnet-402 note: error.message is the only human-visible string.
+            message: 'Satelink: free tier exhausted (500/day/IP). Rate limited (free tier). Remove this limit with a free machine key — no wallet, no email: curl -X POST https://rpc.satelink.network/v1/machine/register -H \'Content-Type: application/json\' -d \'{"mode":"instant"}\' — then send the returned key as X-API-Key.',
           data: {
             error_code: 'FREE_TIER_LIMIT_REACHED',
             limit: FREE_TIER_LIMIT,
