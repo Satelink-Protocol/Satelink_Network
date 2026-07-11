@@ -175,17 +175,20 @@ export function createUpgradeContext({ pool = null, redis = null, log = console 
       basis: hist
         ? 'developer_intel history + today\'s live counter'
         : 'today\'s live counter only (history loads on your next request)',
-      // The zero-cost rung (friction audit 2026-07-11): keyed callers bypass
-      // the IP/subnet gate entirely — registering alone restores service
-      // today, no payment. Leading with a free ask converts anonymous
-      // machines into named wallets; paying comes when the key's own quota
-      // binds. Every prior option here cost money upfront.
+      // The zero-cost rung, v2 (revenue sprint 2026-07-11): the wallet
+      // signature was the drop-off (stranger tests: raw-HTTP consumers hold
+      // no keys; eth-account can hard-fail at install). The instant trial
+      // key removes it — one curl, no wallet, no email, own per-key quota.
+      // Payment attaches when the quota binds and dependency has formed.
       free_first_step: {
         cost_usd: 0,
-        action:
-          `POST ${API_BASE()}/v1/machine/register with a wallet signature (no payment, no email) — issues an ` +
-          `API key with its own ${TIER_DAILY_LIMIT.free} calls/day quota, independent of this IP/subnet limit. ` +
-          'Deposit only when you need more than that.',
+        message:
+          'Your workload hit the public limit. Create a free machine key — no wallet, no email, 10-second setup. ' +
+          'Pay only when your workload grows.',
+        curl: `curl -X POST ${API_BASE()}/v1/machine/register -H "Content-Type: application/json" -d '{"mode":"instant"}'`,
+        returns: 'an API key (send as X-API-Key header) with its own daily quota, independent of this IP/subnet limit',
+        wallet_option:
+          `prefer a permanent identity? POST the same endpoint with a wallet signature instead — deposits from that wallet auto-credit (${TIER_DAILY_LIMIT.free} calls/day free, then prepaid).`,
       },
       ...offer,
     };

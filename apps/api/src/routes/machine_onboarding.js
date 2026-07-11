@@ -30,6 +30,11 @@ const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network
 const VAULT = () => process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
 const USDT = () => process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const MIN_DEPOSIT_USDT = () => parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50');
+// Instant trial identity quota (revenue sprint 2026-07-11): per-key daily
+// limit enforced by the EXISTING authorizeAndMeter path — deliberately a
+// daily cap, not a lifetime cap, because a lifetime cap would require
+// changing billing logic. 2× the anonymous IP cap, on a private quota.
+const INSTANT_TRIAL_DAILY_LIMIT = () => parseInt(process.env.INSTANT_TRIAL_DAILY_LIMIT || '1000', 10);
 
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 
@@ -178,8 +183,78 @@ export function createMachineV1Router(pool, redis = null) {
     res.json(body);
   });
 
+  // Instant trial keys: one per IP per UTC day (plus the burst limiter).
+  // Redis-backed with an in-memory fallback — same pattern as the free-tier
+  // gate. Without the cap, a wall-hitter could mint a fresh key per request
+  // and the trial quota would be meaningless.
+  const instantMints = new Map(); // ip -> yyyymmdd (in-memory fallback)
+  const INSTANT_PER_IP_PER_DAY = 2;
+
+  async function instantMintAllowed(ip) {
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    if (redis) {
+      try {
+        const key = `ik:${ip}:${day}`;
+        const n = await redis.incr(key);
+        if (n === 1) await redis.expire(key, 25 * 3600);
+        return n <= INSTANT_PER_IP_PER_DAY;
+      } catch { /* fall through to memory */ }
+    }
+    const k = `${ip}:${day}`;
+    const n = (instantMints.get(k) || 0) + 1;
+    if (instantMints.size > 10000) instantMints.clear();
+    instantMints.set(k, n);
+    return n <= INSTANT_PER_IP_PER_DAY;
+  }
+
   router.post('/machine/register', apiKeyCreateLimiter, async (req, res) => {
-    const { wallet_address, signature } = req.body || {};
+    const { wallet_address, signature, mode } = req.body || {};
+
+    // ── Instant mode: wallet-less trial identity (revenue sprint 2026-07-11).
+    // The stranger tests proved the wallet signature is the drop-off: raw-HTTP
+    // consumers (python-requests, plain Go) hold no keys and eth-account can
+    // hard-fail at install. The trial key removes that wall: 10-second curl,
+    // own per-key daily quota, clearly marked trial. Payment attaches later,
+    // when the quota binds and the workload already depends on the key.
+    if (mode === 'instant') {
+      const ip =
+        req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+      if (!(await instantMintAllowed(ip))) {
+        return res.status(429).json({
+          ok: false,
+          error: 'instant_key_limit',
+          message: `Instant trial keys are limited to ${INSTANT_PER_IP_PER_DAY}/day per IP. Use the key you already created, or register a wallet for a permanent identity.`,
+        });
+      }
+      try {
+        const result = await createApiKeyWithCredits(pool, 'free', null, {});
+        await pool.query(
+          `UPDATE api_credits SET daily_limit = $1, demand_source = 'instant_trial' WHERE api_key = $2`,
+          [INSTANT_TRIAL_DAILY_LIMIT(), result.api_key]
+        );
+        const base = API_BASE();
+        return res.status(201).json({
+          ok: true,
+          api_key: result.api_key,
+          identity: 'instant_trial',
+          daily_limit: INSTANT_TRIAL_DAILY_LIMIT(),
+          wallet_address: null,
+          message:
+            `Trial machine key: ${INSTANT_TRIAL_DAILY_LIMIT()} calls/day on your own quota (no IP/subnet contention), no wallet, no email. ` +
+            'Send it as the X-API-Key header. Attach a wallet later to add prepaid credits when your workload grows.',
+          next_steps: [
+            `Use now: curl -X POST ${base}/rpc/polygon -H "X-API-Key: ${result.api_key}" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`,
+            `Grow past ${INSTANT_TRIAL_DAILY_LIMIT()}/day: deposit USDT (calldata: GET ${base}/credits/deposit/initiate?amount=<usdt>) or pay per bundle with x402 — details: ${base}/v1/pricing`,
+          ],
+          pricing_url: `${base}/v1/pricing`,
+          manifest_url: `${base}/.well-known/satelink.json`,
+        });
+      } catch (err) {
+        console.error('[MachineRegister] instant mint failed:', err.message);
+        return res.status(500).json({ ok: false, error: 'registration_failed' });
+      }
+    }
 
     if (!wallet_address || !WALLET_RE.test(wallet_address)) {
       return res.status(400).json({
