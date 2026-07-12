@@ -1,0 +1,22 @@
+{
+  "name": "rail-billing",
+  "version": "1.0.0",
+  "description": "Rail-agnostic usage-billing engine: meter API calls, then charge by crypto (x402) OR card (Stripe) into one credit ledger.",
+  "type": "module",
+  "main": "src/engine.js",
+  "exports": { ".": "./src/engine.js" },
+  "files": ["src", "example", ".env.example", "README.md", "LICENSE"],
+  "scripts": { "example": "node example/server.js" },
+  "engines": { "node": ">=18" },
+  "keywords": ["usage-based-billing","metering","x402","stripe","usdc","prepaid-credits","api-monetization","pay-per-call","paywall","express"],
+  "license": "MIT",
+  "dependencies": {
+    "@coinbase/x402": "^2.1.0",
+    "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
+    "@x402/express": "^2.17.0",
+    "@x402/extensions": "^2.17.0"
+  },
+  "peerDependencies": { "express": ">=4", "stripe": ">=12" },
+  "peerDependenciesMeta": { "stripe": { "optional": true } }
+}
