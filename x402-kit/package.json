@@ -1,0 +1,48 @@
+{
+  "name": "x402-kit",
+  "version": "1.0.0",
+  "description": "Add an x402 crypto paywall to any Express route — verify + settle USDC payments through the Coinbase CDP facilitator. Mainnet-proven.",
+  "type": "module",
+  "main": "src/paywall.js",
+  "exports": {
+    ".": "./src/paywall.js"
+  },
+  "files": [
+    "src",
+    "example",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "example": "node example/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "x402",
+    "paywall",
+    "usdc",
+    "base",
+    "micropayments",
+    "api-monetization",
+    "pay-per-call",
+    "coinbase",
+    "cdp",
+    "express",
+    "middleware",
+    "ai-agent"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@coinbase/x402": "^2.1.0",
+    "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
+    "@x402/express": "^2.17.0",
+    "@x402/extensions": "^2.17.0"
+  },
+  "peerDependencies": {
+    "express": ">=4"
+  }
+}
