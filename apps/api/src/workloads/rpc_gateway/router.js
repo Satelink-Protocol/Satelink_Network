@@ -230,7 +230,9 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
         }
       }
 
-      console.log('[RPC Router] No network nodes available, falling back to external providers');
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log('[RPC Router] No network nodes available, falling back to external providers');
+      }
     } catch (dispatcherErr) {
       // Dispatcher error must NOT kill the request — fall through to providers
       console.error('[RPC Router] Dispatcher error, falling back:', dispatcherErr.message);
@@ -282,8 +284,9 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
   while (remainingProviders.length > 0) {
     const provider = selectWeightedProvider(remainingProviders);
 
-    // 🔥 NEW DEBUG LOG (BEFORE CALL)
-    console.log(`[RPC Router DEBUG] Trying → ${chain} → ${provider.id}`);
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[RPC Router DEBUG] Trying → ${chain} → ${provider.id}`);
+    }
 
     attemptedProviders.push(provider.id);
 
