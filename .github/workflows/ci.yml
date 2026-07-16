@@ -76,13 +76,17 @@ jobs:
         run: npm ci --prefer-offline
 
       # Fails ONLY on test failures outside apps/api/test/known-failures-baseline.txt
-      # (the 9 pre-existing failures + 3 CDP-facilitator-auth failures that need
-      # CDP_API_KEY_ID/SECRET secrets to pass in CI — see the baseline file).
+      # (pre-existing failures + entries that need CDP facilitator creds / a real
+      # DB to pass — see the annotated groups in the baseline file).
       - name: Baseline guard
         run: bash scripts/ci-baseline-check.sh
         env:
           NODE_ENV: test
           JWT_SECRET: test-secret-for-ci-only
+          # Dummy: validateEnv() hard-exits without DATABASE_URL. Nothing
+          # listens on this port — DB tests fail fast and deterministically
+          # and are covered by the baseline allowlist.
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:54329/ci_test
 
   security:
     name: Secret Scan
