@@ -1,3 +1,5 @@
+> ⚠️ **STALE (marked 2026-07-16):** presents legacy RevenueVault V1 `0x80AF…DdA3` as the current deposit address. Current: RevenueVaultV2 `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF`. Verify against CLAUDE.md before trusting anything below.
+
 # Satelink Paid Tier — Quick Start Guide
 
 Machine-readable onboarding for operators, DApps, and automated scripts.
