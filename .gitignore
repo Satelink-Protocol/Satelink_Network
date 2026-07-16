@@ -166,3 +166,12 @@ glm-agent/
 
 # generated machine reports (machine_revenue_report.js / machine_crm.js)
 apps/api/reports/
+
+# agent/session scratch files — never commit investigation artifacts
+scratch_*
+scratch_dx_test/
+investigation_data.json
+test_dash.js
+verify.sh
+fix_conflicts.sh
+x402-mainnet-test.*
