@@ -1,3 +1,5 @@
+> ⚠️ **STALE (marked 2026-07-16):** references contract `0x6987…1CC9`, which was never the production contract (purged from the site in PR #237). Current deposit vault: RevenueVaultV2 `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF`. Verify against CLAUDE.md before trusting anything below.
+
 # Satelink Node Operator Guide
 
 Earn USDT by routing RPC traffic through your server. This guide covers everything you need to register, run, and get paid as a Satelink node operator.

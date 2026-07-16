@@ -1,114 +1,68 @@
-# Satelink Network
+# Satelink
 
-**Decentralized RPC Gateway with On-Chain USDT Settlement**
+**Pay-per-call Polygon JSON-RPC for machines and AI agents.**
 
-Node operators earn USDT on Polygon by routing real blockchain RPC traffic. Developers get reliable, decentralized infrastructure. Platform fee: 30%. Node operators: 50%. Distribution pool: 20%.
+Satelink is a machine-commerce runtime: any wallet or agent can call standard
+Polygon (chain 137) JSON-RPC — `eth_call`, `eth_getBalance`, `eth_getLogs`, and
+the rest — and pay per call with no account, no signup, and no commitment.
 
-## Live Infrastructure
+## Status (honest)
 
-- **1,700+ RPC calls processed** (free tier, growing)
-- **$0.65 USDT** in on-chain test transactions
-- **99.8% uptime** | 85ms avg latency  
-- **First settlement pending** — Chainlist listing in review
-- **On-chain contract:** [View on Polygonscan](https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b)
+- The gateway is live at `https://rpc.satelink.network` and serves real traffic
+  (hundreds of thousands of requests/day, p50 ~50 ms).
+- Two payment rails are live on mainnet:
+  - **x402** — HTTP 402 challenge/pay flow, USDC on Base (`eip155:8453`),
+    settled through the Coinbase CDP facilitator. Mainnet-proven.
+  - **USDT credit deposits** — permissionless deposits to RevenueVaultV2 on
+    Polygon, credited automatically to your API key.
+- A free tier exists for evaluation; most current traffic is free-tier.
+  Paid conversion is early. No revenue numbers are advertised here — anything
+  you see is on-chain and verifiable.
 
-## Quick Links
-
-- **RPC Endpoint:** https://rpc.satelink.network/rpc/polygon
-- **Dashboard:** https://app.satelink.network
-- **API Status:** https://rpc.satelink.network/api/status
-
-## Quick Start
+## Try it (no key needed)
 
 ```bash
-# Test RPC (no API key required for free tier)
 curl -X POST https://rpc.satelink.network/rpc/polygon \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-
-# Get API key for higher limits
-curl -X POST https://rpc.satelink.network/api/keys \
-  -H "Content-Type: application/json" \
-  -d '{"tier":"free"}'
 ```
+
+When the free taste runs out you get a machine-readable `402` response that
+contains everything needed to pay (x402 challenge or instant trial key) —
+agents can self-onboard without a human.
+
+## Ecosystem
+
+- **[x402-kit](https://github.com/Satelink-Protocol/x402-kit)** — standalone,
+  MIT-licensed Express middleware that puts an x402 USDC paywall in front of
+  any route. Extracted from this codebase, mainnet-proven.
+- **MCP server** (`apps/mcp-server`) — gives AI agents Satelink RPC access as
+  MCP tools (`satelink-mcp`).
+
+## Contracts (verifiable on-chain)
+
+| Contract | Chain | Address |
+|----------|-------|---------|
+| RevenueVaultV2 (deposits) | Polygon 137 | `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF` |
+| USDT | Polygon 137 | `0xc2132D05D31c914a87C6611C10748AEb04B58e8F` |
+| Treasury / x402 payTo | Polygon / Base | `0x966E1Ae22996545015b1414B35234b10719d7Ad4` |
 
 ## Stack
 
-- **Backend:** Node.js 20 + Express + PostgreSQL + Redis
-- **Frontend:** Next.js 14 + Tailwind + shadcn/ui
-- **Contracts:** Solidity + Foundry + OpenZeppelin
-- **Network:** Polygon PoS (mainnet 137) | Polygon Amoy (testnet)
-- **Settlement:** USDT (ERC-20)
+- **Backend:** Node.js + Express (`apps/api`), PostgreSQL + Redis, on Railway
+- **Frontend:** Next.js (`apps/web`) at [satelink.network](https://satelink.network)
+- **Contracts:** Solidity + Foundry (`contracts/`), Polygon PoS mainnet
 
-## For Developers
+## Development
 
 ```bash
 git clone https://github.com/Satelink-Protocol/Satelink_Network.git
-cd Satelink_Network
-npm install
-cd apps/web && npm install && cd ..
-cp .env.example .env  # Fill in: DATABASE_URL, REDIS_URL, JWT_SECRET
-npm run dev           # Backend (port 8080)
-cd apps/web && npm run dev  # Frontend (port 3000)
+cd Satelink_Network && npm install
+cd apps/api && npm test   # mocha; see CLAUDE.md for the known-failure baseline
 ```
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SATELINK NETWORK                         │
-├─────────────┬─────────────┬─────────────┬──────────────────┤
-│  RPC Layer  │  Billing    │   Epoch     │   Settlement     │
-│  (Gateway)  │  (Metering) │  (Rewards)  │   (Polygon)      │
-├─────────────┴─────────────┴─────────────┴──────────────────┤
-│                     Node Network                            │
-│        [Router] [VPS] [GPU] [Server] [IoT Device]          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-- **RPC Gateway:** Routes Polygon RPC calls through distributed nodes
-- **Metering:** Real-time usage tracking in PostgreSQL
-- **Settlement:** EIP-712 signed claims → on-chain USDT via ClaimsContract
-- **Economic Split:** 50/30/20 enforced by smart contracts
-
-## Revenue Model
-
-| Metric | Current | Target |
-|--------|---------|--------|
-| Hourly rate | $1.26/hr | $500/hr |
-| Monthly | $220.59 | $360,000 |
-| Growth needed | 1x | 395x |
-
-**Path to $500/hr:** Chainlist listing + node operator growth + enterprise clients
-
-## Supported Chains
-
-| Chain | Endpoint | Chain ID | Status |
-|-------|----------|----------|--------|
-| Polygon | `/rpc/polygon` | 137 | Live |
-| Polygon Amoy | `/rpc/polygon-amoy` | 80002 | Live |
-| Ethereum | `/rpc/ethereum` | 1 | Live |
-| Arbitrum | `/rpc/arbitrum` | 42161 | Live |
-| Base | `/rpc/base` | 8453 | Live |
-
-## Contracts (Polygon Mainnet)
-
-| Contract | Address |
-|----------|---------|
-| ClaimsContract | `0x6987921e2453f360e314e4424F6c2789F10a1CC9` |
-| Treasury | `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` |
-
-## Documentation
-
-- [Integration Guide](docs/INTEGRATION_GUIDE.md)
-- [Node Operator Guide](docs/NODE_OPERATOR_GUIDE.md)
-- [Paid Tier Quickstart](docs/PAID_TIER_QUICKSTART.md)
-- [Deploy to Polygon](docs/DEPLOY_POLYGON.md)
-- [Architecture](docs/architecture/AUTONOMOUS_ECONOMIC_PROTOCOL.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md)
+> Do not boot the full app against the production database — the schedulers
+> write. See `CLAUDE.md` for safe local verification.
 
 ## License
 
@@ -116,6 +70,4 @@ MIT
 
 ---
 
-**Revenue first. Rewards second.**
-
-[Website](https://satelink.network) · [Dashboard](https://app.satelink.network) · [RPC](https://rpc.satelink.network)
+[Website](https://satelink.network) · [RPC](https://rpc.satelink.network) · [x402-kit](https://github.com/Satelink-Protocol/x402-kit)

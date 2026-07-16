@@ -1,3 +1,5 @@
+> ⚠️ **STALE (marked 2026-07-16):** references contract `0x6987…1CC9`, which was never the production contract (purged from the site in PR #237). Current deposit vault: RevenueVaultV2 `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF`. Verify against CLAUDE.md before trusting anything below.
+
 # Settlement Architecture — On-Chain USDT Claims
 
 How Satelink settles node operator earnings on Polygon.

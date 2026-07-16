@@ -1,14 +1,16 @@
 # Satelink — AI Agent Master Context
-Last verified: 2026-06-26 (AUDIT_REPORT_2026_06.md + Phase 9–11 wiring branch).
-Every agent reads this FIRST. All numbers below are psql/curl-verified against production.
+Last verified: 2026-07-16 (consolidation session — git rescue + docs truth pass).
+Every agent reads this FIRST. Rows marked (2026-07-16) are curl/railway-verified live;
+older rows retain their original verification date.
 
 ---
 
 ## Project Identity
-DePIN RPC gateway on **Polygon PoS Mainnet (chainId 137)**: machines pay USDT to call
-blockchain RPC APIs (`eth_getBalance`, `eth_call`, …) routed through a permissionless node
-network. Billing rate **$0.00003/call**. Settlement in USDT on-chain, aggregated per epoch
-through the RevenueVault. Revenue target: $500/hr collected on-chain.
+Machine-commerce RPC gateway on **Polygon PoS Mainnet (chainId 137)**: machines and AI
+agents pay per call for blockchain RPC APIs (`eth_getBalance`, `eth_call`, …). Two live
+payment rails: **x402** (USDC on Base `eip155:8453` via CDP facilitator, mainnet-proven)
+and **USDT credit deposits** (RevenueVaultV2 on Polygon). Flat rate $0.00003/call;
+x402 bundle $0.10 = 1,000 calls. Revenue target: $500/hr collected on-chain.
 
 ## Repository
 `/Users/pradeepjakuraa/satelink` (monorepo)
@@ -17,32 +19,31 @@ GitHub: https://github.com/Satelink-Protocol/Satelink_Network
 
 ## Stack
 - Backend: Node.js/Express (`apps/api`), Railway, `api.satelink.network` / `rpc.satelink.network` / `admin.satelink.network` (all the same Express backend)
-- Frontend: Next.js (`apps/web`), Vercel, `app.satelink.network`
+- Frontend: Next.js (`apps/web`), Vercel, `satelink.network` (**`app.satelink.network` is DEAD — 404, verified 2026-07-16; never link it**)
 - DB: Postgres (`Postgres-iQeW`, 304 MB, 32 tables) + Redis on Railway
 - Contracts: Solidity/Foundry, Polygon mainnet
 
 ---
 
-## VERIFIED PRODUCTION STATE (2026-06-26)
+## VERIFIED PRODUCTION STATE
 | Signal | Value |
 |--------|-------|
-| `revenue_events_v2` real rows | **1** row, **$0.00003** USDT total (`is_test_data=false`, epoch 29077) |
-| Revenue today / MTD | $0 / $0.00003 |
-| `api_credits` | 17 keys (16 free, 1 paid); deposited $0.59993, spent $0.00006, outstanding $0.59987 |
-| `settlement_batches` | **1,954 blocked_unfunded** ($294.29), 98 confirmed ($14.78), 1 pending ($0.15) |
-| `epochs` | max id 35,387; 27,933 phantom of 35,331 |
-| `developer_intel` | 23,859 rows — machine 19,421 / unknown 3,809 / developer 628 / scanner 1 |
-| Demand | 5,957 IPs with calls today; ~101,814 calls_today aggregate; ~14.8k req/24h (Redis counter) |
-| `registered_nodes` | **1** active (ap-south-1, chain 137); node health 24h: 100% healthy, p50 ~49ms |
-| Settlement | `SETTLEMENT_DRY_RUN=1`, `signerBalance=null` — NOT broadcasting on-chain |
-| Agents | **`Satelink_Paperclip` Railway service FAILED** — agents.satelink.network offline |
-| Traffic → revenue | ~14.8k req/day convert to **$0 billed** — ~100% free-tier |
+| Traffic (2026-07-16) | **496,273 req/24h** (`/admin/observability/metrics`), p50 46ms; 1,338 active IPs today of 70,608 tracked (`/admin/demand/stats`) |
+| Classification, all-time (2026-07-16) | machine 48,647 / developer 3,435 / unknown 18,524 / scanner 2 |
+| x402 rail (2026-07-16) | **LIVE** — `X402_ENABLED=true`, network `eip155:8453` (Base), payTo `0x966E…7Ad4`; mainnet settlements proven (see `docs/x402-bazaar-escalation.md`) |
+| Deposits vault (2026-07-16) | **RevenueVaultV2** `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF` (`VAULT_ADDRESS` + `REVENUE_VAULT_ADDRESS`); V1 `0x80AF…DdA3` is legacy |
+| Deploys (2026-07-16) | Railway auto-deploy from `main` green (latest SUCCESS 07:08 IST) |
+| Test baseline (2026-07-16) | `apps/api`: **128 passing / 9 failing** — the 9 are pre-existing: DepositListener cursor-resume, EpochScheduler close/split, freeTierGate anon-402, instant-key t1–t3, Withdrawal API ×3. Any NEW failure = regression. Run with `npx mocha --no-config --exit 'test/**/*.test.js'` (`.mocharc` file bug + hanging handles) |
+| Revenue | All pre-2026-07-11 “revenue” was founder test data (war room 2026-07-11); real paid conversion still ~zero — verify on-chain before quoting any number |
+| Settlement | `SETTLEMENT_DRY_RUN=1` — still not broadcasting; do not change (see guards below) |
+| Log noise (2026-07-16) | `[FreeTierGate] Subnet blocked` logs per blocked request (subnet 34.92.84 blocked 2.09M times) — fix requires touching forbidden `free_tier_gate.js`; founder decision |
 
-## Key Addresses (Polygon 137)
-- RevenueVault: `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3` (in production use, accepts deposits)
+## Key Addresses (Polygon 137 unless noted)
+- **RevenueVaultV2 (current)**: `0x577D3716d6Ad5b676d230f5409deF9838FABaCEF` — permissionless deposit; migrated in PR #234
+- RevenueVault V1 (legacy): `0x80AFEaC3B77CbeC1f7B9f24a50319DC72785DdA3`
 - USDT: `0xc2132D05D31c914a87C6611C10748AEb04B58e8F`
-- Treasury: `0x966E1Ae22996545015b1414B35234b10719d7Ad4`
-- Signer: `0x988fb0efC0f14111511dE3481E6c066018A0cf91` (`signerBalance=null` — check before enabling settlement)
+- Treasury / x402 payTo (also on Base): `0x966E1Ae22996545015b1414B35234b10719d7Ad4`
+- Signer: `0x988fb0efC0f14111511dE3481E6c066018A0cf91` (verify balance before enabling settlement)
 
 ## Settlement Guards
 `SETTLEMENT_DRY_RUN=1` — **NEVER set to 0** without ALL of: (a) signer funded,
@@ -108,8 +109,8 @@ Admin router mounts at `app_factory.mjs:413` → `app.use("/admin", requireAdmin
 `/admin/treasury/status`, `/admin/customers/list`, `/admin/agents/status`,
 `/admin/security/threats`, `/admin/security/classifier-stats`,
 `/admin/observability/metrics`, `/admin/incidents`, `/admin/audit-log`, `/admin/config`.
-> Status: committed on the branch, **not yet deployed** (deploy = merge to main). Verified by
-> invoking each handler against live Postgres (200 ok:true). See `docs/ADMIN_DASHBOARD.md`.
+> Status: **DEPLOYED and live** (curl-verified 2026-07-16: `/admin/demand/stats` and
+> `/admin/observability/metrics` return live data). See `docs/ADMIN_DASHBOARD.md`.
 
 ## Dead Files Removed (Phase 10)
 Deleted 20 dead route files (zero live imports): `src/gateway/routes.js`, `src/core/routes.js`,
@@ -121,11 +122,24 @@ NOT done (high-risk, unreviewable) — see `docs/SECURITY.md`.
 
 ---
 
+## Git State (canonical, set 2026-07-16 consolidation)
+- **`main` is the single source of truth**; deploy = merge to `main` (Railway + Vercel auto).
+- Long-lived branches (only these are justified): `add-satelink-polygon-rpc` (protected,
+  Chainlist PR #8314 source — never commit to it), `wip/local-attribution-mcp-2026-07-16`
+  (unreviewed WIP snapshot: partner-attribution tracking + early mcp-server draft).
+- Every deleted branch has an `archive/<name>` tag pushed to origin — restore with
+  `git switch -c <name> archive/<name>`. Do not delete branches without such a tag.
+- `git stash` entry "PRESERVED-2026-07-16" holds a RevenueVaultV2.sol source variant
+  (immutable usdt + full natspec — possibly the deployed source of `0x577D…BaCEF`);
+  local-only, founder to reconcile against Polygonscan verified source.
+- Open PRs stay open only with a stated reason (see PR comments on #257, #249–#251).
+
 ## P0 Items (block Customer Zero)
-1. Signer `0x988f…` balance is `null` — fund + verify before enabling settlement.
-2. 14.8k req/day at $0 billed — free-tier gate lets ~all traffic through unpaid.
-3. Rica Web Services (`38.49.212.250`, `support@servarica.com`) — outreach email not sent.
-4. `Satelink_Paperclip` FAILED — restart in Railway dashboard.
+1. ~500k req/day at ~$0 billed — conversion from free tier is THE problem (war room 2026-07-11;
+   PRs #241/#243–#248/#254 shipped the funnel — measure before building more).
+2. Signer `0x988f…` — verify balance before any settlement change.
+3. x402 Bazaar discoverability: PR #257 (method-level description) awaits founder merge;
+   `docs/x402-bazaar-escalation.md` is drafted, ready to send.
 
 ## Canonical Docs (single source of truth, 2026-06-26)
 `CLAUDE.md` (this file), `AUDIT_REPORT_2026_06.md`, and `docs/`:
