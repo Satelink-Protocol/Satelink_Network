@@ -109,7 +109,16 @@ function buildHttpServer(cfg) {
       payTo: cfg.payTo,
       maxTimeoutSeconds: 60,
     },
-    description: `Satelink — Polygon (chain 137) JSON-RPC: $${cfg.bundlePriceUsd} = ${cfg.bundleCalls.toLocaleString('en-US')} RPC calls`,
+    // Method-level description so the Bazaar catalog reads as a full-capability
+    // RPC (agents + semantic search match on method names). Mirrors how indexed
+    // peers enumerate their surface instead of a single opaque endpoint.
+    description:
+      `Satelink — Polygon PoS (chain 137) JSON-RPC. Pay-per-call access to the full ` +
+      `standard method set: eth_call, eth_getBalance, eth_blockNumber, eth_getLogs, ` +
+      `eth_getTransactionReceipt, eth_getTransactionByHash, eth_sendRawTransaction, ` +
+      `eth_getCode, eth_estimateGas, eth_getStorageAt, and every other JSON-RPC method. ` +
+      `Send any request in the POST body. $${cfg.bundlePriceUsd} = ${cfg.bundleCalls.toLocaleString('en-US')} calls ` +
+      `(USDC on Base via x402); permissionless, no account, no commitment.`,
     mimeType: 'application/json',
     // The serving endpoint is POST /rpc/:chain (bare POST /rpc has no handler),
     // so discovery/catalog metadata must point at a URL that actually serves.
