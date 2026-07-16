@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Users, UserPlus, Key, Mail, ShieldAlert, UserCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Users, UserCheck, CircleDollarSign } from "lucide-react";
 import {
-  Button,
   KPIGrid,
   StatCard,
   DashboardSection,
@@ -11,183 +10,151 @@ import {
   StatusBadge,
   Badge,
   Input,
+  type DataTableColumn,
 } from "@satelink/ui";
+import { adminGet } from "../_lib/adminClient";
+import { isFounderWallet } from "../_lib/format";
 
-interface UserRecord {
-  id: string;
-  email: string;
-  role: "admin_super" | "admin_ops" | "developer" | "node_operator";
-  keyCount: number;
-  walletAddress: string;
-  status: "active" | "suspended";
-  lastActive: string;
+interface PayingCustomer {
+  wallet: string;
+  credits_usdt: number;
+  total_deposited: number;
+  total_spent: number;
+  created_at: string | number | null;
 }
 
-const INITIAL_USERS: UserRecord[] = [
-  { id: "USR-001", email: "pradeep@satelink.network", role: "admin_super", keyCount: 4, walletAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", status: "active", lastActive: "Active now" },
-  { id: "USR-002", email: "alex@satelink.network", role: "admin_ops", keyCount: 2, walletAddress: "0x35Cc6634C0532925a3b844Bc454e4438f44e742d", status: "active", lastActive: "12 mins ago" },
-  { id: "USR-003", email: "corp_indexer@polygon.io", role: "developer", keyCount: 5, walletAddress: "0xCc6634C0532925a3b844Bc454e4438f44e742d35", status: "active", lastActive: "1 hour ago" },
-  { id: "USR-004", email: "validator_host_44@gmail.com", role: "node_operator", keyCount: 1, walletAddress: "0x844Bc454e4438f44e742d35Cc6634C0532925a3b", status: "active", lastActive: "1 day ago" },
-  { id: "USR-005", email: "crawler_tester@spam.com", role: "developer", keyCount: 10, walletAddress: "0x532925a3b844Bc454e4438f44e742d35Cc6634C0", status: "suspended", lastActive: "5 days ago" },
+interface FreeTierLead {
+  ip: string;
+  calls_24h: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  classification: string | null;
+  status: string | null;
+  converted: boolean;
+}
+
+const num = (v: unknown) => Number(v) || 0;
+
+// Never render a full client IP — mask the last two octets.
+function maskIp(ip: string): string {
+  const p = ip.split(".");
+  return p.length === 4 ? `${p[0]}.${p[1]}.**.**` : ip;
+}
+
+const CLASS_TONE: Record<string, string> = {
+  machine: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  developer: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  scanner: "bg-red-500/15 text-red-400 border-red-500/30",
+  unknown: "bg-zinc-800 text-zinc-400 border-zinc-700",
+};
+
+const payingCols: DataTableColumn<PayingCustomer>[] = [
+  {
+    key: "wallet",
+    header: "Wallet",
+    cell: (r) => (
+      <span className="font-mono text-xs text-foreground select-all">
+        {r.wallet ? `${r.wallet.slice(0, 10)}…${r.wallet.slice(-6)}` : "—"}
+      </span>
+    ),
+  },
+  { key: "total_deposited", header: "Deposited", align: "right", cell: (r) => <span className="font-mono text-xs text-emerald-400">${num(r.total_deposited).toFixed(4)}</span> },
+  { key: "total_spent", header: "Spent", align: "right", cell: (r) => <span className="font-mono text-xs text-muted-foreground">${num(r.total_spent).toFixed(4)}</span> },
+  { key: "credits_usdt", header: "Balance", align: "right", cell: (r) => <span className="font-mono text-xs text-foreground">${num(r.credits_usdt).toFixed(4)}</span> },
+];
+
+const leadCols: DataTableColumn<FreeTierLead>[] = [
+  { key: "ip", header: "IP", cell: (r) => <span className="font-mono text-xs">{maskIp(r.ip)}</span> },
+  {
+    key: "classification",
+    header: "Class",
+    cell: (r) => (
+      <Badge className={(CLASS_TONE[r.classification ?? "unknown"] ?? CLASS_TONE.unknown) + " text-[10px]"}>
+        {r.classification ?? "unknown"}
+      </Badge>
+    ),
+  },
+  { key: "calls_24h", header: "Calls (24h)", align: "right", cell: (r) => <span className="font-mono text-xs">{num(r.calls_24h).toLocaleString()}</span> },
+  {
+    key: "status",
+    header: "Stage",
+    cell: (r) => <span className="text-xs text-muted-foreground">{r.status ?? "—"}</span>,
+  },
+  {
+    key: "converted",
+    header: "Converted",
+    cell: (r) => <StatusBadge status={r.converted ? "active" : "neutral"} label={r.converted ? "YES" : "no"} />,
+  },
 ];
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserRecord[]>(INITIAL_USERS);
+  const [paying, setPaying] = useState<PayingCustomer[] | null>(null);
+  const [leads, setLeads] = useState<FreeTierLead[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [acting, setActing] = useState<string | null>(null);
 
-  const toggleUserStatus = (id: string, currentStatus: UserRecord["status"]) => {
-    setActing(id);
-    setTimeout(() => {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, status: currentStatus === "active" ? "suspended" : "active" } : u))
-      );
-      setActing(null);
-    }, 300);
-  };
+  useEffect(() => {
+    adminGet<{ paying: PayingCustomer[]; free_tier: FreeTierLead[] }>("customers/list")
+      .then((d) => {
+        // customers/list is not founder-aware — exclude founder test wallets so
+        // the "Paying Accounts" count/table reflect real external customers.
+        setPaying((d?.paying ?? []).filter((p) => !isFounderWallet(p.wallet)));
+        setLeads(d?.free_tier ?? []);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  const filteredUsers = users.filter((u) => {
-    return (
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.role.toLowerCase().includes(search.toLowerCase()) ||
-      u.walletAddress.toLowerCase().includes(search.toLowerCase())
+  const filteredLeads = useMemo(() => {
+    if (!leads) return leads;
+    const s = search.toLowerCase();
+    if (!s) return leads;
+    return leads.filter(
+      (l) => l.ip.toLowerCase().includes(s) || (l.classification ?? "").toLowerCase().includes(s) || (l.status ?? "").toLowerCase().includes(s)
     );
-  });
+  }, [leads, search]);
 
-  const roleBadge = (role: UserRecord["role"]) => {
-    return {
-      admin_super: "bg-red-500/15 text-red-400 border-red-500/30 font-mono",
-      admin_ops: "bg-orange-500/15 text-orange-400 border-orange-500/30 font-mono",
-      developer: "bg-blue-500/15 text-blue-400 border-blue-500/30 font-mono",
-      node_operator: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-mono",
-    }[role];
-  };
-
-  const cols = [
-    {
-      key: "email",
-      header: "User Identity",
-      cell: (r: UserRecord) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-xs text-foreground flex items-center gap-1">
-            <Mail className="h-3 w-3 text-muted-foreground" /> {r.email}
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">ID: {r.id}</span>
-        </div>
-      ),
-    },
-    {
-      key: "role",
-      header: "Access Role",
-      cell: (r: UserRecord) => (
-        <Badge className={roleBadge(r.role) + " text-[10px]"}>
-          {r.role.toUpperCase()}
-        </Badge>
-      ),
-    },
-    {
-      key: "keyCount",
-      header: "API Keys",
-      cell: (r: UserRecord) => (
-        <span className="text-xs text-foreground font-mono flex items-center gap-1">
-          <Key className="h-3.5 w-3.5 text-muted-foreground" /> {r.keyCount} keys
-        </span>
-      ),
-    },
-    {
-      key: "wallet",
-      header: "Payout/Signer Wallet",
-      cell: (r: UserRecord) => (
-        <span className="font-mono text-xs text-muted-foreground select-all">
-          {r.walletAddress.slice(0, 10)}…{r.walletAddress.slice(-6)}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (r: UserRecord) => (
-        <StatusBadge
-          status={r.status === "active" ? "active" : "danger"}
-          label={r.status.toUpperCase()}
-        />
-      ),
-    },
-    {
-      key: "lastActive",
-      header: "Last Activity",
-      cell: (r: UserRecord) => <span className="text-xs text-muted-foreground">{r.lastActive}</span>,
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right" as const,
-      cell: (r: UserRecord) => (
-        <div className="flex justify-end gap-1.5">
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => alert(`Adjusting daily rate-limit budgets for user ${r.email}...`)}
-          >
-            Adjust Limits
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            disabled={acting !== null}
-            onClick={() => toggleUserStatus(r.id, r.status)}
-            className={r.status === "active" ? "text-red-400 hover:text-red-500" : "text-emerald-400 hover:text-emerald-500"}
-          >
-            {r.status === "active" ? "Suspend" : "Activate"}
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const convertedCount = leads?.filter((l) => l.converted).length ?? 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <KPIGrid columns={3}>
-        <StatCard
-          label="Total User Accounts"
-          value={String(users.length)}
-          caption="Registered network platform accounts"
-          icon={Users}
-        />
-        <StatCard
-          label="Active Developers"
-          value={String(users.filter((u) => u.role === "developer" && u.status === "active").length)}
-          caption="Consuming gateway RPC capacity"
-          icon={UserCheck}
-        />
-        <StatCard
-          label="Suspended Accounts"
-          value={String(users.filter((u) => u.status === "suspended").length)}
-          caption="Flagged accounts banned from network"
-          icon={ShieldAlert}
-          accent={users.filter((u) => u.status === "suspended").length > 0}
-        />
+        <StatCard label="Paying Accounts" value={paying != null ? String(paying.length) : "—"} caption="Wallets with an on-chain deposit" icon={CircleDollarSign} loading={loading} accent={(paying?.length ?? 0) > 0} />
+        <StatCard label="Active Free-Tier Leads" value={leads != null ? String(leads.length) : "—"} caption="Identities seen in the last 24h" icon={Users} loading={loading} />
+        <StatCard label="Converted Leads" value={String(convertedCount)} caption="Advanced to deposited/paid" icon={UserCheck} loading={loading} accent={convertedCount > 0} />
       </KPIGrid>
 
+      <DashboardSection title="Paying Accounts" description="Accounts in api_credits with a USDT deposit" flush>
+        <DataTable
+          columns={payingCols}
+          rows={paying}
+          rowKey={(r) => r.wallet}
+          loading={loading}
+          emptyTitle="No paying accounts"
+          emptyDescription="No account has deposited USDT yet."
+        />
+      </DashboardSection>
+
       <DashboardSection
-        title="User Core Directory"
-        description="Search, audit, and modify access roles and gateway consumption boundaries"
+        title="Active Free-Tier Leads"
+        description="Live gateway identities from developer_intel (conversion pipeline)"
         actions={
-          <div className="flex gap-2">
-            <Input
-              placeholder="Search user profile..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-56 font-mono text-xs"
-            />
-            <Button size="sm" onClick={() => alert("Launching invite dialogue...")}>
-              <UserPlus className="h-3.5 w-3.5 mr-1" /> Add User
-            </Button>
-          </div>
+          <Input
+            placeholder="Search IP / class / stage…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-56 font-mono text-xs"
+          />
         }
         flush
       >
-        <DataTable columns={cols} rows={filteredUsers} rowKey={(r) => r.id} />
+        <DataTable
+          columns={leadCols}
+          rows={filteredLeads}
+          rowKey={(r) => r.ip}
+          loading={loading}
+          emptyTitle="No active leads"
+          emptyDescription={search ? "No leads match your search." : "No free-tier identities recorded calls in the last 24h."}
+        />
       </DashboardSection>
     </div>
   );

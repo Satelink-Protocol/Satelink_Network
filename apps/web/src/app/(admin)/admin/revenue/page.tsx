@@ -1,136 +1,140 @@
 "use client";
 
-import { useState } from "react";
-import { CircleDollarSign, CalendarDays, TrendingUp, HelpCircle } from "lucide-react";
-import {
-  Button,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-  Badge,
-  SeriesChart,
-} from "@satelink/ui";
+import { useEffect, useState } from "react";
+import { CircleDollarSign, CalendarDays, TrendingUp, Receipt } from "lucide-react";
+import { KPIGrid, StatCard, DashboardSection, DataTable, type DataTableColumn } from "@satelink/ui";
+import { DataScopeBadge } from "../_components/DataScope";
+import { adminGet } from "../_lib/adminClient";
+import { isFounderWallet } from "../_lib/format";
 
-interface CustomerCohort {
-  apiKey: string;
-  name: string;
-  totalCalls: number;
-  billedUsdt: number;
-  marginPercent: number;
-  avgLatencyMs: number;
+interface RevenueSummary {
+  total_real_usdt: number;
+  today_usdt: number;
+  mtd_usdt: number;
+  real_data_count: number;
+  is_test_data_count: number;
 }
 
-const COHORTS: CustomerCohort[] = [
-  { apiKey: "sk_live_f89c...", name: "Polygon Indexer Ingress", totalCalls: 1849102, billedUsdt: 55.4730, marginPercent: 94.2, avgLatencyMs: 42 },
-  { apiKey: "sk_live_9a22...", name: "MEV Searcher Bot 01", totalCalls: 981244, billedUsdt: 29.4373, marginPercent: 88.6, avgLatencyMs: 38 },
-  { apiKey: "sk_live_1bc8...", name: "Local Dev Test Key", totalCalls: 12450, billedUsdt: 0.3735, marginPercent: 98.1, avgLatencyMs: 82 },
-  { apiKey: "sk_live_44aa...", name: "Public Dapp Endpoint", totalCalls: 4501, billedUsdt: 0.1350, marginPercent: 91.4, avgLatencyMs: 45 },
+interface PayingCustomer {
+  wallet: string;
+  credits_usdt: number;
+  total_deposited: number;
+  total_spent: number;
+  created_at: string | number | null;
+}
+
+const num = (v: unknown) => Number(v) || 0;
+
+const cols: DataTableColumn<PayingCustomer>[] = [
+  {
+    key: "wallet",
+    header: "Wallet",
+    cell: (r) => (
+      <span className="font-mono text-xs text-foreground select-all">
+        {r.wallet ? `${r.wallet.slice(0, 10)}…${r.wallet.slice(-6)}` : "—"}
+      </span>
+    ),
+  },
+  {
+    key: "total_deposited",
+    header: "Deposited",
+    align: "right",
+    cell: (r) => <span className="font-mono text-xs text-emerald-400">${num(r.total_deposited).toFixed(4)}</span>,
+  },
+  {
+    key: "total_spent",
+    header: "Spent",
+    align: "right",
+    cell: (r) => <span className="font-mono text-xs text-muted-foreground">${num(r.total_spent).toFixed(4)}</span>,
+  },
+  {
+    key: "credits_usdt",
+    header: "Credit Balance",
+    align: "right",
+    cell: (r) => <span className="font-mono text-xs text-foreground">${num(r.credits_usdt).toFixed(4)}</span>,
+  },
 ];
 
 export default function AdminRevenuePage() {
-  const [cohorts] = useState<CustomerCohort[]>(COHORTS);
+  const [summary, setSummary] = useState<RevenueSummary | null>(null);
+  const [customers, setCustomers] = useState<PayingCustomer[] | null>(null);
+  const [founderExcluded, setFounderExcluded] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const chartData = [
-    { x: "06-19", y: 12.45 },
-    { x: "06-20", y: 15.62 },
-    { x: "06-21", y: 18.91 },
-    { x: "06-22", y: 22.45 },
-    { x: "06-23", y: 24.12 },
-    { x: "06-24", y: 28.56 },
-    { x: "06-25", y: 32.41 },
-  ];
-
-  const cols = [
-    {
-      key: "name",
-      header: "Billing Group Label",
-      cell: (r: CustomerCohort) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-xs text-foreground">{r.name}</span>
-          <span className="text-[10px] text-muted-foreground font-mono">Key: {r.apiKey}</span>
-        </div>
-      ),
-    },
-    {
-      key: "totalCalls",
-      header: "Cumulative Requests",
-      align: "right" as const,
-      cell: (r: CustomerCohort) => <span className="text-xs text-foreground font-mono">{r.totalCalls.toLocaleString()} calls</span>,
-    },
-    {
-      key: "billedUsdt",
-      header: "USDT Billed",
-      align: "right" as const,
-      cell: (r: CustomerCohort) => <span className="font-mono text-xs text-emerald-400 font-semibold">${r.billedUsdt.toFixed(4)} USDT</span>,
-    },
-    {
-      key: "avgLatencyMs",
-      header: "Avg Latency",
-      align: "right" as const,
-      cell: (r: CustomerCohort) => <span className="font-mono text-xs text-muted-foreground">{r.avgLatencyMs}ms</span>,
-    },
-    {
-      key: "marginPercent",
-      header: "Net Profit Margin",
-      align: "right" as const,
-      cell: (r: CustomerCohort) => (
-        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[11px] font-mono">
-          {r.marginPercent}%
-        </Badge>
-      ),
-    },
-  ];
-
-  const totalBilled = cohorts.reduce((sum, c) => sum + c.billedUsdt, 0);
+  useEffect(() => {
+    Promise.all([
+      adminGet<RevenueSummary>("revenue/summary"),
+      adminGet<{ paying: PayingCustomer[] }>("customers/list"),
+    ])
+      .then(([s, c]) => {
+        setSummary(s);
+        // customers/list is NOT founder-aware — strip founder wallets so this
+        // table (and the EXCLUDED badge) never counts a founder test deposit
+        // as a real paying customer.
+        const all = c?.paying ?? [];
+        const real = all.filter((p) => !isFounderWallet(p.wallet));
+        setFounderExcluded(all.length - real.length);
+        setCustomers(real);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-end">
+        <DataScopeBadge included={false} testCount={summary?.is_test_data_count ?? null} />
+      </div>
+
       <KPIGrid columns={4}>
         <StatCard
-          label="Cumulative Billed Revenue"
-          value={`$${totalBilled.toFixed(4)} USDT`}
-          caption="Total billed across all api keys"
+          label="Total Revenue (real)"
+          value={summary != null ? `$${num(summary.total_real_usdt).toFixed(4)}` : "—"}
+          caption="All-time, founder/test excluded"
           icon={CircleDollarSign}
           accent
+          loading={loading}
         />
         <StatCard
-          label="Average Margin"
-          value="93.1%"
-          caption="Margins factoring validator gas overhead"
-          icon={TrendingUp}
-          accent
-        />
-        <StatCard
-          label="Today's Revenue Runrate"
-          value="$32.41 USDT"
-          caption="Daily growth trajectory rate"
+          label="Today"
+          value={summary != null ? `$${num(summary.today_usdt).toFixed(4)}` : "—"}
+          caption="Billed since 00:00 UTC"
           icon={CalendarDays}
-          trend={{ label: "+14.2% daily", direction: "up" }}
+          loading={loading}
         />
         <StatCard
-          label="Gas Expense (POL)"
-          value="0.065 POL"
-          caption="Accrued payout transaction fees"
+          label="Month to Date"
+          value={summary != null ? `$${num(summary.mtd_usdt).toFixed(4)}` : "—"}
+          caption="Billed this month"
+          icon={TrendingUp}
+          loading={loading}
+        />
+        <StatCard
+          label="Real Revenue Events"
+          value={summary != null ? num(summary.real_data_count).toLocaleString() : "—"}
+          caption={summary != null ? `${num(summary.is_test_data_count).toLocaleString()} test events excluded` : undefined}
+          icon={Receipt}
+          loading={loading}
         />
       </KPIGrid>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <DashboardSection title="Tenants Consumption Summary" description="Core billing breakdown per API key cohort" flush>
-            <DataTable columns={cols} rows={cohorts} rowKey={(r) => r.apiKey} />
-          </DashboardSection>
-        </div>
-
-        <div>
-          <DashboardSection title="Daily Billing Revenue Timeline" description="Metered USDT credit consumption history" flush>
-            <div className="p-4 bg-zinc-900/40 border border-border border-t-0 rounded-b-md">
-              <SeriesChart title="USDT Spent" data={chartData} type="area" height={200} />
-            </div>
-          </DashboardSection>
-        </div>
-      </div>
+      <DashboardSection
+        title="Paying Customers"
+        description={
+          founderExcluded > 0
+            ? `Accounts with an on-chain USDT deposit — ${founderExcluded} founder/test wallet${founderExcluded > 1 ? "s" : ""} excluded`
+            : "Accounts with an on-chain USDT deposit (from api_credits)"
+        }
+        flush
+      >
+        <DataTable
+          columns={cols}
+          rows={customers}
+          rowKey={(r) => r.wallet}
+          loading={loading}
+          emptyTitle="No paying customers yet"
+          emptyDescription="No account has made a USDT deposit. Real paid conversion is still zero — this table populates on the first external deposit."
+        />
+      </DashboardSection>
     </div>
   );
 }

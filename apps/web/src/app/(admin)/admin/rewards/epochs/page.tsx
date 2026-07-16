@@ -1,148 +1,71 @@
 "use client";
 
-import { useState } from "react";
-import { Trophy, Compass, Plus, AlertTriangle, RefreshCw } from "lucide-react";
-import {
-  Button,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-  Badge,
-} from "@satelink/ui";
+import { useEffect, useState } from "react";
+import { Trophy, Compass, Layers } from "lucide-react";
+import { KPIGrid, StatCard, DashboardSection, DataTable, StatusBadge, type DataTableColumn } from "@satelink/ui";
 
-interface EpochRecord {
-  id: number;
-  status: "FINALIZED" | "RECONCILING" | "OPEN";
-  totalNodesPaid: number;
-  poolAmount: number;
-  gasSpentPol: number;
-  merkleVerified: boolean;
-  timestamp: string;
+interface EpochRow {
+  epoch_id: number;
+  status: string;
+  starts_at: string | number | null;
+  ends_at: string | number | null;
+  total: number | string | null;
+  node_pool_usdt: number | string | null;
+  platform_share_usdt: number | string | null;
+  distributor_share_usdt: number | string | null;
+  requests: number | string | null;
 }
 
-const INITIAL_EPOCHS: EpochRecord[] = [
-  { id: 489, status: "OPEN", totalNodesPaid: 104, poolAmount: 0.1245, gasSpentPol: 0.0, merkleVerified: false, timestamp: "Current Epoch" },
-  { id: 488, status: "RECONCILING", totalNodesPaid: 104, poolAmount: 0.0984, gasSpentPol: 0.012, merkleVerified: true, timestamp: "20 mins ago" },
-  { id: 487, status: "FINALIZED", totalNodesPaid: 102, poolAmount: 0.1042, gasSpentPol: 0.014, merkleVerified: true, timestamp: "30 mins ago" },
-  { id: 486, status: "FINALIZED", totalNodesPaid: 98, poolAmount: 0.1521, gasSpentPol: 0.021, merkleVerified: true, timestamp: "40 mins ago" },
-  { id: 485, status: "FINALIZED", totalNodesPaid: 96, poolAmount: 0.0874, gasSpentPol: 0.018, merkleVerified: true, timestamp: "50 mins ago" },
+const num = (v: unknown) => Number(v) || 0;
+
+const cols: DataTableColumn<EpochRow>[] = [
+  { key: "epoch_id", header: "Epoch", cell: (r) => <span className="font-mono text-xs font-semibold text-foreground">E{r.epoch_id}</span> },
+  {
+    key: "status",
+    header: "Status",
+    cell: (r) => {
+      const s = String(r.status || "").toUpperCase();
+      return <StatusBadge status={s === "CLOSED" || s === "FINALIZED" ? "active" : s === "OPEN" ? "pending" : "neutral"} label={s || "—"} />;
+    },
+  },
+  { key: "total", header: "Revenue", align: "right", cell: (r) => <span className="font-mono text-xs text-emerald-400">${num(r.total).toFixed(4)}</span> },
+  { key: "node_pool_usdt", header: "Node Pool", align: "right", cell: (r) => <span className="font-mono text-xs text-muted-foreground">${num(r.node_pool_usdt).toFixed(4)}</span> },
+  { key: "platform_share_usdt", header: "Platform", align: "right", cell: (r) => <span className="font-mono text-xs text-muted-foreground">${num(r.platform_share_usdt).toFixed(4)}</span> },
+  { key: "requests", header: "Requests", align: "right", cell: (r) => <span className="font-mono text-xs">{num(r.requests).toLocaleString()}</span> },
 ];
 
 export default function AdminEpochsPage() {
-  const [epochs, setEpochs] = useState<EpochRecord[]>(INITIAL_EPOCHS);
-  const [loading, setLoading] = useState(false);
+  const [epochs, setEpochs] = useState<EpochRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const triggerEpochFinalize = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setEpochs((prev) => {
-        const nextEpochId = prev[0].id + 1;
-        const finalized = prev.map((e) =>
-          e.status === "OPEN" ? { ...e, status: "FINALIZED" as const, merkleVerified: true, gasSpentPol: 0.015 } : e
-        );
-        return [
-          { id: nextEpochId, status: "OPEN" as const, totalNodesPaid: 104, poolAmount: 0.0, gasSpentPol: 0.0, merkleVerified: false, timestamp: "Current Epoch" },
-          ...finalized,
-        ];
-      });
-      setLoading(false);
-      alert("Epoch finalized! Ledger calculated and Merkle proofs generated.");
-    }, 1500);
-  };
+  useEffect(() => {
+    fetch("/api/epochs")
+      .then((r) => r.json())
+      .then((d) => setEpochs(d?.ok && Array.isArray(d.epochs) ? d.epochs : []))
+      .catch(() => setEpochs([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const cols = [
-    {
-      key: "id",
-      header: "Epoch ID",
-      cell: (r: EpochRecord) => <span className="font-mono text-xs font-semibold text-foreground">Epoch {r.id}</span>,
-    },
-    {
-      key: "status",
-      header: "Epoch Lifecycle",
-      cell: (r: EpochRecord) => (
-        <StatusBadge
-          status={r.status === "FINALIZED" ? "active" : r.status === "RECONCILING" ? "pending" : "neutral"}
-          label={r.status}
-        />
-      ),
-    },
-    {
-      key: "totalNodesPaid",
-      header: "Active Node Hosts",
-      cell: (r: EpochRecord) => <span className="text-xs text-foreground font-mono">{r.totalNodesPaid} nodes</span>,
-    },
-    {
-      key: "poolAmount",
-      header: "Reward Pool",
-      align: "right" as const,
-      cell: (r: EpochRecord) => <span className="font-mono text-xs text-emerald-400">${r.poolAmount.toFixed(4)} USDT</span>,
-    },
-    {
-      key: "gasSpentPol",
-      header: "Payout Gas Fees",
-      align: "right" as const,
-      cell: (r: EpochRecord) => <span className="font-mono text-xs text-muted-foreground">{r.gasSpentPol.toFixed(3)} POL</span>,
-    },
-    {
-      key: "merkleVerified",
-      header: "Consensus Proof",
-      cell: (r: EpochRecord) => (
-        <Badge
-          variant={r.merkleVerified ? "outline" : "secondary"}
-          className={
-            r.merkleVerified
-              ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10 text-[10px]"
-              : "text-zinc-500 text-[10px]"
-          }
-        >
-          {r.merkleVerified ? "✓ Merkle Root Confirmed" : "—"}
-        </Badge>
-      ),
-    },
-    {
-      key: "timestamp",
-      header: "Ended",
-      cell: (r: EpochRecord) => <span className="text-xs text-muted-foreground">{r.timestamp}</span>,
-    },
-  ];
+  const open = epochs?.find((e) => String(e.status).toUpperCase() === "OPEN");
+  const finalized = epochs?.filter((e) => ["CLOSED", "FINALIZED"].includes(String(e.status).toUpperCase())).length ?? 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <KPIGrid columns={3}>
-        <StatCard
-          label="Active Epoch ID"
-          value={`E${epochs.find((e) => e.status === "OPEN")?.id ?? "—"}`}
-          caption="Accumulating reward telemetry data"
-          icon={Compass}
-          accent
-        />
-        <StatCard
-          label="Estimated Epoch Reward"
-          value="0.1245 USDT"
-          caption="Accrued value inside active pool"
-          icon={Trophy}
-        />
-        <StatCard
-          label="Finalized Epochs"
-          value={String(epochs.filter((e) => e.status === "FINALIZED").length)}
-          caption="Total reward distribution rounds completed"
-        />
+        <StatCard label="Active Epoch" value={open ? `E${open.epoch_id}` : "—"} caption="Currently accumulating" icon={Compass} loading={loading} accent={!!open} />
+        <StatCard label="Active Epoch Revenue" value={open ? `$${num(open.total).toFixed(4)} USDT` : "—"} caption="Accrued in the open epoch" icon={Trophy} loading={loading} />
+        <StatCard label="Finalized Epochs" value={String(finalized)} caption="Closed / finalized rounds" icon={Layers} loading={loading} />
       </KPIGrid>
 
-      <DashboardSection
-        title="Reward Epoch Coordinator"
-        description="Oversee the lifecycle of consensus-reward distribution pools"
-        actions={
-          <Button size="sm" onClick={triggerEpochFinalize} disabled={loading}>
-            {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-            Finalize Active Epoch
-          </Button>
-        }
-        flush
-      >
-        <DataTable columns={cols} rows={epochs} rowKey={(r) => String(r.id)} />
+      <DashboardSection title="Reward Epochs" description="Epoch lifecycle and revenue split (from epochs table)" flush>
+        <DataTable
+          columns={cols}
+          rows={epochs}
+          rowKey={(r) => String(r.epoch_id)}
+          loading={loading}
+          emptyTitle="No epochs yet"
+          emptyDescription="No epochs have been opened. The epoch scheduler creates these server-side."
+        />
       </DashboardSection>
     </div>
   );
