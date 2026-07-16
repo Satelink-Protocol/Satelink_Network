@@ -11,6 +11,7 @@ import {
 } from "@satelink/ui";
 import { DataScopeBadge } from "./_components/DataScope";
 import { adminGet } from "./_lib/adminClient";
+import { fmtResult } from "./_lib/format";
 
 // /admin/revenue/summary already excludes founder/test rows via
 // FILTER (WHERE NOT is_test_data) — the UI consumes it instead of the
@@ -26,7 +27,7 @@ interface RevenueSummary {
 interface JobRow {
   job_name: string;
   action: string | null;
-  result: string | null;
+  result: unknown; // automation_logs.result is a parsed JSON value, not a string
   created_at: string | number | null;
 }
 
@@ -102,7 +103,7 @@ export default function AdminCommandCenterPage() {
       header: "Result",
       cell: (r: JobRow) => (
         <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[260px] block">
-          {r.result ?? "—"}
+          {fmtResult(r.result)}
         </span>
       ),
     },

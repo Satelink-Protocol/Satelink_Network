@@ -5,6 +5,7 @@ import { CircleDollarSign, CalendarDays, TrendingUp, Receipt } from "lucide-reac
 import { KPIGrid, StatCard, DashboardSection, DataTable, type DataTableColumn } from "@satelink/ui";
 import { DataScopeBadge } from "../_components/DataScope";
 import { adminGet } from "../_lib/adminClient";
+import { isFounderWallet } from "../_lib/format";
 
 interface RevenueSummary {
   total_real_usdt: number;
@@ -57,6 +58,7 @@ const cols: DataTableColumn<PayingCustomer>[] = [
 export default function AdminRevenuePage() {
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [customers, setCustomers] = useState<PayingCustomer[] | null>(null);
+  const [founderExcluded, setFounderExcluded] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -66,7 +68,13 @@ export default function AdminRevenuePage() {
     ])
       .then(([s, c]) => {
         setSummary(s);
-        setCustomers(c?.paying ?? []);
+        // customers/list is NOT founder-aware — strip founder wallets so this
+        // table (and the EXCLUDED badge) never counts a founder test deposit
+        // as a real paying customer.
+        const all = c?.paying ?? [];
+        const real = all.filter((p) => !isFounderWallet(p.wallet));
+        setFounderExcluded(all.length - real.length);
+        setCustomers(real);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -111,7 +119,11 @@ export default function AdminRevenuePage() {
 
       <DashboardSection
         title="Paying Customers"
-        description="Accounts with an on-chain USDT deposit (from api_credits)"
+        description={
+          founderExcluded > 0
+            ? `Accounts with an on-chain USDT deposit — ${founderExcluded} founder/test wallet${founderExcluded > 1 ? "s" : ""} excluded`
+            : "Accounts with an on-chain USDT deposit (from api_credits)"
+        }
         flush
       >
         <DataTable

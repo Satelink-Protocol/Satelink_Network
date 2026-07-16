@@ -13,6 +13,7 @@ import {
   type DataTableColumn,
 } from "@satelink/ui";
 import { adminGet } from "../_lib/adminClient";
+import { isFounderWallet } from "../_lib/format";
 
 interface PayingCustomer {
   wallet: string;
@@ -95,7 +96,9 @@ export default function AdminUsersPage() {
   useEffect(() => {
     adminGet<{ paying: PayingCustomer[]; free_tier: FreeTierLead[] }>("customers/list")
       .then((d) => {
-        setPaying(d?.paying ?? []);
+        // customers/list is not founder-aware — exclude founder test wallets so
+        // the "Paying Accounts" count/table reflect real external customers.
+        setPaying((d?.paying ?? []).filter((p) => !isFounderWallet(p.wallet)));
         setLeads(d?.free_tier ?? []);
       })
       .finally(() => setLoading(false));

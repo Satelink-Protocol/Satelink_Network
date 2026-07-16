@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button, KPIGrid, StatCard, DashboardSection, DataTable, StatusBadge, Badge, type DataTableColumn } from "@satelink/ui";
 import { adminGet } from "../../_lib/adminClient";
+import { fmtResult } from "../../_lib/format";
 
 interface Metrics {
   cpu_pct: number;
@@ -18,7 +19,7 @@ interface Metrics {
 interface JobRow {
   job_name: string;
   action: string | null;
-  result: string | null;
+  result: unknown; // parsed JSON value, not a string
   created_at: string | number | null;
 }
 
@@ -108,7 +109,7 @@ export default function AdminSelfTestsPage() {
           columns={[
             { key: "job_name", header: "Job", cell: (r: JobRow) => <span className="font-mono text-xs font-semibold text-foreground">{r.job_name}</span> },
             { key: "action", header: "Action", cell: (r: JobRow) => <Badge variant="outline" className="text-[10px]">{r.action || "—"}</Badge> },
-            { key: "result", header: "Result", cell: (r: JobRow) => <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[320px] block">{r.result ?? "—"}</span> },
+            { key: "result", header: "Result", cell: (r: JobRow) => <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[320px] block">{fmtResult(r.result)}</span> },
           ]}
           rows={jobs}
           rowKey={(r) => r.job_name}

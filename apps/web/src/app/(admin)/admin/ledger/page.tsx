@@ -70,8 +70,8 @@ export default function AdminLedgerPage() {
         />
         <StatCard
           label="Signer Balance (POL)"
-          value={t != null ? `${num(t.signer_balance_pol).toFixed(4)}` : "—"}
-          caption="Hot signer gas reserve"
+          value={t?.signer_balance_pol != null ? `${num(t.signer_balance_pol).toFixed(4)}` : "—"}
+          caption={t != null && t.signer_balance_pol == null ? "Balance lookup unavailable" : "Hot signer gas reserve"}
           icon={Fuel}
           loading={loading}
         />
