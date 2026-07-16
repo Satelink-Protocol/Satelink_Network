@@ -164,5 +164,5 @@ apps/web/node_modules/
 scripts/refund_signer.js
 glm-agent/
 
-# generated machine-revenue reports (machine_revenue_report.js)
+# generated machine reports (machine_revenue_report.js / machine_crm.js)
 apps/api/reports/
