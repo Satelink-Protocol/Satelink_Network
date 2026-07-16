@@ -7,6 +7,7 @@
  */
 
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
+import { isDebug } from '../../utils/log_level.js';
 
 const REQUEST_TIMEOUT_MS = 15000; // 15s to account for serverless cold starts
 const HEARTBEAT_THRESHOLD_SECONDS = 300; // 5 minutes
@@ -182,7 +183,7 @@ export async function forwardToNode(node, rpcRequest) {
   try {
     const response = await fetch(node.endpoint_url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'gzip, br' },
       body: JSON.stringify(rpcRequest),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
@@ -276,7 +277,7 @@ export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, meth
       });
     }
 
-    console.log(`[NodeDispatcher] ✓ ${nodeId} served ${method} (${isPaid ? '$' + usdtValue : 'free'}) ${latencyMs}ms`);
+    if (isDebug) console.log(`[NodeDispatcher] ✓ ${nodeId} served ${method} (${isPaid ? '$' + usdtValue : 'free'}) ${latencyMs}ms`);
 
   } catch (err) {
     console.error('[NodeDispatcher] recordNodeSuccess error:', err.message);

@@ -4,6 +4,7 @@ import { startRpcHealer } from './rpc_healer.js'
 import { startRevenueMonitor } from './revenue_anomaly.js'
 import { startTreasuryMonitor } from './treasury_monitor.js'
 import { startCapacityAlerter } from './capacity_alerter.js'
+import { isDebug } from '../utils/log_level.js'
 
 export async function startSentinel(pool, redis) {
   console.log('[Sentinel] Started — autonomous operations active')
@@ -23,7 +24,7 @@ export async function startSentinel(pool, redis) {
       }
       const revenue = await pool.query("SELECT COALESCE(SUM(amount_usdt),0) as total FROM revenue_events_v2 WHERE created_at > $1", [Math.floor(Date.now()/1000) - 3600])
       // Redis eliminated — revenue tracking is logged only
-      console.log(`[Sentinel] Revenue last hour: ${revenue.rows[0].total} USDT`)
+      if (isDebug) console.log(`[Sentinel] Revenue last hour: ${revenue.rows[0].total} USDT`)
     } catch(e) { console.error('[Sentinel] Error:', e.message) }
   }, 60000)
 

@@ -7,6 +7,7 @@
  */
 
 import { getProviders, getChainConfig, CHAIN_ALIASES } from "./providers.js";
+import { isDebug } from '../../utils/log_level.js';
 import {
   isOpen,
   recordSuccess,
@@ -107,7 +108,7 @@ function sortProvidersByLatency(providersWithLatency) {
   });
 }
 
-async function executeRpcCall(providerUrl, method, params, id) {
+async function executeRpcCall(providerUrl, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -116,13 +117,8 @@ async function executeRpcCall(providerUrl, method, params, id) {
   try {
     const response = await fetch(providerUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method,
-        params: params || [],
-        id: id || 1,
-      }),
+      headers: { "Content-Type": "application/json", "Accept-Encoding": "gzip, br" },
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -156,8 +152,12 @@ const EMERGENCY_FALLBACKS = {
   'polygon-amoy': 'https://rpc-amoy.polygon.technology'
 };
 
-export async function routeRpcRequest(chain, method, params, id, options = {}) {
+export async function routeRpcRequest(chain, body, options = {}) {
   const { apiKey, requestId, billedUsdt } = options;
+
+  const isBatch = Array.isArray(body);
+  const method = isBatch ? body[0].method : body.method;
+  const id = isBatch ? 'batch' : body.id;
 
   const chainConfig = getChainConfig(chain);
   if (!chainConfig) {
@@ -184,14 +184,9 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
         });
 
         if (node) {
-          console.log(`[RPC Router] Trying network node: ${node.node_id} (${node.region})`);
+          if (isDebug) console.log(`[RPC Router] Trying network node: ${node.node_id} (${node.region})`);
 
-          const result = await forwardToNode(node, {
-            jsonrpc: '2.0',
-            method,
-            params: params || [],
-            id: id || 1
-          });
+          const result = await forwardToNode(node, body);
 
           if (result.success) {
             // Fire-and-forget: record revenue attribution to node
@@ -207,7 +202,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
               }).catch(() => {});
             });
 
-            console.log(`[RPC Router] ✓ Network node ${node.node_id} served ${method} (${result.latencyMs}ms)`);
+            if (isDebug) console.log(`[RPC Router] ✓ Network node ${node.node_id} served ${method} (${result.latencyMs}ms)`);
 
             return {
               success: true,
@@ -230,7 +225,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
         }
       }
 
-      console.log('[RPC Router] No network nodes available, falling back to external providers');
+      if (isDebug) console.log('[RPC Router] No network nodes available, falling back to external providers');
     } catch (dispatcherErr) {
       // Dispatcher error must NOT kill the request — fall through to providers
       console.error('[RPC Router] Dispatcher error, falling back:', dispatcherErr.message);
@@ -282,16 +277,12 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
   while (remainingProviders.length > 0) {
     const provider = selectWeightedProvider(remainingProviders);
 
-    // 🔥 NEW DEBUG LOG (BEFORE CALL)
-    console.log(`[RPC Router DEBUG] Trying → ${chain} → ${provider.id}`);
 
     attemptedProviders.push(provider.id);
 
     const { success, result, error, latency } = await executeRpcCall(
       provider.url,
-      method,
-      params,
-      id,
+      body
     );
 
     if (success) {
@@ -300,7 +291,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
       updateLatency(chain, provider.id, latency).catch(() => {});
       incrementRequestCount(chain, provider.id).catch(() => {});
 
-      console.log(
+      if (isDebug) console.log(
         `[RPC Router] ${chain} → ${provider.id} (${latency}ms) [weighted]`,
       );
 
@@ -329,9 +320,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
 
     const { success, result, error, latency } = await executeRpcCall(
       emergencyUrl,
-      method,
-      params,
-      id
+      body
     );
 
     if (success) {

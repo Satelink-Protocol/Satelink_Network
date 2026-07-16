@@ -1,0 +1,17 @@
+{
+  "name": "@satelink/mcp",
+  "version": "1.0.0",
+  "description": "Satelink MCP Server for AI Agents",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "satelink-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.1.1",
+    "ethers": "^6.13.0"
+  }
+}

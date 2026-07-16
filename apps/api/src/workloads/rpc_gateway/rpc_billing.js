@@ -85,7 +85,6 @@ export async function recordRpcRevenue({ pool, chain, method, apiKey, source, re
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000), chain || null, method || null, source || null]
     );
-    console.log(`[Billing] ✓ $${costUsdt}`);
 
     broadcaster.publish('revenue:event', {
       amount_usdt: costUsdt,

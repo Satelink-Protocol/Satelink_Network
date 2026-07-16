@@ -604,7 +604,7 @@ async function start() {
          SET status = 'active', last_heartbeat_at = $3, updated_at = $3`,
         [SELF_NODE_ID, SELF_NODE_WALLET, now]
       );
-      console.log(`[Self-Heartbeat] ✅ ${SELF_NODE_ID} heartbeat sent`);
+      // heartbeat success — silent in production (288/day is pure noise)
     } catch (err) {
       console.error('[Self-Heartbeat] ❌ Failed:', err.message);
     }

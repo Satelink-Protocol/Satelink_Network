@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import { isDebug } from '../../utils/log_level.js';
 import { routeRpcRequest, getRouterStats, initRouterWithPool, getNodeRoutingStatus } from './router.js';
 import { getSupportedChains, getChainConfig, CHAIN_ALIASES } from './providers.js';
 import { getCached, setCached, isCacheable, getCacheStats } from './cache.js';
@@ -51,6 +52,35 @@ function getClientIp(req) {
            req.headers['x-real-ip'] ||
            req.socket?.remoteAddress ||
            'unknown';
+}
+
+async function trackAttribution(pool, apiKey, headers, paymentStatus) {
+    if (!pool || !pool.query) return;
+    const partnerId = headers['x-satelink-partner'];
+    if (!partnerId) return; // Only track requests with partner identification
+    
+    const integration = headers['x-satelink-integration'] || null;
+    const source = headers['x-satelink-source'] || null;
+    const sdk = headers['x-satelink-sdk'] || null;
+    const machineId = headers['x-machine-id'] || null;
+    const resolvedKey = apiKey || 'public';
+
+    const sql = `
+        INSERT INTO api_client_attribution 
+            (api_key, partner_id, integration, source, sdk, machine_id, first_seen, last_seen, payment_status)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), $7)
+        ON CONFLICT (api_key) DO UPDATE SET
+            last_seen = NOW(),
+            partner_id = COALESCE(EXCLUDED.partner_id, api_client_attribution.partner_id),
+            integration = COALESCE(EXCLUDED.integration, api_client_attribution.integration),
+            source = COALESCE(EXCLUDED.source, api_client_attribution.source),
+            sdk = COALESCE(EXCLUDED.sdk, api_client_attribution.sdk),
+            machine_id = COALESCE(EXCLUDED.machine_id, api_client_attribution.machine_id),
+            payment_status = EXCLUDED.payment_status
+    `;
+    pool.query(sql, [resolvedKey, partnerId, integration, source, sdk, machineId, paymentStatus]).catch(err => {
+        console.error('[Attribution] Failed to track partner:', err.message);
+    });
 }
 
 export function createRpcGateway(db) {
@@ -207,6 +237,7 @@ export function createRpcGateway(db) {
         // not derivable from any request header). Revenue for that call was
         // already recorded at settlement with demand_source='x402'.
         if (!apiKey && !walletHdr && !req.x402?.settled) {
+            trackAttribution(db, apiKey, req.headers, 'payment_required');
             return res.status(402).json(PAYMENT_REQUIRED_BODY);
         }
 
@@ -221,12 +252,30 @@ export function createRpcGateway(db) {
 
         const body = req.body;
 
-        if (!body || body.jsonrpc !== '2.0' || !body.method) {
-            return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC 2.0 payload: requires jsonrpc="2.0" and method' });
-        }
+        const isBatch = Array.isArray(body);
+        let validRequests = 0;
+        let firstMethod = 'unknown';
 
-        if (typeof body.method !== 'string' || body.method.length === 0) {
-            return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC method' });
+        if (isBatch) {
+            if (body.length === 0) {
+                return res.status(400).json({ ok: false, error: 'Empty batch request' });
+            }
+            if (body.length > 50) {
+                return res.status(400).json({ ok: false, error: 'Batch size exceeds maximum limit of 50' });
+            }
+            for (const reqObj of body) {
+                if (!reqObj || reqObj.jsonrpc !== '2.0' || !reqObj.method || typeof reqObj.method !== 'string' || reqObj.method.length === 0) {
+                    return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC 2.0 payload in batch' });
+                }
+            }
+            validRequests = body.length;
+            firstMethod = body[0].method;
+        } else {
+            if (!body || body.jsonrpc !== '2.0' || !body.method || typeof body.method !== 'string' || body.method.length === 0) {
+                return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC 2.0 payload: requires jsonrpc="2.0" and method' });
+            }
+            validRequests = 1;
+            firstMethod = body.method;
         }
 
         // ── AUTHORIZE + METER ────────────────────────────────────────────────
@@ -239,7 +288,7 @@ export function createRpcGateway(db) {
             // No Redis, no credit_balances, no anonymous downgrade (unknown key → 401).
             let verdict;
             try {
-                verdict = await authorizeAndMeter(db, { apiKey, wallet: walletHdr });
+                verdict = await authorizeAndMeter(db, { apiKey, wallet: walletHdr, batchSize: validRequests });
             } catch (err) {
                 console.error('[RPC Gateway] creditService error (fail-open + alert):', err.message);
                 verdict = { ok: true, tier: 'unknown', remaining: null, limit: null, balanceAfter: null, degraded: true };
@@ -247,6 +296,7 @@ export function createRpcGateway(db) {
             res.set('X-Credit-Source', 'api_credits');
             if (!verdict.ok) {
                 if (verdict.code === 'account_not_found') {
+                    trackAttribution(db, apiKey, req.headers, 'payment_required');
                     return res.status(402).json(PAYMENT_REQUIRED_BODY);
                 }
                 const payload = { ok: false, error: verdict.code, message: verdict.message };
@@ -264,6 +314,7 @@ export function createRpcGateway(db) {
                     payload.manifest_url = `${apiBase}/.well-known/satelink.json`;
                     payload.pricing_url = `${apiBase}/v1/pricing`;
                 }
+                trackAttribution(db, apiKey, req.headers, verdict.code);
                 return res.status(verdict.http || 402).json(payload);
             }
             res.set({
@@ -274,6 +325,7 @@ export function createRpcGateway(db) {
             });
             // Only a real deduction (paid tier, cost > 0) bills revenue.
             billedUsdt = Number(verdict.cost) > 0 ? Number(verdict.cost) : 0;
+            trackAttribution(db, apiKey, req.headers, 'active');
         } else {
             // LEGACY: Redis rate-limit (flag off, or anonymous public traffic).
             // An x402-settled call is paid per-request: the per-IP daily counter
@@ -284,7 +336,7 @@ export function createRpcGateway(db) {
                 rateCheck = { allowed: true, tier: 'x402', remaining: null, limit: null };
             } else {
                 try {
-                    const ratePromise = checkRateLimit(apiKey, clientIp);
+                    const ratePromise = checkRateLimit(apiKey, clientIp, validRequests);
                     const timeoutPromise = new Promise((_, reject) =>
                         setTimeout(() => reject(new Error('Rate limit timeout')), 500)
                     );
@@ -302,6 +354,7 @@ export function createRpcGateway(db) {
 
             if (!rateCheck.allowed) {
                 res.set('X-RateLimit-Reset', rateCheck.resetAt);
+                trackAttribution(db, apiKey, req.headers, 'rate_limit_exceeded');
                 return res.status(429).json({
                     error: 'rate_limit_exceeded',
                     upgrade_url: `${process.env.API_BASE_URL || 'https://rpc.satelink.network'}/credits/initiate?amount=10`,
@@ -312,22 +365,25 @@ export function createRpcGateway(db) {
             }
 
             // Usage tracking - fire and forget (non-blocking)
-            incrementUsage(apiKey, clientIp).catch(() => {});
+            incrementUsage(apiKey, clientIp, validRequests).catch(() => {});
+            trackAttribution(db, apiKey, req.headers, 'active');
         }
 
         const request_id = `rpc_${crypto.randomUUID()}`;
-        const method = body.method;
-        const params = body.params || [];
+        const method = firstMethod;
+        const params = isBatch ? [] : (body.params || []);
 
         try {
             // Cache check with 300ms timeout
             let cachedResponse = null;
-            try {
-                const cachePromise = getCached(chain, method, params);
-                const cacheTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 300));
-                cachedResponse = await Promise.race([cachePromise, cacheTimeout]);
-            } catch {
-                // Cache miss, continue
+            if (!isBatch) {
+                try {
+                    const cachePromise = getCached(chain, method, params);
+                    const cacheTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 300));
+                    cachedResponse = await Promise.race([cachePromise, cacheTimeout]);
+                } catch {
+                    // Cache miss, continue
+                }
             }
 
             if (cachedResponse) {
@@ -347,7 +403,7 @@ export function createRpcGateway(db) {
                 return res.status(200).json({ ...cachedResponse, id: body.id ?? null });
             }
 
-            const routeResult = await routeRpcRequest(chain, method, params, body.id, {
+            const routeResult = await routeRpcRequest(chain, body, {
                 apiKey,
                 requestId: request_id,
                 billedUsdt
@@ -358,7 +414,7 @@ export function createRpcGateway(db) {
             }
 
             // Cache set - fire and forget
-            if (isCacheable(method)) {
+            if (!isBatch && isCacheable(method)) {
                 setCached(chain, method, params, routeResult.result).catch(() => {});
             }
 
@@ -377,7 +433,7 @@ export function createRpcGateway(db) {
             }
 
             const elapsed = Date.now() - startTime;
-            console.log(`[RPC Gateway] ${chain}/${method} → ${routeResult.provider} (${elapsed}ms)`);
+            if (isDebug) console.log(`[RPC Gateway] ${chain}/${method} → ${routeResult.provider} (${elapsed}ms)`);
 
             res.status(200).json(routeResult.result);
         } catch (error) {

@@ -397,6 +397,18 @@ CREATE INDEX IF NOT EXISTS idx_auth_nonces_address ON auth_nonces(address);
 CREATE INDEX IF NOT EXISTS idx_auth_nonces_expiry ON auth_nonces(expires_at);
 
 -- ── Observability ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS api_client_attribution (
+    api_key TEXT PRIMARY KEY,
+    partner_id TEXT,
+    integration TEXT,
+    source TEXT,
+    sdk TEXT,
+    machine_id TEXT,
+    first_seen TIMESTAMP DEFAULT NOW(),
+    last_seen TIMESTAMP DEFAULT NOW(),
+    payment_status TEXT
+);
+
 CREATE TABLE IF NOT EXISTS api_usage (
     id SERIAL PRIMARY KEY,
     builder_wallet TEXT,

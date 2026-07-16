@@ -103,7 +103,7 @@ export async function getApiKeyInfo(apiKey) {
   }
 }
 
-export async function checkRateLimit(apiKey, ip) {
+export async function checkRateLimit(apiKey, ip, batchSize = 1) {
   const client = getRedis();
   const date = getDateKey();
 
@@ -131,7 +131,7 @@ export async function checkRateLimit(apiKey, ip) {
   try {
     const current = parseInt(await client.get(usageKey)) || 0;
 
-    if (current >= limit) {
+    if (current + batchSize > limit) {
       return {
         allowed: false,
         tier,
@@ -144,7 +144,7 @@ export async function checkRateLimit(apiKey, ip) {
     return {
       allowed: true,
       tier,
-      remaining: limit - current - 1,
+      remaining: limit - current - batchSize,
       limit
     };
   } catch (err) {
@@ -153,7 +153,7 @@ export async function checkRateLimit(apiKey, ip) {
   }
 }
 
-export async function incrementUsage(apiKey, ip) {
+export async function incrementUsage(apiKey, ip, batchSize = 1) {
   const client = getRedis();
   if (!client) return;
 
@@ -172,7 +172,7 @@ export async function incrementUsage(apiKey, ip) {
   }
 
   try {
-    await client.incr(usageKey);
+    await client.incrby(usageKey, batchSize);
     await client.expire(usageKey, 86400 * 2);
   } catch (err) {
     console.error('[RateLimiter] Increment failed:', err.message);

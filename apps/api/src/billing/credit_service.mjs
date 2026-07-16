@@ -90,7 +90,7 @@ export function costFor(account, methodPrice) {
  * @returns {Promise<{ok:true, tier, cost, balanceAfter, remaining}
  *                  | {ok:false, code, http, message, ...}>}
  */
-export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = {}) {
+export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, batchSize = 1 } = {}) {
   if (!pool || !pool.query) {
     // Fail-open for infra absence (no DB) — never block on missing pool.
     return { ok: true, tier: 'free', cost: 0, balanceAfter: null, remaining: null, degraded: true };
@@ -109,7 +109,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = 
 
   // 1. Daily-limit (rate) gate — authoritative from Postgres usage.
   const used = await getDailyCount(pool, key);
-  if (used >= limit) {
+  if (used + batchSize > limit) {
     return {
       ok: false, code: 'daily_limit_exceeded', http: 429,
       tier: account.tier, limit, used,
@@ -118,7 +118,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = 
   }
 
   // 2. Balance gate (paid tiers only). Atomic deduct; never goes negative.
-  const cost = costFor(account, methodPrice);
+  const cost = costFor(account, methodPrice) * batchSize;
   let balanceAfter = parseFloat(account.credits_usdt || 0);
   if (cost > 0) {
     const ded = await pool.query(
@@ -147,11 +147,11 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = 
   // 3. Usage metering — record the request (and usd spent) for this key/day.
   await pool.query(
     `INSERT INTO api_usage_daily (api_key, date, request_count, usdt_spent)
-       VALUES ($1, CURRENT_DATE, 1, $2)
+       VALUES ($1, CURRENT_DATE, $3, $2)
      ON CONFLICT (api_key, date) DO UPDATE
-       SET request_count = api_usage_daily.request_count + 1,
+       SET request_count = api_usage_daily.request_count + $3,
            usdt_spent    = api_usage_daily.usdt_spent + $2`,
-    [key, cost]
+    [key, cost, batchSize]
   );
 
   return {

@@ -10,8 +10,9 @@
  */
 
 import { PROVIDER_CONFIGS } from './providers.js';
+import { isDebug } from '../../utils/log_level.js';
 
-const HEALTH_CHECK_INTERVAL = 60_000;
+const HEALTH_CHECK_INTERVAL = 300_000;
 const ALERT_THRESHOLD_ERROR_RATE = 0.3;
 const ALERT_THRESHOLD_LATENCY_MS = 5000;
 const ALERT_COOLDOWN_MS = 300_000;
@@ -197,12 +198,15 @@ function shouldAlert(key) {
 }
 
 async function runHealthChecks() {
-  console.log('[Health Monitor] Starting health check cycle');
+  if (isDebug) console.log('[Health Monitor] Starting health check cycle');
 
   const results = [];
 
   for (const chain of Object.keys(PROVIDER_CONFIGS)) {
     for (const provider of PROVIDER_CONFIGS[chain].providers) {
+      // Skip disabled providers — no point probing endpoints we never route to
+      if (provider.enabled === false || !provider.url) continue;
+
       const key = `${chain}:${provider.id}`;
       const result = await checkProvider(chain, provider);
       results.push({ key, ...result });
@@ -230,7 +234,7 @@ async function runHealthChecks() {
 
   const healthy = results.filter(r => r.success).length;
   const total = results.length;
-  console.log(`[Health Monitor] Cycle complete: ${healthy}/${total} healthy`);
+  if (isDebug) console.log(`[Health Monitor] Cycle complete: ${healthy}/${total} healthy`);
 }
 
 let healthCheckInterval = null;

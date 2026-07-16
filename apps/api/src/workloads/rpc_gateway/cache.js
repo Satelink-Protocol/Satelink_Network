@@ -91,7 +91,6 @@ export async function getCached(chain, method, params) {
     const cached = await client.get(key);
     if (cached) {
       cacheStats.hits++;
-      console.log(`[RPC Cache] HIT ${method} (${key.slice(-20)})`);
       return JSON.parse(cached);
     }
   } catch (err) {
@@ -121,7 +120,6 @@ export async function setCached(chain, method, params, response) {
 
   try {
     await client.set(key, JSON.stringify(response), 'EX', ttl);
-    console.log(`[RPC Cache] SET ${method} TTL=${ttl}s`);
   } catch (err) {
     console.error('[RPC Cache] Set failed:', err.message);
   }

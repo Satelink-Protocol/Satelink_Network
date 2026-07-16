@@ -49,7 +49,10 @@ export function createApp(pool, redis) {
     .catch(e => console.error('[Admin] Table setup failed:', e.message));
 
   // Core health endpoints
-  app.get("/healthz", (req, res) => res.status(200).json({ status: "ok" }));
+  app.get("/healthz", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ status: "ok" });
+  });
 
   // Enhanced public health endpoint — ALWAYS returns 200 for Railway
   app.get("/health", async (req, res) => {
@@ -108,6 +111,7 @@ app.get("/api/mode", (req, res) => {
       console.warn("[Pricing] rpc_method_pricing unavailable, using defaults:", e.message);
     }
 
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.json({
       provider: "Satelink",
       network: "Polygon PoS",
@@ -168,8 +172,9 @@ app.get("/api/mode", (req, res) => {
 
   // GET /api/diagnostics — system health for agents and dashboards (no auth required)
   app.get("/api/diagnostics", async (req, res) => {
-    const t0 = Date.now();
     try {
+      const t0 = Date.now();
+      res.setHeader("Cache-Control", "public, max-age=60");
       const [dbPing, nodeCount, epochCount, revenueSum] = await Promise.all([
         pool.query('SELECT 1').then(() => ({ ok: true, latencyMs: Date.now() - t0 })).catch(e => ({ ok: false, error: e.message })),
         pool.query(`SELECT COUNT(*) AS cnt FROM registered_nodes WHERE status = 'active'`).catch(() => ({ rows: [{ cnt: 0 }] })),
@@ -205,6 +210,7 @@ app.get("/api/mode", (req, res) => {
   // GET /api/status — Live network status for machine monitoring
   app.get("/api/status", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "public, max-age=30");
       // current_epoch reads epoch_ledger (the live settlement ledger that
       // /api/settlement/history serves) — the `epochs` table lags it by hundreds
       // of epochs. total_requests_24h reads the same Redis free-tier counters that
