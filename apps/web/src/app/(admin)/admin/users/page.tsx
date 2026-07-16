@@ -12,6 +12,7 @@ import {
   Badge,
   Input,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../_components/DataScope";
 
 interface UserRecord {
   id: string;
@@ -147,6 +148,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="This user directory (accounts, wallets, key counts, suspend/activate actions) is placeholder data — the rows are hardcoded and the action buttons do not call the backend. Do not use it for decisions." />
       <KPIGrid columns={3}>
         <StatCard
           label="Total User Accounts"

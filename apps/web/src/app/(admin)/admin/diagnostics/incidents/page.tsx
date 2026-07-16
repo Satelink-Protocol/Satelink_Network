@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Badge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../../_components/DataScope";
 
 interface Incident {
   id: string;
@@ -150,6 +151,7 @@ export default function AdminIncidentsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="These incidents and their acknowledge/resolve/page actions are placeholder data — the actions only mutate local state and never notify anyone. Do not use this page for incident response." />
       <KPIGrid columns={3}>
         <StatCard
           label="Active Incidents"

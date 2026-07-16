@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Server, DollarSign, Cpu, AlertTriangle, ShieldCheck, Play, RefreshCw } from "lucide-react";
+import { Server, DollarSign, Cpu, Receipt, Play, RefreshCw } from "lucide-react";
 import {
   DashboardSection,
   KPIGrid,
@@ -12,6 +12,32 @@ import {
   SeriesChart,
   Button,
 } from "@satelink/ui";
+import { DataScopeBadge, SampleDataBanner } from "./_components/DataScope";
+
+// Live revenue summary from the (test-data-aware) admin observer endpoint.
+// /admin/revenue/summary already excludes founder/test rows via
+// `FILTER (WHERE NOT is_test_data)` — the UI just has to consume it instead of
+// the un-filtered public /api/revenue total it used before.
+interface RevenueSummary {
+  total_real_usdt: number;
+  free_tier_calls_24h: number;
+  real_data_count: number;
+  is_test_data_count: number;
+}
+
+async function adminFetch<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch("/api/admin-proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, method: "GET" }),
+    });
+    const data = await res.json();
+    return data?.ok ? (data as T) : null;
+  } catch {
+    return null;
+  }
+}
 
 interface JobQueueRow {
   jobName: string;
@@ -30,7 +56,7 @@ const JOBS: JobQueueRow[] = [
 
 export default function AdminCommandCenterPage() {
   const [nodesOnline, setNodesOnline] = useState<number | null>(null);
-  const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
+  const [revenue, setRevenue] = useState<RevenueSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<JobQueueRow[]>(JOBS);
   const [acting, setActing] = useState<string | null>(null);
@@ -40,13 +66,14 @@ export default function AdminCommandCenterPage() {
       fetch("/api/nodes?status=active&limit=1")
         .then((r) => r.json())
         .catch(() => null),
-      fetch("/api/revenue")
-        .then((r) => r.json())
-        .catch(() => null),
+      // Was fetch("/api/revenue") — the public endpoint SUMs revenue_events_v2
+      // with NO is_test_data filter, so founder/test settlements showed up as
+      // real revenue on this screen. /admin/revenue/summary excludes them.
+      adminFetch<RevenueSummary>("revenue/summary"),
     ])
       .then(([nodesData, revenueData]) => {
         setNodesOnline(nodesData?.ok ? nodesData.pagination?.total ?? 0 : null);
-        setTotalRevenue(revenueData?.ok ? Number(revenueData.total) : null);
+        setRevenue(revenueData);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -125,6 +152,10 @@ export default function AdminCommandCenterPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-end">
+        <DataScopeBadge included={false} testCount={revenue?.is_test_data_count ?? null} />
+      </div>
+
       <KPIGrid columns={4}>
         <StatCard
           label="Nodes Online"
@@ -134,25 +165,34 @@ export default function AdminCommandCenterPage() {
           accent
         />
         <StatCard
-          label="Total Revenue"
-          value={totalRevenue != null ? `$${totalRevenue.toFixed(2)}` : "—"}
+          label="Total Revenue (real)"
+          value={revenue != null ? `$${(Number(revenue.total_real_usdt) || 0).toFixed(2)}` : "—"}
+          caption="Founder/test settlements excluded"
           icon={DollarSign}
           accent
           loading={loading}
         />
         <StatCard
           label="API Request Volume (24h)"
-          value="18,491"
+          value={revenue != null ? (Number(revenue.free_tier_calls_24h) || 0).toLocaleString() : "—"}
+          caption="Gateway requests, last 24h"
           icon={Cpu}
-          trend={{ label: "+8.4% vs yesterday", direction: "up" }}
+          loading={loading}
         />
         <StatCard
-          label="Security Incidents"
-          value="0"
-          icon={ShieldCheck}
-          accent={false}
+          label="Real Revenue Events"
+          value={revenue != null ? (Number(revenue.real_data_count) || 0).toLocaleString() : "—"}
+          caption={
+            revenue != null
+              ? `${(Number(revenue.is_test_data_count) || 0).toLocaleString()} test events excluded`
+              : undefined
+          }
+          icon={Receipt}
+          loading={loading}
         />
       </KPIGrid>
+
+      <SampleDataBanner note="The scheduler telemetry and CPU chart below are placeholder values, not live job or system metrics. Do not use them for decisions." />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">

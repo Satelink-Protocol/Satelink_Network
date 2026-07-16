@@ -11,6 +11,7 @@ import {
   DataTable,
   StatusBadge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../../_components/DataScope";
 
 interface AuditLog {
   id: string;
@@ -84,6 +85,7 @@ export default function AdminAuditLogPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="These audit-log rows are placeholder data, not the real admin action history. A live audit feed exists at the /admin/audit-log observer endpoint but this page is not yet wired to it. Do not use it for decisions." />
       <KPIGrid columns={3}>
         <StatCard
           label="Total Audit Records"

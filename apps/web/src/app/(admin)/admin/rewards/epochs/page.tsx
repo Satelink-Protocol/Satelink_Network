@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Badge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../../_components/DataScope";
 
 interface EpochRecord {
   id: number;
@@ -110,6 +111,7 @@ export default function AdminEpochsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="Epoch IDs, reward pools, node payout counts and the 'Finalize Active Epoch' action are placeholder data — finalize only mutates local React state and calls no backend. Do not use it for decisions." />
       <KPIGrid columns={3}>
         <StatCard
           label="Active Epoch ID"

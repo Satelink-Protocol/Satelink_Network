@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Badge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../../_components/DataScope";
 
 interface TestResult {
   id: string;
@@ -116,6 +117,7 @@ export default function AdminSelfTestsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="These self-test results (Redis/DB/RPC health, signer POL balance, pass rate) are placeholder data. 'Run Subsystem Diagnostics' randomises the outcomes client-side and runs no real checks. Do not treat green here as a healthy system." />
       <KPIGrid columns={4}>
         <StatCard
           label="Pass Rate"

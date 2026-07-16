@@ -12,6 +12,7 @@ import {
   Badge,
   SeriesChart,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../_components/DataScope";
 
 interface CustomerCohort {
   apiKey: string;
@@ -87,6 +88,7 @@ export default function AdminRevenuePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="Every figure on this page — billed revenue, margins, runrate, per-customer cohorts — is placeholder data, not queried from production. For real revenue use the Command Center 'Total Revenue (real)' card. Do not use this page for decisions." />
       <KPIGrid columns={4}>
         <StatCard
           label="Cumulative Billed Revenue"

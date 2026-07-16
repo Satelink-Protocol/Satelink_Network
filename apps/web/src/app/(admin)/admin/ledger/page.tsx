@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Badge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../_components/DataScope";
 
 interface LedgerRun {
   id: string;
@@ -138,6 +139,7 @@ export default function AdminLedgerPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="Distribution runs, Merkle roots, settled USDT totals and the linked Polygonscan tx hashes on this page are placeholder data — the tx hashes do not resolve on-chain. Do not use it for decisions." />
       <KPIGrid columns={3}>
         <StatCard
           label="Setted On-Chain Total"

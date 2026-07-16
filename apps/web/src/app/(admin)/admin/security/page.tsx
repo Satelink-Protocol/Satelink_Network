@@ -34,6 +34,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { SampleDataBanner } from "../_components/DataScope";
 
 interface Abuser {
   ip: string;
@@ -230,6 +231,7 @@ export default function SOCThreatCenterPage() {
 
   return (
     <div className="space-y-6">
+      <SampleDataBanner note="The abuser/subnet tables are live (from /admin/intel/abuse-overview), but the 'Abuse Rate Trends' chart, the 100.0% security-nominal figure, and the 'Strict Shield Mode' toggle are placeholder/no-op — they do not reflect or change real state. The cleaner live view is the Abuse Monitor page." />
       {/* KPI summaries */}
       <KPIGrid columns={4}>
         <StatCard

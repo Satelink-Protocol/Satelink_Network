@@ -10,6 +10,7 @@ import {
   DashboardSection,
   Badge,
 } from "@satelink/ui";
+import { SampleDataBanner } from "../_components/DataScope";
 
 export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
@@ -36,6 +37,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SampleDataBanner note="These settings are not wired to the backend — 'Save System Configuration' only shows a success message and changes nothing. The displayed values are defaults, not the live gateway config. Do not rely on them." />
       <KPIGrid columns={3}>
         <StatCard
           label="Strict Shield Mode"
