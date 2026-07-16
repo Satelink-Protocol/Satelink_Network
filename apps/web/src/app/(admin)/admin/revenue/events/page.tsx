@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { DataTable, type DataTableColumn } from "@satelink/ui";
 import { DataScopeBadge } from "../../_components/DataScope";
+import { adminGet } from "../../_lib/adminClient";
 
 interface RevenueEvent {
   id: number | string;
@@ -44,27 +45,19 @@ export default function AdminRevenueEventsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Was fetch("/api/revenue/events") — the public endpoint returns every row
-    // with no is_test_data awareness, so founder/test settlements appeared as
-    // real revenue events. /admin/revenue/events tags each row; we drop the
-    // test rows here and surface the count that was hidden.
-    fetch("/api/admin-proxy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: "revenue/events?limit=100", method: "GET" }),
-    })
-      .then((r) => r.json())
+    // /admin/revenue/events tags each row with is_test_data; we drop the test
+    // rows here and surface the count that was hidden. (The public
+    // /api/revenue/events has no test-data awareness — do not use it here.)
+    adminGet<{ events: RevenueEvent[] }>("revenue/events?limit=100")
       .then((data) => {
-        if (!data?.ok || !Array.isArray(data.events)) {
+        if (!data || !Array.isArray(data.events)) {
           setEvents([]);
           return;
         }
-        const all: RevenueEvent[] = data.events;
-        const real = all.filter((e) => !e.is_test_data);
-        setTestHidden(all.length - real.length);
+        const real = data.events.filter((e) => !e.is_test_data);
+        setTestHidden(data.events.length - real.length);
         setEvents(real);
       })
-      .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, []);
 

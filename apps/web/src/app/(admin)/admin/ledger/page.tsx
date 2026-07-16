@@ -1,180 +1,137 @@
 "use client";
 
-import { useState } from "react";
-import { Coins, HardDrive, RefreshCcw, Landmark, FileCheck } from "lucide-react";
-import {
-  Button,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-  Badge,
-} from "@satelink/ui";
-import { SampleDataBanner } from "../_components/DataScope";
+import { useEffect, useState } from "react";
+import { Landmark, FileCheck, Coins, Fuel } from "lucide-react";
+import { KPIGrid, StatCard, DashboardSection, Badge } from "@satelink/ui";
+import { adminGet } from "../_lib/adminClient";
 
-interface LedgerRun {
-  id: string;
-  epochId: number;
-  merkleRoot: string;
-  totalDistributed: number;
-  status: "verified" | "pending" | "failed";
-  txHash: string;
-  timestamp: string;
+interface Treasury {
+  dry_run: boolean;
+  signer_balance_pol: number | string | null;
+  signer_address: string | null;
+  vault_address: string | null;
+  usdt_address: string | null;
+  treasury_address: string | null;
+  pending_batches: number;
+  blocked_unfunded_batches: number;
+  confirmed_batches: number;
+  confirmed_usdt: number;
+  blocked_unfunded_usdt: number;
+  min_anchor_usdt: number;
+  threshold_met: boolean;
 }
 
-const INITIAL_RUNS: LedgerRun[] = [
-  { id: "RUN-104", epochId: 489, merkleRoot: "0x12a8fbc789...", totalDistributed: 0.1245, status: "verified", txHash: "0xfa77b8192837bc90", timestamp: "10 mins ago" },
-  { id: "RUN-103", epochId: 488, merkleRoot: "0x98fca327db...", totalDistributed: 0.0984, status: "verified", txHash: "0xec2249abcf1231da", timestamp: "20 mins ago" },
-  { id: "RUN-102", epochId: 487, merkleRoot: "0xb7c8adfe3e...", totalDistributed: 0.1042, status: "verified", txHash: "0xbc55288237facdeb", timestamp: "30 mins ago" },
-  { id: "RUN-101", epochId: 486, merkleRoot: "0x66deac89ff...", totalDistributed: 0.1521, status: "verified", txHash: "0x3e18a9fc8827fa11", timestamp: "40 mins ago" },
-  { id: "RUN-100", epochId: 485, merkleRoot: "0xee56a1b2c4...", totalDistributed: 0.0874, status: "failed", txHash: "", timestamp: "50 mins ago" },
-];
+const num = (v: unknown) => Number(v) || 0;
+
+function Addr({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs py-1.5 border-b border-border/50 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono text-[11px] text-foreground select-all truncate max-w-[220px]">{value || "—"}</span>
+    </div>
+  );
+}
 
 export default function AdminLedgerPage() {
-  const [runs, setRuns] = useState<LedgerRun[]>(INITIAL_RUNS);
-  const [recomputing, setRecomputing] = useState<string | null>(null);
+  const [t, setT] = useState<Treasury | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleVerify = (id: string) => {
-    setRecomputing(id);
-    setTimeout(() => {
-      setRuns((prev) =>
-        prev.map((run) =>
-          run.id === id ? { ...run, status: "verified" } : run
-        )
-      );
-      setRecomputing(null);
-      alert(`Ledger proof verify run complete. Root matched blockchain state!`);
-    }, 1200);
-  };
-
-  const cols = [
-    {
-      key: "id",
-      header: "Run ID",
-      cell: (r: LedgerRun) => <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>,
-    },
-    {
-      key: "epoch",
-      header: "Epoch",
-      cell: (r: LedgerRun) => <span className="font-mono text-xs">E{r.epochId}</span>,
-    },
-    {
-      key: "merkleRoot",
-      header: "Merkle Root",
-      cell: (r: LedgerRun) => <span className="font-mono text-xs text-muted-foreground">{r.merkleRoot}</span>,
-    },
-    {
-      key: "total",
-      header: "Total Distributed",
-      align: "right" as const,
-      cell: (r: LedgerRun) => <span className="font-mono text-xs text-emerald-400">${r.totalDistributed.toFixed(4)} USDT</span>,
-    },
-    {
-      key: "status",
-      header: "Validation Status",
-      cell: (r: LedgerRun) => (
-        <StatusBadge
-          status={r.status === "verified" ? "active" : r.status === "pending" ? "pending" : "danger"}
-          label={r.status.toUpperCase()}
-        />
-      ),
-    },
-    {
-      key: "txHash",
-      header: "EVM Settlement Tx",
-      cell: (r: LedgerRun) =>
-        r.txHash ? (
-          <a
-            href={`https://polygonscan.com/tx/${r.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-primary hover:underline font-mono"
-          >
-            {r.txHash.slice(0, 10)}…
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
-    },
-    {
-      key: "timestamp",
-      header: "Verified Time",
-      cell: (r: LedgerRun) => <span className="text-xs text-muted-foreground">{r.timestamp}</span>,
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right" as const,
-      cell: (r: LedgerRun) => (
-        <div className="flex justify-end">
-          {r.status === "failed" ? (
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={recomputing !== null}
-              onClick={() => handleVerify(r.id)}
-              className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-            >
-              {recomputing === r.id ? "Re-running..." : "Recompute Proof"}
-            </Button>
-          ) : (
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={recomputing !== null}
-              onClick={() => handleVerify(r.id)}
-            >
-              <RefreshCcw className="h-3 w-3 mr-1" /> Re-verify
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
-
-  const totalUSDT = runs
-    .filter((r) => r.status === "verified")
-    .reduce((sum, r) => sum + r.totalDistributed, 0);
+  useEffect(() => {
+    adminGet<Treasury>("treasury/status")
+      .then(setT)
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <SampleDataBanner note="Distribution runs, Merkle roots, settled USDT totals and the linked Polygonscan tx hashes on this page are placeholder data — the tx hashes do not resolve on-chain. Do not use it for decisions." />
-      <KPIGrid columns={3}>
+      <KPIGrid columns={4}>
         <StatCard
-          label="Setted On-Chain Total"
-          value={`$${totalUSDT.toFixed(4)} USDT`}
-          caption="Aggregated finalized epoch payments"
+          label="Settled On-Chain (USDT)"
+          value={t != null ? `$${num(t.confirmed_usdt).toFixed(4)}` : "—"}
+          caption="Confirmed settlement batches"
           icon={Landmark}
           accent
+          loading={loading}
         />
         <StatCard
-          label="Epochs Finalized"
-          value={String(runs.filter((r) => r.status === "verified").length)}
-          caption="Finalized Merkle ledger checkpoints"
+          label="Confirmed Batches"
+          value={t != null ? String(num(t.confirmed_batches)) : "—"}
+          caption="Finalized distribution runs"
           icon={FileCheck}
+          loading={loading}
         />
         <StatCard
-          label="On-chain Verification State"
-          value="100% OK"
-          caption="Decentralized consensus validated"
+          label="Settlement Mode"
+          value={t != null ? (t.dry_run ? "DRY RUN" : "LIVE") : "—"}
+          caption={t != null ? (t.dry_run ? "Not broadcasting to chain" : "Broadcasting on-chain") : undefined}
           icon={Coins}
-          accent
+          accent={t != null && !t.dry_run}
+          loading={loading}
+        />
+        <StatCard
+          label="Signer Balance (POL)"
+          value={t != null ? `${num(t.signer_balance_pol).toFixed(4)}` : "—"}
+          caption="Hot signer gas reserve"
+          icon={Fuel}
+          loading={loading}
         />
       </KPIGrid>
 
-      <DashboardSection
-        title="Payment Distribution Ledger Runs"
-        description="Tracks ledger epochs reconciled and submitted for blockchain verification"
-        actions={
-          <Button size="sm" onClick={() => alert("Recomputing entire Merkle roots tree...")}>
-            Force Ledger Re-sync
-          </Button>
-        }
-        flush
-      >
-        <DataTable columns={cols} rows={runs} rowKey={(r) => r.id} />
-      </DashboardSection>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DashboardSection title="Settlement Batch Breakdown" description="Distribution runs grouped by status (settlement_batches)">
+          <div className="p-4 space-y-3">
+            <BatchRow label="Confirmed" count={num(t?.confirmed_batches)} usdt={num(t?.confirmed_usdt)} tone="emerald" />
+            <BatchRow label="Pending" count={num(t?.pending_batches)} tone="amber" />
+            <BatchRow label="Blocked (unfunded signer)" count={num(t?.blocked_unfunded_batches)} usdt={num(t?.blocked_unfunded_usdt)} tone="red" />
+            <div className="flex items-center justify-between pt-3 mt-1 border-t border-border text-xs">
+              <span className="text-muted-foreground">Anchor threshold ({num(t?.min_anchor_usdt).toFixed(2)} USDT)</span>
+              <Badge
+                className={
+                  t?.threshold_met
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]"
+                    : "bg-zinc-800 text-zinc-400 border-zinc-700 text-[10px]"
+                }
+              >
+                {t?.threshold_met ? "MET" : "not met"}
+              </Badge>
+            </div>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection title="On-Chain Addresses" description="Vault, signer and token addresses (Polygon 137)">
+          <div className="p-4">
+            <Addr label="Revenue Vault" value={t?.vault_address ?? null} />
+            <Addr label="Signer" value={t?.signer_address ?? null} />
+            <Addr label="Treasury" value={t?.treasury_address ?? null} />
+            <Addr label="USDT" value={t?.usdt_address ?? null} />
+          </div>
+        </DashboardSection>
+      </div>
+    </div>
+  );
+}
+
+function BatchRow({
+  label,
+  count,
+  usdt,
+  tone,
+}: {
+  label: string;
+  count: number;
+  usdt?: number;
+  tone: "emerald" | "amber" | "red";
+}) {
+  const dot = tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="flex items-center gap-2 text-muted-foreground">
+        <span className={`h-2 w-2 rounded-full ${dot}`} /> {label}
+      </span>
+      <span className="font-mono text-foreground">
+        {count.toLocaleString()}
+        {usdt !== undefined ? <span className="text-muted-foreground"> · ${usdt.toFixed(4)}</span> : null}
+      </span>
     </div>
   );
 }

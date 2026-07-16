@@ -1,132 +1,88 @@
 "use client";
 
-import { useState } from "react";
-import { ScrollText, Search, Download } from "lucide-react";
-import {
-  Button,
-  Input,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-} from "@satelink/ui";
-import { SampleDataBanner } from "../../_components/DataScope";
+import { useEffect, useMemo, useState } from "react";
+import { ScrollText } from "lucide-react";
+import { Input, KPIGrid, StatCard, DashboardSection, DataTable, type DataTableColumn } from "@satelink/ui";
+import { adminGet } from "../../_lib/adminClient";
 
-interface AuditLog {
-  id: string;
-  timestamp: string;
-  admin: string;
-  action: string;
-  details: string;
-  ipAddress: string;
-  status: "success" | "failed";
+interface AuditRow {
+  id?: number | string;
+  actor_wallet?: string | null;
+  action_type?: string | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  created_at?: number | string | null;
 }
 
-const INITIAL_LOGS: AuditLog[] = [
-  { id: "AUD-109", timestamp: "06:06:58", admin: "pradeep@satelink.network", action: "SETTINGS_UPDATE", details: "Enabled Strict Shield Mode on gateway pools", ipAddress: "72.45.18.23", status: "success" },
-  { id: "AUD-108", timestamp: "06:04:12", admin: "pradeep@satelink.network", action: "IP_QUARANTINE", details: "Quarantined scanner client IP subnet 192.168.**.**", ipAddress: "72.45.18.23", status: "success" },
-  { id: "AUD-107", timestamp: "05:59:45", admin: "ops_scheduler", action: "MERKLE_SETTLEMENT", details: "Merkle root submitted for Epoch 489", ipAddress: "127.0.0.1 (local)", status: "success" },
-  { id: "AUD-106", timestamp: "05:12:00", admin: "alex@satelink.network", action: "KEY_REVOCATION", details: "Revoked API key labels: 'Legacy Portal Dev'", ipAddress: "88.192.10.42", status: "success" },
-  { id: "AUD-105", timestamp: "04:30:15", admin: "alex@satelink.network", action: "SETTINGS_UPDATE", details: "Attempted to override epoch threshold value to 0.0 USDT", ipAddress: "88.192.10.42", status: "failed" },
+function fmtTime(ts: number | string | null | undefined): string {
+  if (ts == null) return "—";
+  const n = Number(ts);
+  if (!Number.isFinite(n)) return String(ts);
+  // created_at is BIGINT epoch — seconds or ms.
+  const ms = n > 1e12 ? n : n * 1000;
+  return new Date(ms).toLocaleString();
+}
+
+const cols: DataTableColumn<AuditRow>[] = [
+  { key: "created_at", header: "Timestamp", cell: (r) => <span className="text-xs text-muted-foreground font-mono">{fmtTime(r.created_at)}</span> },
+  { key: "actor_wallet", header: "Actor", cell: (r) => <span className="font-mono text-xs text-foreground">{r.actor_wallet || "—"}</span> },
+  { key: "action_type", header: "Action", cell: (r) => <span className="font-mono text-xs text-primary font-semibold">{r.action_type || "—"}</span> },
+  { key: "target", header: "Target", cell: (r) => <span className="text-xs text-muted-foreground font-mono">{[r.target_type, r.target_id].filter(Boolean).join(":") || "—"}</span> },
 ];
 
 export default function AdminAuditLogPage() {
-  const [logs] = useState<AuditLog[]>(INITIAL_LOGS);
+  const [logs, setLogs] = useState<AuditRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const filteredLogs = logs.filter((log) => {
-    return (
-      log.admin.toLowerCase().includes(search.toLowerCase()) ||
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.details.toLowerCase().includes(search.toLowerCase())
-    );
-  });
+  useEffect(() => {
+    adminGet<AuditRow[]>("audit-log")
+      .then((rows) => setLogs(Array.isArray(rows) ? rows : []))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const cols = [
-    {
-      key: "timestamp",
-      header: "Timestamp",
-      cell: (r: AuditLog) => <span className="text-xs text-muted-foreground font-mono">{r.timestamp}</span>,
-    },
-    {
-      key: "admin",
-      header: "Admin User",
-      cell: (r: AuditLog) => <span className="font-semibold text-xs text-foreground">{r.admin}</span>,
-    },
-    {
-      key: "action",
-      header: "Action",
-      cell: (r: AuditLog) => (
-        <span className="font-mono text-xs text-primary font-semibold">{r.action}</span>
-      ),
-    },
-    {
-      key: "details",
-      header: "Action Details",
-      cell: (r: AuditLog) => <span className="text-xs text-muted-foreground font-mono">{r.details}</span>,
-    },
-    {
-      key: "ipAddress",
-      header: "IP Address",
-      cell: (r: AuditLog) => <span className="text-xs text-muted-foreground font-mono">{r.ipAddress}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (r: AuditLog) => (
-        <StatusBadge
-          status={r.status === "success" ? "active" : "danger"}
-          label={r.status.toUpperCase()}
-        />
-      ),
-    },
-  ];
+  const filtered = useMemo(() => {
+    if (!logs) return logs;
+    const s = search.toLowerCase();
+    if (!s) return logs;
+    return logs.filter((l) =>
+      [l.actor_wallet, l.action_type, l.target_type, l.target_id].some((v) => (v ?? "").toLowerCase().includes(s))
+    );
+  }, [logs, search]);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <SampleDataBanner note="These audit-log rows are placeholder data, not the real admin action history. A live audit feed exists at the /admin/audit-log observer endpoint but this page is not yet wired to it. Do not use it for decisions." />
-      <KPIGrid columns={3}>
+      <KPIGrid columns={2}>
+        <StatCard label="Audit Records" value={logs != null ? String(logs.length) : "—"} caption="Most recent 100 admin actions" icon={ScrollText} loading={loading} />
         <StatCard
-          label="Total Audit Records"
-          value={String(logs.length)}
-          caption="Lifetime administrator operations logged"
-          icon={ScrollText}
-        />
-        <StatCard
-          label="Last Session User"
-          value="pradeep@satelink"
-          caption="Active supervisor token verified"
-        />
-        <StatCard
-          label="Audit Integrity"
-          value="SECURE"
-          caption="Cryptographic blockchain hashes match local db log"
-          accent
+          label="Latest Action"
+          value={logs != null && logs.length > 0 ? logs[0].action_type || "—" : "—"}
+          caption={logs != null && logs.length > 0 ? fmtTime(logs[0].created_at) : "No actions logged"}
+          loading={loading}
         />
       </KPIGrid>
 
       <DashboardSection
-        title="Admin Action Audit Logs"
-        description="Immutable logs of all state-mutating actions executed within the admin panel"
+        title="Admin Action Audit Log"
+        description="State-mutating admin actions (admin_audit_log)"
         actions={
-          <div className="flex gap-2">
-            <div className="relative">
-              <Input
-                placeholder="Search audit trail..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-56 font-mono text-xs"
-              />
-            </div>
-            <Button size="sm" variant="outline" onClick={() => alert("Downloading audit logs CSV...")}>
-              <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
-            </Button>
-          </div>
+          <Input
+            placeholder="Search actor / action / target…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-56 font-mono text-xs"
+          />
         }
         flush
       >
-        <DataTable columns={cols} rows={filteredLogs} rowKey={(r) => r.id} />
+        <DataTable
+          columns={cols}
+          rows={filtered}
+          rowKey={(r, i) => String(r.id ?? `${r.created_at}-${i}`)}
+          loading={loading}
+          emptyTitle="No audit records"
+          emptyDescription={search ? "No records match your search." : "No admin actions have been logged yet (the admin_audit_log table may not be populated)."}
+        />
       </DashboardSection>
     </div>
   );

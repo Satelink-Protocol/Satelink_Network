@@ -1,194 +1,122 @@
 "use client";
 
-import { useState } from "react";
-import { Play, RefreshCw, Terminal } from "lucide-react";
-import {
-  Button,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-  Badge,
-} from "@satelink/ui";
-import { SampleDataBanner } from "../../_components/DataScope";
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { Button, KPIGrid, StatCard, DashboardSection, DataTable, StatusBadge, Badge, type DataTableColumn } from "@satelink/ui";
+import { adminGet } from "../../_lib/adminClient";
 
-interface TestResult {
-  id: string;
+interface Metrics {
+  cpu_pct: number;
+  memory_mb: number;
+  uptime_s: number;
+  db_status: string;
+  redis_status: string;
+  api_p50_ms: number;
+  requests_24h: number;
+}
+
+interface JobRow {
+  job_name: string;
+  action: string | null;
+  result: string | null;
+  created_at: string | number | null;
+}
+
+interface Check {
   name: string;
   subsystem: string;
   status: "success" | "warning" | "failed";
-  latencyMs: number;
-  message: string;
+  value: string;
 }
 
-const INITIAL_TESTS: TestResult[] = [
-  { id: "1", name: "Redis Connection & Ping", subsystem: "Cache", status: "success", latencyMs: 2, message: "PONG received in 1.8ms" },
-  { id: "2", name: "PostgreSQL Prisma Pool", subsystem: "Database", status: "success", latencyMs: 14, message: "Successfully executed SELECT 1" },
-  { id: "3", name: "EVM Signer Balance Check", subsystem: "Settlement", status: "success", latencyMs: 45, message: "Balance: 0.124 POL (Threshold: 0.05 POL)" },
-  { id: "4", name: "Polygon RPC Endpoint Sync", subsystem: "RPC", status: "success", latencyMs: 180, message: "Sync status: OK (Current block: 18491024)" },
-  { id: "5", name: "Webhook Dispatcher Verification", subsystem: "Alerting", status: "warning", latencyMs: 310, message: "Alerts endpoint responded with latency > 300ms" },
-  { id: "6", name: "Merkle Root Accrual Check", subsystem: "Accounting", status: "success", latencyMs: 24, message: "Unsettled epoch revenue balances verified" },
+const num = (v: unknown) => Number(v) || 0;
+
+function buildChecks(m: Metrics): Check[] {
+  const p50 = num(m.api_p50_ms);
+  return [
+    { name: "Database connectivity", subsystem: "Postgres", status: m.db_status === "ok" ? "success" : "failed", value: m.db_status },
+    {
+      name: "Redis connectivity",
+      subsystem: "Cache",
+      status: m.redis_status === "ok" ? "success" : m.redis_status === "not_configured" ? "warning" : "failed",
+      value: m.redis_status,
+    },
+    { name: "API latency (p50)", subsystem: "Gateway", status: p50 === 0 ? "warning" : p50 < 300 ? "success" : "warning", value: `${p50} ms` },
+    { name: "Process memory", subsystem: "Runtime", status: "success", value: `${num(m.memory_mb)} MB` },
+    { name: "Uptime", subsystem: "Runtime", status: "success", value: `${Math.floor(num(m.uptime_s) / 3600)}h` },
+  ];
+}
+
+const cols: DataTableColumn<Check>[] = [
+  { key: "name", header: "Check", cell: (r) => <span className="font-medium text-xs text-foreground">{r.name}</span> },
+  { key: "subsystem", header: "Subsystem", cell: (r) => <Badge variant="outline">{r.subsystem}</Badge> },
+  {
+    key: "status",
+    header: "Status",
+    cell: (r) => <StatusBadge status={r.status === "success" ? "active" : r.status === "warning" ? "pending" : "danger"} label={r.status.toUpperCase()} />,
+  },
+  { key: "value", header: "Value", align: "right", cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.value}</span> },
 ];
 
 export default function AdminSelfTestsPage() {
-  const [tests, setTests] = useState<TestResult[]>(INITIAL_TESTS);
-  const [running, setRunning] = useState(false);
-  const [logs, setLogs] = useState<string[]>([
-    "[06:06:01] System boot sequence diagnostic complete.",
-    "[06:06:01] Redis backend initialized at redis://127.0.0.1:6379.",
-    "[06:06:02] Database pool active (14 connections).",
-  ]);
+  const [checks, setChecks] = useState<Check[] | null>(null);
+  const [jobs, setJobs] = useState<JobRow[] | null>(null);
+  const [reqs24h, setReqs24h] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const runDiagnostics = () => {
-    setRunning(true);
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Starting manual diagnostic sequence...`]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [m, j] = await Promise.all([adminGet<Metrics>("observability/metrics"), adminGet<{ jobs: JobRow[] }>("jobs/status")]);
+    setChecks(m ? buildChecks(m) : []);
+    setReqs24h(m ? num(m.requests_24h) : null);
+    setJobs(j?.jobs ?? []);
+    setLoading(false);
+  }, []);
 
-    setTimeout(() => {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Testing cache layer: Redis Ping...`]);
-    }, 400);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-    setTimeout(() => {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Testing DB layer: Prisma client check...`]);
-    }, 800);
-
-    setTimeout(() => {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Fetching gas station POL balance...`]);
-    }, 1200);
-
-    setTimeout(() => {
-      const updated = tests.map((t) => {
-        const isSuccess = Math.random() > 0.1;
-        return {
-          ...t,
-          status: isSuccess ? "success" : ("failed" as const),
-          latencyMs: Math.floor(Math.random() * 200) + 2,
-          message: isSuccess ? "Healthy status response verified" : "Connection timeout occurred during test request",
-        };
-      });
-      setTests(updated);
-      setRunning(false);
-      setLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] Diagnostic suite complete. Status: ${
-          updated.some((u) => u.status === "failed") ? "FAIL" : "PASS"
-        }`,
-      ]);
-    }, 1800);
-  };
-
-  const cols = [
-    {
-      key: "name",
-      header: "Test Identifier",
-      cell: (r: TestResult) => <span className="font-medium text-xs text-foreground">{r.name}</span>,
-    },
-    {
-      key: "subsystem",
-      header: "Subsystem",
-      cell: (r: TestResult) => <Badge variant="outline">{r.subsystem}</Badge>,
-    },
-    {
-      key: "status",
-      header: "Test Status",
-      cell: (r: TestResult) => (
-        <StatusBadge
-          status={r.status === "success" ? "active" : r.status === "warning" ? "pending" : "danger"}
-          label={r.status.toUpperCase()}
-        />
-      ),
-    },
-    {
-      key: "latencyMs",
-      header: "Latency",
-      align: "right" as const,
-      cell: (r: TestResult) => <span className="font-mono text-xs text-muted-foreground">{r.latencyMs}ms</span>,
-    },
-    {
-      key: "message",
-      header: "Message",
-      cell: (r: TestResult) => <span className="text-xs text-muted-foreground font-mono">{r.message}</span>,
-    },
-  ];
-
-  const successCount = tests.filter((t) => t.status === "success").length;
-  const warningCount = tests.filter((t) => t.status === "warning").length;
-  const failedCount = tests.filter((t) => t.status === "failed").length;
+  const passed = checks?.filter((c) => c.status === "success").length ?? 0;
+  const failed = checks?.filter((c) => c.status === "failed").length ?? 0;
+  const total = checks?.length ?? 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <SampleDataBanner note="These self-test results (Redis/DB/RPC health, signer POL balance, pass rate) are placeholder data. 'Run Subsystem Diagnostics' randomises the outcomes client-side and runs no real checks. Do not treat green here as a healthy system." />
       <KPIGrid columns={4}>
-        <StatCard
-          label="Pass Rate"
-          value={`${Math.round((successCount / tests.length) * 100)}%`}
-          caption={`${successCount}/${tests.length} tests succeeded`}
-          accent={successCount === tests.length}
-        />
-        <StatCard
-          label="Warning Alerts"
-          value={String(warningCount)}
-          caption="Minor degradation observed"
-          trend={{ label: warningCount > 0 ? "attention" : "nominal", direction: warningCount > 0 ? "down" : "neutral" }}
-        />
-        <StatCard
-          label="Failed Subsystems"
-          value={String(failedCount)}
-          caption="Critical failures requiring action"
-          trend={{ label: failedCount > 0 ? "incident!" : "safe", direction: failedCount > 0 ? "down" : "neutral" }}
-        />
-        <StatCard
-          label="Signer Key Balance"
-          value="0.124 POL"
-          caption="Hot wallet validator reserve"
-          accent
-        />
+        <StatCard label="Pass Rate" value={total ? `${Math.round((passed / total) * 100)}%` : "—"} caption={`${passed}/${total} checks healthy`} accent={total > 0 && failed === 0} loading={loading} />
+        <StatCard label="Failed Checks" value={String(failed)} caption="Critical subsystems down" accent={failed > 0} loading={loading} />
+        <StatCard label="Requests (24h)" value={reqs24h != null ? reqs24h.toLocaleString() : "—"} caption="Gateway calls tracked" loading={loading} />
+        <StatCard label="Automation Jobs" value={jobs != null ? String(jobs.length) : "—"} caption="Jobs with a logged run" loading={loading} />
       </KPIGrid>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <DashboardSection
-            title="Subsystem Test Harness"
-            description="Run automatic self-tests against critical components"
-            actions={
-              <Button size="sm" onClick={runDiagnostics} disabled={running}>
-                {running ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                Run Subsystem Diagnostics
-              </Button>
-            }
-            flush
-          >
-            <DataTable columns={cols} rows={tests} rowKey={(r) => r.id} />
-          </DashboardSection>
-        </div>
+      <DashboardSection
+        title="Live Health Checks"
+        description="Real subsystem status from /admin/observability/metrics"
+        actions={
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Re-check
+          </Button>
+        }
+        flush
+      >
+        <DataTable columns={cols} rows={checks} rowKey={(r) => r.name} loading={loading} emptyTitle="No metrics" emptyDescription="Could not read server metrics." />
+      </DashboardSection>
 
-        <div>
-          <DashboardSection title="Live Runner Logs" description="Standard stdout telemetry stream" flush>
-            <div className="bg-black/60 backdrop-blur border border-border p-4 font-mono text-[11px] leading-relaxed rounded-b-md">
-              <div className="flex items-center gap-1.5 text-zinc-500 mb-3 border-b border-zinc-800 pb-2">
-                <Terminal className="h-3 w-3" />
-                <span>DIAGNOSTICS_RUNNER_STDOUT</span>
-              </div>
-              <div className="h-[220px] overflow-y-auto space-y-1.5 scrollbar-thin text-zinc-300">
-                {logs.map((log, i) => (
-                  <div
-                    key={i}
-                    className={
-                      log.includes("PASS") || log.includes("sequence complete")
-                        ? "text-emerald-400 font-semibold"
-                        : log.includes("FAIL")
-                        ? "text-rose-400 font-semibold"
-                        : "text-zinc-400"
-                    }
-                  >
-                    {log}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </DashboardSection>
-        </div>
-      </div>
+      <DashboardSection title="Automation Job Runs" description="Latest logged run per job (automation_logs)" flush>
+        <DataTable
+          columns={[
+            { key: "job_name", header: "Job", cell: (r: JobRow) => <span className="font-mono text-xs font-semibold text-foreground">{r.job_name}</span> },
+            { key: "action", header: "Action", cell: (r: JobRow) => <Badge variant="outline" className="text-[10px]">{r.action || "—"}</Badge> },
+            { key: "result", header: "Result", cell: (r: JobRow) => <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[320px] block">{r.result ?? "—"}</span> },
+          ]}
+          rows={jobs}
+          rowKey={(r) => r.job_name}
+          loading={loading}
+          emptyTitle="No job runs"
+          emptyDescription="No automation jobs have logged a run."
+        />
+      </DashboardSection>
     </div>
   );
 }

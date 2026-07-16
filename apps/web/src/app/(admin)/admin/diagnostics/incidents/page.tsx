@@ -1,193 +1,88 @@
 "use client";
 
-import { useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle, Info, RefreshCw, Send } from "lucide-react";
-import {
-  Button,
-  KPIGrid,
-  StatCard,
-  DashboardSection,
-  DataTable,
-  StatusBadge,
-  Badge,
-} from "@satelink/ui";
-import { SampleDataBanner } from "../../_components/DataScope";
+import { useEffect, useState } from "react";
+import { AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import { KPIGrid, StatCard, DashboardSection, DataTable, StatusBadge, Badge, type DataTableColumn } from "@satelink/ui";
+import { adminGet } from "../../_lib/adminClient";
 
 interface Incident {
   id: string;
+  severity: "critical" | "high" | "major" | "minor" | string;
   title: string;
-  service: string;
-  severity: "critical" | "major" | "minor";
-  status: "unassigned" | "acknowledged" | "resolved";
-  timestamp: string;
-  duration: string;
+  status: "unassigned" | "acknowledged" | "resolved" | string;
+  owner?: string | null;
+  resolved_at?: string | null;
+  note?: string | null;
 }
 
-const INITIAL_INCIDENTS: Incident[] = [
-  { id: "INC-901", title: "RPC Rate Limit Loop Hole Detected", service: "rpc-gateway", severity: "critical", status: "unassigned", timestamp: "10 mins ago", duration: "10m" },
-  { id: "INC-889", title: "Redis memory utilization > 85%", service: "cache-store", severity: "major", status: "acknowledged", timestamp: "1 hour ago", duration: "1h 4m" },
-  { id: "INC-884", title: "EVM Signer Gas Balance Warning", service: "reputation-engine", severity: "minor", status: "acknowledged", timestamp: "3 hours ago", duration: "3h 12m" },
-  { id: "INC-852", title: "Database Write Queue Backlog", service: "db-writer", severity: "major", status: "resolved", timestamp: "1 day ago", duration: "45m" },
-  { id: "INC-841", title: "Free Tier IP Blacklist Sync Failure", service: "rate-limiter", severity: "critical", status: "resolved", timestamp: "2 days ago", duration: "2h 10m" },
+const severityTone = (sev: string) =>
+  ({
+    critical: "bg-red-500/15 text-red-400 border-red-500/30",
+    high: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    major: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    minor: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  }[sev] ?? "bg-zinc-800 text-zinc-400 border-zinc-700");
+
+const cols: DataTableColumn<Incident>[] = [
+  { key: "id", header: "ID", cell: (r) => <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span> },
+  {
+    key: "title",
+    header: "Title",
+    cell: (r) => (
+      <div className="flex flex-col gap-0.5">
+        <span className="font-medium text-xs text-foreground">{r.title}</span>
+        {r.note ? <span className="text-[10px] text-muted-foreground">{r.note}</span> : null}
+      </div>
+    ),
+  },
+  { key: "severity", header: "Severity", cell: (r) => <Badge className={severityTone(r.severity) + " text-[10px] uppercase font-mono"}>{r.severity}</Badge> },
+  {
+    key: "status",
+    header: "Status",
+    cell: (r) => <StatusBadge status={r.status === "resolved" ? "active" : r.status === "acknowledged" ? "pending" : "neutral"} label={String(r.status).toUpperCase()} />,
+  },
+  { key: "owner", header: "Owner", cell: (r) => <span className="text-xs text-muted-foreground">{r.owner || "—"}</span> },
 ];
 
 export default function AdminIncidentsPage() {
-  const [incidents, setIncidents] = useState<Incident[]>(INITIAL_INCIDENTS);
-  const [loading, setLoading] = useState(false);
+  const [incidents, setIncidents] = useState<Incident[] | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleAction = (id: string, nextStatus: Incident["status"]) => {
-    setLoading(true);
-    setTimeout(() => {
-      setIncidents((prev) =>
-        prev.map((inc) => (inc.id === id ? { ...inc, status: nextStatus } : inc))
-      );
-      setLoading(false);
-    }, 400);
-  };
+  useEffect(() => {
+    adminGet<{ incidents: Incident[]; source?: string }>("incidents")
+      .then((d) => {
+        setIncidents(d?.incidents ?? []);
+        setSource(d?.source ?? null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  const severityTone = (sev: Incident["severity"]) => {
-    return {
-      critical: "bg-red-500/15 text-red-400 border-red-500/30",
-      major: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-      minor: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-    }[sev];
-  };
-
-  const cols = [
-    {
-      key: "id",
-      header: "Incident ID",
-      cell: (r: Incident) => <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>,
-    },
-    {
-      key: "title",
-      header: "Alert Title",
-      cell: (r: Incident) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-xs text-foreground">{r.title}</span>
-          <span className="text-[10px] text-muted-foreground">Service: {r.service}</span>
-        </div>
-      ),
-    },
-    {
-      key: "severity",
-      header: "Severity",
-      cell: (r: Incident) => (
-        <Badge className={severityTone(r.severity) + " text-[10px] uppercase font-mono"}>
-          {r.severity}
-        </Badge>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (r: Incident) => (
-        <StatusBadge
-          status={r.status === "unassigned" ? "neutral" : r.status === "acknowledged" ? "pending" : "active"}
-          label={r.status.toUpperCase()}
-        />
-      ),
-    },
-    {
-      key: "timestamp",
-      header: "Triggered",
-      cell: (r: Incident) => <span className="text-xs text-muted-foreground">{r.timestamp}</span>,
-    },
-    {
-      key: "duration",
-      header: "Duration",
-      cell: (r: Incident) => <span className="text-xs text-muted-foreground font-mono">{r.duration}</span>,
-    },
-    {
-      key: "actions",
-      header: "Operator Action",
-      align: "right" as const,
-      cell: (r: Incident) => (
-        <div className="flex items-center gap-1.5 justify-end">
-          {r.status === "unassigned" && (
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={loading}
-              onClick={() => handleAction(r.id, "acknowledged")}
-            >
-              Acknowledge
-            </Button>
-          )}
-          {r.status === "acknowledged" && (
-            <Button
-              size="xs"
-              variant="default"
-              disabled={loading}
-              onClick={() => handleAction(r.id, "resolved")}
-            >
-              Resolve
-            </Button>
-          )}
-          {r.status !== "resolved" && (
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={loading}
-              onClick={() => {
-                alert(`Paging the on-call engineer for ${r.id}...`);
-              }}
-              className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
-            >
-              <Send className="h-3 w-3 mr-1" /> Page
-            </Button>
-          )}
-          {r.status === "resolved" && (
-            <span className="text-[11px] text-emerald-400 font-medium">✓ Closed</span>
-          )}
-        </div>
-      ),
-    },
-  ];
-
-  const activeCount = incidents.filter((i) => i.status !== "resolved").length;
-  const criticalCount = incidents.filter((i) => i.severity === "critical" && i.status !== "resolved").length;
-  const acknowledgedCount = incidents.filter((i) => i.status === "acknowledged").length;
+  const active = incidents?.filter((i) => i.status !== "resolved").length ?? 0;
+  const critical = incidents?.filter((i) => i.severity === "critical" && i.status !== "resolved").length ?? 0;
+  const resolved = incidents?.filter((i) => i.status === "resolved").length ?? 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <SampleDataBanner note="These incidents and their acknowledge/resolve/page actions are placeholder data — the actions only mutate local state and never notify anyone. Do not use this page for incident response." />
       <KPIGrid columns={3}>
-        <StatCard
-          label="Active Incidents"
-          value={String(activeCount)}
-          caption="Requires operator attention"
-          accent={activeCount > 0}
-          icon={AlertCircle}
-        />
-        <StatCard
-          label="Unresolved Critical"
-          value={String(criticalCount)}
-          caption="Severe network disruptions"
-          trend={{ label: criticalCount > 0 ? "high risk" : "stable", direction: criticalCount > 0 ? "down" : "neutral" }}
-          icon={AlertTriangle}
-        />
-        <StatCard
-          label="Acknowledged Issues"
-          value={String(acknowledgedCount)}
-          caption="Currently under investigation"
-          icon={CheckCircle}
-        />
+        <StatCard label="Active Incidents" value={String(active)} caption="Not yet resolved" accent={active > 0} icon={AlertCircle} loading={loading} />
+        <StatCard label="Unresolved Critical" value={String(critical)} caption="Severe, still open" icon={AlertTriangle} loading={loading} />
+        <StatCard label="Resolved" value={String(resolved)} caption="Closed incidents" icon={CheckCircle} loading={loading} />
       </KPIGrid>
 
       <DashboardSection
-        title="Incident Dashboard"
-        description="Real-time incident response management center"
-        actions={
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <a href="/satelink/os/monitoring">Open Monitoring Logs</a>
-            </Button>
-          </div>
-        }
+        title="Incidents"
+        description={source ?? "Incident record"}
         flush
       >
-        <DataTable columns={cols} rows={incidents} rowKey={(r) => r.id} />
+        <DataTable
+          columns={cols}
+          rows={incidents}
+          rowKey={(r) => r.id}
+          loading={loading}
+          emptyTitle="No incidents"
+          emptyDescription="No incidents on record."
+        />
       </DashboardSection>
     </div>
   );
