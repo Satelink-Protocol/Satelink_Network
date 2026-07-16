@@ -12,7 +12,15 @@ RESULTS="$(mktemp -d)/results.json"
 cd "$ROOT/apps/api"
 # Same invocation as npm run test:baseline (--no-config: .mocharc file bug;
 # --exit: hanging handles), but with the JSON reporter for exact titles.
-npx mocha --no-config --exit --reporter json --reporter-option output="$RESULTS" 'test/**/*.test.js' >/dev/null 2>&1
+MOCHA_LOG="$(mktemp)"
+npx mocha --no-config --exit --reporter json --reporter-option output="$RESULTS" 'test/**/*.test.js' >"$MOCHA_LOG" 2>&1
+MOCHA_EXIT=$?
+
+if [ ! -f "$RESULTS" ]; then
+  echo "FAIL: mocha (exit $MOCHA_EXIT) produced no JSON results — raw output:"
+  cat "$MOCHA_LOG"
+  exit 1
+fi
 
 node - "$RESULTS" "$ROOT/apps/api/test/known-failures-baseline.txt" <<'EOF'
 const fs = require('fs');
