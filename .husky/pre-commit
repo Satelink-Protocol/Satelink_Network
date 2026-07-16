@@ -1,2 +1,6 @@
-# Husky pre-commit hook — run env check (blocks only on production JWT issues)
+# Husky pre-commit hook — abort on the first failing check
+set -e
+# 1) secret leak + repo bloat gate (ported from the dead .git/hooks/pre-commit)
+bash scripts/pre-commit-gate.sh
+# 2) env check (blocks only on production JWT issues)
 bash scripts/agent-env-check.sh

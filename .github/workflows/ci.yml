@@ -59,6 +59,31 @@ jobs:
           NODE_ENV: test
           JWT_SECRET: test-secret-for-ci-only
 
+  baseline:
+    name: API Test Baseline Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      # Fails ONLY on test failures outside apps/api/test/known-failures-baseline.txt
+      # (the 9 pre-existing failures + 3 CDP-facilitator-auth failures that need
+      # CDP_API_KEY_ID/SECRET secrets to pass in CI — see the baseline file).
+      - name: Baseline guard
+        run: bash scripts/ci-baseline-check.sh
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-secret-for-ci-only
+
   security:
     name: Secret Scan
     runs-on: ubuntu-latest
