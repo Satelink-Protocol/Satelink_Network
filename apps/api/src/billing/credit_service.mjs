@@ -21,6 +21,8 @@
  * Pure-ish: every function takes `pool` so it is unit-testable with a mock.
  */
 
+import { isFounderWallet } from '../payments/founder_wallets.js';
+
 export const PRICE_PER_CALL_USDT = 0.000030;
 
 // Per-tier daily request ceiling (rate limit). Mirrors credit_system TIERS.
@@ -190,11 +192,12 @@ export async function creditAccount(pool, { apiKey, wallet, amountUsdt, txHash, 
     }
   }
 
+  const depositor = fromAddress || account.wallet_address || null;
   await pool.query(
-    `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-    [key, txHash || `internal_${Date.now()}`, amount, fromAddress || account.wallet_address || null,
-     account.tier, tier || account.tier]
+    `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [key, txHash || `internal_${Date.now()}`, amount, depositor,
+     account.tier, tier || account.tier, isFounderWallet(depositor)]
   );
 
   const upd = await pool.query(

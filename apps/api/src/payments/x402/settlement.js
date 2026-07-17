@@ -74,9 +74,9 @@ export async function recordX402Settlement(pool, {
       // is lifted to the paid x402 tier so the deduction path actually
       // charges it; existing paid tiers are preserved.
       await client.query(
-        `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after)
-         VALUES ($1, $2, $3, $4, 'x402', 'x402')`,
-        [creditedKey, txHash, creditUsdt, payer.toLowerCase()]
+        `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
+         VALUES ($1, $2, $3, $4, 'x402', 'x402', $5)`,
+        [creditedKey, txHash, creditUsdt, payer.toLowerCase(), isTest]
       );
       const upd = await client.query(
         `UPDATE api_credits
