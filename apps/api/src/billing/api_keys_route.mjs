@@ -23,6 +23,7 @@ import {
   TIERS
 } from './credit_system.mjs';
 import { discord } from '../services/discord_notify.mjs';
+import { isFounderWallet } from '../payments/founder_wallets.js';
 import {
   apiKeyCreateLimiter,
   apiKeyDepositLimiter,
@@ -371,9 +372,9 @@ export function createSimpleApiKeysRouter(pool) {
       `).catch(() => {});
 
       await pool.query(`
-        INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [key, tx_hash, depositAmount, fromAddress, keyRow.rows[0].tier, newTier]);
+        INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [key, tx_hash, depositAmount, fromAddress, keyRow.rows[0].tier, newTier, isFounderWallet(fromAddress)]);
 
       // Credit the account
       await pool.query(`
