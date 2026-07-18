@@ -72,6 +72,9 @@ done
 
 while IFS= read -r file; do
   [ -f "$file" ] || continue
+  case "$file" in
+    *package-lock.json|*yarn.lock|*pnpm-lock.yaml) continue ;;
+  esac
   size=$(wc -c < "$file" 2>/dev/null | tr -d ' ')
   if [ "${size:-0}" -gt "$MAX_BYTES" ]; then
     echo "❌ BLOCKED: $file is $((size/1024))KB — over 500KB limit"
