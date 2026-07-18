@@ -1,5 +1,9 @@
 version: 2
 updates:
+  # This repo is an npm workspaces monorepo (see root package.json "workspaces").
+  # The ONLY lockfile npm/CI reads is the root package-lock.json — never add or
+  # commit a nested apps/*/package-lock.json, or Dependabot will target it
+  # instead of the root lockfile and every PR it opens will fail `npm ci`.
   # Frontend dependencies - weekly, grouped
   - package-ecosystem: "npm"
     directory: "/apps/web"
