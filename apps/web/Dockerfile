@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Safety check for package.json and package-lock.json
 # These must exist in the build context (apps/web)
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
 # Fail build if package.json or node_modules is missing
 # (Note: node_modules is ignored by .dockerignore, so we check for package.json here)
