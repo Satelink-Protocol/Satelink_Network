@@ -20,6 +20,7 @@ export class RoutingKernel {
     this.journal = journal;
     this.idempotency = idempotency;
     this.clock = clock || (() => Date.now());
+    this._seq = 0; // guarantees a unique default txId even within one clock tick
   }
 
   /** Run one guarded, idempotent, journaled phase transition. */
@@ -40,7 +41,7 @@ export class RoutingKernel {
    * @param {{txId:string}} options  txId is derived from the client idempotency key.
    */
   async execute(request, options = {}) {
-    const txId = options.txId || ('tx_' + this.clock().toString(36));
+    const txId = options.txId || ('tx_' + this.clock().toString(36) + '_' + (++this._seq));
     const tx = new RoutingTransaction(txId, request);
     const saga = new Saga();
 

@@ -26,7 +26,7 @@ export class HealthMonitor {
       if (s.status === SupplierStatus.MAINTENANCE) continue;
       const stale = now - s.lastHeartbeat > this.timeout;
       if (stale && s.status !== SupplierStatus.OFFLINE) {
-        this.registry.updateHealth(s.supplierId, { status: SupplierStatus.OFFLINE, health: 'offline' });
+        this.registry.updateHealth(s.supplierId, { status: SupplierStatus.OFFLINE, health: 'offline', reason: 'stale' });
         transitioned.push(s.supplierId);
       }
     }

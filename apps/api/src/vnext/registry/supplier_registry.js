@@ -49,6 +49,7 @@ export class SupplierRegistry {
       currency: spec.currency || 'USDC',
       reputation: spec.reputation ?? 50,
       version: spec.version || '1',
+      offlineReason: null,
       lastHeartbeat: now,
       registeredAt: now,
       updatedAt: now,
@@ -70,16 +71,24 @@ export class SupplierRegistry {
     const s = this._require(supplierId);
     s.lastHeartbeat = ts ?? this.clock();
     if (latency != null) s.latency = latency;
-    // Recovering from an auto (missed-heartbeat) offline restores service.
-    if (s.status === SupplierStatus.OFFLINE) { s.status = SupplierStatus.HEALTHY; s.availability = this._availability(s.status); }
+    // Auto-recover ONLY from a stale-heartbeat offline. An operator-set offline
+    // (or maintenance) must NOT be overridden by a heartbeat.
+    if (s.status === SupplierStatus.OFFLINE && s.offlineReason === 'stale') {
+      s.status = SupplierStatus.HEALTHY;
+      s.offlineReason = null;
+      s.availability = this._availability(s.status);
+    }
     s.updatedAt = this.clock();
     this._record('HEARTBEAT', s);
     return s;
   }
 
-  updateHealth(supplierId, { status, health } = {}) {
+  updateHealth(supplierId, { status, health, reason } = {}) {
     const s = this._require(supplierId);
-    if (status) s.status = status;
+    if (status) {
+      s.status = status;
+      s.offlineReason = status === SupplierStatus.OFFLINE ? (reason || 'manual') : null;
+    }
     if (health) s.health = health;
     s.availability = this._availability(s.status);
     s.updatedAt = this.clock();

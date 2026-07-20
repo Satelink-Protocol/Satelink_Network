@@ -21,11 +21,16 @@ export class IdempotencyStore {
 
   has(key) { return this._results.has(key); }
 
-  /** Run `fn` exactly once per key; later calls return the cached result. */
-  async once(key, fn) {
+  /**
+   * Run `fn` exactly once per key; later (or concurrent) callers await the same
+   * result. The in-flight promise is cached SYNCHRONOUSLY before any await, so
+   * two concurrent callers cannot both execute `fn` (no double side effect).
+   * On rejection the key is evicted so a genuine retry can re-run.
+   */
+  once(key, fn) {
     if (this._results.has(key)) return this._results.get(key);
-    const result = await fn();
-    this._results.set(key, result);
-    return result;
+    const p = Promise.resolve().then(fn).catch((err) => { this._results.delete(key); throw err; });
+    this._results.set(key, p);
+    return p;
   }
 }

@@ -94,6 +94,14 @@ test('DecisionEngine consumes registry output WITHOUT modification', () => {
   assert.equal(d2.chosen.supplierId, 'S4');
 });
 
+test('operator-set offline is NOT revived by a heartbeat (only stale-offline recovers)', () => {
+  const { registry } = harness();
+  registry.updateHealth('S1', { status: 'offline' }); // operator disables
+  registry.heartbeat('S1'); // stray heartbeat must not re-enable
+  assert.equal(registry.get('S1').status, 'offline');
+  assert.ok(!registry.findCandidates({ workload: 'echo' }).some((x) => x.supplierId === 'S1'));
+});
+
 test('journal: every mutation journaled; replay reconstructs identical state', () => {
   const { registry, journal, monitor, state } = harness();
   registry.heartbeat('S1', { latency: 33 });
