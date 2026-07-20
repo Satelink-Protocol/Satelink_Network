@@ -14,7 +14,8 @@ import { SettlementMode } from './interfaces.js';
 
 export class RoutingKernel {
   constructor({ registry, settlement, fee, journal, idempotency, clock,
-    decisionEngine, policy, feeEngine, feePolicy, feeCurrency, feeReceiver } = {}) {
+    decisionEngine, policy, feeEngine, feePolicy, feeCurrency, feeReceiver,
+    supplierRegistry, healthMonitor } = {}) {
     this.registry = registry;
     this.settlement = settlement;
     this.fee = fee;
@@ -30,6 +31,10 @@ export class RoutingKernel {
     this.feePolicy = feePolicy || { type: 'zero' };
     this.feeCurrency = feeCurrency || null;
     this.feeReceiver = feeReceiver || 'satelink-treasury';
+    // Optional M4 supply source. When present, DISCOVER pulls candidates from
+    // the registry (health-filtered) instead of the adapter's discover().
+    this.supplierRegistry = supplierRegistry || null;
+    this.healthMonitor = healthMonitor || null;
   }
 
   _routingContext(caps) {
@@ -63,9 +68,17 @@ export class RoutingKernel {
       const caps = adapter.capabilities();
       const mode = caps.settlementMode || SettlementMode.POST;
 
-      // DISCOVER
+      // DISCOVER — from the M4 registry (health-filtered) when wired, else the
+      // adapter's own discover(). HealthMonitor runs first so stale/offline
+      // suppliers are excluded from selection. Cached by _phase for replay.
       tx.state = TxState.DISCOVERING;
-      tx.candidates = await this._phase(tx, 'DISCOVER', () => adapter.discover(request.query || {}), null, saga);
+      tx.candidates = await this._phase(tx, 'DISCOVER', () => {
+        if (this.supplierRegistry) {
+          if (this.healthMonitor) this.healthMonitor.evaluate();
+          return this.supplierRegistry.findCandidates({ workload: request.workload, ...(request.query || {}) });
+        }
+        return adapter.discover(request.query || {});
+      }, null, saga);
       if (!tx.candidates || tx.candidates.length === 0) {
         await this._phase(tx, 'REJECTED', () => ({ reason: 'no_supply' }), null, saga);
         tx.state = TxState.REJECTED; tx.reason = 'no_supply';
