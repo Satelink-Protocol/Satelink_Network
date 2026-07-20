@@ -31,6 +31,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
+import { isFounderApiKey } from '../../payments/founder_wallets.js';
 
 const MEV_PROVIDERS = {
   ethereum: [
@@ -195,18 +196,20 @@ async function submitToMevProvider(chain, method, params, requestBody, timeout =
   throw lastError || new Error('All MEV providers failed');
 }
 
-async function recordMevRevenue(db, method, clientId, requestId, chain) {
+async function recordMevRevenue(db, method, apiKey, requestId, chain) {
   if (!db || !db.query) return null;
 
   const amount = MEV_PRICING_USDT[method] || DEFAULT_MEV_PRICE;
+  const clientId = apiKey || 'anonymous';
+  const isTestData = await isFounderApiKey(db, apiKey);
 
   try {
     const now = Math.floor(Date.now() / 1000);
     const result = await db.query(
-      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
-       VALUES ('mev_relay', $1, $2, $3, 'success', $4, $5)
+      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at, is_test_data)
+       VALUES ('mev_relay', $1, $2, $3, 'success', $4, $5, $6)
        RETURNING id, epoch_id`,
-      ['mev_private', clientId, amount, requestId, now]
+      ['mev_private', clientId, amount, requestId, now, isTestData]
     );
 
     mevStats.revenueUsdt += amount;
@@ -392,7 +395,7 @@ export function createMevRelayRouter(db, redis) {
         mevStats.bundlesSubmitted++;
       }
 
-      await recordMevRevenue(db, method, apiKey || 'anonymous', requestId, chain);
+      await recordMevRevenue(db, method, apiKey, requestId, chain);
 
       res.json({
         jsonrpc: '2.0',
@@ -470,7 +473,7 @@ export function createMevRelayRouter(db, redis) {
       mevStats.successfulSubmissions++;
       mevStats.lastSubmissionAt = new Date().toISOString();
 
-      await recordMevRevenue(db, 'eth_sendBundle', apiKey || 'anonymous', requestId, chain);
+      await recordMevRevenue(db, 'eth_sendBundle', apiKey, requestId, chain);
 
       res.json({
         ok: true,
@@ -573,7 +576,7 @@ export function createMevRelayRouter(db, redis) {
       const latency = Date.now() - startTime;
 
       const simulationFee = MEV_PRICING_USDT.eth_callBundle;
-      await recordMevRevenue(db, 'eth_callBundle', apiKey || 'anonymous', requestId, 'ethereum');
+      await recordMevRevenue(db, 'eth_callBundle', apiKey, requestId, 'ethereum');
 
       if (result.error) {
         return res.json({
@@ -668,7 +671,7 @@ export function createMevRelayRouter(db, redis) {
       const result = await response.json();
 
       const statusFee = MEV_PRICING_USDT.flashbots_getBundleStats;
-      await recordMevRevenue(db, 'flashbots_getBundleStats', apiKey || 'anonymous', requestId, 'ethereum');
+      await recordMevRevenue(db, 'flashbots_getBundleStats', apiKey, requestId, 'ethereum');
 
       if (result.error) {
         return res.json({

@@ -9,6 +9,7 @@
  */
 
 import { Router } from 'express';
+import { isFounderApiKey } from '../../payments/founder_wallets.js';
 
 const WEBHOOK_PRICE_USDT = 0.0001;
 
@@ -137,10 +138,11 @@ export async function deliverWebhooks(pool, redis, chain, eventType, payload) {
 
         if (response.ok) {
           delivered++;
+          const isTestData = await isFounderApiKey(pool, sub.api_key);
           await pool.query(
-            `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at)
-             VALUES ($1, 'webhook', $2, $3, 'completed', $4)`,
-            [sub.api_key, eventType, WEBHOOK_PRICE_USDT, Math.floor(Date.now() / 1000)]
+            `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data)
+             VALUES ($1, 'webhook', $2, $3, 'completed', $4, $5)`,
+            [sub.api_key, eventType, WEBHOOK_PRICE_USDT, Math.floor(Date.now() / 1000), isTestData]
           );
         }
       } catch (e) {

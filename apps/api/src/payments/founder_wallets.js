@@ -14,3 +14,22 @@ export const FOUNDER_WALLETS = [
 export function isFounderWallet(address) {
   return typeof address === 'string' && FOUNDER_WALLETS.includes(address.toLowerCase());
 }
+
+// API-key-based revenue sites (oracle, mev_relay, ai_gateway, webhooks,
+// rpc_billing, bandwidth_proxy) don't have a wallet address on hand — only
+// an api_key. Unauthenticated traffic ('public'/'anonymous' sentinels, or no
+// key at all) and traffic from a founder-owned key (resolved via the key's
+// bound wallet_address in api_credits) both count as is_test_data, same as
+// the api_deposits pattern in PR #268.
+export async function isFounderApiKey(pool, apiKey) {
+  if (!apiKey || apiKey === 'public' || apiKey === 'anonymous') return true;
+  try {
+    const r = await pool.query(
+      'SELECT wallet_address FROM api_credits WHERE api_key = $1',
+      [apiKey]
+    );
+    return isFounderWallet(r.rows[0]?.wallet_address);
+  } catch {
+    return false;
+  }
+}
