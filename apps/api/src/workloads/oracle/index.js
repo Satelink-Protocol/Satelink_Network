@@ -10,6 +10,7 @@
  */
 
 import { Router } from 'express';
+import { isFounderApiKey } from '../../payments/founder_wallets.js';
 
 const ORACLE_PRICE_USDT = 0.00001;
 
@@ -90,10 +91,11 @@ export function createOracleRouter(pool, redis) {
     const apiKey = req.headers['x-api-key'];
     if (apiKey) {
       try {
+        const isTestData = await isFounderApiKey(pool, apiKey);
         await pool.query(
-          `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at)
-           VALUES ($1, 'oracle', $2, $3, 'completed', $4)`,
-          [apiKey, token, ORACLE_PRICE_USDT, Math.floor(Date.now() / 1000)]
+          `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data)
+           VALUES ($1, 'oracle', $2, $3, 'completed', $4, $5)`,
+          [apiKey, token, ORACLE_PRICE_USDT, Math.floor(Date.now() / 1000), isTestData]
         );
       } catch (e) {
         console.error('[Oracle] Revenue recording failed:', e.message);

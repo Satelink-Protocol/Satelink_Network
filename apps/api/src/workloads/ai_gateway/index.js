@@ -15,6 +15,7 @@
 
 import { Router } from 'express';
 import crypto from 'crypto';
+import { isFounderApiKey } from '../../payments/founder_wallets.js';
 
 const REQUEST_COST_USDT = 0.001;
 
@@ -61,17 +62,19 @@ function countMessageTokens(messages) {
   }, 0);
 }
 
-async function recordAiRevenue(db, inputTokens, outputTokens, clientId, requestId, model) {
+async function recordAiRevenue(db, inputTokens, outputTokens, apiKey, requestId, model) {
   if (!db || !db.query) return;
 
   const cost = REQUEST_COST_USDT;
+  const clientId = apiKey || 'anonymous';
 
   try {
     const now = Math.floor(Date.now() / 1000);
+    const isTestData = await isFounderApiKey(db, apiKey);
     await db.query(
-      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
-       VALUES ('ai_inference', $1, $2, $3, 'success', $4, $5)`,
-      [`ai_${model}`, clientId, cost, requestId, now]
+      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at, is_test_data)
+       VALUES ('ai_inference', $1, $2, $3, 'success', $4, $5, $6)`,
+      [`ai_${model}`, clientId, cost, requestId, now, isTestData]
     );
 
     aiGatewayStats.revenueUsdt += cost;
@@ -285,7 +288,7 @@ export function createAiGatewayRouter(db, redis) {
       result = createStubResponse(model, messages, max_tokens);
     }
 
-    await recordAiRevenue(db, result.inputTokens, result.outputTokens, apiKey || 'anonymous', result.requestId, model);
+    await recordAiRevenue(db, result.inputTokens, result.outputTokens, apiKey, result.requestId, model);
 
     res.json(result.response);
   });
@@ -326,7 +329,7 @@ export function createAiGatewayRouter(db, redis) {
       result = createStubResponse(model, messages, max_tokens);
     }
 
-    await recordAiRevenue(db, result.inputTokens, result.outputTokens, apiKey || 'anonymous', result.requestId, model);
+    await recordAiRevenue(db, result.inputTokens, result.outputTokens, apiKey, result.requestId, model);
 
     res.json({
       id: result.requestId,

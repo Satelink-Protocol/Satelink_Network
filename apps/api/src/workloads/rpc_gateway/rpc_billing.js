@@ -9,6 +9,7 @@
 
 import { getSharedRedis } from './shared_redis.js';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
+import { isFounderApiKey } from '../../payments/founder_wallets.js';
 
 const CHAIN_PRICING_USDT = {
   'ethereum': 0.00005,
@@ -80,10 +81,11 @@ export async function recordRpcRevenue({ pool, chain, method, apiKey, source, re
   }
 
   try {
+    const isTestData = await isFounderApiKey(pool, apiKey);
     await pool.query(
-      `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000), chain || null, method || null, source || null]
+      `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source, is_test_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000), chain || null, method || null, source || null, isTestData]
     );
     console.log(`[Billing] ✓ $${costUsdt}`);
 
