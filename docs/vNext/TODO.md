@@ -74,3 +74,14 @@ Proven: two separate pg Pools (two instances) contending on the same key run the
 critical section exactly once (maxConcurrent==1), the loser skips cleanly, and the
 lock is released afterward. Earlier note about needing this guard before
 multi-instance deploy is now addressed.
+
+## DurableKernel wired into app_factory.mjs (gated, additive)
+
+`app_factory.mjs` mounts `/vnext` (admin-gated) via `createVnextKernelRouter(pool)` — 2 additive edits (1 import + 1 mount block), zero existing lines changed, live money path untouched.
+
+Gating (defaults OFF; enabling is a human decision per the non-negotiable rules):
+- `VNEXT_KERNEL_ENABLED` (default off): when off the router is fully inert — every route 503s, NO pool access / DDL / kernel boot (proven with an exploding pool in tests).
+- `VNEXT_RECOVERY_TIMER_ENABLED` (default off): starts the advisory-lock-guarded recovery timer when on.
+- `VNEXT_RECOVERY_INTERVAL_MS` (default 30000).
+
+When enabled: lazily boots a DurableKernel over the app's pool (creates additive `vnext_*` tables via store.init()), rehydrates durable suppliers, and serves `GET /vnext/health` (enabled state, supplier/journal counts, chainValid, recovery-timer status) and `GET /vnext/journal/:txId` (phase timeline). Boot failures are contained (503 on /vnext, never crashes the host app). NO workload adapters and NO submit endpoint yet — money cannot move through this surface; it is lifecycle + observability only. Real adapters + a submit surface are the next deliberate wiring step.
