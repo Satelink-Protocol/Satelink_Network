@@ -92,10 +92,16 @@ export class DurableKernel {
   /** Run a recovery sweep on demand. */
   recover() { return this.recoveryWorker.recover(); }
 
-  /** Start periodic recovery sweeps on a timer. Idempotent. */
-  startRecoveryTimer({ intervalMs = 30_000, onError, setTimer, clearTimer } = {}) {
+  /** Start periodic recovery sweeps on a timer. Idempotent. When the store
+   *  supports advisory locks, sweeps are guarded so only one instance sweeps at
+   *  a time across a multi-instance deployment (no wasted double-sweeps). */
+  startRecoveryTimer({ intervalMs = 30_000, onError, setTimer, clearTimer, lockKey = 4021 } = {}) {
     if (!this.recoveryScheduler) {
-      this.recoveryScheduler = new RecoveryScheduler({ worker: this.recoveryWorker, intervalMs, onError, setTimer, clearTimer });
+      const store = this.store;
+      const withLock = store && typeof store.withAdvisoryLock === 'function'
+        ? (fn) => store.withAdvisoryLock(lockKey, fn)
+        : undefined;
+      this.recoveryScheduler = new RecoveryScheduler({ worker: this.recoveryWorker, intervalMs, onError, setTimer, clearTimer, withLock });
     }
     this.recoveryScheduler.start();
     return this.recoveryScheduler;

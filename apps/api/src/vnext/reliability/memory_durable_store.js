@@ -49,6 +49,17 @@ export class MemoryDurableStore {
   async dlqAdd(entry) { this.b.dlq.set(entry.tx_id, entry); }
   async dlqAll() { return [...this.b.dlq.values()]; }
   async dlqGet(txId) { return this.b.dlq.get(txId) || null; }
+
+  // Single-process: the advisory lock is held on the shared backing so two
+  // MemoryDurableStore instances over the SAME backing (modelling two workers)
+  // still serialize — mirroring the PG advisory-lock semantics for tests.
+  async withAdvisoryLock(key, fn) {
+    if (!this.b.locks) this.b.locks = new Set();
+    if (this.b.locks.has(key)) return { ran: false, result: null };
+    this.b.locks.add(key);
+    try { return { ran: true, result: await fn() }; }
+    finally { this.b.locks.delete(key); }
+  }
 }
 
 export { GENESIS };

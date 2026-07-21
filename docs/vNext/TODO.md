@@ -59,3 +59,18 @@ Wiring the M6 reliability layer into the kernel path (DurableKernel.boot) expose
 Wired into `DurableKernel`: `startRecoveryTimer({intervalMs})` / `stopRecoveryTimer()` (drains in-flight sweep). `DurableKernel.boot({recoveryIntervalMs})` opts in at boot. Default OFF (caller opts in). Tests: `vnext_recovery_scheduler_m6.test.js` + a DurableKernel timer integration test — a transaction that goes stuck AFTER boot is recovered to CLOSED by a periodic sweep.
 
 Note: this does NOT resolve the multi-instance leader-election risk — running the timer in >1 process still double-sweeps (safe via idempotency, wasteful). `pg_advisory_lock` around a sweep is still the recommended guard before multi-instance deploy.
+
+## Multi-instance double-sweep — RESOLVED (pg_advisory_lock)
+
+`DurableStore.withAdvisoryLock(key, fn)` runs a critical section under a Postgres
+session-level advisory lock (`pg_try_advisory_lock` / `pg_advisory_unlock` on ONE
+dedicated client; non-blocking — a peer that can't acquire returns {ran:false}
+and skips rather than queueing). Memory store models the same via a lock set on
+the shared backing. The RecoveryScheduler takes an optional `withLock` and skips
+(increments `skipped`) when a peer holds the lock; `DurableKernel.startRecoveryTimer`
+auto-enables it whenever the store supports advisory locks (default lockKey 4021).
+
+Proven: two separate pg Pools (two instances) contending on the same key run the
+critical section exactly once (maxConcurrent==1), the loser skips cleanly, and the
+lock is released afterward. Earlier note about needing this guard before
+multi-instance deploy is now addressed.

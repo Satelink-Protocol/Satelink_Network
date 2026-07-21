@@ -203,3 +203,38 @@ test('PG red-team: duplicate delivery + journal corruption detection', async (t)
   const reloaded = await PersistentJournal.load(store);
   assert.equal(reloaded.verifyChain(), false, 'tampered journal not detected');
 });
+
+test('PG advisory lock: two pools (two instances) contend -> exactly one sweeps', async (t) => {
+  if (!POOL) return t.skip('local postgres unavailable'); await cleanup();
+
+  // Two SEPARATE pools model two separate processes/instances.
+  const poolA = new pg.Pool({ connectionString: LOCAL_DSN, max: 3 });
+  const poolB = new pg.Pool({ connectionString: LOCAL_DSN, max: 3 });
+  try {
+    const storeA = new PgDurableStore(poolA);
+    const storeB = new PgDurableStore(poolB);
+    let concurrent = 0; let maxConcurrent = 0; let ran = 0;
+    const body = async () => {
+      concurrent += 1; maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((r) => setTimeout(r, 60)); // hold long enough to overlap
+      concurrent -= 1; ran += 1; return 'done';
+    };
+    const KEY = 99123;
+    const [a, b] = await Promise.all([
+      storeA.withAdvisoryLock(KEY, body),
+      storeB.withAdvisoryLock(KEY, body),
+    ]);
+
+    assert.equal(maxConcurrent, 1, 'both instances ran the critical section concurrently');
+    assert.equal(ran, 1, 'sweep body ran on more than one instance');
+    // Exactly one acquired the lock; the other was cleanly skipped (ran:false).
+    assert.equal([a, b].filter((r) => r.ran).length, 1);
+    assert.equal([a, b].filter((r) => !r.ran).length, 1);
+
+    // After both settle, the lock is free again: a fresh acquire succeeds.
+    const again = await storeA.withAdvisoryLock(KEY, async () => 'ok');
+    assert.equal(again.ran, true, 'advisory lock not released after use');
+  } finally {
+    await poolA.end(); await poolB.end();
+  }
+});

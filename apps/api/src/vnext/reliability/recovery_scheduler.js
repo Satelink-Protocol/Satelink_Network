@@ -8,10 +8,13 @@
 // tests; runOnce() drives a single sweep without any timer.
 
 export class RecoveryScheduler {
-  constructor({ worker, recover, intervalMs = 30_000, onError, setTimer, clearTimer } = {}) {
+  constructor({ worker, recover, intervalMs = 30_000, onError, setTimer, clearTimer, withLock } = {}) {
     const fn = recover || (worker && (() => worker.recover()));
     if (!fn) throw new Error('RecoveryScheduler requires { worker } or { recover }');
     this._recover = fn;
+    // Optional cross-instance guard: withLock(fn) -> {ran, result}. When a peer
+    // instance is already sweeping, ran=false and this sweep is skipped.
+    this._withLock = withLock || (async (f) => ({ ran: true, result: await f() }));
     this.intervalMs = intervalMs;
     this.onError = onError || (() => {});
     this._setTimer = setTimer || ((cb, ms) => {
@@ -26,6 +29,7 @@ export class RecoveryScheduler {
     this.lastResult = null;
     this.lastError = null;
     this.sweeps = 0;
+    this.skipped = 0; // sweeps skipped because a peer instance held the lock
   }
 
   /** Start the periodic loop. Idempotent (a second start is a no-op). */
@@ -61,9 +65,11 @@ export class RecoveryScheduler {
     if (this._inFlight) return this._inFlight; // guard: never overlap
     this._inFlight = (async () => {
       try {
-        this.lastResult = await this._recover();
+        const { ran, result } = await this._withLock(() => this._recover());
+        if (!ran) { this.skipped += 1; return null; } // a peer instance is sweeping
+        this.lastResult = result;
         this.lastError = null;
-        return this.lastResult;
+        return result;
       } catch (err) {
         this.lastError = err;
         this.onError(err);

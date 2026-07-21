@@ -82,6 +82,30 @@ export class PgDurableStore {
     const { rows } = await this.pool.query(`SELECT tx_id, reason, attempts, request, failed_at FROM vnext_dlq WHERE tx_id=$1`, [txId]);
     return rows.length ? { tx_id: rows[0].tx_id, reason: rows[0].reason, attempts: rows[0].attempts, request: rows[0].request, failed_at: Number(rows[0].failed_at) } : null;
   }
+
+  /**
+   * Run `fn` while holding a Postgres session-level advisory lock. Only one
+   * process/instance can hold the lock for `key` at a time, so concurrent
+   * recovery sweeps across instances are serialized to exactly one. Non-blocking:
+   * if another instance holds the lock, returns {ran:false} immediately instead
+   * of queueing. Lock + unlock run on the SAME dedicated client (advisory locks
+   * are session-scoped); the client is always released.
+   * @returns {{ran:boolean, result:any}}
+   */
+  async withAdvisoryLock(key, fn) {
+    const client = await this.pool.connect();
+    try {
+      const { rows } = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [key]);
+      if (!rows[0].locked) return { ran: false, result: null };
+      try {
+        return { ran: true, result: await fn() };
+      } finally {
+        await client.query('SELECT pg_advisory_unlock($1)', [key]);
+      }
+    } finally {
+      client.release();
+    }
+  }
 }
 
 export { GENESIS };

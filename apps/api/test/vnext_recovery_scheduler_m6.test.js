@@ -73,3 +73,24 @@ test('start()/stop() with real timers; timer is unref-safe', async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(calls, after, 'sweeps continued after stop()');
 });
+
+test('advisory lock: two "instances" over the same backing sweep as one (memory)', async () => {
+  const backing = createMemoryBacking();
+  // Two independent stores over the SAME backing = two workers/instances.
+  const storeA = new MemoryDurableStore(backing);
+  const storeB = new MemoryDurableStore(backing);
+  let concurrent = 0; let maxConcurrent = 0; let ran = 0;
+  const makeRecover = () => async () => {
+    concurrent += 1; maxConcurrent = Math.max(maxConcurrent, concurrent);
+    await new Promise((r) => setTimeout(r, 15));
+    concurrent -= 1; ran += 1; return { resumed: [], deadLettered: [] };
+  };
+  const schedA = new RecoveryScheduler({ recover: makeRecover(), withLock: (fn) => storeA.withAdvisoryLock(4021, fn) });
+  const schedB = new RecoveryScheduler({ recover: makeRecover(), withLock: (fn) => storeB.withAdvisoryLock(4021, fn) });
+
+  // Both instances sweep at the same instant; the lock must let only one run.
+  await Promise.all([schedA.runOnce(), schedB.runOnce()]);
+  assert.equal(maxConcurrent, 1, 'both instances swept concurrently (double-sweep)');
+  assert.equal(ran, 1, 'more than one instance ran the sweep');
+  assert.equal(schedA.skipped + schedB.skipped, 1, 'the losing instance did not record a skip');
+});
