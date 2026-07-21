@@ -12,6 +12,7 @@ export class PersistentJournal {
   constructor(store, primed = []) {
     this.store = store;
     this._chain = primed.slice(); // in-memory mirror (seq-ordered)
+    this._tail = Promise.resolve(); // append serialization lock (see append)
   }
 
   /** Rehydrate the journal from durable storage (call on process start).
@@ -26,16 +27,27 @@ export class PersistentJournal {
     return new PersistentJournal(store, primed);
   }
 
-  async append(streamId, phase, payload, ts) {
-    const seq = this._chain.length; // matches in-memory M1 Journal seq semantics
-    const hashPrev = seq === 0 ? GENESIS : this._chain[seq - 1].hash_current;
-    const entry = { seq, txId: streamId, phase, payload, ts };
-    const hashCurrent = sha256Hex(canonicalJSON(entry) + hashPrev);
-    const durable = { stream_id: streamId, phase, payload, ts, hash_prev: hashPrev, hash_current: hashCurrent };
-    await this.store.appendEvent(durable); // durable BEFORE returning (crash-safe)
-    const record = { seq, txId: streamId, phase, payload, ts, hash_prev: hashPrev, hash_current: hashCurrent };
-    this._chain.push(record);
-    return record;
+  // Appends are strictly serialized. A hash chain is order-dependent: the
+  // read-compute-persist-push sequence must be atomic per append, or concurrent
+  // callers (e.g. a fire-and-forget health mutation racing a transaction phase)
+  // would both hash against the same tail and corrupt the chain. The `_tail`
+  // promise chain guarantees one append completes before the next begins.
+  append(streamId, phase, payload, ts) {
+    const run = this._tail.then(async () => {
+      const seq = this._chain.length; // matches in-memory M1 Journal seq semantics
+      const hashPrev = seq === 0 ? GENESIS : this._chain[seq - 1].hash_current;
+      const entry = { seq, txId: streamId, phase, payload, ts };
+      const hashCurrent = sha256Hex(canonicalJSON(entry) + hashPrev);
+      const durable = { stream_id: streamId, phase, payload, ts, hash_prev: hashPrev, hash_current: hashCurrent };
+      await this.store.appendEvent(durable); // durable BEFORE returning (crash-safe)
+      const record = { seq, txId: streamId, phase, payload, ts, hash_prev: hashPrev, hash_current: hashCurrent };
+      this._chain.push(record);
+      return record;
+    });
+    // Keep the lock chain alive even if this append rejects, without swallowing
+    // the error for the caller.
+    this._tail = run.then(() => {}, () => {});
+    return run;
   }
 
   read(txId) { return this._chain.filter((e) => e.txId === txId); }

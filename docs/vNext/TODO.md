@@ -39,3 +39,11 @@ Residual production risks (not yet addressed):
 - **Full-payload journaling:** execute response bodies persisted verbatim (size/PII); store digests when hardening.
 - **Recovery worker is pull-based** (call `recover()` on boot / timer); no leader election, so running it in >1 process concurrently could double-resume — safe (idempotent) but wasteful. Add an advisory lock (`pg_advisory_lock`) before multi-instance deployment.
 - **No real fsync/power-loss test:** "crash" is simulated by abandoning in-flight promises + rebuilding from the durable store; true OS-level power-loss durability relies on PostgreSQL's own guarantees (not independently tested here).
+
+## Reliability-wiring (DurableKernel) — defects found & fixed
+
+Wiring the M6 reliability layer into the kernel path (DurableKernel.boot) exposed two real defects, both fixed:
+- **ROUTE phase side-effects were lost on replay/recovery.** The DecisionEngine ROUTE branch set `tx.supplier`/`tx.quote`/`tx.decision` INSIDE the memoized phase closure; on a resumed transaction (cache hit) the closure doesn't run, so those fields were undefined and EXECUTE failed. Fixed: the closure now returns `{engine, chosen, decision|fee}` and the kernel derives `tx` fields OUTSIDE it from the (possibly cached) result — replay-safe. Proven by `test/vnext_durable_kernel_m6.test.js` boot-recovery.
+- **Hash-chain corruption under concurrent appends.** `HealthMonitor.evaluate()` (sync, fire-and-forget) triggered the durable registry's async `updateHealth` -> an un-awaited `journal.append` that raced the transaction's phase appends; both hashed against the same tail and broke the chain. Fixed by an append-serialization lock in `PersistentJournal.append` (a hash chain is order-dependent and must serialize appends at the source, independent of caller). verifyChain now holds under the full durable path.
+
+`DurableKernel.boot()` is the single durable entry point: rehydrates journal (+ optional supplier registry), refuses to start on an invalid chain, runs one recovery pass BEFORE serving new traffic, then exposes submit()/recover(). Zero kernel edits were needed to inject the durable components; the ROUTE fix is a correctness fix (replay), not a business-logic change.

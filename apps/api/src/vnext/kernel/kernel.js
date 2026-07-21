@@ -105,6 +105,10 @@ export class RoutingKernel {
       // ROUTE — DecisionEngine selects the winner (rules live only in M3);
       // legacy path binds candidate[0] + legacy fee (fee>=0 invariant).
       tx.state = TxState.ROUTING;
+      // The forward fn must have NO effect on `tx` — the phase result is
+      // memoized, so on replay/recovery (cache hit) the closure does not run.
+      // All `tx` field derivation happens OUTSIDE, from the returned value, so a
+      // resumed transaction reconstructs supplier/quote/decision identically.
       tx.route = await this._phase(tx, 'ROUTE', () => {
         if (this.decisionEngine) {
           const scored = tx.quotes.map(({ candidate, quote }) => ({
@@ -112,17 +116,21 @@ export class RoutingKernel {
             price: candidate.price != null ? candidate.price : Number(quote.cost ?? 0),
           }));
           const decision = this.decisionEngine.select(scored, this.policy, this._routingContext(caps));
-          const idx = tx.quotes.findIndex((q) => q.candidate.supplierId === decision.chosen.supplierId);
-          tx.supplier = tx.quotes[idx].candidate;
-          tx.quote = tx.quotes[idx].quote;
-          tx.decision = decision;
-          return { decisionId: decision.decisionId, chosen: decision.chosen.supplierId, decision };
+          return { engine: true, chosen: decision.chosen.supplierId, decision };
         }
         const fee = this.fee.computeFee(tx.quote, { txId: tx.id });
         if (!fee || fee.amount < 0) throw new Error('INVARIANT_VIOLATION_fee_negative');
-        return { supplier: tx.supplier, quote: tx.quote, fee };
+        return { engine: false, fee };
       }, null, saga);
-      if (!this.decisionEngine) tx.fee = tx.route.fee;
+      // Derive tx state from the (possibly cached) ROUTE result — replay-safe.
+      if (tx.route.engine) {
+        const picked = tx.quotes.find((q) => q.candidate.supplierId === tx.route.chosen);
+        tx.supplier = picked.candidate;
+        tx.quote = picked.quote;
+        tx.decision = tx.route.decision;
+      } else {
+        tx.fee = tx.route.fee;
+      }
       tx.state = TxState.ROUTED;
 
       // SETTLE-IN before execute only when the adapter declares PRE (generic branch)
