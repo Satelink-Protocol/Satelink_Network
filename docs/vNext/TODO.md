@@ -85,3 +85,19 @@ Gating (defaults OFF; enabling is a human decision per the non-negotiable rules)
 - `VNEXT_RECOVERY_INTERVAL_MS` (default 30000).
 
 When enabled: lazily boots a DurableKernel over the app's pool (creates additive `vnext_*` tables via store.init()), rehydrates durable suppliers, and serves `GET /vnext/health` (enabled state, supplier/journal counts, chainValid, recovery-timer status) and `GET /vnext/journal/:txId` (phase timeline). Boot failures are contained (503 on /vnext, never crashes the host app). NO workload adapters and NO submit endpoint yet — money cannot move through this surface; it is lifecycle + observability only. Real adapters + a submit surface are the next deliberate wiring step.
+
+## x402 adapter + /vnext/submit wired (gated, SSRF-safe)
+
+`createVnextKernelRouter` now registers the M2 x402 purchase adapter and exposes `POST /vnext/submit` when `VNEXT_SUBMIT_ENABLED=true` (default off) AND `VNEXT_X402_RESOURCES` (JSON allowlist) is non-empty. Full path: DISCOVER (allowlisted resources) -> QUOTE (real 402 parse) -> ROUTE (M3 cheapest) -> SETTLE_IN (x402 payload) -> EXECUTE (real fetch w/ X-PAYMENT) -> FEE (M5 bps) -> SETTLE -> CLOSED, durable + idempotent.
+
+New env (all default off/zero):
+- `VNEXT_SUBMIT_ENABLED` — enables the /submit money path (else 403).
+- `VNEXT_X402_RESOURCES` — JSON `[{url,method,supplierId}]` allowlist (only http/https URLs; malformed => empty => x402 path inactive).
+- `VNEXT_FEE_BPS` — spread fee in basis points (default 0).
+
+Safety:
+- **SSRF-safe:** request `resource` only SELECTS among the allowlist; URLs are never fetched from the request. Off-allowlist -> no_supply/REJECTED, nothing fetched (proven, incl. a 169.254.169.254 attempt).
+- **No real broadcast:** X402SettlementAdapter constructs x402 payloads but holds no wallet/keys; real outbound settlement still needs a funded wallet + the outbound flag (M2 residual, NOT wired).
+- Admin-gated, idempotent by client key, result body never echoed (only status/paidWith).
+
+Tests: `vnext_submit_endpoint.test.js` (3) — disabled->403, end-to-end buy against a local mock x402 merchant (CLOSED, fee 25 = 2.5% of 1000, full phase timeline), SSRF rejection. Full vnext suite 81/81; app_factory loads clean.
