@@ -47,3 +47,15 @@ Wiring the M6 reliability layer into the kernel path (DurableKernel.boot) expose
 - **Hash-chain corruption under concurrent appends.** `HealthMonitor.evaluate()` (sync, fire-and-forget) triggered the durable registry's async `updateHealth` -> an un-awaited `journal.append` that raced the transaction's phase appends; both hashed against the same tail and broke the chain. Fixed by an append-serialization lock in `PersistentJournal.append` (a hash chain is order-dependent and must serialize appends at the source, independent of caller). verifyChain now holds under the full durable path.
 
 `DurableKernel.boot()` is the single durable entry point: rehydrates journal (+ optional supplier registry), refuses to start on an invalid chain, runs one recovery pass BEFORE serving new traffic, then exposes submit()/recover(). Zero kernel edits were needed to inject the durable components; the ROUTE fix is a correctness fix (replay), not a business-logic change.
+
+## Recovery worker on a timer (RecoveryScheduler)
+
+`RecoveryScheduler` runs the RecoveryWorker on a self-rescheduling setTimeout loop:
+- Non-overlapping by construction (next sweep scheduled only after the previous settles; concurrent runOnce() dedupes to one in-flight sweep).
+- Timer is `unref()`'d, so it never keeps the process alive on its own.
+- A failing sweep is captured (onError) and swallowed so the loop continues.
+- Injectable timers + `runOnce()` for deterministic tests.
+
+Wired into `DurableKernel`: `startRecoveryTimer({intervalMs})` / `stopRecoveryTimer()` (drains in-flight sweep). `DurableKernel.boot({recoveryIntervalMs})` opts in at boot. Default OFF (caller opts in). Tests: `vnext_recovery_scheduler_m6.test.js` + a DurableKernel timer integration test — a transaction that goes stuck AFTER boot is recovered to CLOSED by a periodic sweep.
+
+Note: this does NOT resolve the multi-instance leader-election risk — running the timer in >1 process still double-sweeps (safe via idempotency, wasteful). `pg_advisory_lock` around a sweep is still the recommended guard before multi-instance deploy.

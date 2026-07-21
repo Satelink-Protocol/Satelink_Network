@@ -99,3 +99,27 @@ test('durable path: boot() auto-recovers an in-flight transaction after a crash'
   assert.ok(phases.includes('CLOSED'), `expected CLOSED after boot-recovery, got ${phases.join(',')}`);
   assert.equal(settlement2.outs, 1, 'settlement not exactly-once across crash+boot-recovery');
 });
+
+test('DurableKernel.startRecoveryTimer(): periodic sweeps recover post-boot crashes', async () => {
+  const backing = createMemoryBacking();
+  const clock = () => 1;
+  const seed = await DurableKernel.boot(bootOpts(new MemoryDurableStore(backing), new PricedAdapter(), new Settlement(), clock));
+  await seed.supplierRegistry.register({ supplierId: 'A', adapterId: 'priced', supportedWorkloads: ['priced'], supportedSettlementModes: ['POST'], supportedPaymentRails: ['x402'], basePrice: 100, latency: 10, reputation: 50, currency: 'uUSDC' });
+
+  const dk = await DurableKernel.boot(bootOpts(new MemoryDurableStore(backing), new PricedAdapter(), new Settlement(), clock));
+  dk.startRecoveryTimer({ intervalMs: 5 });
+  // A transaction is submitted but its process "died" mid-flight (SUBMIT only,
+  // no terminal) — write the SUBMIT marker directly to simulate that.
+  await dk.journal.append('tx_timer', 'SUBMIT', { request: { workload: 'priced', payer: '0xB' } }, 1);
+
+  // Wait for a timer sweep to pick it up and drive it to CLOSED.
+  const deadline = Date.now() + 500;
+  let phases = [];
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10));
+    phases = dk.journal.read('tx_timer').map((e) => e.phase);
+    if (phases.includes('CLOSED')) break;
+  }
+  await dk.stopRecoveryTimer();
+  assert.ok(phases.includes('CLOSED'), `timer recovery did not close the tx, phases=${phases.join(',')}`);
+});

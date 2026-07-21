@@ -19,6 +19,7 @@ import { PersistentIdempotencyStore } from './persistent_idempotency.js';
 import { PersistentSupplierRegistry } from './persistent_supplier_registry.js';
 import { ReliableExecutor } from './reliable_executor.js';
 import { RecoveryWorker } from './recovery_worker.js';
+import { RecoveryScheduler } from './recovery_scheduler.js';
 import { RetryPolicy } from './retry_policy.js';
 
 export class DurableKernel {
@@ -30,6 +31,7 @@ export class DurableKernel {
     this.executor = executor;
     this.recoveryWorker = recoveryWorker;
     this.store = store;
+    this.recoveryScheduler = null;
   }
 
   /**
@@ -79,12 +81,28 @@ export class DurableKernel {
     // Finish any transaction that was in flight when the previous process died,
     // BEFORE accepting new work.
     dk.lastRecovery = await recoveryWorker.recover();
+    // Optionally keep sweeping on a timer (default off; caller opts in).
+    if (opts.recoveryIntervalMs) dk.startRecoveryTimer({ intervalMs: opts.recoveryIntervalMs, onError: opts.onRecoveryError, setTimer: opts.setTimer, clearTimer: opts.clearTimer });
     return dk;
   }
 
   /** Submit a new transaction through the durable path (SUBMIT persisted first). */
   submit(request, options) { return this.executor.submit(request, options); }
 
-  /** Run a recovery sweep on demand (e.g. on a timer). */
+  /** Run a recovery sweep on demand. */
   recover() { return this.recoveryWorker.recover(); }
+
+  /** Start periodic recovery sweeps on a timer. Idempotent. */
+  startRecoveryTimer({ intervalMs = 30_000, onError, setTimer, clearTimer } = {}) {
+    if (!this.recoveryScheduler) {
+      this.recoveryScheduler = new RecoveryScheduler({ worker: this.recoveryWorker, intervalMs, onError, setTimer, clearTimer });
+    }
+    this.recoveryScheduler.start();
+    return this.recoveryScheduler;
+  }
+
+  /** Stop periodic recovery sweeps (and drain any in-flight sweep). */
+  async stopRecoveryTimer() {
+    if (this.recoveryScheduler) { this.recoveryScheduler.stop(); await this.recoveryScheduler.drain(); }
+  }
 }
