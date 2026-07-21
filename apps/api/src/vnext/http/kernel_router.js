@@ -25,6 +25,7 @@ import { X402SettlementAdapter } from '../adapters/x402/x402_settlement_adapter.
 import { OutboundGuard } from '../reliability/outbound_guard.js';
 import { TreasuryLedger } from '../reliability/treasury_ledger.js';
 import { InboundSettlement } from '../adapters/x402/inbound_settlement.js';
+import { buildInboundVerifierFromEnv } from '../adapters/x402/cdp_inbound_verifier.js';
 
 // Resale price = supplier cost + spread, where spread = floor(cost * bps / 10000).
 // bps=0 -> no spread -> price == cost -> no revenue (a safe, explicit default).
@@ -135,10 +136,13 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
       });
       // Inbound revenue leg: charge the caller, collect, persist revenue.
       treasury = new TreasuryLedger({ store, clock: () => Date.now() });
+      // Real CDP verifier from env (fail-safe null if no CDP creds); tests may
+      // inject `inboundVerifier` to override.
+      const verifier = inboundVerifier || buildInboundVerifierFromEnv();
       inbound = new InboundSettlement({
         payTo: process.env.VNEXT_INBOUND_PAYTO || '0x966E1Ae22996545015b1414B35234b10719d7Ad4',
         network: process.env.X402_NETWORK || 'eip155:8453',
-        verifier: inboundVerifier || null, // fail-safe: no verifier -> cannot settle inbound
+        verifier: verifier || null, // fail-safe: no verifier -> cannot settle inbound
       });
       logger.log(`[vnext] x402 resale path active with ${resources.length} allowlisted resource(s), fee ${feeBps}bps`);
     } else {
