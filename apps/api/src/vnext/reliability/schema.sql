@@ -70,3 +70,15 @@ CREATE TABLE IF NOT EXISTS vnext_treasury (
   ts        BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_vnext_treasury_ts ON vnext_treasury(ts);
+
+-- Withdrawal ledger: admin-initiated treasury payouts to the FIXED cold address.
+-- Exactly-once by idem_key. Separate table so payouts never affect the outbound
+-- supplier-payment rolling caps.
+CREATE TABLE IF NOT EXISTS vnext_withdrawal (
+  idem_key TEXT PRIMARY KEY,
+  amount   TEXT   NOT NULL,
+  dest     TEXT   NOT NULL,
+  ref      TEXT,
+  status   TEXT   NOT NULL,
+  ts       BIGINT NOT NULL
+);

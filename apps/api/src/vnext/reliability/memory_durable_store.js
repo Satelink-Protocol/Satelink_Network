@@ -71,6 +71,15 @@ export class MemoryDurableStore {
     return { inserted: true, entry };
   }
   async treasuryGet(txId) { return (this.b.treasury && this.b.treasury.get(txId)) || null; }
+
+  // Withdrawal ledger (exactly-once by idem_key).
+  async withdrawalAdd(entry) {
+    if (!this.b.withdrawal) this.b.withdrawal = new Map();
+    if (this.b.withdrawal.has(entry.idem_key)) return { inserted: false, entry: this.b.withdrawal.get(entry.idem_key) };
+    this.b.withdrawal.set(entry.idem_key, entry);
+    return { inserted: true, entry };
+  }
+  async withdrawalGet(idemKey) { return (this.b.withdrawal && this.b.withdrawal.get(idemKey)) || null; }
   async treasuryRows(unit) {
     if (!this.b.treasury) return [];
     return [...this.b.treasury.values()].filter((e) => !unit || e.unit === unit);

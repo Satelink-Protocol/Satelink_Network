@@ -116,6 +116,20 @@ export class PgDurableStore {
     const r = rows[0];
     return { tx_id: r.tx_id, amount_in: r.amount_in, cost: r.cost, spread: r.spread, unit: r.unit, tx_in_ref: r.tx_in_ref, payer: r.payer, ts: Number(r.ts) };
   }
+  // Withdrawal ledger (exactly-once by idem_key).
+  async withdrawalAdd(entry) {
+    const { rows } = await this.pool.query(
+      `INSERT INTO vnext_withdrawal(idem_key, amount, dest, ref, status, ts) VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (idem_key) DO NOTHING RETURNING idem_key`,
+      [entry.idem_key, String(entry.amount), entry.dest, entry.ref || null, entry.status, entry.ts]);
+    if (rows.length) return { inserted: true, entry };
+    return { inserted: false, entry: await this.withdrawalGet(entry.idem_key) };
+  }
+  async withdrawalGet(idemKey) {
+    const { rows } = await this.pool.query(`SELECT idem_key, amount, dest, ref, status, ts FROM vnext_withdrawal WHERE idem_key=$1`, [idemKey]);
+    return rows.length ? { idem_key: rows[0].idem_key, amount: rows[0].amount, dest: rows[0].dest, ref: rows[0].ref, status: rows[0].status, ts: Number(rows[0].ts) } : null;
+  }
+
   async treasuryRows(unit) {
     const { rows } = unit
       ? await this.pool.query(`SELECT amount_in, cost, spread, unit FROM vnext_treasury WHERE unit=$1`, [unit])

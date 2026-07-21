@@ -28,6 +28,7 @@ import { InboundSettlement } from '../adapters/x402/inbound_settlement.js';
 import { buildInboundVerifierFromEnv } from '../adapters/x402/cdp_inbound_verifier.js';
 import { buildOutboundSignerFromEnv } from '../adapters/x402/eip3009_outbound_signer.js';
 import { buildBalanceReaderFromEnv } from '../adapters/x402/usdc_balance_reader.js';
+import { buildWithdrawalFromEnv } from '../adapters/x402/withdrawal.js';
 
 // Resale price = supplier cost + spread, where spread = floor(cost * bps / 10000).
 // bps=0 -> no spread -> price == cost -> no revenue (a safe, explicit default).
@@ -89,7 +90,7 @@ const INERT_SETTLEMENT = {
   async verify() { return { status: 'settled' }; },
 };
 
-export function createVnextKernelRouter(pool, { logger = console, adminAuth, inboundVerifier, outboundSigner } = {}) {
+export function createVnextKernelRouter(pool, { logger = console, adminAuth, inboundVerifier, outboundSigner, withdrawal: injectedWithdrawal } = {}) {
   const router = express.Router();
   const enabled = process.env.VNEXT_KERNEL_ENABLED === 'true';
   // Admin gate for observability routes. When no adminAuth is injected (e.g.
@@ -110,6 +111,7 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
   const feeBps = Number(process.env.VNEXT_FEE_BPS || 0);
   let treasury = null;
   let inbound = null;
+  let withdrawal = null;
 
   let dk = null;
   let bootErr = null;
@@ -149,6 +151,7 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
         network: process.env.X402_NETWORK || 'eip155:8453',
         verifier: verifier || null, // fail-safe: no verifier -> cannot settle inbound
       });
+      withdrawal = injectedWithdrawal || buildWithdrawalFromEnv({ store }); // admin payout, or null (endpoint 403)
       logger.log(`[vnext] x402 resale path active with ${resources.length} allowlisted resource(s), fee ${feeBps}bps`);
     } else {
       // Observability-only: no adapters, no money path.
@@ -198,6 +201,21 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
     if (!(await guard(res))) return;
     if (!treasury) return res.json({ ok: true, active: false, totals: null });
     res.json({ ok: true, active: true, totals: await treasury.totals(req.query.unit || 'USDC') });
+  });
+
+  // POST /vnext/withdraw — admin-only treasury payout to the FIXED cold address.
+  // Destination is operator config (VNEXT_WITHDRAW_TO), never caller input.
+  router.post('/withdraw', admin, express.json({ limit: '4kb' }), async (req, res) => {
+    if (!(await guard(res))) return;
+    if (!withdrawal) return res.status(403).json({ ok: false, error: 'vnext withdrawal not configured' });
+    const { amount, idempotencyKey } = req.body || {};
+    if (amount == null || !idempotencyKey) return res.status(400).json({ ok: false, error: 'amount and idempotencyKey are required' });
+    try {
+      const out = await withdrawal.withdraw({ amount: String(amount), idempotencyKey: String(idempotencyKey) });
+      res.status(out.ok ? 200 : 422).json(out);
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String((e && e.message) || e) });
+    }
   });
 
   // POST /vnext/submit — run one transaction through the durable kernel.

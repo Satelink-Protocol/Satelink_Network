@@ -134,3 +134,22 @@ Still required for REAL mainnet revenue (operator/eng, not wired — same fail-s
 - Inject a real outbound signer + fund the wallet (Blocker 4) so the upstream buy actually settles.
 - Un-gate /resell is already done; set the enable flags. bps>0 for non-zero spread.
 Full vnext suite 102/102; app_factory loads clean.
+
+## Commercial settlement layer — 4 real components built (B1-B4)
+
+All money-boundary code is real; the external service (facilitator/wallet/RPC/token) is the injected boundary (stub in tests, built-from-env in prod, null when unconfigured => fail-safe).
+
+- B1 inboundVerifier (cdp_inbound_verifier.js): real CDP HTTPFacilitatorClient verify+settle. Pins payTo/price/network; underpay/forged/fail-closed guarded. Env: CDP_API_KEY_ID/SECRET.
+- B2 outboundSigner (eip3009_outbound_signer.js): real ethers EIP-3009 signature (recovers to wallet, proven). Deterministic nonce from idemKey => on-chain single-use. Env: VNEXT_OUTBOUND_PRIVATE_KEY.
+- B3 balanceReader (usdc_balance_reader.js): real ethers balanceOf; enables OutboundGuard wallet-floor; read-error => refuse. Env: VNEXT_OUTBOUND_RPC_URL, VNEXT_OUTBOUND_WALLET_ADDRESS.
+- B4 withdrawal (withdrawal.js): real ERC-20 transfer to FIXED VNEXT_WITHDRAW_TO; admin-only POST /vnext/withdraw; capped (VNEXT_WITHDRAW_MAX); exactly-once (claim-before-send). Env: VNEXT_WITHDRAW_TO + outbound key/rpc.
+
+All four wired env-driven into the router; injected overrides for tests. 128/128 vnext tests; app_factory loads clean. No architecture change; kernel frozen.
+
+## GO-LIVE (operator actions to earn the first dollar)
+1. Fund a DEDICATED hot wallet with USDC + gas on Base (never treasury/legacy signer).
+2. Secrets: CDP_API_KEY_ID, CDP_API_KEY_SECRET, VNEXT_OUTBOUND_PRIVATE_KEY, VNEXT_OUTBOUND_RPC_URL.
+3. Config: VNEXT_INBOUND_PAYTO (dedicated receiving addr), VNEXT_FEE_BPS>0, VNEXT_X402_RESOURCES (real merchants), VNEXT_OUTBOUND_MAX_PER_TX/HOUR/DAY, VNEXT_OUTBOUND_WALLET_FLOOR, VNEXT_OUTBOUND_WALLET_ADDRESS, VNEXT_WITHDRAW_TO, VNEXT_WITHDRAW_MAX.
+4. Flags: VNEXT_KERNEL_ENABLED, VNEXT_SUBMIT_ENABLED, VNEXT_OUTBOUND_ENABLED = true.
+5. Merge PR #278 to main -> Railway deploy.
+6. Execute one real POST /vnext/resell; observe vnext_treasury.spread increase; verify recovery after restart.
