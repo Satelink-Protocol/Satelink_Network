@@ -41,16 +41,17 @@ export class RoutingKernel {
     return caps && caps.settlementMode ? { acceptedModes: [caps.settlementMode] } : {};
   }
 
-  /** Run one guarded, idempotent, journaled phase transition. */
+  /** Run one guarded, idempotent, journaled phase transition. `run` reports
+   *  freshness atomically (no check-then-act gap), and the journal write is
+   *  awaited so a durable (PostgreSQL) journal commits before the phase returns. */
   async _phase(tx, phase, forward, compensation, saga) {
     const key = idemKey(tx.id, phase);
-    const fresh = !this.idempotency.has(key);
-    const out = await this.idempotency.once(key, forward);
+    const { value, fresh } = await this.idempotency.run(key, forward);
     if (fresh) {
-      this.journal.append(tx.id, phase, { state: tx.state, out: out === undefined ? null : out }, this.clock());
+      await this.journal.append(tx.id, phase, { state: tx.state, out: value === undefined ? null : value }, this.clock());
       if (compensation) saga.step(compensation);
     }
-    return out;
+    return value;
   }
 
   /**
@@ -182,11 +183,11 @@ export class RoutingKernel {
     } catch (err) {
       const reason = String((err && err.message) || err);
       tx.state = TxState.COMPENSATING;
-      this.journal.append(tx.id, 'COMPENSATING', { reason }, this.clock());
+      await this.journal.append(tx.id, 'COMPENSATING', { reason }, this.clock());
       await saga.compensate();
       tx.state = TxState.FAILED;
       tx.reason = reason;
-      this.journal.append(tx.id, 'FAILED', { reason }, this.clock());
+      await this.journal.append(tx.id, 'FAILED', { reason }, this.clock());
       return tx;
     }
   }

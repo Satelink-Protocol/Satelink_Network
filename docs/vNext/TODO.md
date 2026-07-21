@@ -19,3 +19,23 @@ Open risks (non-blocking, in-memory MVP scope — not defects to fix now):
 - Unbounded in-memory growth: Journal `_events`/`_byTx`, IdempotencyStore `_results`, registry/ledger indexes grow without bound. Acceptable for MVP; the pg-backed journal binding (audit) must add retention/compaction before long-running production.
 - Journal records full phase payloads (execute response bodies, etc.) — size/PII exposure; redact or store digests when binding to durable storage.
 - Failure path under concurrency may append duplicate terminal (COMPENSATING/FAILED) journal markers (no financial impact — compensations are `fresh`-gated so refunds run once).
+
+## M6 Production Reliability — status + residual risks
+
+Delivered (all tested; PG tests run against a local throwaway `vnext_m6_test`, never prod `DATABASE_URL`):
+- Persistent hash-linked journal (`vnext_journal`) with deterministic replay across restart.
+- Persistent exactly-once idempotency (`vnext_idempotency`, PK/ON CONFLICT) surviving restart.
+- Durable supplier registry (`vnext_suppliers`) via composition wrapper (M4 logic unmodified) + rehydrate on load.
+- Recovery worker: resumes SUBMITted-but-non-terminal transactions; idempotent phases mean settled effects never repeat.
+- Dead Letter Queue (`vnext_dlq`) for transactions that can't terminate within retry limits.
+- Retry policy: exponential backoff + jitter + capped attempts (deterministic via injectable rng).
+- Crash-recovery proven at DISCOVER/QUOTE/EXECUTE and PRE-mode settle-in; single settlement across crash+recovery.
+
+Justified kernel changes (reliability, not business logic): `_phase` now uses `idempotency.run()` (atomic freshness, no check-then-act gap) and awaits the journal append so a durable write commits before the phase returns; terminal journal writes in the catch block are awaited. All 67 vnext tests green.
+
+Residual production risks (not yet addressed):
+- **Registry mutation durability under HealthMonitor:** `HealthMonitor.evaluate()` calls `registry.updateHealth()` without awaiting; with the durable wrapper the in-memory state is correct immediately but the DB snapshot write is fire-and-forget. Health is recomputed each sweep, so this self-heals, but a crash in the write window loses only the last health transition (re-derived on next evaluate). Acceptable; revisit if health history must be durable.
+- **Journal growth/compaction:** `vnext_journal` is append-only and unbounded; needs retention/partitioning before long-running production (same note as M1 open risks).
+- **Full-payload journaling:** execute response bodies persisted verbatim (size/PII); store digests when hardening.
+- **Recovery worker is pull-based** (call `recover()` on boot / timer); no leader election, so running it in >1 process concurrently could double-resume — safe (idempotent) but wasteful. Add an advisory lock (`pg_advisory_lock`) before multi-instance deployment.
+- **No real fsync/power-loss test:** "crash" is simulated by abandoning in-flight promises + rebuilding from the durable store; true OS-level power-loss durability relies on PostgreSQL's own guarantees (not independently tested here).

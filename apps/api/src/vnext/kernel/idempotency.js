@@ -33,4 +33,17 @@ export class IdempotencyStore {
     this._results.set(key, p);
     return p;
   }
+
+  /**
+   * Like once(), but also reports whether this call actually executed `fn`
+   * (fresh=true) or returned a cached/concurrent result (fresh=false). The
+   * promise is cached SYNCHRONOUSLY before any await, so two concurrent callers
+   * cannot both be fresh — exactly one runs the side effect and journals it.
+   */
+  run(key, fn) {
+    if (this._results.has(key)) return this._results.get(key).then((value) => ({ value, fresh: false }));
+    const p = Promise.resolve().then(fn).catch((err) => { this._results.delete(key); throw err; });
+    this._results.set(key, p);
+    return p.then((value) => ({ value, fresh: true }));
+  }
 }
