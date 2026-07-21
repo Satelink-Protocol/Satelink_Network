@@ -53,3 +53,20 @@ CREATE TABLE IF NOT EXISTS vnext_outbound (
   ts       BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_vnext_outbound_ts ON vnext_outbound(ts);
+
+-- Treasury revenue ledger. THE record of real collected revenue: one row per
+-- fulfilled resale, exactly-once by tx_id. amount_in = collected from the
+-- caller, cost = paid to the supplier, spread = amount_in - cost (net revenue).
+-- amounts are integer minor units as TEXT (summed as BigInt — no float). tx_in_ref
+-- is the on-chain/settlement reference for the inbound payment (external audit).
+CREATE TABLE IF NOT EXISTS vnext_treasury (
+  tx_id     TEXT PRIMARY KEY,
+  amount_in TEXT   NOT NULL,
+  cost      TEXT   NOT NULL,
+  spread    TEXT   NOT NULL,
+  unit      TEXT   NOT NULL,
+  tx_in_ref TEXT,
+  payer     TEXT,
+  ts        BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vnext_treasury_ts ON vnext_treasury(ts);

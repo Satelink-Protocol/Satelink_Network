@@ -63,6 +63,19 @@ export class MemoryDurableStore {
     return [...this.b.outbound.values()].filter((e) => e.ts >= ts).map((e) => ({ amount: e.amount, ts: e.ts }));
   }
 
+  // Treasury revenue ledger (exactly-once by tx_id).
+  async treasuryAdd(entry) {
+    if (!this.b.treasury) this.b.treasury = new Map();
+    if (this.b.treasury.has(entry.tx_id)) return { inserted: false, entry: this.b.treasury.get(entry.tx_id) };
+    this.b.treasury.set(entry.tx_id, entry);
+    return { inserted: true, entry };
+  }
+  async treasuryGet(txId) { return (this.b.treasury && this.b.treasury.get(txId)) || null; }
+  async treasuryRows(unit) {
+    if (!this.b.treasury) return [];
+    return [...this.b.treasury.values()].filter((e) => !unit || e.unit === unit);
+  }
+
   // Single-process: the advisory lock is held on the shared backing so two
   // MemoryDurableStore instances over the SAME backing (modelling two workers)
   // still serialize — mirroring the PG advisory-lock semantics for tests.

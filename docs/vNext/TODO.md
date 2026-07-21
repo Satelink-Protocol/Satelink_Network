@@ -116,3 +116,21 @@ Wired into `X402SettlementAdapter.settleIn` (the outbound leg of x402 purchase) 
 **Fail-safe by design — SHIPS UNABLE TO MOVE MONEY:** the router constructs the guard from env caps but does NOT construct a key-holding signer. So with `VNEXT_OUTBOUND_ENABLED=true` and no signer, `settleIn` throws `outbound_no_signer` and the tx FAILS before EXECUTE (proven: FAILED, zero rows in `vnext_outbound`). Moving real money requires an operator to (1) fund a dedicated hot wallet (NEVER treasury/legacy signer), (2) inject a signer that holds `VNEXT_OUTBOUND_PRIVATE_KEY`, (3) set the kill switch + caps. No private key is read, logged, or committed anywhere in this code.
 
 Remaining before real mainnet outbound: implement + inject the real x402 signer (port x402-kit client) behind the guard; wire a real `balanceReader` for the wallet floor. The guard/caps/ledger/kill-switch are done and tested (11 guard tests + fail-safe submit test).
+
+## Inbound revenue leg built (fixes audit Blockers 1, 2-partial, 3)
+
+The audit's #1 blocker (no inbound leg / no treasury) is resolved.
+
+- `TreasuryLedger` (durable `vnext_treasury`): THE revenue record. One row per fulfilled resale, exactly-once by txId, revenue = amount_in - cost (spread). `balance('USDC')` = sum of spreads = net revenue. Refuses to book a loss (inbound < cost). Survives restart.
+- `InboundSettlement`: issues the x402 402 challenge for price P and verifies the caller's X-PAYMENT. Verifier is injectable (facilitator in prod; mock in tests). No verifier => cannot settle (fail-safe: never serve paid work for free). Underpaid => rejected.
+- `POST /vnext/resell` (PUBLIC, payment-gated — the 402 IS the auth; addresses Blocker 3): resolve allowlisted resource -> quote supplier cost C -> price P = C + spread(VNEXT_FEE_BPS) -> no X-PAYMENT: 402 for P -> with X-PAYMENT: verify, CREDIT TREASURY (P-C), then buy upstream (outbound, guarded) + return goods. Idempotent by key.
+- app_factory: auth moved to per-route inside the router (/health,/journal,/submit,/treasury admin-gated; /resell public). Live money path untouched.
+- New env: VNEXT_INBOUND_PAYTO (Satelink receiving address), VNEXT_FEE_BPS (spread; default 0 = no revenue).
+
+Proven end-to-end (real PG + mock merchant/verifier/signer): 402 for 1025 (cost 1000 + 25 spread) -> caller pays -> treasury books 25 net revenue -> supplier paid -> goods served -> idempotent replay books nothing new. Fail-safe: no verifier -> 402 re-challenge, 0 treasury rows.
+
+Still required for REAL mainnet revenue (operator/eng, not wired — same fail-safe pattern as outbound):
+- Inject a real inbound verifier (CDP facilitator verify+settle) so caller USDC actually moves to VNEXT_INBOUND_PAYTO.
+- Inject a real outbound signer + fund the wallet (Blocker 4) so the upstream buy actually settles.
+- Un-gate /resell is already done; set the enable flags. bps>0 for non-zero spread.
+Full vnext suite 102/102; app_factory loads clean.

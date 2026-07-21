@@ -101,6 +101,28 @@ export class PgDurableStore {
     return rows.map((r) => ({ amount: r.amount, ts: Number(r.ts) }));
   }
 
+  // Treasury revenue ledger (exactly-once by tx_id; ON CONFLICT DO NOTHING).
+  async treasuryAdd(entry) {
+    const { rows } = await this.pool.query(
+      `INSERT INTO vnext_treasury(tx_id, amount_in, cost, spread, unit, tx_in_ref, payer, ts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (tx_id) DO NOTHING RETURNING tx_id`,
+      [entry.tx_id, String(entry.amount_in), String(entry.cost), String(entry.spread), entry.unit, entry.tx_in_ref || null, entry.payer || null, entry.ts]);
+    if (rows.length) return { inserted: true, entry };
+    return { inserted: false, entry: await this.treasuryGet(entry.tx_id) };
+  }
+  async treasuryGet(txId) {
+    const { rows } = await this.pool.query(`SELECT tx_id, amount_in, cost, spread, unit, tx_in_ref, payer, ts FROM vnext_treasury WHERE tx_id=$1`, [txId]);
+    if (!rows.length) return null;
+    const r = rows[0];
+    return { tx_id: r.tx_id, amount_in: r.amount_in, cost: r.cost, spread: r.spread, unit: r.unit, tx_in_ref: r.tx_in_ref, payer: r.payer, ts: Number(r.ts) };
+  }
+  async treasuryRows(unit) {
+    const { rows } = unit
+      ? await this.pool.query(`SELECT amount_in, cost, spread, unit FROM vnext_treasury WHERE unit=$1`, [unit])
+      : await this.pool.query(`SELECT amount_in, cost, spread, unit FROM vnext_treasury`);
+    return rows;
+  }
+
   /**
    * Run `fn` while holding a Postgres session-level advisory lock. Only one
    * process/instance can hold the lock for `key` at a time, so concurrent

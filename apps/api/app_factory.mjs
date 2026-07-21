@@ -458,10 +458,12 @@ app.get("/api/mode", (req, res) => {
   // without forcing a parser onto the high-volume /rpc path above.
   app.use("/admin", requireAdminAuth, express.json({ limit: '256kb' }), createAdminRouter(pool, redis));
 
-  // vNext durable kernel surface — ADDITIVE, admin-gated, and inert unless
-  // VNEXT_KERNEL_ENABLED=true (default OFF: no DB access, no kernel boot). Does
-  // not touch any existing route or the live money path.
-  app.use("/vnext", requireAdminAuth, createVnextKernelRouter(pool));
+  // vNext durable kernel surface — ADDITIVE and inert unless VNEXT_KERNEL_ENABLED=true
+  // (default OFF: no DB access, no kernel boot). Auth is applied PER ROUTE inside
+  // the router: /health, /journal, /submit, /treasury stay admin-only (adminAuth
+  // injected below); /resell is public and payment-gated (its x402 402 challenge
+  // is the auth). Does not touch any existing route or the live money path.
+  app.use("/vnext", createVnextKernelRouter(pool, { adminAuth: requireAdminAuth }));
 
   return app;
 }
