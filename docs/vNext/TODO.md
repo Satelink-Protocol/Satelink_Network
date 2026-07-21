@@ -101,3 +101,18 @@ Safety:
 - Admin-gated, idempotent by client key, result body never echoed (only status/paidWith).
 
 Tests: `vnext_submit_endpoint.test.js` (3) — disabled->403, end-to-end buy against a local mock x402 merchant (CLOSED, fee 25 = 2.5% of 1000, full phase timeline), SSRF rejection. Full vnext suite 81/81; app_factory loads clean.
+
+## Outbound settlement wired with wallet + cap flags (OutboundGuard)
+
+`OutboundGuard` is the hard financial safety rail for outbound payments — enforced in code:
+- **Kill switch** `VNEXT_OUTBOUND_ENABLED` (default OFF) — disabled => dry-run, no money.
+- **Caps** (minor-unit ints, optional): `VNEXT_OUTBOUND_MAX_PER_TX`, `_MAX_PER_HOUR`, `_MAX_PER_DAY` (rolling windows from the durable `vnext_outbound` ledger — survive restart), `_WALLET_FLOOR`.
+- **Wallet floor** enforced only with a `balanceReader`; a floor set without one => refuse (never pay blind).
+- **Exactly-once** per idemKey (durable ledger, no double-spend on retry).
+- **Atomic spend()** — authorize→sign→commit under an internal mutex, so concurrent near-limit spends cannot overshoot a rolling cap (TOCTOU closed; proven: 3×60 against a 100 cap => 1 spent, 2 blocked).
+
+Wired into `X402SettlementAdapter.settleIn` (the outbound leg of x402 purchase) and into the router's x402 submit path via `buildOutboundGuard(store)`.
+
+**Fail-safe by design — SHIPS UNABLE TO MOVE MONEY:** the router constructs the guard from env caps but does NOT construct a key-holding signer. So with `VNEXT_OUTBOUND_ENABLED=true` and no signer, `settleIn` throws `outbound_no_signer` and the tx FAILS before EXECUTE (proven: FAILED, zero rows in `vnext_outbound`). Moving real money requires an operator to (1) fund a dedicated hot wallet (NEVER treasury/legacy signer), (2) inject a signer that holds `VNEXT_OUTBOUND_PRIVATE_KEY`, (3) set the kill switch + caps. No private key is read, logged, or committed anywhere in this code.
+
+Remaining before real mainnet outbound: implement + inject the real x402 signer (port x402-kit client) behind the guard; wire a real `balanceReader` for the wallet floor. The guard/caps/ledger/kill-switch are done and tested (11 guard tests + fail-safe submit test).

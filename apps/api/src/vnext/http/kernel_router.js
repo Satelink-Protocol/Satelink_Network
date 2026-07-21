@@ -22,6 +22,27 @@ import { FeeEngine } from '../fees/fee_engine.js';
 import { X402Context } from '../adapters/x402/x402_context.js';
 import { X402PurchaseAdapter } from '../adapters/x402/x402_purchase_adapter.js';
 import { X402SettlementAdapter } from '../adapters/x402/x402_settlement_adapter.js';
+import { OutboundGuard } from '../reliability/outbound_guard.js';
+
+// Build the outbound safety guard from env caps. Kill switch (VNEXT_OUTBOUND_ENABLED)
+// defaults OFF. Caps are optional minor-unit integer strings; unset = unenforced
+// for that dimension (but the kill switch still gates all real spend). The
+// key-holding signer is intentionally NOT constructed here — enabling outbound
+// without a wired signer fails safe (the settlement adapter refuses to pay).
+function buildOutboundGuard(store) {
+  const numeric = (k) => (process.env[k] != null && process.env[k] !== '' ? process.env[k] : null);
+  return new OutboundGuard({
+    store,
+    enabled: process.env.VNEXT_OUTBOUND_ENABLED === 'true',
+    caps: {
+      maxPerTx: numeric('VNEXT_OUTBOUND_MAX_PER_TX'),
+      maxPerHour: numeric('VNEXT_OUTBOUND_MAX_PER_HOUR'),
+      maxPerDay: numeric('VNEXT_OUTBOUND_MAX_PER_DAY'),
+      walletFloor: numeric('VNEXT_OUTBOUND_WALLET_FLOOR'),
+    },
+    clock: () => Date.now(),
+  });
+}
 
 // Parse the operator-configured x402 resource allowlist. URLs are NEVER taken
 // from a request — only from this env allowlist — so /submit cannot be used as
@@ -84,9 +105,13 @@ export function createVnextKernelRouter(pool, { logger = console } = {}) {
       const ctx = new X402Context();
       const registry = new Registry();
       registry.register(new X402PurchaseAdapter({ resources, ctx }));
+      // Outbound guard enforces kill switch + caps + exactly-once. No signer is
+      // wired here, so with VNEXT_OUTBOUND_ENABLED=true the adapter fails safe
+      // (refuses to pay) until an operator injects a key-holding signer.
+      const outboundGuard = buildOutboundGuard(store);
       dk = await DurableKernel.boot({
         store, registry, clock: () => Date.now(),
-        settlement: new X402SettlementAdapter({ ctx }),
+        settlement: new X402SettlementAdapter({ ctx, guard: outboundGuard }),
         decisionEngine: new DecisionEngine({ clock: () => Date.now() }), policy: Policies.cheapest,
         feeEngine: new FeeEngine(), feePolicy: { type: 'bps', bps: Number(process.env.VNEXT_FEE_BPS || 0) }, feeCurrency: 'USDC',
       });

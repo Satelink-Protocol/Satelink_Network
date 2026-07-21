@@ -50,6 +50,19 @@ export class MemoryDurableStore {
   async dlqAll() { return [...this.b.dlq.values()]; }
   async dlqGet(txId) { return this.b.dlq.get(txId) || null; }
 
+  // Outbound-payment ledger (exactly-once by idem_key).
+  async outboundAdd(entry) {
+    if (!this.b.outbound) this.b.outbound = new Map();
+    if (this.b.outbound.has(entry.idem_key)) return { inserted: false, entry: this.b.outbound.get(entry.idem_key) };
+    this.b.outbound.set(entry.idem_key, entry);
+    return { inserted: true, entry };
+  }
+  async outboundGet(idemKey) { return (this.b.outbound && this.b.outbound.get(idemKey)) || null; }
+  async outboundRowsSince(ts) {
+    if (!this.b.outbound) return [];
+    return [...this.b.outbound.values()].filter((e) => e.ts >= ts).map((e) => ({ amount: e.amount, ts: e.ts }));
+  }
+
   // Single-process: the advisory lock is held on the shared backing so two
   // MemoryDurableStore instances over the SAME backing (modelling two workers)
   // still serialize — mirroring the PG advisory-lock semantics for tests.

@@ -127,3 +127,32 @@ test('SSRF-safe: a resource URL not on the allowlist is rejected (no fetch)', as
     });
   } finally { await pool.end(); mSrv.close(); }
 });
+
+test('outbound enabled without a signer: submit fails safe (no money, tx not CLOSED)', async (t) => {
+  const pool = await pgOrSkip(t); if (!pool) return;
+  const { server: mSrv, port: mPort } = await listen(mockMerchant());
+  try {
+    const resourceUrl = `http://127.0.0.1:${mPort}/x402/data`;
+    await withEnv({
+      VNEXT_KERNEL_ENABLED: 'true', VNEXT_SUBMIT_ENABLED: 'true',
+      VNEXT_X402_RESOURCES: JSON.stringify([{ url: resourceUrl, method: 'GET', supplierId: 'merchant-1' }]),
+      VNEXT_OUTBOUND_ENABLED: 'true', // kill switch ON, but the router wires no signer
+      VNEXT_OUTBOUND_MAX_PER_TX: '100000',
+    }, async () => {
+      await pool.query('TRUNCATE vnext_journal, vnext_idempotency, vnext_suppliers, vnext_dlq, vnext_outbound').catch(() => {});
+      const app = express(); app.use('/vnext', createVnextKernelRouter(pool, { logger: silent }));
+      const { server, port } = await listen(app);
+      try {
+        const r = await fetch(`http://127.0.0.1:${port}/vnext/submit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workload: 'x402-purchase', idempotencyKey: 'os-1', payer: '0xB' }) });
+        const b = await r.json();
+        // No signer -> settleIn throws outbound_no_signer -> tx FAILED, resource never fetched.
+        assert.equal(b.ok, false);
+        assert.equal(b.state, 'FAILED');
+        assert.match(String(b.reason || ''), /outbound_no_signer/);
+        // Durable outbound ledger recorded no spend.
+        const spent = await pool.query('SELECT COUNT(*)::int n FROM vnext_outbound');
+        assert.equal(spent.rows[0].n, 0, 'money recorded despite fail-safe');
+      } finally { server.close(); }
+    });
+  } finally { await pool.end(); mSrv.close(); }
+});

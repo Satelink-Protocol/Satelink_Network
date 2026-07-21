@@ -41,3 +41,15 @@ CREATE TABLE IF NOT EXISTS vnext_dlq (
   request   JSONB  NOT NULL,
   failed_at BIGINT NOT NULL
 );
+
+-- Durable outbound-payment ledger. Every authorized outbound payment is
+-- recorded exactly once (idem_key PK), so per-hour/per-day rolling caps survive
+-- restart and a retried payment never double-spends. amount is integer minor
+-- units stored as TEXT (summed as BigInt in app code — no float).
+CREATE TABLE IF NOT EXISTS vnext_outbound (
+  idem_key TEXT PRIMARY KEY,
+  amount   TEXT   NOT NULL,
+  ref      TEXT,
+  ts       BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vnext_outbound_ts ON vnext_outbound(ts);

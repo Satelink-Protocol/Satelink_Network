@@ -83,6 +83,24 @@ export class PgDurableStore {
     return rows.length ? { tx_id: rows[0].tx_id, reason: rows[0].reason, attempts: rows[0].attempts, request: rows[0].request, failed_at: Number(rows[0].failed_at) } : null;
   }
 
+  // Outbound-payment ledger (exactly-once by idem_key; ON CONFLICT DO NOTHING).
+  async outboundAdd(entry) {
+    const { rows } = await this.pool.query(
+      `INSERT INTO vnext_outbound(idem_key, amount, ref, ts) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (idem_key) DO NOTHING RETURNING idem_key`,
+      [entry.idem_key, String(entry.amount), entry.ref || null, entry.ts]);
+    if (rows.length) return { inserted: true, entry };
+    return { inserted: false, entry: await this.outboundGet(entry.idem_key) };
+  }
+  async outboundGet(idemKey) {
+    const { rows } = await this.pool.query(`SELECT idem_key, amount, ref, ts FROM vnext_outbound WHERE idem_key=$1`, [idemKey]);
+    return rows.length ? { idem_key: rows[0].idem_key, amount: rows[0].amount, ref: rows[0].ref, ts: Number(rows[0].ts) } : null;
+  }
+  async outboundRowsSince(ts) {
+    const { rows } = await this.pool.query(`SELECT amount, ts FROM vnext_outbound WHERE ts >= $1`, [ts]);
+    return rows.map((r) => ({ amount: r.amount, ts: Number(r.ts) }));
+  }
+
   /**
    * Run `fn` while holding a Postgres session-level advisory lock. Only one
    * process/instance can hold the lock for `key` at a time, so concurrent
