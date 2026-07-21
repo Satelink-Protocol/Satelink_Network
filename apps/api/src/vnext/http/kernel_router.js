@@ -26,6 +26,7 @@ import { OutboundGuard } from '../reliability/outbound_guard.js';
 import { TreasuryLedger } from '../reliability/treasury_ledger.js';
 import { InboundSettlement } from '../adapters/x402/inbound_settlement.js';
 import { buildInboundVerifierFromEnv } from '../adapters/x402/cdp_inbound_verifier.js';
+import { buildOutboundSignerFromEnv } from '../adapters/x402/eip3009_outbound_signer.js';
 
 // Resale price = supplier cost + spread, where spread = floor(cost * bps / 10000).
 // bps=0 -> no spread -> price == cost -> no revenue (a safe, explicit default).
@@ -130,7 +131,7 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
       const outboundGuard = buildOutboundGuard(store);
       dk = await DurableKernel.boot({
         store, registry, clock: () => Date.now(),
-        settlement: new X402SettlementAdapter({ ctx, guard: outboundGuard, signer: outboundSigner || null }),
+        settlement: new X402SettlementAdapter({ ctx, guard: outboundGuard, signer: outboundSigner || buildOutboundSignerFromEnv() || null }),
         decisionEngine: new DecisionEngine({ clock: () => Date.now() }), policy: Policies.cheapest,
         feeEngine: new FeeEngine(), feePolicy: { type: 'bps', bps: feeBps }, feeCurrency: 'USDC',
       });
