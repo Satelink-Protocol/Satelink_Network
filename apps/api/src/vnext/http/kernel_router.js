@@ -27,6 +27,7 @@ import { TreasuryLedger } from '../reliability/treasury_ledger.js';
 import { InboundSettlement } from '../adapters/x402/inbound_settlement.js';
 import { buildInboundVerifierFromEnv } from '../adapters/x402/cdp_inbound_verifier.js';
 import { buildOutboundSignerFromEnv } from '../adapters/x402/eip3009_outbound_signer.js';
+import { buildBalanceReaderFromEnv } from '../adapters/x402/usdc_balance_reader.js';
 
 // Resale price = supplier cost + spread, where spread = floor(cost * bps / 10000).
 // bps=0 -> no spread -> price == cost -> no revenue (a safe, explicit default).
@@ -41,7 +42,7 @@ function resalePrice(cost, bps) {
 // for that dimension (but the kill switch still gates all real spend). The
 // key-holding signer is intentionally NOT constructed here — enabling outbound
 // without a wired signer fails safe (the settlement adapter refuses to pay).
-function buildOutboundGuard(store) {
+function buildOutboundGuard(store, balanceReader) {
   const numeric = (k) => (process.env[k] != null && process.env[k] !== '' ? process.env[k] : null);
   return new OutboundGuard({
     store,
@@ -52,6 +53,7 @@ function buildOutboundGuard(store) {
       maxPerDay: numeric('VNEXT_OUTBOUND_MAX_PER_DAY'),
       walletFloor: numeric('VNEXT_OUTBOUND_WALLET_FLOOR'),
     },
+    balanceReader: balanceReader || null, // enables the wallet-floor check
     clock: () => Date.now(),
   });
 }
@@ -128,10 +130,12 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
       // Outbound guard enforces kill switch + caps + exactly-once. No signer is
       // wired here, so with VNEXT_OUTBOUND_ENABLED=true the adapter fails safe
       // (refuses to pay) until an operator injects a key-holding signer.
-      const outboundGuard = buildOutboundGuard(store);
+      const signer = outboundSigner || buildOutboundSignerFromEnv() || null;
+      const balanceReader = buildBalanceReaderFromEnv({ walletAddress: signer && signer.walletAddress });
+      const outboundGuard = buildOutboundGuard(store, balanceReader);
       dk = await DurableKernel.boot({
         store, registry, clock: () => Date.now(),
-        settlement: new X402SettlementAdapter({ ctx, guard: outboundGuard, signer: outboundSigner || buildOutboundSignerFromEnv() || null }),
+        settlement: new X402SettlementAdapter({ ctx, guard: outboundGuard, signer }),
         decisionEngine: new DecisionEngine({ clock: () => Date.now() }), policy: Policies.cheapest,
         feeEngine: new FeeEngine(), feePolicy: { type: 'bps', bps: feeBps }, feeCurrency: 'USDC',
       });
