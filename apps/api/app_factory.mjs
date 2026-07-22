@@ -33,6 +33,7 @@ import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
+import { createVnextKernelRouter } from './src/vnext/http/kernel_router.js';
 
 export function createApp(pool, redis) {
   // Initialize free tier gate (Path C: 500 free calls/day per IP).
@@ -456,6 +457,13 @@ app.get("/api/mode", (req, res) => {
   // express.json() is applied here so the JSON-only admin routes parse bodies
   // without forcing a parser onto the high-volume /rpc path above.
   app.use("/admin", requireAdminAuth, express.json({ limit: '256kb' }), createAdminRouter(pool, redis));
+
+  // vNext durable kernel surface — ADDITIVE and inert unless VNEXT_KERNEL_ENABLED=true
+  // (default OFF: no DB access, no kernel boot). Auth is applied PER ROUTE inside
+  // the router: /health, /journal, /submit, /treasury stay admin-only (adminAuth
+  // injected below); /resell is public and payment-gated (its x402 402 challenge
+  // is the auth). Does not touch any existing route or the live money path.
+  app.use("/vnext", createVnextKernelRouter(pool, { adminAuth: requireAdminAuth }));
 
   return app;
 }
