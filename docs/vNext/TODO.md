@@ -153,3 +153,30 @@ All four wired env-driven into the router; injected overrides for tests. 128/128
 4. Flags: VNEXT_KERNEL_ENABLED, VNEXT_SUBMIT_ENABLED, VNEXT_OUTBOUND_ENABLED = true.
 5. Merge PR #278 to main -> Railway deploy.
 6. Execute one real POST /vnext/resell; observe vnext_treasury.spread increase; verify recovery after restart.
+
+## M8 — Global Supplier Intelligence Engine (production-readiness report)
+
+Reuses SupplierRegistry (routable state -> findCandidates feeds M3 DecisionEngine unchanged), Journal (deterministic replay), DecisionEngine + Policies (unmodified). Kernel + routing engine: ZERO changes (git diff empty). Registry: +27 additive lines (updateReputation, updateMetadata) — existing methods/behavior untouched; M4 tests still 8/8.
+
+Components (src/vnext/market/):
+- health_scorer.js: pure computeHealthScore (availability/success/latency/price-competitiveness), decayReputation (EMA), idleDecay. Deterministic -> replay-safe.
+- sources.js: 5 discovery source adapters (Agentic Market, x402scan, Ampersend, Pay.sh, MCP registry) + normalize + createAllSources. Network is the injected fetchFn boundary; defensive parsing skips malformed rows.
+- discovery_agent.js: discoverOnce() across all sources; registers into SupplierRegistry (upsert -> routable), records discovery history, journals; one source failing never aborts the round.
+- benchmark_agent.js: benchmarkOnce() probes each supplier (injected prober), folds price/latency/availability/reputation-decay back into the registry so DecisionEngine auto-adapts; failed probe degrades + decays. MarketStore is the single journaler (no double-write).
+- market_store.js: append-only price/latency/benchmark/discovery history (bounded ring buffers) journaled to `market:<id>`; MarketStore.replay(journal) rebuilds state deterministically.
+- market_admin_router.js: GET /market/rankings, /price-history/:id, /latency-history/:id, /benchmark-history/:id, /discovery-history (read-only; mount behind adminAuth).
+
+Integration: discovery -> registry -> findCandidates -> DecisionEngine picks the cheapest/fastest discovered supplier; benchmark changes routing live. Proven in tests.
+
+Metrics:
+- LOC added: ~304 (market/) + 28 (registry additive) + 250 (tests) = ~582.
+- Reuse: ~292 LOC of reused infra (registry/journal/decision/policies) leveraged unchanged; ~49% reuse ratio for the M8 unit; DecisionEngine/kernel/routing 100% unchanged.
+- Tests added: 11 (unit x4, integration x2, replay x1, failure x2, admin x1, compat x1). Full vnext suite 139/139.
+- Architecture compliance: PASS — no kernel edits, no routing-engine edits, registry additive-only, DecisionEngine consumes updated candidates with no change.
+
+Remaining risks:
+- Source endpoints/response shapes are best-effort (DEFAULT_ENDPOINTS + generic extractors); real Agentic Market / x402scan / Ampersend / Pay.sh / MCP schemas UNVERIFIED against live APIs — normalize() is defensive but per-source field mapping may need tuning against real payloads.
+- benchmark prober is injected; a real prober (cheap probe / merchant 402 read, latency measurement) is not wired to a network transport yet.
+- MarketStore history is in-memory (bounded ring); durable persistence beyond the journal (pg-backed history table) not added — replay reconstructs from the journal, but long-run history retention needs the pg binding.
+- No scheduler wired: discoverOnce()/benchmarkOnce() are call-driven; a timer (reuse RecoveryScheduler pattern) is not mounted — intentional, to keep this call-driven and testable.
+- Not mounted into app_factory; admin router + agents are library-only until an operator wires them (same gated pattern as the rest of vNext).

@@ -96,6 +96,33 @@ export class SupplierRegistry {
     return s;
   }
 
+  // --- M8 additive extensions (existing methods/behavior unchanged) ---
+
+  // Update the routing reputation (0..100). Used by benchmark scoring + decay.
+  // Feeds DecisionEngine automatically via findCandidates().reputation.
+  updateReputation(supplierId, { reputation } = {}) {
+    const s = this._require(supplierId);
+    if (reputation != null) s.reputation = Math.max(0, Math.min(100, Number(reputation)));
+    s.updatedAt = this.clock();
+    this._record('REPUTATION', s);
+    return s;
+  }
+
+  // Store live market metadata (payment methods, protocols, observed success
+  // rate, discovery source). Additive fields only — never alters routable state
+  // fields consumed by findCandidates(), so compatibility is preserved.
+  updateMetadata(supplierId, { paymentMethods, protocols, successRate, source, marketMeta } = {}) {
+    const s = this._require(supplierId);
+    if (Array.isArray(paymentMethods)) s.paymentMethods = paymentMethods.slice();
+    if (Array.isArray(protocols)) s.protocols = protocols.slice();
+    if (successRate != null) s.successRate = Number(successRate);
+    if (source) s.source = source;
+    if (marketMeta && typeof marketMeta === 'object') s.marketMeta = { ...(s.marketMeta || {}), ...marketMeta };
+    s.updatedAt = this.clock();
+    this._record('METADATA', s);
+    return s;
+  }
+
   updatePrice(supplierId, { basePrice, currency } = {}) {
     const s = this._require(supplierId);
     if (basePrice != null) s.basePrice = basePrice;
