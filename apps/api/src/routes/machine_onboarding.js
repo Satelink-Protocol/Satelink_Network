@@ -92,20 +92,39 @@ function manifestBody() {
     schema_version: '1.0',
     service: 'Satelink RPC Gateway',
     description:
-      'DePIN RPC gateway: machines pay USDT on Polygon to call blockchain RPC APIs. ' +
+      'DePIN RPC gateway: machines pay per call for blockchain RPC APIs. Primary rail is ' +
+      'x402 (USDC on Base) — permissionless: pay the HTTP 402 challenge with any x402 v2 ' +
+      'client, no account. USDT prepaid credits on Polygon are available as an alternative. ' +
       'Fully autonomous onboarding — no email, no dashboard, no human.',
     chain: { name: 'Polygon PoS Mainnet', chain_id: 137 },
     pricing: {
+      x402_bundle: `$${process.env.X402_BUNDLE_PRICE_USD || '0.10'} = ${Number(process.env.X402_BUNDLE_CALLS || 1000).toLocaleString('en-US')} calls (USDC on Base)`,
       price_per_call_usdt: PRICE_PER_CALL_USDT,
       details: `${base}/v1/pricing`,
     },
+    // Primary rail: x402 (USDC on Base). x402-native agents auto-pay the
+    // machine-payable HTTP 402 the endpoint returns after a small free allowance
+    // (accepts carried in the PAYMENT-REQUIRED header, x402 v2). The USDT vault
+    // rail is preserved for existing integrations under alternative_rails.
     payment: {
-      token: 'USDT',
-      token_address: USDT(),
-      vault_address: VAULT(),
-      chain_id: 137,
-      minimum_deposit_usdt: MIN_DEPOSIT_USDT(),
-      confirmations_required: MIN_CONFIRMATIONS,
+      rail: 'x402',
+      network: 'eip155:8453',
+      asset: 'USDC',
+      price: `$${process.env.X402_BUNDLE_PRICE_USD || '0.10'} = ${Number(process.env.X402_BUNDLE_CALLS || 1000).toLocaleString('en-US')} calls`,
+      payTo: process.env.X402_PAY_TO || '0x966E1Ae22996545015b1414B35234b10719d7Ad4',
+      resource: `${base}/rpc/polygon`,
+      note: 'permissionless — pay the 402 challenge with any x402 v2 client (@x402/fetch, pay.sh); no account',
+      alternative_rails: [
+        {
+          rail: 'usdt-vault',
+          token: 'USDT',
+          token_address: USDT(),
+          vault_address: VAULT(),
+          chain_id: 137,
+          minimum_deposit_usdt: MIN_DEPOSIT_USDT(),
+          confirmations_required: MIN_CONFIRMATIONS,
+        },
+      ],
     },
     onboarding: {
       register: {
