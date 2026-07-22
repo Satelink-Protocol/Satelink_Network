@@ -180,3 +180,11 @@ Remaining risks:
 - MarketStore history is in-memory (bounded ring); durable persistence beyond the journal (pg-backed history table) not added — replay reconstructs from the journal, but long-run history retention needs the pg binding.
 - No scheduler wired: discoverOnce()/benchmarkOnce() are call-driven; a timer (reuse RecoveryScheduler pattern) is not mounted — intentional, to keep this call-driven and testable.
 - Not mounted into app_factory; admin router + agents are library-only until an operator wires them (same gated pattern as the rest of vNext).
+
+## RPC self-supply workload adapter (revenue activation, Step 1)
+
+`RpcWorkloadAdapter` (src/vnext/adapters/rpc/) makes Satelink's OWN RPC gateway a vNext resale supplier (ADR-002 supplier #1) so the existing RPC firehose can be metered through the vNext x402 rail. settlementMode=POST (self-supply -> no upstream payment leg); executionSafety=AT_MOST_ONCE. discover() = one candidate per supported chain; quote() = non-zero internal cost; execute() proxies the caller's JSON-RPC body to the SAME upstream node the live gateway uses (getPrimaryProvider reused from workloads/rpc_gateway/providers.js), injectable fetch for tests. Write methods (eth_sendRawTransaction) blocked unless allowWrites.
+
+Wired into kernel_router: registered in the x402Active block, gated by VNEXT_RPC_ENABLED (default OFF; VNEXT_RPC_UNIT_PRICE/CURRENCY), injectable (rpcAdapter) for tests. Kernel + routing engine UNTOUCHED (git diff empty). Tests +7 (capabilities/discover/quote/execute/safety/kernel-integration). Full vnext suite 146/146; app_factory loads clean.
+
+Next to fully "meter the firehose": a public payment-gated metered-RPC endpoint (like /resell but passing the JSON-RPC body + chain, workload 'rpc'), + the P0 settle/credit atomicity fix, + lower FREE_TIER_DAILY_LIMIT + advertise x402 in .well-known. The adapter + kernel path are ready.

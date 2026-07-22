@@ -21,6 +21,7 @@ import { Policies } from '../routing/policies.js';
 import { FeeEngine } from '../fees/fee_engine.js';
 import { X402Context } from '../adapters/x402/x402_context.js';
 import { X402PurchaseAdapter } from '../adapters/x402/x402_purchase_adapter.js';
+import { RpcWorkloadAdapter } from '../adapters/rpc/rpc_workload_adapter.js';
 import { X402SettlementAdapter } from '../adapters/x402/x402_settlement_adapter.js';
 import { OutboundGuard } from '../reliability/outbound_guard.js';
 import { TreasuryLedger } from '../reliability/treasury_ledger.js';
@@ -90,7 +91,7 @@ const INERT_SETTLEMENT = {
   async verify() { return { status: 'settled' }; },
 };
 
-export function createVnextKernelRouter(pool, { logger = console, adminAuth, inboundVerifier, outboundSigner, withdrawal: injectedWithdrawal } = {}) {
+export function createVnextKernelRouter(pool, { logger = console, adminAuth, inboundVerifier, outboundSigner, withdrawal: injectedWithdrawal, rpcAdapter: injectedRpcAdapter } = {}) {
   const router = express.Router();
   const enabled = process.env.VNEXT_KERNEL_ENABLED === 'true';
   // Admin gate for observability routes. When no adminAuth is injected (e.g.
@@ -129,6 +130,16 @@ export function createVnextKernelRouter(pool, { logger = console, adminAuth, inb
       const ctx = new X402Context();
       const registry = new Registry();
       registry.register(new X402PurchaseAdapter({ resources, ctx }));
+      // Self-supply RPC (ADR-002 supplier #1) — meter Satelink's own RPC firehose
+      // through the vNext rail. Gated by VNEXT_RPC_ENABLED (default off); injectable
+      // for tests. POST settlement mode -> no upstream payment leg.
+      if (injectedRpcAdapter || process.env.VNEXT_RPC_ENABLED === 'true') {
+        registry.register(injectedRpcAdapter || new RpcWorkloadAdapter({
+          unitPriceMinor: Number(process.env.VNEXT_RPC_UNIT_PRICE || 3),
+          currency: process.env.VNEXT_RPC_CURRENCY || 'USDC',
+        }));
+        logger.log('[vnext] RPC self-supply adapter registered (workload: rpc)');
+      }
       // Outbound guard enforces kill switch + caps + exactly-once. No signer is
       // wired here, so with VNEXT_OUTBOUND_ENABLED=true the adapter fails safe
       // (refuses to pay) until an operator injects a key-holding signer.
