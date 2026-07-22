@@ -14,8 +14,8 @@ const PLUGIN_MANIFEST = {
   schema_version: 'v1',
   name_for_human: 'Satelink RPC',
   name_for_model: 'satelink_rpc',
-  description_for_human: 'Execute blockchain RPC calls via Satelink DePIN network. Query Ethereum, Polygon, Arbitrum, and more.',
-  description_for_model: 'Use this plugin to execute JSON-RPC calls on multiple blockchains. Supports eth_blockNumber, eth_getBalance, eth_call, eth_getTransactionByHash, eth_getLogs, and all standard Ethereum JSON-RPC methods. Available chains: ethereum, polygon, arbitrum, base, polygon-amoy.',
+  description_for_human: 'Execute blockchain RPC calls via Satelink DePIN network. Query Ethereum, Polygon, Arbitrum, and more. Pay-per-call via x402 (USDC on Base). After a small free allowance the endpoint returns a machine-payable HTTP 402; x402 v2 clients settle it automatically — no account needed.',
+  description_for_model: 'Use this plugin to execute JSON-RPC calls on multiple blockchains. Supports eth_blockNumber, eth_getBalance, eth_call, eth_getTransactionByHash, eth_getLogs, and all standard Ethereum JSON-RPC methods. Available chains: ethereum, polygon, arbitrum, base, polygon-amoy. Pay-per-call via x402 (USDC on Base). After a small free allowance the endpoint returns a machine-payable HTTP 402; x402 v2 clients settle it automatically — no account needed.',
   auth: {
     type: 'user_http',
     authorization_type: 'bearer'

@@ -31,7 +31,7 @@ import {
 } from '@x402/extensions/bazaar';
 import { getX402Config } from './config.js';
 import { recordX402Settlement, DuplicateSettlementError } from './settlement.js';
-import { bumpFunnel } from './funnel.js';
+import { bumpFunnel, bumpFunnelDaily } from './funnel.js';
 import { PRICE_PER_CALL_USDT } from '../../billing/credit_service.mjs';
 
 const LOG_PREFIX = '[x402]';
@@ -230,6 +230,7 @@ export function createX402Middleware(pool, logger) {
     // ---- Rail 2: an x402 payment is attached — verify, settle, serve ----
     if (paymentHeader) {
       bumpFunnel(pool, 'attempts');
+      bumpFunnelDaily(pool, 'x_payment_retry_received'); // X-PAYMENT present on this request
       // Abuse guard: reject before any facilitator round-trip. The rate limit
       // counts every attempt (malformed included — that's the abuse) so a
       // flood can't probe shapes for free.
@@ -260,7 +261,11 @@ export function createX402Middleware(pool, logger) {
       }
 
       if (result.type === 'no-payment-required') return next();
-      if (result.type === 'payment-error') return writeSdkResponse(res, result.response);
+      if (result.type === 'payment-error') {
+        // A payable x402 402 is re-served to a caller whose payment did not verify.
+        if (result.response && result.response.status === 402) bumpFunnelDaily(pool, 'x402_402_served');
+        return writeSdkResponse(res, result.response);
+      }
 
       // payment-verified — settle BEFORE serving so an unsettled call is never
       // executed, then record. Duplicate settlement id → 409, call not served.
@@ -295,6 +300,7 @@ export function createX402Middleware(pool, logger) {
       }, log);
       if (!recorded) return;
       bumpFunnel(pool, 'settlements');
+      bumpFunnelDaily(pool, 'x402_settled');
 
       for (const [key, value] of Object.entries(settle.headers || {})) res.setHeader(key, value);
       req.x402 = { settled: true, txHash: settle.transaction, payer: settle.payer };
@@ -393,6 +399,7 @@ export function createX402Middleware(pool, logger) {
             ? JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
             : {};
           bumpFunnel(pool, 'issued');
+          bumpFunnelDaily(pool, 'x402_402_served'); // anonymous exhausted-tier 402 upgraded to a payable x402 challenge
           return originalJson({ ...paymentRequired, alternativePayment: body });
         } catch (err) {
           // Fail open to today's exact 402 — the USDT rail must never break
