@@ -5,6 +5,13 @@
 
 import express from 'express';
 
+// Observability helper: supplier count grouped by discovery source.
+function countBySource(list) {
+  const out = {};
+  for (const s of list) { const k = s.source || 'unknown'; out[k] = (out[k] || 0) + 1; }
+  return out;
+}
+
 /**
  * @param {object} deps { registry, marketStore }
  */
@@ -26,10 +33,15 @@ export function createMarketAdminRouter({ registry, marketStore } = {}) {
         reputation: s.reputation, price: s.basePrice, currency: s.currency,
         latencyMs: s.latency, availability: s.availability, successRate: s.successRate ?? null,
         paymentMethods: s.paymentMethods || [], protocols: s.protocols || [],
+        // Observability: provenance + freshness (Bazaar lastUpdated) so operators
+        // can see how recent/real each discovered supplier is.
+        serviceName: (s.marketMeta && s.marketMeta.serviceName) || null,
+        url: (s.marketMeta && s.marketMeta.url) || null,
+        lastUpdated: (s.marketMeta && s.marketMeta.lastUpdated) || null,
       }))
       .sort((a, b) => (b.reputation - a.reputation) || (a.price - b.price))
       .slice(0, limit);
-    res.json({ ok: true, count: ranked.length, rankings: ranked });
+    res.json({ ok: true, count: ranked.length, bySource: countBySource(registry.list(filter)), rankings: ranked });
   });
 
   router.get('/price-history/:supplierId', (req, res) => {

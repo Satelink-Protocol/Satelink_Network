@@ -188,3 +188,32 @@ Remaining risks:
 Wired into kernel_router: registered in the x402Active block, gated by VNEXT_RPC_ENABLED (default OFF; VNEXT_RPC_UNIT_PRICE/CURRENCY), injectable (rpcAdapter) for tests. Kernel + routing engine UNTOUCHED (git diff empty). Tests +7 (capabilities/discover/quote/execute/safety/kernel-integration). Full vnext suite 146/146; app_factory loads clean.
 
 Next to fully "meter the firehose": a public payment-gated metered-RPC endpoint (like /resell but passing the JSON-RPC body + chain, workload 'rpc'), + the P0 settle/credit atomicity fix, + lower FREE_TIER_DAILY_LIMIT + advertise x402 in .well-known. The adapter + kernel path are ready.
+
+## CDP x402 Bazaar integration (highest-ROI marketplace, M8) — LIVE-PROVEN
+
+Live evidence (verified 2026-07-22, https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources, HTTP 200 / 342KB):
+- 100 resources returned, 214 priced accepts. Networks: Base 135, Solana 41, Polygon 28, Arbitrum 6.
+- Schemes: exact 183 (Satelink's rail), batch-settlement 25, upto 5.
+- Recency (recurring activity, not a stale dump): 98/100 updated <=30 days, 100/100 <=90 days.
+- 108 priced Base-USDC-`exact` resources = resellable supply on Satelink's exact rail.
+- End-to-end LIVE: DiscoveryAgent crawled the real Bazaar -> 98 discovered, 75 routable Base-USDC suppliers registered -> DecisionEngine selected the cheapest real merchant (e.g. OneSource RPC block-number @ 1000 minor units — a real competitor Satelink's RPC self-supply can undercut).
+
+Implementation (minimum, reuses M8 unchanged; kernel/routing frozen — git diff empty):
+- market/bazaar_source.js: real CDP Bazaar source parsing the exact live schema (item.resource/serviceName/tags/lastUpdated; accept.amount/asset/payTo/extra/scheme/network). Filters to priced `exact` on target network (default Base). Defensive: skips non-callable/unpriced/off-network/garbage rows. Injected fetch boundary. Plugs into the existing DiscoveryAgent.
+- discovery_agent.js: fixed to persist the source's full marketMeta (was dropping lastUpdated/payTo/serviceName) — additive fix, M8 suite still green.
+- market_admin_router.js: rankings now include serviceName/url/lastUpdated (provenance + freshness) and bySource counts (observability).
+- Tests +5 (real-schema normalize, filter, DiscoveryAgent->registry->DecisionEngine integration, failure isolation, network targeting). Full vnext suite 151/151; app_factory loads clean.
+
+### Deployment checklist
+1. Wire createBazaarSource into a DiscoveryAgent instance (operator: pass it in `sources`), + a timer (reuse RecoveryScheduler pattern) at e.g. 1/hour.
+2. Mount createMarketAdminRouter behind admin auth (GET /market/rankings|discovery-history|...).
+3. Env: none required (Bazaar list is unauthenticated GET). Optional: VNEXT_BAZAAR_ENDPOINT / network override.
+4. To RESELL discovered suppliers: add them to the resale allowlist path (they carry url + payTo) — reuse /resell + M7 verifier/signer; gate by resale-permissiveness (see risks).
+5. Observe: /market/rankings bySource shows cdp-bazaar supplier count + freshness; /market/discovery-history shows crawl rounds.
+
+### Remaining risks
+- DEMAND vs SUPPLY: the Bazaar proves abundant, fresh SUPPLY (108 priced Base-USDC resources) and is the canonical index agents query, but actual downstream agent PAYMENT volume is thin/partly-wash-traded (prior public data) — supplier intelligence + resale positioning is real; guaranteed recurring buyer volume is NOT proven by the index alone.
+- Pagination: the endpoint returned 100 items; a cursor/`limit` may exist — current source fetches one page (maxItems cap). Add pagination before claiming full-market coverage.
+- Resale legality: reselling a discovered merchant's resource must respect its ToS; not all are resale-permissive. Add a per-supplier resale-permissive check before routing paid traffic to them.
+- Benchmark prober not wired to network: discovered suppliers get reputation 50 until a real prober measures them (M8 BenchmarkAgent needs a live prober).
+- Rate limits: crawling the Bazaar hourly is fine; higher frequency may be rate-limited by CDP.

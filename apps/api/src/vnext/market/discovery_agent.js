@@ -34,7 +34,9 @@ export class DiscoveryAgent {
           if (typeof this.registry.updateMetadata === 'function') {
             this.registry.updateMetadata(rec.supplierId, {
               paymentMethods: rec.paymentMethods, protocols: rec.protocols, source: rec.source,
-              marketMeta: { url: rec.url },
+              // Preserve the source's full market metadata (e.g. Bazaar lastUpdated,
+              // payTo, serviceName, tags); fall back to url when absent.
+              marketMeta: rec.marketMeta || { url: rec.url },
             });
           }
           added += 1;
