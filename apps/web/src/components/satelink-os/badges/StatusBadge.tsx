@@ -10,7 +10,7 @@ export interface StatusBadgeProps {
 export function StatusBadge({ label, tone = 'primary' }: StatusBadgeProps): JSX.Element {
   return (
     <span className={styles.badge} data-tone={tone}>
-      {label.toUpperCase()}
+      {(label ?? '').toUpperCase()}
     </span>
   );
 }
