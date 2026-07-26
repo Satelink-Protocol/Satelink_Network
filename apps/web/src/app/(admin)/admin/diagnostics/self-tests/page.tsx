@@ -54,7 +54,7 @@ const cols: DataTableColumn<Check>[] = [
   {
     key: "status",
     header: "Status",
-    cell: (r) => <StatusBadge status={r.status === "success" ? "active" : r.status === "warning" ? "pending" : "danger"} label={r.status.toUpperCase()} />,
+    cell: (r) => <StatusBadge status={r.status === "success" ? "active" : r.status === "warning" ? "pending" : "danger"} label={r.status?.toUpperCase() ?? ''} />,
   },
   { key: "value", header: "Value", align: "right", cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.value}</span> },
 ];

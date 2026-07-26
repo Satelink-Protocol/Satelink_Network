@@ -69,7 +69,7 @@ export default function BuilderProjectsPage() {
       key: "status",
       header: "Status",
       cell: (r: ProjectRow) => (
-        <StatusBadge status={r.status === "active" ? "active" : "neutral"} label={r.status.toUpperCase()} />
+        <StatusBadge status={r.status === "active" ? "active" : "neutral"} label={r.status?.toUpperCase() ?? ''} />
       ),
     },
     {

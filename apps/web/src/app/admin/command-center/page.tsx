@@ -533,7 +533,7 @@ function AdminCommandCenter() {
                       <div key={s.label} className="flex justify-between items-center py-3 border-b border-zinc-800/50 last:border-0">
                         <span className="text-sm text-zinc-300">{s.label}</span>
                         <StatusBadge
-                          label={s.status === "dry_run" ? "DRY_RUN" : s.status === "unknown" ? "…" : s.status.toUpperCase()}
+                          label={s.status === "dry_run" ? "DRY_RUN" : s.status === "unknown" ? "…" : s.status?.toUpperCase() ?? ''}
                           tone={s.status === "operational" ? "success" : s.status === "dry_run" ? "warn" : s.status === "unknown" ? "muted" : "danger"}
                         />
                       </div>
@@ -835,7 +835,7 @@ function AdminCommandCenter() {
                   columns={[
                     { key: "name", header: "Network Name" },
                     { key: "chain_id", header: "Chain ID", mono: true },
-                    { key: "status", header: "SLA status", cell: (c: any) => <StatusBadge label={c.status.toUpperCase()} tone={c.status === "operational" ? "success" : "danger"} /> },
+                    { key: "status", header: "SLA status", cell: (c: any) => <StatusBadge label={c.status?.toUpperCase() ?? ''} tone={c.status === "operational" ? "success" : "danger"} /> },
                     { key: "requests_24h", header: "Bridge Requests Served", mono: true, cell: (c: any) => fmt.num(c.requests_24h) }
                   ]}
                   rows={netHealth.chain_status}
@@ -854,7 +854,7 @@ function AdminCommandCenter() {
                   { key: "reputation_score", header: "Reputation", mono: true },
                   { key: "avg_latency_ms", header: "Avg Latency", mono: true, cell: (n: any) => <span>{n.avg_latency_ms}ms</span> },
                   { key: "jobs_executed", header: "Cumulative Requests", mono: true, cell: (n: any) => fmt.num(n.jobs_executed) },
-                  { key: "status", header: "Status", cell: (n: any) => <StatusBadge label={n.status.toUpperCase()} tone={n.status === "active" ? "success" : "muted"} /> }
+                  { key: "status", header: "Status", cell: (n: any) => <StatusBadge label={n.status?.toUpperCase() ?? ''} tone={n.status === "active" ? "success" : "muted"} /> }
                 ]}
                 rows={nodesList?.nodes}
                 error={nodesListErr}
@@ -874,7 +874,7 @@ function AdminCommandCenter() {
                 <>
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <KPICard label="RPC Gateway Status" value={netHealth.availability_pct >= 99.9 ? "Operational" : "Degraded"} caption={`${netHealth.availability_pct}% availability (24h)`} />
-                    <KPICard label="Polygon Bridge" value={polygon ? polygon.status.toUpperCase() : "—"} caption={polygon ? `Chain ID ${polygon.chain_id}` : "no chain data"} />
+                    <KPICard label="Polygon Bridge" value={polygon?.status ? polygon.status.toUpperCase() : "—"} caption={polygon ? `Chain ID ${polygon.chain_id}` : "no chain data"} />
                     <KPICard label="Bridge Requests Served" value={fmt.num(polygon ? polygon.requests_24h : netHealth.requests_24h)} caption="24h gateway calls" />
                     <KPICard label="Error Rate" value={`${netHealth.error_rate_pct}%`} caption="HTTP 5xx and timeouts" />
                   </div>
@@ -884,7 +884,7 @@ function AdminCommandCenter() {
                       columns={[
                         { key: "name", header: "Network Name" },
                         { key: "chain_id", header: "Chain ID", mono: true },
-                        { key: "sla", header: "SLA Status", cell: (c: any) => <StatusBadge label={c.status.toUpperCase()} tone={c.status === "operational" ? "success" : "danger"} /> },
+                        { key: "sla", header: "SLA Status", cell: (c: any) => <StatusBadge label={c.status?.toUpperCase() ?? ''} tone={c.status === "operational" ? "success" : "danger"} /> },
                         { key: "requests_24h", header: "Requests Served", mono: true, cell: (c: any) => fmt.num(c.requests_24h) },
                         { key: "latency", header: "Latency", mono: true, cell: () => <span>{fmt.num(netHealth.p50_latency_ms)}ms</span> },
                         { key: "status", header: "Status", cell: (c: any) => <Inline gap="sm"><StatusDot tone={c.status === "operational" ? "success" : "danger"} /><span>{c.status === "operational" ? "Up" : "Down"}</span></Inline> }
@@ -930,7 +930,7 @@ function AdminCommandCenter() {
                         { key: "reputation_score", header: "Reputation", mono: true },
                         { key: "avg_latency_ms", header: "Avg Latency", mono: true, cell: (n: any) => <span>{n.avg_latency_ms == null ? "—" : `${n.avg_latency_ms}ms`}</span> },
                         { key: "jobs_executed", header: "Cumulative Requests", mono: true, cell: (n: any) => fmt.num(Number(n.jobs_executed)) },
-                        { key: "status", header: "Status", cell: (n: any) => <StatusBadge label={n.status.toUpperCase()} tone={n.status === "active" ? "success" : "muted"} /> }
+                        { key: "status", header: "Status", cell: (n: any) => <StatusBadge label={n.status?.toUpperCase() ?? ''} tone={n.status === "active" ? "success" : "muted"} /> }
                       ]}
                       rows={nodes}
                       emptyLabel="registered nodes"
@@ -1225,7 +1225,7 @@ function AdminCommandCenter() {
               <DataTable
                 columns={[
                   { key: "ip", header: "IP Address", mono: true },
-                  { key: "classification", header: "Class", cell: (t: any) => <StatusBadge label={t.classification.toUpperCase()} tone={t.classification === "scanner" ? "danger" : "warn"} /> },
+                  { key: "classification", header: "Class", cell: (t: any) => <StatusBadge label={t.classification?.toUpperCase() ?? ''} tone={t.classification === "scanner" ? "danger" : "warn"} /> },
                   { key: "score", header: "Abuse Score", mono: true },
                   { key: "calls_today", header: "Calls Today", mono: true, cell: (t: any) => fmt.num(t.calls_today) },
                   { key: "avg_daily_calls", header: "Daily Avg", mono: true, cell: (t: any) => fmt.num(t.avg_daily_calls) },
@@ -1253,8 +1253,8 @@ function AdminCommandCenter() {
                 columns={[
                   { key: "id", header: "Incident ID", mono: true, muted: true },
                   { key: "title", header: "Issue Title" },
-                  { key: "severity", header: "Severity", cell: (i: any) => <StatusBadge label={i.severity.toUpperCase()} tone={i.severity === "critical" ? "danger" : "warn"} /> },
-                  { key: "status", header: "Outcome", cell: (i: any) => <StatusBadge label={i.status.toUpperCase()} tone="success" /> },
+                  { key: "severity", header: "Severity", cell: (i: any) => <StatusBadge label={i.severity?.toUpperCase() ?? ''} tone={i.severity === "critical" ? "danger" : "warn"} /> },
+                  { key: "status", header: "Outcome", cell: (i: any) => <StatusBadge label={i.status?.toUpperCase() ?? ''} tone="success" /> },
                   { key: "owner", header: "Team Owner", mono: true },
                   { key: "note", header: "Postmortem Resolution Notes" }
                 ]}

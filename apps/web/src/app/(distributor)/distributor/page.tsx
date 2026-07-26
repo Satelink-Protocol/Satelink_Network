@@ -80,7 +80,7 @@ export default function DistributorPage() {
       key: "status",
       header: "Activity State",
       cell: (r: ReferralRow) => (
-        <StatusBadge status={r.status === "active" ? "active" : "neutral"} label={r.status.toUpperCase()} />
+        <StatusBadge status={r.status === "active" ? "active" : "neutral"} label={r.status?.toUpperCase() ?? ''} />
       ),
     },
   ];

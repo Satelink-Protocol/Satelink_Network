@@ -687,7 +687,7 @@ function NodePortal() {
                 <TableRow key={r.id}>
                   <TableCell className="font-mono">{r.id}</TableCell>
                   <TableCell>
-                    <StatusBadge status={r.severity} variant={sevTone(r.severity) as any} label={r.severity.toUpperCase()} />
+                    <StatusBadge status={r.severity} variant={sevTone(r.severity) as any} label={r.severity?.toUpperCase() ?? ''} />
                   </TableCell>
                   <TableCell>{r.message}</TableCell>
                   <TableCell>{r.triggered_at}</TableCell>
