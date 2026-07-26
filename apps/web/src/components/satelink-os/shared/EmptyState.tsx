@@ -29,14 +29,14 @@ export function EmptyState({
   if (variant === 'line') {
     return (
       <div className={styles.line}>
-        <span>── {label.toUpperCase()}</span>
+        <span>── {(label ?? '').toUpperCase()}</span>
         {note ? <span className={styles.lineNote}>· {note}</span> : null}
       </div>
     );
   }
   return (
     <div className={clsx(styles.block)}>
-      <div className={styles.blockLabel}>{label.toUpperCase()}</div>
+      <div className={styles.blockLabel}>{(label ?? '').toUpperCase()}</div>
       <div className={styles.blockTitle}>{message}</div>
       {note ? <div className={styles.blockNote}>{note}</div> : null}
     </div>
