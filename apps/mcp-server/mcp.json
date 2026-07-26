@@ -1,0 +1,35 @@
+{
+  "name": "satelink-mcp",
+  "version": "2.0.0",
+  "description": "Pay-per-call Polygon PoS (chain 137) JSON-RPC over MCP. First calls each day are free; after that, calls settle automatically via x402 (USDC on Base) — $0.10 buys a 1,000-call bundle. No account, no subscription.",
+  "homepage": "https://satelink.network",
+  "vendor": "Satelink Protocol",
+  "license": "MIT",
+  "runtime": "node",
+  "transports": {
+    "stdio": {
+      "command": "npx",
+      "args": ["-y", "satelink-mcp"]
+    },
+    "streamable_http": {
+      "url": "/mcp"
+    }
+  },
+  "capabilities": {
+    "tools": ["polygon_rpc"],
+    "resources": ["satelink://pricing"],
+    "prompts": ["check_wallet_balance"]
+  },
+  "payment": {
+    "protocol": "x402",
+    "network": "eip155:8453",
+    "asset": "USDC",
+    "price": "$0.10 per 1000 calls",
+    "payTo": "0x966E1Ae22996545015b1414B35234b10719d7Ad4"
+  },
+  "env": {
+    "SATELINK_WALLET_PRIVATE_KEY": "0x private key of a Base-funded USDC wallet; enables automatic x402 payment.",
+    "SATELINK_RPC_URL": "Override RPC endpoint (default https://rpc.satelink.network/rpc/polygon).",
+    "SATELINK_API_KEY": "Optional Satelink API key for higher free-tier limits."
+  }
+}

@@ -1,19 +1,26 @@
 {
   "name": "satelink-mcp",
-  "version": "1.0.0",
-  "description": "Satelink MCP server — give AI agents pay-per-call Polygon (chain 137) JSON-RPC access. Free tier, then micropayments in USDT/USDC.",
+  "version": "2.0.0",
+  "description": "Satelink MCP server — give AI agents pay-per-call Polygon (chain 137) JSON-RPC access. Free tier, then automatic x402 micropayments (USDC on Base).",
   "type": "module",
   "main": "index.js",
   "bin": {
-    "satelink-mcp": "./index.js"
+    "satelink-mcp": "./index.js",
+    "satelink-mcp-http": "./http.mjs"
   },
   "files": [
     "index.js",
+    "http.mjs",
+    "client-example.mjs",
+    "src/",
+    "mcp.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "start:http": "node http.mjs",
+    "demo": "node client-example.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -29,6 +36,7 @@
     "web3",
     "ai-agent",
     "x402",
+    "micropayments",
     "depin"
   ],
   "homepage": "https://satelink.network",
@@ -45,6 +53,11 @@
     "access": "public"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.1.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
+    "@x402/fetch": "^2.17.0",
+    "express": "^5.2.1",
+    "viem": "^2.55.0"
   }
 }
