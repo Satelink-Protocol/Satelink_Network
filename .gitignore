@@ -175,3 +175,7 @@ test_dash.js
 verify.sh
 fix_conflicts.sh
 x402-mainnet-test.*
+
+# M0 architecture test fixtures (written and removed at test time)
+libs/**/__arch_fixture__/
+architecture.svg
