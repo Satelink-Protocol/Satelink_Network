@@ -58,7 +58,7 @@ export default defineConfig({
         test: {
           name: 'libs',
           include: ['libs/**/*.{test,spec}.ts'],
-          exclude: ['**/node_modules/**', '**/dist/**', ...INTEGRATION_PATTERNS],
+          exclude: ['**/node_modules/**', '**/dist/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
           environment: 'node',
         },
       },
@@ -66,7 +66,7 @@ export default defineConfig({
         test: {
           name: 'tools',
           include: ['tools/**/*.{test,spec}.ts'],
-          exclude: ['**/node_modules/**', ...INTEGRATION_PATTERNS],
+          exclude: ['**/node_modules/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
           environment: 'node',
         },
       },
@@ -76,7 +76,7 @@ export default defineConfig({
         test: {
           name: 'integration',
           include: INTEGRATION_PATTERNS,
-          exclude: ['**/node_modules/**'],
+          exclude: ['**/node_modules/**', '.claude/worktrees/**'],
           environment: 'node',
           testTimeout: 120_000,
           hookTimeout: 120_000,
