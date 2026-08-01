@@ -30,6 +30,9 @@ export class Currency<Code extends string = string> {
   readonly minorMultiplier: bigint;
 
   private constructor(code: Code, decimals: number) {
+    if (decimals < 1) {
+      throw new RangeError(`Currency decimals must be >= 1, got ${decimals} for "${code}"`);
+    }
     this.code = code;
     this.decimals = decimals;
     this.minorMultiplier = 10n ** BigInt(decimals);

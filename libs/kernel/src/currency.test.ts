@@ -135,4 +135,25 @@ describe('Currency', () => {
       expect(e.toString()).toContain('not a supported currency');
     });
   });
+
+  describe('decimals guard', () => {
+    it('rejects 0 decimals', () => {
+      // Currency constructor is private, so we bypass via reflection to prove
+      // the guard exists. This makes the removed toDecimalString branch
+      // (decimals > 0) provably unreachable rather than accidentally unreachable.
+      const CurrencyAny = Currency as unknown as { new (code: string, decimals: number): Currency };
+      expect(() => new CurrencyAny('FAKE', 0)).toThrow(RangeError);
+    });
+
+    it('rejects negative decimals', () => {
+      const CurrencyAny = Currency as unknown as { new (code: string, decimals: number): Currency };
+      expect(() => new CurrencyAny('FAKE', -1)).toThrow(RangeError);
+    });
+
+    it('all registered currencies have decimals >= 1', () => {
+      for (const c of Currency.ALL) {
+        expect(c.decimals).toBeGreaterThanOrEqual(1);
+      }
+    });
+  });
 });
