@@ -14,6 +14,7 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { CHAIN_ALIASES } from './providers.js';
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 const WS_PROVIDERS = {
   'polygon-amoy': process.env.WS_POLYGON_AMOY || 'wss://polygon-amoy.g.alchemy.com/v2/demo',
@@ -217,11 +218,14 @@ async function recordWsRevenue(db, clientId, chain) {
 
   try {
     const now = Math.floor(Date.now() / 1000);
+    const revRequestId = `ws_${Date.now()}`;
     await db.query(
       `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
        VALUES ('ws_subscription', $1, $2, $3, 'success', $4, $5)`,
-      [chain, clientId, WS_EVENT_PRICE_USDT, `ws_${Date.now()}`, now]
+      [chain, clientId, WS_EVENT_PRICE_USDT, revRequestId, now]
     );
+    // M3 shadow ledger — flag-gated, isolated pool, never throws.
+    shadowWriteRevenueLedger(db, { requestId: revRequestId, amountUsdt: WS_EVENT_PRICE_USDT });
   } catch (e) {
     console.error('[WS Gateway] Revenue error:', e.message);
   }

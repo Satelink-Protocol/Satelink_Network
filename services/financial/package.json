@@ -1,0 +1,21 @@
+{
+  "name": "@satelink/financial",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Financial application + infrastructure: LedgerRepository port and its Postgres/in-memory implementations.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@satelink/kernel": "*",
+    "@satelink/financial-domain": "*",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/pg": "^8.20.2",
+    "vitest": "^3.0.0",
+    "@testcontainers/postgresql": "^10.28.0"
+  }
+}

@@ -144,7 +144,10 @@ describe('architecture enforcement harness', () => {
       const fired = violatedRules(result.output as ICruiseResult);
       expect(fired).toContain('domain-no-io-packages');
     } finally {
-      rmSync(join(REPO_ROOT, 'libs/financial-domain'), { recursive: true, force: true });
+      // Remove ONLY the fixture dir — NOT the whole libs/financial-domain
+      // package, which now contains the real M3 domain. (M0 wrote this when the
+      // package was empty; deleting the package here nukes M3 source on every run.)
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

@@ -12,12 +12,17 @@
  *                 access permitted (they inspect the repo itself).
  *   integration — Docker-backed. Excluded from the default run.
  *
+ * Workspace packages (@satelink/kernel, @satelink/financial-domain) resolve via
+ * their node_modules symlinks — created by `npm install`'s workspace linking in
+ * CI, and present locally too. No alias/plugin indirection.
+ *
  * Run:
  *   npx vitest run --project libs
  *   npx vitest run --project tools
  *   npx vitest run --project integration
  */
 
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const INTEGRATION_PATTERNS = [
@@ -25,14 +30,35 @@ const INTEGRATION_PATTERNS = [
   '**/*.integration.test.ts',
 ];
 
+// Resolve workspace package specifiers to their TS source. A resolveId plugin is
+// used because Vitest's `projects` do not reliably apply resolve.alias to
+// transitive bare specifiers, and the local shared node_modules symlink does not
+// contain the M3 workspace links. In CI, `npm install` links the workspaces, so
+// this plugin is a harmless no-op there (npm resolution wins first).
+const WORKSPACE_SOURCES: Record<string, string> = {
+  '@satelink/kernel': fileURLToPath(new URL('./libs/kernel/src/index.ts', import.meta.url)),
+  '@satelink/financial-domain': fileURLToPath(
+    new URL('./libs/financial-domain/src/index.ts', import.meta.url),
+  ),
+};
+
+const workspaceResolver = {
+  name: 'satelink-workspace-resolver',
+  enforce: 'pre' as const,
+  resolveId(id: string) {
+    return WORKSPACE_SOURCES[id] ?? null;
+  },
+};
+
 export default defineConfig({
+  plugins: [workspaceResolver],
   test: {
     projects: [
       {
         test: {
           name: 'libs',
           include: ['libs/**/*.{test,spec}.ts'],
-          exclude: ['**/node_modules/**', '**/dist/**', ...INTEGRATION_PATTERNS],
+          exclude: ['**/node_modules/**', '**/dist/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
           environment: 'node',
         },
       },
@@ -40,15 +66,17 @@ export default defineConfig({
         test: {
           name: 'tools',
           include: ['tools/**/*.{test,spec}.ts'],
-          exclude: ['**/node_modules/**', ...INTEGRATION_PATTERNS],
+          exclude: ['**/node_modules/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
           environment: 'node',
         },
       },
       {
+        extends: true,
+        plugins: [workspaceResolver],
         test: {
           name: 'integration',
           include: INTEGRATION_PATTERNS,
-          exclude: ['**/node_modules/**'],
+          exclude: ['**/node_modules/**', '.claude/worktrees/**'],
           environment: 'node',
           testTimeout: 120_000,
           hookTimeout: 120_000,

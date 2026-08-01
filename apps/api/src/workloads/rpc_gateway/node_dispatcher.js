@@ -7,6 +7,7 @@
  */
 
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 const REQUEST_TIMEOUT_MS = 15000; // 15s to account for serverless cold starts
 const HEARTBEAT_THRESHOLD_SECONDS = 300; // 5 minutes
@@ -232,6 +233,7 @@ export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, meth
   try {
     // 1. Write to revenue_events_v2 WITH node_id attribution — paid traffic only
     if (isPaid) {
+      const revRequestId = requestId || `${nodeId}-${now}`;
       await pool.query(`
         INSERT INTO revenue_events_v2
           (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
@@ -242,9 +244,11 @@ export async function recordNodeSuccess(pool, { nodeId, latencyMs, chainId, meth
         apiKey || 'public',
         usdtValue,
         'completed',
-        requestId || `${nodeId}-${now}`,
+        revRequestId,
         now
       ]);
+      // M3 shadow ledger — flag-gated, isolated pool, never throws.
+      shadowWriteRevenueLedger(pool, { requestId: revRequestId, amountUsdt: usdtValue });
     }
 
     // 2. Update node stats:

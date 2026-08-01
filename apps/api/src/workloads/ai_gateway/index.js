@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { isFounderApiKey } from '../../payments/founder_wallets.js';
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 const REQUEST_COST_USDT = 0.001;
 
@@ -76,6 +77,8 @@ async function recordAiRevenue(db, inputTokens, outputTokens, apiKey, requestId,
        VALUES ('ai_inference', $1, $2, $3, 'success', $4, $5, $6)`,
       [`ai_${model}`, clientId, cost, requestId, now, isTestData]
     );
+    // M3 shadow ledger — flag-gated, isolated pool, never throws.
+    shadowWriteRevenueLedger(db, { requestId, amountUsdt: cost, isTestData });
 
     aiGatewayStats.revenueUsdt += cost;
     aiGatewayStats.totalInputTokens += inputTokens;

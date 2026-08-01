@@ -1,5 +1,6 @@
 import express from 'express'
 import { isFounderApiKey } from '../../payments/founder_wallets.js'
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js'
 
 export function createBandwidthRouter(pool, redis) {
   const router = express.Router()
@@ -15,7 +16,10 @@ export function createBandwidthRouter(pool, redis) {
       const kb = Buffer.byteLength(text) / 1024
       const cost = Math.max(0.0001, kb * 0.0001).toFixed(8)
       const isTestData = await isFounderApiKey(pool, apiKey)
-      await pool.query('INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, is_test_data) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['bandwidth', apiKey || 'public', cost, 'completed', 'bw_' + Date.now(), Math.floor(Date.now()/1000), isTestData])
+      const revRequestId = 'bw_' + Date.now()
+      await pool.query('INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, is_test_data) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['bandwidth', apiKey || 'public', cost, 'completed', revRequestId, Math.floor(Date.now()/1000), isTestData])
+      // M3 shadow ledger — flag-gated, isolated pool, never throws.
+      shadowWriteRevenueLedger(pool, { requestId: revRequestId, amountUsdt: cost, isTestData })
       res.json({ ok: true, status: response.status, body: text.slice(0, 10000), kb: kb.toFixed(2), cost_usdt: cost })
     } catch (e) { res.status(500).json({ error: e.message }) }
   })
@@ -32,7 +36,10 @@ export function createBandwidthRouter(pool, redis) {
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000)
       const links = [...html.matchAll(/href="([^"]+)"/g)].map(m => m[1]).slice(0, 20)
       const isTestData = await isFounderApiKey(pool, apiKey)
-      await pool.query('INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, is_test_data) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['scrape', apiKey || 'public', '0.001', 'completed', 'sc_' + Date.now(), Math.floor(Date.now()/1000), isTestData])
+      const revRequestId = 'sc_' + Date.now()
+      await pool.query('INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, is_test_data) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['scrape', apiKey || 'public', '0.001', 'completed', revRequestId, Math.floor(Date.now()/1000), isTestData])
+      // M3 shadow ledger — flag-gated, isolated pool, never throws.
+      shadowWriteRevenueLedger(pool, { requestId: revRequestId, amountUsdt: '0.001', isTestData })
       res.json({ ok: true, title, text, links, cost_usdt: '0.001000' })
     } catch (e) { res.status(500).json({ error: e.message }) }
   })

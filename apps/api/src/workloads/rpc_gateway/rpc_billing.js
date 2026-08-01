@@ -10,6 +10,7 @@
 import { getSharedRedis } from './shared_redis.js';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
 import { isFounderApiKey } from '../../payments/founder_wallets.js';
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 const CHAIN_PRICING_USDT = {
   'ethereum': 0.00005,
@@ -82,11 +83,15 @@ export async function recordRpcRevenue({ pool, chain, method, apiKey, source, re
 
   try {
     const isTestData = await isFounderApiKey(pool, apiKey);
+    const revRequestId = requestId || String(Date.now());
     await pool.query(
       `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source, is_test_data)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      ['rpc_call', apiKey || 'public', costUsdt, 'completed', requestId || String(Date.now()), Math.floor(Date.now() / 1000), chain || null, method || null, source || null, isTestData]
+      ['rpc_call', apiKey || 'public', costUsdt, 'completed', revRequestId, Math.floor(Date.now() / 1000), chain || null, method || null, source || null, isTestData]
     );
+    // M3 shadow ledger — flag-gated (LEDGER_SHADOW_WRITE, default OFF), isolated
+    // pool, never throws. Same request_id so the shadow txn parity-matches this row.
+    shadowWriteRevenueLedger(pool, { requestId: revRequestId, amountUsdt: costUsdt, isTestData });
     console.log(`[Billing] ✓ $${costUsdt}`);
 
     broadcaster.publish('revenue:event', {

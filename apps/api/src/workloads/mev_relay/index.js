@@ -32,6 +32,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
 import { isFounderApiKey } from '../../payments/founder_wallets.js';
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 const MEV_PROVIDERS = {
   ethereum: [
@@ -211,6 +212,8 @@ async function recordMevRevenue(db, method, apiKey, requestId, chain) {
        RETURNING id, epoch_id`,
       ['mev_private', clientId, amount, requestId, now, isTestData]
     );
+    // M3 shadow ledger — flag-gated, isolated pool, never throws.
+    shadowWriteRevenueLedger(db, { requestId, amountUsdt: amount, isTestData });
 
     mevStats.revenueUsdt += amount;
     console.log(`[MEV] Revenue: ${chain}/${method} → $${amount}`);
