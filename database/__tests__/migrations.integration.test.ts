@@ -76,16 +76,17 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 4 migrations to a fresh database', async () => {
+  it('applies all 5 migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(4);
+    expect(result.applied).toHaveLength(5);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
       '003_ledger_entries.sql',
       '004_ledger_revoke_mutation.sql',
+      '005_system_accounts.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -95,16 +96,38 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(4);
+    expect(result.skipped).toHaveLength(5);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(4);
+    expect(statuses).toHaveLength(5);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);
+    }
+  });
+
+  it('005 seeds the platform system accounts', async () => {
+    const client = new Client({ connectionString });
+    await client.connect();
+    try {
+      const { rows } = await client.query<{ id: string; normality: string; currency: string }>(
+        `SELECT id, normality, currency FROM accounts
+          WHERE id IN ('acct_platform_revenue', 'acct_platform_suspense')
+          ORDER BY id`,
+      );
+      expect(rows).toHaveLength(2);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      expect(byId.get('acct_platform_revenue')?.normality).toBe('credit');
+      expect(byId.get('acct_platform_suspense')?.normality).toBe('debit');
+      const { rows: prn } = await client.query(
+        `SELECT id FROM principals WHERE id = 'prn_platform' AND kind = 'platform'`,
+      );
+      expect(prn).toHaveLength(1);
+    } finally {
+      await client.end();
     }
   });
 

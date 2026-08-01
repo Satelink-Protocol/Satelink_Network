@@ -23,7 +23,8 @@
     "forceConsistentCasingInFileNames": true,
 
     "paths": {
-      "@satelink/kernel": ["./libs/kernel/src/index.ts"]
+      "@satelink/kernel": ["./libs/kernel/src/index.ts"],
+      "@satelink/financial-domain": ["./libs/financial-domain/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist", "build", "coverage", ".next"]

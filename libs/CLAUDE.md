@@ -27,8 +27,13 @@ Enforced by .dependency-cruiser.cjs. Violations fail CI.
 
 1. Balance is DERIVED from ledger entries. Never a stored mutable column.
 2. Money is bigint in integer minor units. NEVER a float. NEVER a JS number.
-3. Pending entries never contribute to AVAILABLE balance.
-   available = posted_credits - pending_debits
+3. Pending entries never contribute to AVAILABLE balance. A posted debit is
+   settled spend and DOES reduce available.
+   available = posted_credits - posted_debits - pending_debits
+   (Source of truth: the shipped M2 `account_balances` view in
+   database/migrations/003_ledger_entries.sql. BalanceCalculator must match it
+   exactly. Corrected 2026-08-01 — the earlier `posted_credits - pending_debits`
+   dropped the posted_debits term, which would let settled spend be re-spent.)
 4. Ledger credits ONLY on confirmed settlement. This is the settle-before-credit
    bug that made PR #278 a NO-GO. Do not reintroduce it.
 5. Ledger is append-only. No UPDATE, no DELETE. Reversals are NEW entries.

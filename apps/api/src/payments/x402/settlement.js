@@ -19,6 +19,9 @@
 
 import { PRICE_PER_CALL_USDT } from '../../billing/credit_service.mjs';
 import { isFounderWallet } from '../founder_wallets.js';
+// M3 shadow ledger (DECISION 4: narrow exception to instrument the single
+// revenue_events_v2 INSERT below — no other change to settlement logic).
+import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
 
 export class DuplicateSettlementError extends Error {
   constructor(txHash) {
@@ -105,6 +108,9 @@ export async function recordX402Settlement(pool, {
        VALUES ('rpc_call', $1, $2, 'completed', $3, $4, $5, null, 'x402', 'x402', $6)`,
       [payer, amountUsd, `x402:${txHash}`, Math.floor(Date.now() / 1000), network, isTest]
     );
+    // M3 shadow ledger — flag-gated (default OFF), isolated pool (NOT this
+    // transaction's client), never throws. Same request_id so it parity-matches.
+    shadowWriteRevenueLedger(pool, { requestId: `x402:${txHash}`, amountUsdt: amountUsd, isTestData: isTest });
     await client.query('COMMIT');
     return {
       creditedKey,
