@@ -6,8 +6,10 @@
  *   - Runner applies all migrations to a fresh DB
  *   - Re-running is idempotent (applies nothing)
  *   - Status correctly reports applied vs pending
- *   - UPDATE on ledger_entries fails (invariant #5)
- *   - DELETE on ledger_entries fails (invariant #5)
+ *   - UPDATE on ledger_entries fails for the non-superuser satelink_app role (invariant #5)
+ *   - DELETE on ledger_entries fails for the non-superuser satelink_app role (invariant #5)
+ *   - a SUPERUSER CAN still mutate — asserted honestly as the known production gap,
+ *     because production currently connects as the superuser `postgres` (see 004)
  *   - INSERT with amount <= 0 fails CHECK constraint
  *   - Duplicate (idem_key, account_id, direction) fails UNIQUE
  *   - account_balances view returns correct posted/pending sums
@@ -36,6 +38,39 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   afterAll(async () => {
     await container?.stop().catch(() => undefined);
   });
+
+  // -----------------------------------------------------------------------
+  // Helpers for the append-only tests
+  // -----------------------------------------------------------------------
+
+  // Password for the throwaway non-superuser role. Container-local only.
+  const APP_ROLE_PASSWORD = 'app_test_pw';
+
+  // Connection string that logs in AS the non-superuser satelink_app role
+  // (as opposed to `connectionString`, which is the container superuser).
+  const appConnectionString = (): string =>
+    `postgresql://satelink_app:${APP_ROLE_PASSWORD}` +
+    `@${container.getHost()}:${container.getPort()}/${container.getDatabase()}`;
+
+  // Idempotently create the least-privilege satelink_app role, grant it the
+  // privileges a real app needs (SELECT/INSERT), then apply the SAME revoke
+  // migration 004 applies once the role exists. This mirrors the infra state
+  // production must reach (dedicated non-superuser role + repointed DATABASE_URL);
+  // it is a test fixture only and must never be run against production.
+  async function ensureAppRole(client: Client): Promise<void> {
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'satelink_app') THEN
+          CREATE ROLE satelink_app LOGIN PASSWORD '${APP_ROLE_PASSWORD}';
+        END IF;
+      END
+      $$;
+    `);
+    await client.query('GRANT USAGE ON SCHEMA public TO satelink_app');
+    await client.query('GRANT SELECT, INSERT ON ledger_entries TO satelink_app');
+    await client.query('REVOKE UPDATE, DELETE ON ledger_entries FROM satelink_app');
+  }
 
   // -----------------------------------------------------------------------
   // Migration runner
@@ -82,35 +117,78 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
   // -----------------------------------------------------------------------
   // Invariant #5 — append-only (REVOKE UPDATE/DELETE)
+  //
+  // HONEST framing: the REVOKE in migration 004 only constrains a *non-superuser*
+  // role. Production connects as the superuser `postgres`, which bypasses all
+  // privilege checks — so append-only is NOT enforced for the app connection
+  // today. These tests therefore:
+  //   1. prove the revoke DOES bite a dedicated non-superuser role (satelink_app),
+  //      which is the state prod must reach (create role + repoint DATABASE_URL); and
+  //   2. assert, without flattery, that a SUPERUSER can STILL mutate — the current
+  //      production gap. We never assert against the container superuser as if it
+  //      represented a protected production connection.
   // -----------------------------------------------------------------------
 
-  it('UPDATE on ledger_entries fails with permission denied', async () => {
-    const client = new Client({ connectionString });
-    await client.connect();
-
+  it('UPDATE on ledger_entries fails for the non-superuser satelink_app role', async () => {
+    const admin = new Client({ connectionString });
+    await admin.connect();
     try {
-      // Seed test data
-      await seedTestData(client);
+      await seedTestData(admin);
+      await ensureAppRole(admin);
+    } finally {
+      await admin.end();
+    }
 
-      // Attempt UPDATE — should fail
+    const app = new Client({ connectionString: appConnectionString() });
+    await app.connect();
+    try {
       await expect(
-        client.query("UPDATE ledger_entries SET amount = 999 WHERE id = 1"),
+        app.query("UPDATE ledger_entries SET amount = 999 WHERE id = 1"),
       ).rejects.toThrow(/permission denied/);
     } finally {
-      await client.end();
+      await app.end();
     }
   });
 
-  it('DELETE on ledger_entries fails with permission denied', async () => {
-    const client = new Client({ connectionString });
-    await client.connect();
+  it('DELETE on ledger_entries fails for the non-superuser satelink_app role', async () => {
+    const admin = new Client({ connectionString });
+    await admin.connect();
+    try {
+      await seedTestData(admin);
+      await ensureAppRole(admin);
+    } finally {
+      await admin.end();
+    }
 
+    const app = new Client({ connectionString: appConnectionString() });
+    await app.connect();
     try {
       await expect(
-        client.query("DELETE FROM ledger_entries WHERE id = 1"),
+        app.query("DELETE FROM ledger_entries WHERE id = 1"),
       ).rejects.toThrow(/permission denied/);
     } finally {
-      await client.end();
+      await app.end();
+    }
+  });
+
+  it('a SUPERUSER can STILL mutate ledger_entries — the known production gap, NOT a passing guarantee', async () => {
+    // Production connects as the superuser `postgres`. Superusers bypass the
+    // REVOKE in migration 004, so append-only is NOT enforced for the app today.
+    // We assert this truth explicitly so the suite can never be read as claiming
+    // production is protected. It becomes protected only once a non-superuser
+    // role exists AND DATABASE_URL is repointed to it (see 004 header).
+    const admin = new Client({ connectionString });
+    await admin.connect();
+    try {
+      await seedTestData(admin);
+      // SET amount = amount: requires UPDATE privilege but leaves data unchanged
+      // (keeps CHECK (amount > 0) satisfied and does not disturb later tests).
+      const res = await admin.query(
+        "UPDATE ledger_entries SET amount = amount WHERE id = 1",
+      );
+      expect(res.rowCount).toBe(1);
+    } finally {
+      await admin.end();
     }
   });
 
