@@ -22,6 +22,7 @@ import {
   BalanceCalculator,
 } from '@satelink/financial-domain';
 import { Money, USDT } from '@satelink/kernel';
+import type { Result } from '@satelink/kernel';
 
 const MIGRATIONS_DIR = resolve(
   import.meta.dirname ?? new URL('.', import.meta.url).pathname,
@@ -76,9 +77,9 @@ runLedgerRepositoryContract('Postgres', async () => ({
 
 // --- balance-view regression (DECISION 1) -----------------------------------
 
-function must<T>(r: { isOk: boolean; value?: T; error?: { toString(): string } }): T {
-  if (!r.isOk) throw new Error(r.error?.toString());
-  return r.value as T;
+function must<T, E extends { toString(): string }>(r: Result<T, E>): T {
+  if (r.isErr) throw new Error(r.error.toString());
+  return r.value;
 }
 
 describe('BalanceCalculator agrees with the SQL account_balances view', () => {

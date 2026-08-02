@@ -28,6 +28,7 @@ import {
   BalanceInvariant,
 } from '@satelink/financial-domain';
 import { USDT } from '@satelink/kernel';
+import type { Result } from '@satelink/kernel';
 import { PostgresPrincipalRepository } from '../repositories/postgres/postgres-principal-repository.js';
 import { PostgresAccountRepository } from '../repositories/postgres/postgres-account-repository.js';
 
@@ -62,13 +63,9 @@ function deterministicId(prefix: string, externalRef: string): string {
   return `${prefix}_${hash}`;
 }
 
-function unwrap<T, E extends { toString(): string }>(r: {
-  isOk: boolean;
-  value?: T;
-  error?: E;
-}): T {
-  if (!r.isOk) throw new Error(r.error?.toString());
-  return r.value as T;
+function unwrap<T, E extends { toString(): string }>(r: Result<T, E>): T {
+  if (r.isErr) throw new Error(r.error.toString());
+  return r.value;
 }
 
 async function collectIdentities(pool: Pool): Promise<{ ids: string[]; sourceErrors: string[] }> {

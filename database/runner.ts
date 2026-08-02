@@ -44,7 +44,9 @@ export interface MigrationStatus {
   readonly filename: string;
   readonly number: number;
   readonly status: 'applied' | 'pending';
-  readonly applied_at?: Date;
+  // Pending migrations have no applied_at; under exactOptionalPropertyTypes the
+  // explicit `| undefined` allows assigning `undefined` (not just omission).
+  readonly applied_at?: Date | undefined;
 }
 
 export interface MigrationResult {

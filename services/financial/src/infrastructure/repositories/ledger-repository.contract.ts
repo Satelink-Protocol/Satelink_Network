@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { LedgerTransaction, TxnId, AccountRef, SourceReference } from '@satelink/financial-domain';
 import { Money, USDT } from '@satelink/kernel';
+import type { Result } from '@satelink/kernel';
 import { EntryState } from '@satelink/financial-domain';
 import type { LedgerRepository } from '../../application/ports/ledger-repository.js';
 
@@ -26,9 +27,9 @@ export interface LedgerRepoHarness {
   dispose(): Promise<void>;
 }
 
-function must<T>(r: { isOk: boolean; value?: T; error?: { toString(): string } }): T {
-  if (!r.isOk) throw new Error(`unexpected Err in contract setup: ${r.error?.toString()}`);
-  return r.value as T;
+function must<T, E extends { toString(): string }>(r: Result<T, E>): T {
+  if (r.isErr) throw new Error(`unexpected Err in contract setup: ${r.error.toString()}`);
+  return r.value;
 }
 
 function buildTransfer(txn: string, debit: string, credit: string, minor: bigint): LedgerTransaction {

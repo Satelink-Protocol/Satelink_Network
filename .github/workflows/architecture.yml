@@ -1,0 +1,46 @@
+name: Architecture
+
+# Financial-OS enforcement gates (M0 harness). These were previously only run
+# locally; this workflow makes them block merges. The strict typecheck now
+# covers libs AND services (services/financial holds the Draw hot path from M6).
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: architecture-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    name: Architecture + Strict Types + Domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      # Dependency-direction / purity rules (must be zero violations).
+      - name: Dependency rules
+        run: npm run arch
+
+      # Strict TS across kernel + financial-domain + financial (services).
+      # A strict error anywhere in these packages fails the build.
+      - name: Strict typecheck (libs + services)
+        run: npm run typecheck:libs
+
+      - name: Domain tests
+        run: npm run test:libs
+
+      - name: Architecture guard tests
+        run: npm run test:arch
