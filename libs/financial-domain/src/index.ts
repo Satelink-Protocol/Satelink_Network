@@ -75,3 +75,51 @@ export {
   IllegalAccountTransitionError,
   AccountClosePreconditionError,
 } from './account/errors.js';
+
+// ---------------------------------------------------------------------------
+// M5 — FundingSource aggregate
+// ---------------------------------------------------------------------------
+
+export { FundingSourceId, InvalidFundingSourceIdError } from './shared/funding-source-id.js';
+export { FundingSource } from './funding-source/funding-source.js';
+export type { FundingSourceProps } from './funding-source/funding-source.js';
+export { RailId, InvalidRailIdError } from './funding-source/rail-id.js';
+export { RailReference, InvalidRailReferenceError } from './funding-source/rail-reference.js';
+export { FundingMode, InvalidFundingModeError } from './funding-source/funding-mode.js';
+export type { FundingModeValue } from './funding-source/funding-mode.js';
+export { Capabilities, InvalidCapabilitiesError } from './funding-source/capabilities.js';
+export type { CapabilitiesProps, SettlementLatency } from './funding-source/capabilities.js';
+export { FundingSourceState, InvalidFundingSourceStateError } from './funding-source/funding-source-state.js';
+export type { FundingSourceStateValue } from './funding-source/funding-source-state.js';
+export { IllegalFundingSourceTransitionError } from './funding-source/errors.js';
+
+// ---------------------------------------------------------------------------
+// M5 — Authorization aggregate (AuthorizationNonce entity is NOT exported)
+// ---------------------------------------------------------------------------
+
+export { AuthorizationId, InvalidAuthorizationIdError } from './authorization/authorization-id.js';
+export { Authorization } from './authorization/authorization.js';
+export type { AuthorizationProps, ConsumeParams } from './authorization/authorization.js';
+export { AuthorizationState, InvalidAuthorizationStateError } from './authorization/authorization-state.js';
+export type { AuthorizationStateValue } from './authorization/authorization-state.js';
+export { Cap, InvalidCapError } from './authorization/cap.js';
+export { ConsumedAmount, InvalidConsumedAmountError } from './authorization/consumed-amount.js';
+export { ValidityWindow, InvalidValidityWindowError } from './authorization/validity-window.js';
+export { SignatureEnvelope, InvalidSignatureEnvelopeError } from './authorization/signature-envelope.js';
+export { NonceValue, InvalidNonceValueError } from './authorization/nonce-value.js';
+// NOTE: the AuthorizationNonce entity is deliberately NOT exported. Callers pass
+// AuthorizationNonceInput data; the root builds the entities. External code only
+// ever sees AuthorizationNonceView.
+export type { AuthorizationNonceView, AuthorizationNonceInput, NonceStateValue } from './authorization/authorization-nonce.js';
+export { CapacitySelector } from './authorization/capacity-selector.js';
+export {
+  IllegalAuthorizationTransitionError,
+  AuthorizationRevokedError,
+  NonceNotFoundError,
+  NonceAlreadyConsumedError,
+  OutsideValidityWindowError,
+  CapExceededError,
+  ConsumeCurrencyMismatchError,
+  NonPositiveConsumeError,
+} from './authorization/errors.js';
+export type { ConsumeError } from './authorization/errors.js';

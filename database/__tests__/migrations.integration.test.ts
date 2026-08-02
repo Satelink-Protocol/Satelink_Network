@@ -76,11 +76,11 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 6 migrations to a fresh database', async () => {
+  it('applies all 7 migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(6);
+    expect(result.applied).toHaveLength(7);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
@@ -88,6 +88,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '004_ledger_revoke_mutation.sql',
       '005_system_accounts.sql',
       '006_principal_account_version.sql',
+      '007_authorization.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -97,16 +98,41 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(6);
+    expect(result.skipped).toHaveLength(7);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(6);
+    expect(statuses).toHaveLength(7);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);
+    }
+  });
+
+  it('007 creates funding_sources, authorizations, authorization_nonces', async () => {
+    const client = new Client({ connectionString });
+    await client.connect();
+    try {
+      const { rows } = await client.query<{ table_name: string }>(
+        `SELECT table_name FROM information_schema.tables
+          WHERE table_name IN ('funding_sources','authorizations','authorization_nonces')
+          ORDER BY table_name`,
+      );
+      expect(rows.map((r) => r.table_name)).toEqual([
+        'authorization_nonces',
+        'authorizations',
+        'funding_sources',
+      ]);
+      // version column on authorizations (optimistic locking)
+      const { rows: v } = await client.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'authorizations' AND column_name = 'version'`,
+      );
+      expect(v).toHaveLength(1);
+    } finally {
+      await client.end();
     }
   });
 
