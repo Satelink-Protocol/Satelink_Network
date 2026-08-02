@@ -76,17 +76,18 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 5 migrations to a fresh database', async () => {
+  it('applies all 6 migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(5);
+    expect(result.applied).toHaveLength(6);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
       '003_ledger_entries.sql',
       '004_ledger_revoke_mutation.sql',
       '005_system_accounts.sql',
+      '006_principal_account_version.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -96,16 +97,34 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(5);
+    expect(result.skipped).toHaveLength(6);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(5);
+    expect(statuses).toHaveLength(6);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);
+    }
+  });
+
+  it('006 adds a version column to principals and accounts', async () => {
+    const client = new Client({ connectionString });
+    await client.connect();
+    try {
+      const { rows } = await client.query<{ table_name: string; column_default: string | null }>(
+        `SELECT table_name, column_default FROM information_schema.columns
+          WHERE table_name IN ('principals', 'accounts') AND column_name = 'version'
+          ORDER BY table_name`,
+      );
+      expect(rows.map((r) => r.table_name)).toEqual(['accounts', 'principals']);
+      for (const r of rows) {
+        expect(r.column_default).toContain('0'); // DEFAULT 0
+      }
+    } finally {
+      await client.end();
     }
   });
 
