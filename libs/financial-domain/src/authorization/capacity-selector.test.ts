@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { Money, USDT } from '@satelink/kernel';
 import { CapacitySelector } from './capacity-selector.js';
 import { Authorization } from './authorization.js';
-import { AuthorizationId } from './authorization-id.js';
+import { AuthorizationId } from '../shared/authorization-id.js';
 import { Cap } from './cap.js';
 import { ValidityWindow } from './validity-window.js';
 import { SignatureEnvelope } from './signature-envelope.js';

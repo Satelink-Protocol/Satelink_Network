@@ -18,7 +18,7 @@
 
 import type { Currency, Result } from '@satelink/kernel';
 import { ok, err } from '@satelink/kernel';
-import { AccountId } from './account-id.js';
+import { AccountId } from '../shared/account-id.js';
 import { AccountKind } from './account-kind.js';
 import { Normality } from './normality.js';
 import { BalanceInvariant } from './balance-invariant.js';
