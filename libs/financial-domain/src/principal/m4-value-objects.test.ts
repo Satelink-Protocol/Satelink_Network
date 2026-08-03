@@ -3,7 +3,7 @@ import { PrincipalId } from '../shared/principal-id.js';
 import { PrincipalKind } from './principal-kind.js';
 import { PrincipalState } from './principal-state.js';
 import { ExternalRef } from './external-ref.js';
-import { AccountId } from '../account/account-id.js';
+import { AccountId } from '../shared/account-id.js';
 import { AccountKind } from '../account/account-kind.js';
 import { Normality } from '../account/normality.js';
 import { BalanceInvariant } from '../account/balance-invariant.js';

@@ -20,6 +20,7 @@ import { createMachineAccessRouter } from "./src/machine-access/index.js";
 import { createAdminMalRouter } from "./src/routes/admin_mal_route.mjs";
 import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createLedgerParityRouter } from "./src/internal/ledger_parity.js";
+import { createDrawParityRouter } from "./src/ledger/draw_parity.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
@@ -439,6 +440,7 @@ app.get("/api/mode", (req, res) => {
   // M3 — ledger shadow: read-only parity measurement (nothing reads the ledger
   // for a decision). GET /internal/ledger-parity.
   app.use("/internal", createLedgerParityRouter(pool));
+  app.use("/internal", createDrawParityRouter(pool));
 
   // Conversion funnel: fetching deposit calldata is the "payment_started"
   // signal (the URL every 402 advertises). Counting middleware only — the

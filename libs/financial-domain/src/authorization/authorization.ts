@@ -20,7 +20,7 @@ import type { Currency, Money, Result } from '@satelink/kernel';
 import { ok, err } from '@satelink/kernel';
 import { PrincipalId } from '../shared/principal-id.js';
 import { FundingSourceId } from '../shared/funding-source-id.js';
-import { AuthorizationId } from './authorization-id.js';
+import { AuthorizationId } from '../shared/authorization-id.js';
 import { Cap } from './cap.js';
 import { ConsumedAmount } from './consumed-amount.js';
 import { ValidityWindow } from './validity-window.js';

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { Money, USDT, USDC } from '@satelink/kernel';
 import { Authorization } from './authorization.js';
-import { AuthorizationId } from './authorization-id.js';
+import { AuthorizationId } from '../shared/authorization-id.js';
 import { Cap } from './cap.js';
 import { ValidityWindow } from './validity-window.js';
 import { SignatureEnvelope } from './signature-envelope.js';

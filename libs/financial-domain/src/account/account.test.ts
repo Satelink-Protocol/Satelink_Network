@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { USDT } from '@satelink/kernel';
 import { Account } from './account.js';
-import { AccountId } from './account-id.js';
+import { AccountId } from '../shared/account-id.js';
 import { AccountKind } from './account-kind.js';
 import { Normality } from './normality.js';
 import { BalanceInvariant } from './balance-invariant.js';

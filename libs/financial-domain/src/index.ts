@@ -61,7 +61,7 @@ export {
 // M4 — Account aggregate
 // ---------------------------------------------------------------------------
 
-export { AccountId, InvalidAccountIdError } from './account/account-id.js';
+export { AccountId, InvalidAccountIdError } from './shared/account-id.js';
 export { Account } from './account/account.js';
 export type { AccountProps, AccountCloseContext, AccountNaturalKey } from './account/account.js';
 export { AccountKind, InvalidAccountKindError } from './account/account-kind.js';
@@ -97,7 +97,7 @@ export { IllegalFundingSourceTransitionError } from './funding-source/errors.js'
 // M5 — Authorization aggregate (AuthorizationNonce entity is NOT exported)
 // ---------------------------------------------------------------------------
 
-export { AuthorizationId, InvalidAuthorizationIdError } from './authorization/authorization-id.js';
+export { AuthorizationId, InvalidAuthorizationIdError } from './shared/authorization-id.js';
 export { Authorization } from './authorization/authorization.js';
 export type { AuthorizationProps, ConsumeParams } from './authorization/authorization.js';
 export { AuthorizationState, InvalidAuthorizationStateError } from './authorization/authorization-state.js';
@@ -123,3 +123,35 @@ export {
   NonPositiveConsumeError,
 } from './authorization/errors.js';
 export type { ConsumeError } from './authorization/errors.js';
+
+// ---------------------------------------------------------------------------
+// M6 — Draw aggregate + Settlement entity
+// ---------------------------------------------------------------------------
+
+export { DrawId, InvalidDrawIdError } from './draw/draw-id.js';
+export { DrawState, InvalidDrawStateError } from './draw/draw-state.js';
+export type { DrawStateValue } from './draw/draw-state.js';
+export { SettlementState, InvalidSettlementStateError } from './draw/settlement-state.js';
+export type { SettlementStateValue } from './draw/settlement-state.js';
+export { RejectReason, InvalidRejectReasonError } from './draw/reject-reason.js';
+export type { RejectReasonValue } from './draw/reject-reason.js';
+export { RailTransaction, InvalidRailTransactionError } from './draw/rail-transaction.js';
+export type { RailTransactionProps } from './draw/rail-transaction.js';
+export { ConfirmationCount, InvalidConfirmationCountError } from './draw/confirmation-count.js';
+export { AttemptCount, InvalidAttemptCountError } from './draw/attempt-count.js';
+
+export { Draw } from './draw/draw.js';
+export type { DrawProps, DrawReconProps } from './draw/draw.js';
+export { Settlement } from './draw/settlement.js';
+export type { SettlementView, SettlementProps } from './draw/settlement.js';
+
+export {
+  IllegalDrawTransitionError,
+  IllegalSettlementTransitionError,
+  InsufficientConfirmationsError,
+  DrawAlreadySettledError,
+} from './draw/errors.js';
+export type { DrawError } from './draw/errors.js';
+
+export { authorizeDrawRequest } from './coordination/draw-authorizer.js';
+export type { AuthorizeDrawResult, Grant, Policy } from './coordination/draw-authorizer.js';

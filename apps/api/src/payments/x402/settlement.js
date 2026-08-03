@@ -22,6 +22,7 @@ import { isFounderWallet } from '../founder_wallets.js';
 // M3 shadow ledger (DECISION 4: narrow exception to instrument the single
 // revenue_events_v2 INSERT below — no other change to settlement logic).
 import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
+import { shadowWriteDraw } from '../../ledger/shadow_draw_write.js';
 
 export class DuplicateSettlementError extends Error {
   constructor(txHash) {
@@ -111,6 +112,10 @@ export async function recordX402Settlement(pool, {
     // M3 shadow ledger — flag-gated (default OFF), isolated pool (NOT this
     // transaction's client), never throws. Same request_id so it parity-matches.
     shadowWriteRevenueLedger(pool, { requestId: `x402:${txHash}`, amountUsdt: amountUsd, isTestData: isTest });
+
+    // M6 shadow ledger — Draw
+    shadowWriteDraw(pool, { txHash, payer, amountUsd, isTestData: isTest, network });
+
     await client.query('COMMIT');
     return {
       creditedKey,
