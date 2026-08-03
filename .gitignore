@@ -175,3 +175,4 @@ test_dash.js
 verify.sh
 fix_conflicts.sh
 x402-mainnet-test.*
+install-m0.sh
