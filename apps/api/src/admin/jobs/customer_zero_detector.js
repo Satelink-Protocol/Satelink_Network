@@ -6,7 +6,7 @@
  * Corrected vs the original design doc:
  *   - `pool` is a pg Pool: pool.query() returns { rows }
  *   - credit_deposits real columns: wallet_address, amount_usdt, tx_hash,
- *     block_number, chain_id, created_at (see services/deposit_listener.js:149)
+ *     block_number, chain_id, confirmed_at (timestamped deposit confirmation)
  *   - Removed the hardcoded "Runway after refund: 47 days" line — that number
  *     is not computed from anything, and per docs/audit-2026-06-13 real external
  *     revenue is $0. The alert states only what is actually known: the deposit.
@@ -41,11 +41,11 @@ export class CustomerZeroDetector {
     let deposits = [];
     try {
       deposits = await this.q(
-        `SELECT wallet_address, amount_usdt, tx_hash, created_at
+        `SELECT wallet_address, amount_usdt, tx_hash, confirmed_at AS created_at
            FROM credit_deposits
           WHERE LOWER(wallet_address) != ALL($1::text[])
             AND amount_usdt > 0
-          ORDER BY created_at DESC
+          ORDER BY confirmed_at DESC
           LIMIT 5`,
         [FOUNDER_WALLETS]
       );
