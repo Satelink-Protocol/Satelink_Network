@@ -112,14 +112,24 @@ describe('shadowWriteDraw (plain JS)', () => {
   });
 
   async function seedDeps(payer, txHash) {
+    const prnId = `prn_${payer}`;
+    const acctId = `acct_${payer}`;
     await pool.query(`
-      INSERT INTO principals (id, kind, state, version, created_at) VALUES ('${payer}', 'human', 'active', 1, now()) ON CONFLICT DO NOTHING;
-      INSERT INTO accounts (id, principal_id, kind, currency, decimals, normality, balance_invariant, state, version, created_at) VALUES ('${payer}', '${payer}', 'capacity', 'USDT', 6, 'credit', 'non_negative', 'open', 1, now()) ON CONFLICT DO NOTHING;
-      INSERT INTO funding_sources (id, principal_id, rail_id, rail_reference, mode, capabilities, state, version, created_at) VALUES ('fs_x402_${payer}', '${payer}', 'base', '{"refType":"x402"}'::jsonb, 'push', '{"settlement_latency":"instant"}'::jsonb, 'active', 1, now()) ON CONFLICT DO NOTHING;
+      INSERT INTO principals (id, external_ref, kind, state, version, created_at) VALUES ('${prnId}', LOWER('${payer}'), 'human', 'active', 1, now()) ON CONFLICT DO NOTHING;
+      INSERT INTO accounts (id, principal_id, kind, currency, decimals, normality, balance_invariant, state, version, created_at) VALUES ('${acctId}', '${prnId}', 'capacity', 'USDT', 6, 'credit', 'non_negative', 'open', 1, now()) ON CONFLICT DO NOTHING;
+      INSERT INTO funding_sources (id, principal_id, rail_id, rail_reference, mode, capabilities, state, version, created_at) VALUES ('fs_x402_${payer}', '${prnId}', 'base', '{"refType":"x402"}'::jsonb, 'push', '{"settlement_latency":"instant"}'::jsonb, 'active', 1, now()) ON CONFLICT DO NOTHING;
       INSERT INTO authorizations (id, principal_id, funding_source_id, cap_amount, currency, consumed_amount, valid_after, valid_before, signature_envelope, state, version, created_at) 
-      VALUES ('auth_x402_${txHash}', '${payer}', 'fs_x402_${payer}', 2000000, 'USDC', 1500000, 0, 9999999999000, '{"scheme":"test"}'::jsonb, 'active', 1, now()) ON CONFLICT DO NOTHING;
+      VALUES ('auth_x402_${txHash}', '${prnId}', 'fs_x402_${payer}', 2000000, 'USDC', 1500000, 0, 9999999999000, '{"scheme":"test"}'::jsonb, 'active', 1, now()) ON CONFLICT DO NOTHING;
     `);
   }
+
+  it('returns principal_not_found if payer is unknown', async () => {
+    process.env.DRAW_SHADOW_WRITE = '1';
+    const r = await shadowWriteDraw(pool, { txHash: '0xunknown_tx', payer: '0xunknown_payer', amountUsd: 1.50, network: 'base' });
+    expect(r).toEqual({ written: false, reason: 'principal_not_found' });
+    const { rows } = await pool.query('SELECT COUNT(*) as n FROM draws WHERE idempotency_key = $1', ['idem_x402_draw_0xunknown_tx']);
+    expect(Number(rows[0].n)).toBe(0);
+  });
 
   it('writes NOTHING when the flag is OFF (default)', async () => {
     await seedDeps('0xpayer1', '0xtx1');

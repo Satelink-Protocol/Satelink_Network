@@ -1,6 +1,11 @@
 /**
  * Shadow draw writer (M6 — Draw + Settlement in shadow).
  *
+ * This records ALREADY-CONFIRMED x402 settlements, so draws are inserted as
+ * 'settled' and settlements as 'confirmed' with 0 required confirmations. The
+ * pending->posted state machine is deliberately NOT exercised here. Real
+ * confirmation polling arrives in M7.
+ *
  * This is plain JS by design. Apps/api runs as plain Node (no transpile), so
  * importing TS workspace packages at runtime causes production build failures.
  *
@@ -45,8 +50,6 @@ export async function shadowWriteDraw(pool, event, logger = console) {
     const drawId = `draw_x402_${txHash}`;
     const txnId = `txn_x402_${txHash}`;
     const idempotencyKey = `idem_x402_draw_${txHash}`;
-    const principalId = payer;
-    const accountId = payer;
     const fundingSourceId = `fs_x402_${payer}`;
     const authorizationId = `auth_x402_${txHash}`;
     const nowMs = Date.now();
@@ -55,6 +58,21 @@ export async function shadowWriteDraw(pool, event, logger = console) {
 
     const client = await pool.connect();
     try {
+      const pRes = await client.query('SELECT id FROM principals WHERE external_ref = LOWER($1)', [payer]);
+      if (pRes.rowCount === 0) {
+        return { written: false, reason: 'principal_not_found' };
+      }
+      const principalId = pRes.rows[0].id;
+
+      const aRes = await client.query(
+        "SELECT id FROM accounts WHERE principal_id = $1 AND kind = 'capacity' AND currency = $2",
+        [principalId, SHADOW_CURRENCY]
+      );
+      if (aRes.rowCount === 0) {
+        return { written: false, reason: 'account_not_found' };
+      }
+      const accountId = aRes.rows[0].id;
+
       await client.query('BEGIN');
 
       // 1. Insert Draw
