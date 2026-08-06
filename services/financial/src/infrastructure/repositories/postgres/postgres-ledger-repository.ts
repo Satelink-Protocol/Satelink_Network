@@ -18,6 +18,8 @@ import {
   Direction,
   EntryState,
   SourceReference,
+  assertUniformLedgerHeader,
+  isLedgerKind,
 } from '@satelink/financial-domain';
 import type { LedgerEntryInput, LedgerEntryView } from '@satelink/financial-domain';
 import { Money, Currency } from '@satelink/kernel';
@@ -51,6 +53,28 @@ export class PostgresLedgerRepository implements LedgerRepository {
     try {
       client = await this.pool.connect();
       await client.query('BEGIN');
+      // The header's ref_type/ref_id/state are derived from entries[0]; every
+      // entry must agree or the header would misdescribe the transaction.
+      assertUniformLedgerHeader(txn.txnId.value, txn.entries);
+      // Insert ledger_txns header (parent of ledger_entries via FK). `kind`
+      // comes from the aggregate — NOT a literal — so a draw/settlement is
+      // never mislabeled as a deposit.
+      const firstEntry = txn.entries[0]!;
+      await client.query(
+        `INSERT INTO ledger_txns
+           (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (txn_id) DO NOTHING`,
+        [
+          txn.txnId.value,
+          txn.kind,
+          firstEntry.source.refType,
+          firstEntry.source.refId,
+          txn.currency.code,
+          firstEntry.state.value,
+          firstEntry.state.isPosted() ? new Date() : null,
+        ],
+      );
       const entries = txn.entries;
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i]!;
@@ -104,6 +128,20 @@ export class PostgresLedgerRepository implements LedgerRepository {
         return ok(null);
       }
 
+      // Every entry row has a parent ledger_txns header (FK). Read `kind` from
+      // it — the stored classification, not a value re-derived from entries.
+      const { rows: headerRows } = await this.pool.query<{ kind: string }>(
+        `SELECT kind FROM ledger_txns WHERE txn_id = $1`,
+        [id],
+      );
+      const kind = headerRows[0]?.kind;
+      if (kind === undefined) {
+        return err(ledgerRepositoryError(`ledger_txns header missing for txn "${id}"`));
+      }
+      if (!isLedgerKind(kind)) {
+        return err(ledgerRepositoryError(`invalid stored ledger kind "${kind}" for txn "${id}"`));
+      }
+
       const inputs: LedgerEntryInput[] = [];
       for (const row of rows) {
         const mapped = PostgresLedgerRepository.rowToInput(row);
@@ -120,6 +158,7 @@ export class PostgresLedgerRepository implements LedgerRepository {
       const source = inputs[0]!.source;
       const rebuilt = LedgerTransaction.reconstitute({
         txnId: txnIdResult.value,
+        kind,
         source,
         entries: inputs,
       });

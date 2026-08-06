@@ -35,7 +35,7 @@ export interface DrawRow {
   state: string;
   reject_reason: string | null;
   version: number;
-  created_at: string | number; // pg returns bigint as string
+  created_at: Date | string | number; // pg returns timestamptz as Date
 }
 
 export interface SettlementRow {
@@ -62,7 +62,7 @@ export function drawToRow(d: Draw): DrawRow {
     state: d.state.value,
     reject_reason: d.rejectReason?.value ?? null,
     version: d.version,
-    created_at: d.createdAt,
+    created_at: new Date(d.createdAt),
   };
 }
 
@@ -161,7 +161,9 @@ export function rowsToDraw(
       rejectReason,
       settlement,
       version: drawRow.version,
-      createdAt: Number(drawRow.created_at),
+      createdAt: drawRow.created_at instanceof Date
+        ? drawRow.created_at.getTime()
+        : Number(drawRow.created_at),
     }),
   );
 }

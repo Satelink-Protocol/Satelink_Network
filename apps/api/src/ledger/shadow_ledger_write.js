@@ -125,6 +125,14 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Insert ledger_txns header (parent of ledger_entries via FK).
+      await client.query(
+        `INSERT INTO ledger_txns
+           (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+         VALUES ($1, 'deposit', $2, $3, $4, 'posted', now())
+         ON CONFLICT (txn_id) DO NOTHING`,
+        [txnId, refType, refId, SHADOW_CURRENCY],
+      );
       // Debit suspense, credit revenue — balanced by construction.
       await client.query(
         `INSERT INTO ledger_entries

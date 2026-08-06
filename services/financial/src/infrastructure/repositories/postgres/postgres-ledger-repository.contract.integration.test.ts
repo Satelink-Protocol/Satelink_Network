@@ -95,6 +95,7 @@ describe('BalanceCalculator agrees with the SQL account_balances view', () => {
       must(
         LedgerTransaction.transfer({
           txnId: must(TxnId.of('txn_bal_credit')),
+          kind: 'deposit',
           source: src,
           debitAccount: must(AccountRef.of('acct_other')),
           creditAccount: must(AccountRef.of('acct_bal')),
@@ -108,6 +109,7 @@ describe('BalanceCalculator agrees with the SQL account_balances view', () => {
       must(
         LedgerTransaction.transfer({
           txnId: must(TxnId.of('txn_bal_debit')),
+          kind: 'deposit',
           source: src,
           debitAccount: must(AccountRef.of('acct_bal')),
           creditAccount: must(AccountRef.of('acct_other')),
@@ -121,6 +123,7 @@ describe('BalanceCalculator agrees with the SQL account_balances view', () => {
       must(
         LedgerTransaction.create({
           txnId: must(TxnId.of('txn_bal_pending')),
+          kind: 'deposit',
           source: src,
           entries: [
             {

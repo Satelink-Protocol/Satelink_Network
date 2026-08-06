@@ -151,7 +151,7 @@ export class PostgresDrawRepository implements DrawRepository {
     try {
       const res = await this.db.query<DrawRow>(
         'SELECT * FROM draws WHERE state = $1 AND created_at < $2',
-        ['settling', olderThan.getTime()]
+        ['settling', olderThan]
       );
       
       const draws: Draw[] = [];
