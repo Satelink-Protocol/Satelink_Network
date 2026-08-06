@@ -128,6 +128,7 @@ describe('PostgresUnitOfWork integration', () => {
     const ledgerTx = must(
       LedgerTransaction.create({
         txnId: must(TxnId.of('txn_uow_1')),
+        kind: 'draw',
         source: must(SourceReference.of('draw', 'txn_uow_1')),
         entries: [
           {

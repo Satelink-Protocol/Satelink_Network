@@ -36,6 +36,7 @@ function buildTransfer(txn: string, debit: string, credit: string, minor: bigint
   return must(
     LedgerTransaction.transfer({
       txnId: must(TxnId.of(txn)),
+      kind: 'deposit',
       source: must(SourceReference.of('revenue_event', txn)),
       debitAccount: must(AccountRef.of(debit)),
       creditAccount: must(AccountRef.of(credit)),

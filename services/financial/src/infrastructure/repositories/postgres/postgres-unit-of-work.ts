@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import type { Draw, LedgerTransaction } from '@satelink/financial-domain';
+import { assertUniformLedgerHeader } from '@satelink/financial-domain';
 import type { Result } from '@satelink/kernel';
 import { ok, err } from '@satelink/kernel';
 import type { UnitOfWork } from '../../../application/ports/unit-of-work.js';
@@ -25,12 +26,16 @@ export class PostgresUnitOfWork implements UnitOfWork {
 
       // Inline ledger entries post to use the UoW client transaction
       try {
-        // Insert ledger_txns header (parent of ledger_entries via FK).
+        // The header's ref_type/ref_id/state are derived from entries[0]; every
+        // entry must agree or the header would misdescribe the transaction.
+        assertUniformLedgerHeader(ledgerTxn.txnId.value, ledgerTxn.entries);
+        // Insert ledger_txns header (parent of ledger_entries via FK). This
+        // path only ever commits a draw, so kind is draw — never a deposit.
         const firstEntry = ledgerTxn.entries[0]!;
         await client.query(
           `INSERT INTO ledger_txns
              (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
-           VALUES ($1, 'deposit', $2, $3, $4, $5, $6)
+           VALUES ($1, 'draw', $2, $3, $4, $5, $6)
            ON CONFLICT (txn_id) DO NOTHING`,
           [
             ledgerTxn.txnId.value,

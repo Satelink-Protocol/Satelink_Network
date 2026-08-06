@@ -22,6 +22,7 @@ import { EntryState } from './entry-state.js';
 import type { AccountRef } from './account-ref.js';
 import type { TxnId } from './txn-id.js';
 import type { SourceReference } from './source-reference.js';
+import type { LedgerKind } from './ledger-kind.js';
 import type { LedgerEntryInput, LedgerEntryView } from './types.js';
 import {
   EmptyTransactionError,
@@ -34,6 +35,7 @@ import type { LedgerError } from './errors.js';
 export class LedgerTransaction {
   private constructor(
     readonly txnId: TxnId,
+    readonly kind: LedgerKind,
     readonly source: SourceReference,
     readonly currency: Currency,
     private readonly _entries: readonly LedgerEntry[],
@@ -44,31 +46,37 @@ export class LedgerTransaction {
 
   /**
    * Build a new, balanced transaction. Returns Err for any violated invariant;
-   * never throws for expected input errors.
+   * never throws for expected input errors. `kind` is required and has NO
+   * default — mislabeling is how a draw or settlement silently persists as a
+   * 'deposit' and gets misclassified by the reconciler.
    */
   static create(params: {
     txnId: TxnId;
+    kind: LedgerKind;
     source: SourceReference;
     entries: readonly LedgerEntryInput[];
   }): Result<LedgerTransaction, LedgerError> {
-    return LedgerTransaction.build(params.txnId, params.source, params.entries);
+    return LedgerTransaction.build(params.txnId, params.kind, params.source, params.entries);
   }
 
   /**
    * Rebuild a transaction from persisted rows. Identical validation to
    * `create` — a stored transaction that no longer balances is a corruption we
-   * refuse to hand back. Entry ids are preserved.
+   * refuse to hand back. Entry ids are preserved. `kind` comes from the stored
+   * ledger_txns header.
    */
   static reconstitute(params: {
     txnId: TxnId;
+    kind: LedgerKind;
     source: SourceReference;
     entries: readonly LedgerEntryInput[];
   }): Result<LedgerTransaction, LedgerError> {
-    return LedgerTransaction.build(params.txnId, params.source, params.entries);
+    return LedgerTransaction.build(params.txnId, params.kind, params.source, params.entries);
   }
 
   private static build(
     txnId: TxnId,
+    kind: LedgerKind,
     source: SourceReference,
     inputs: readonly LedgerEntryInput[],
   ): Result<LedgerTransaction, LedgerError> {
@@ -127,7 +135,7 @@ export class LedgerTransaction {
       }),
     );
 
-    return ok(new LedgerTransaction(txnId, source, currency, entries));
+    return ok(new LedgerTransaction(txnId, kind, source, currency, entries));
   }
 
   /** Read-only projection of the entries. The entity itself never escapes. */
@@ -183,19 +191,21 @@ export class LedgerTransaction {
       source: params.source,
       reversesEntryId: e.entryId,
     }));
-    return LedgerTransaction.build(params.txnId, params.source, reversedInputs);
+    // A reversal is always kind 'reversal' regardless of the original's kind.
+    return LedgerTransaction.build(params.txnId, 'reversal', params.source, reversedInputs);
   }
 
   /** Convenience for constructing a simple two-legged transfer. */
   static transfer(params: {
     txnId: TxnId;
+    kind: LedgerKind;
     source: SourceReference;
     debitAccount: AccountRef;
     creditAccount: AccountRef;
     amount: Money;
     state: EntryState;
   }): Result<LedgerTransaction, LedgerError> {
-    return LedgerTransaction.build(params.txnId, params.source, [
+    return LedgerTransaction.build(params.txnId, params.kind, params.source, [
       {
         account: params.debitAccount,
         direction: Direction.DEBIT,

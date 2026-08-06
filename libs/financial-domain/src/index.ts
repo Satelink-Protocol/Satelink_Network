@@ -24,6 +24,10 @@ export type { EntryStateValue } from './ledger/entry-state.js';
 export { SourceReference, InvalidSourceReferenceError } from './ledger/source-reference.js';
 
 export { LedgerTransaction } from './ledger/ledger-transaction.js';
+export { LEDGER_KINDS, isLedgerKind } from './ledger/ledger-kind.js';
+export type { LedgerKind } from './ledger/ledger-kind.js';
+export { assertUniformLedgerHeader, LedgerHeaderMismatchError } from './ledger/assert-uniform-header.js';
+export type { LedgerHeaderField } from './ledger/assert-uniform-header.js';
 export type { LedgerEntryView, LedgerEntryInput } from './ledger/types.js';
 
 export { BalanceCalculator } from './ledger/balance-calculator.js';

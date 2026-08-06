@@ -38,6 +38,7 @@ describe('LedgerTransaction — construction', () => {
   it('constructs a balanced two-legged transfer', () => {
     const r = LedgerTransaction.transfer({
       txnId: txnId('txn_1'),
+      kind: 'deposit',
       source: SRC,
       debitAccount: acc('acct_a'),
       creditAccount: acc('acct_b'),
@@ -53,7 +54,7 @@ describe('LedgerTransaction — construction', () => {
   });
 
   it('rejects an empty transaction', () => {
-    const r = LedgerTransaction.create({ txnId: txnId('txn_empty'), source: SRC, entries: [] });
+    const r = LedgerTransaction.create({ txnId: txnId('txn_empty'), kind: 'deposit', source: SRC, entries: [] });
     expect(r.isErr).toBe(true);
     if (r.isErr) expect(r.error.tag).toBe('EmptyTransactionError');
   });
@@ -61,6 +62,7 @@ describe('LedgerTransaction — construction', () => {
   it('rejects a non-positive amount', () => {
     const r = LedgerTransaction.create({
       txnId: txnId('txn_zero'),
+      kind: 'deposit',
       source: SRC,
       entries: [
         { account: acc('acct_a'), direction: Direction.DEBIT, amount: Money.fromMinorUnits(0n, USDT), state: EntryState.POSTED, source: SRC },
@@ -74,6 +76,7 @@ describe('LedgerTransaction — construction', () => {
   it('rejects mixed currencies across entries', () => {
     const r = LedgerTransaction.create({
       txnId: txnId('txn_mixed'),
+      kind: 'deposit',
       source: SRC,
       entries: [
         { account: acc('acct_a'), direction: Direction.DEBIT, amount: Money.fromMinorUnits(1000n, USDT), state: EntryState.POSTED, source: SRC },
@@ -87,6 +90,7 @@ describe('LedgerTransaction — construction', () => {
   it('rejects an unbalanced transaction (debits != credits)', () => {
     const r = LedgerTransaction.create({
       txnId: txnId('txn_unbal'),
+      kind: 'deposit',
       source: SRC,
       entries: [
         { account: acc('acct_a'), direction: Direction.DEBIT, amount: Money.fromMinorUnits(1000n, USDT), state: EntryState.POSTED, source: SRC },
@@ -128,7 +132,7 @@ describe('LedgerTransaction — property: balance is unconstructable when unequa
           else creditSum += row.amount;
         }
 
-        const r = LedgerTransaction.create({ txnId: txnId('txn_prop'), source: SRC, entries });
+        const r = LedgerTransaction.create({ txnId: txnId('txn_prop'), kind: 'deposit', source: SRC, entries });
 
         if (debitSum === creditSum) {
           expect(r.isOk).toBe(true);
@@ -151,6 +155,7 @@ describe('LedgerTransaction — reversal', () => {
   it('creates a new transaction with flipped directions; original unmodified', () => {
     const original = LedgerTransaction.transfer({
       txnId: txnId('txn_orig'),
+      kind: 'deposit',
       source: SRC,
       debitAccount: acc('acct_a'),
       creditAccount: acc('acct_b'),
@@ -168,8 +173,10 @@ describe('LedgerTransaction — reversal', () => {
     expect(rev.isOk).toBe(true);
     if (!rev.isOk) return;
 
-    // New transaction, balanced, opposite legs.
+    // New transaction, balanced, opposite legs, always kind 'reversal'.
     expect(rev.value.txnId.value).toBe('txn_rev');
+    expect(rev.value.kind).toBe('reversal');
+    expect(original.value.kind).toBe('deposit');
     expect(rev.value.isBalanced()).toBe(true);
     const revDebit = rev.value.entries.find((e) => e.direction.isDebit());
     expect(revDebit?.account.value).toBe('acct_b'); // credit side of original became debit
