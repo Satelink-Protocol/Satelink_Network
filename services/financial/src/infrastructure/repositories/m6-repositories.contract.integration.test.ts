@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { resolve } from 'node:path';
+import { migrate } from '../../../../../database/runner.js';
 import { runDrawRepositoryContract } from './draw-repository.contract.js';
 import type { DrawRepoHarness } from './draw-repository.contract.js';
 import { PostgresDrawRepository } from './postgres/postgres-draw-repository.js';
@@ -28,17 +31,39 @@ function must<T, E extends { toString(): string }>(r: Result<T, E>): T {
   return r.value;
 }
 
-// Read the test database URL ONLY. DATABASE_URL is never consulted — reading it
-// here is what leaked 20 fixture rows into production (scripts/ops/OPS_LOG.md).
-// The integration project's globalSetup (assert-test-db) has already proven this
-// URL is set and carries __test_db_marker before this module is ever loaded.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-if (!TEST_DATABASE_URL) {
-  throw new Error('TEST_DATABASE_URL is not set — integration tests require an explicit test database.');
-}
+// ---------------------------------------------------------------------------
+// Ephemeral Postgres via testcontainers — matching the other 12 integration
+// tests. Migrations 001–009 are applied to the fresh container so the
+// ledger_entries→ledger_txns FK, the deferred balance trigger, and the
+// accounts.state CHECK are all present. The production DATABASE_URL env var is
+// NEVER read (reading it is what leaked fixtures into production —
+// scripts/ops/OPS_LOG.md); the marker guard (integration globalSetup) still
+// gates the suite as defense in depth.
+// ---------------------------------------------------------------------------
+
+const MIGRATIONS_DIR = resolve(
+  import.meta.dirname ?? new URL('.', import.meta.url).pathname,
+  '../../../../../database/migrations',
+);
+
+let container: StartedPostgreSqlContainer;
+let connectionString: string;
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:16-alpine').start();
+  connectionString = container.getConnectionUri();
+  const result = await migrate(connectionString, MIGRATIONS_DIR);
+  if (result.errors.length > 0) {
+    throw new Error(`migration failed: ${result.errors.join('; ')}`);
+  }
+}, 120_000);
+
+afterAll(async () => {
+  await container?.stop().catch(() => undefined);
+});
 
 class PostgresDrawRepoHarness implements DrawRepoHarness {
-  readonly pool = new pg.Pool({ connectionString: TEST_DATABASE_URL });
+  readonly pool = new pg.Pool({ connectionString });
   readonly repo = new PostgresDrawRepository(this.pool);
 
   async ensurePrincipal(id: string): Promise<void> {
@@ -93,7 +118,7 @@ describe('PostgresUnitOfWork integration', () => {
   let uow: PostgresUnitOfWork;
 
   beforeAll(async () => {
-    pool = new pg.Pool({ connectionString: TEST_DATABASE_URL });
+    pool = new pg.Pool({ connectionString });
     harness = new PostgresDrawRepoHarness();
     await harness.ensurePrincipal('prn_uow');
     await harness.ensureFundingSource('fs_uow', 'prn_uow');
@@ -186,7 +211,7 @@ describe('PostgresUnitOfWork integration', () => {
         createdAt: 1000,
       })
     );
-    
+
     const ledgerTx = {
       txnId: must(TxnId.of('txn_uow_2')),
       source: must(SourceReference.of('draw', 'txn_uow_2')),
@@ -207,10 +232,162 @@ describe('PostgresUnitOfWork integration', () => {
 
     const result = await uow.commitDrawAndLedger(d, ledgerTx);
     expect(result.isErr).toBe(true);
-    
+
     // Verify neither saved
     const drawRepo = new PostgresDrawRepository(pool);
     const foundDraw = must(await drawRepo.findById('draw_uow_2'));
     expect(foundDraw).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M6.5 schema gates (migration 009): the ledger_entries→ledger_txns FK and the
+// deferred balance-check trigger. These constraints ship in 009 but no
+// integration test exercised them until now — this block runs them against a
+// real Postgres. assertUniformLedgerHeader (the JS persistence guard) is also
+// exercised end-to-end through PostgresLedgerRepository.post().
+// ---------------------------------------------------------------------------
+
+describe('M6.5 ledger_txns FK + deferred balance trigger (migration 009)', () => {
+  let pool: pg.Pool;
+
+  beforeAll(async () => {
+    pool = new pg.Pool({ connectionString });
+    // Two accounts under one principal (distinct kinds so the
+    // (principal_id, kind, currency) unique index is satisfied).
+    await pool.query(
+      `INSERT INTO principals (id, kind, state) VALUES ('prn_trg', 'human', 'active') ON CONFLICT (id) DO NOTHING`
+    );
+    await pool.query(
+      `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
+       VALUES ('acct_trg_a', 'prn_trg', 'liability', 'credit', 'USDT', 6, 'open') ON CONFLICT (id) DO NOTHING`
+    );
+    await pool.query(
+      `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
+       VALUES ('acct_trg_b', 'prn_trg', 'revenue', 'credit', 'USDT', 6, 'open') ON CONFLICT (id) DO NOTHING`
+    );
+  });
+
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  it('FK: a ledger_entries row with no parent ledger_txns is rejected', async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
+         VALUES ('txn_orphan', 'acct_trg_a', 'debit', 100, 'USDT', 'posted', 'draw', 'r0', 'idem_fk_orphan')`
+      )
+    ).rejects.toThrow(/foreign key/i);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM ledger_entries WHERE txn_id = 'txn_orphan'`
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('deferred balance trigger: a balanced transaction COMMITs', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO ledger_txns (txn_id, kind, ref_type, ref_id, currency, state)
+         VALUES ('txn_bal_ok', 'deposit', 'draw', 'r1', 'USDT', 'posted')`
+      );
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
+         VALUES ('txn_bal_ok', 'acct_trg_a', 'debit', 100, 'USDT', 'posted', 'draw', 'r1', 'idem_ok_d')`
+      );
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
+         VALUES ('txn_bal_ok', 'acct_trg_b', 'credit', 100, 'USDT', 'posted', 'draw', 'r1', 'idem_ok_c')`
+      );
+      // The trigger is DEFERRABLE INITIALLY DEFERRED — it runs here, at COMMIT.
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM ledger_entries WHERE txn_id = 'txn_bal_ok'`
+    );
+    expect(rows[0].n).toBe(2);
+  });
+
+  it('deferred balance trigger: an unbalanced transaction is REJECTED at COMMIT', async () => {
+    const client = await pool.connect();
+    let threw = false;
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO ledger_txns (txn_id, kind, ref_type, ref_id, currency, state)
+         VALUES ('txn_bal_bad', 'deposit', 'draw', 'r2', 'USDT', 'posted')`
+      );
+      // Single debit, no matching credit → SUM(debit) <> SUM(credit).
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
+         VALUES ('txn_bal_bad', 'acct_trg_a', 'debit', 100, 'USDT', 'posted', 'draw', 'r2', 'idem_bad_d')`
+      );
+      await client.query('COMMIT'); // trigger fires here and must raise
+    } catch (e) {
+      threw = true;
+      expect(String((e as Error).message)).toMatch(/ledger balance violation/i);
+      await client.query('ROLLBACK').catch(() => undefined);
+    } finally {
+      client.release();
+    }
+    expect(threw).toBe(true);
+
+    // The aborted transaction persisted nothing.
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM ledger_entries WHERE txn_id = 'txn_bal_bad'`
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('assertUniformLedgerHeader: repo.post rejects entries that disagree on the header', async () => {
+    const repo = new PostgresLedgerRepository(pool);
+    // Amounts balance, but the two legs disagree on ref_id — the header would be
+    // derived from entries[0] and misdescribe the second leg. The aggregate
+    // permits heterogeneous sources; the persistence guard does not.
+    const txn = must(
+      LedgerTransaction.create({
+        txnId: must(TxnId.of('txn_hdr_mismatch')),
+        kind: 'deposit',
+        source: must(SourceReference.of('draw', 'r3a')),
+        entries: [
+          {
+            account: must(AccountId.of('acct_trg_a')),
+            direction: Direction.DEBIT,
+            amount: Money.fromMinorUnits(100n, USDT),
+            state: EntryState.POSTED,
+            source: must(SourceReference.of('draw', 'r3a')),
+          },
+          {
+            account: must(AccountId.of('acct_trg_b')),
+            direction: Direction.CREDIT,
+            amount: Money.fromMinorUnits(100n, USDT),
+            state: EntryState.POSTED,
+            source: must(SourceReference.of('draw', 'r3b')),
+          },
+        ],
+      })
+    );
+
+    const res = await repo.post(txn);
+    expect(res.isErr).toBe(true);
+
+    // Guard throws before the header INSERT, so nothing is written.
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM ledger_entries WHERE txn_id = 'txn_hdr_mismatch'`
+    );
+    expect(rows[0].n).toBe(0);
   });
 });
