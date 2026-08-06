@@ -25,6 +25,22 @@ export class PostgresUnitOfWork implements UnitOfWork {
 
       // Inline ledger entries post to use the UoW client transaction
       try {
+        // Insert ledger_txns header (parent of ledger_entries via FK).
+        const firstEntry = ledgerTxn.entries[0]!;
+        await client.query(
+          `INSERT INTO ledger_txns
+             (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+           VALUES ($1, 'deposit', $2, $3, $4, $5, $6)
+           ON CONFLICT (txn_id) DO NOTHING`,
+          [
+            ledgerTxn.txnId.value,
+            firstEntry.source.refType,
+            firstEntry.source.refId,
+            ledgerTxn.currency.code,
+            firstEntry.state.value,
+            firstEntry.state.isPosted() ? new Date() : null,
+          ],
+        );
         for (let i = 0; i < ledgerTxn.entryCount; i++) {
           const e = ledgerTxn.entries[i]!;
           const idemKey = `${ledgerTxn.txnId.value}#${i}`;

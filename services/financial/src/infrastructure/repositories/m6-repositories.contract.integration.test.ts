@@ -62,7 +62,7 @@ class PostgresDrawRepoHarness implements DrawRepoHarness {
   async ensureAccount(id: string, principalId: string): Promise<void> {
     await this.pool.query(
       `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
-       VALUES ($1, $2, 'liability', 'credit', 'USDT', 6, 'active')
+       VALUES ($1, $2, 'liability', 'credit', 'USDT', 6, 'open')
        ON CONFLICT (id) DO NOTHING`,
       [id, principalId]
     );
@@ -95,7 +95,7 @@ describe('PostgresUnitOfWork integration', () => {
     await harness.ensurePrincipal('sys_root');
     await pool.query(
       `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
-       VALUES ('acct_revenue', 'sys_root', 'revenue', 'credit', 'USDT', 6, 'active')
+       VALUES ('acct_revenue', 'sys_root', 'revenue', 'credit', 'USDT', 6, 'open')
        ON CONFLICT (id) DO NOTHING`
     );
     uow = new PostgresUnitOfWork(pool);

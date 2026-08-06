@@ -51,6 +51,22 @@ export class PostgresLedgerRepository implements LedgerRepository {
     try {
       client = await this.pool.connect();
       await client.query('BEGIN');
+      // Insert ledger_txns header (parent of ledger_entries via FK).
+      const firstEntry = txn.entries[0]!;
+      await client.query(
+        `INSERT INTO ledger_txns
+           (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+         VALUES ($1, 'deposit', $2, $3, $4, $5, $6)
+         ON CONFLICT (txn_id) DO NOTHING`,
+        [
+          txn.txnId.value,
+          firstEntry.source.refType,
+          firstEntry.source.refId,
+          txn.currency.code,
+          firstEntry.state.value,
+          firstEntry.state.isPosted() ? new Date() : null,
+        ],
+      );
       const entries = txn.entries;
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i]!;

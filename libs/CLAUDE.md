@@ -108,3 +108,15 @@ DDD. Aggregate roots. Value objects. Repository pattern. Dependency injection.
 Event-driven between contexts. Pure domain, infrastructure adapters.
 Result<T,E> for expected failures. Domain code does not throw for
 insufficient-capacity or currency-mismatch.
+
+## Schema corrections (M6.5, 2026-08-06)
+
+- ledger_txns is the txn header; every ledger_entries row must have a parent
+  txn in ledger_txns (FK enforced: ledger_entries.txn_id → ledger_txns.txn_id).
+- Balance is enforced by a deferred DB trigger (`trg_ledger_entries_balance`),
+  not only by the domain-layer LedgerTransaction. At COMMIT, for each affected
+  txn_id, SUM(debit) must equal SUM(credit) for non-voided entries.
+- accounts.state vocabulary is 'open' | 'closed' — never 'active'.
+  (principals.state uses 'active', which is correct for principals.)
+- All Financial OS timestamps are timestamptz. draws.created_at was converted
+  from BIGINT epoch-ms to timestamptz in migration 009.
