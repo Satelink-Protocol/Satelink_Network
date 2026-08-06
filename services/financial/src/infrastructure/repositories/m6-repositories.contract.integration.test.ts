@@ -28,10 +28,17 @@ function must<T, E extends { toString(): string }>(r: Result<T, E>): T {
   return r.value;
 }
 
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/satelink_test';
+// Read the test database URL ONLY. DATABASE_URL is never consulted — reading it
+// here is what leaked 20 fixture rows into production (scripts/ops/OPS_LOG.md).
+// The integration project's globalSetup (assert-test-db) has already proven this
+// URL is set and carries __test_db_marker before this module is ever loaded.
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+if (!TEST_DATABASE_URL) {
+  throw new Error('TEST_DATABASE_URL is not set — integration tests require an explicit test database.');
+}
 
 class PostgresDrawRepoHarness implements DrawRepoHarness {
-  readonly pool = new pg.Pool({ connectionString: DATABASE_URL });
+  readonly pool = new pg.Pool({ connectionString: TEST_DATABASE_URL });
   readonly repo = new PostgresDrawRepository(this.pool);
 
   async ensurePrincipal(id: string): Promise<void> {
@@ -86,7 +93,7 @@ describe('PostgresUnitOfWork integration', () => {
   let uow: PostgresUnitOfWork;
 
   beforeAll(async () => {
-    pool = new pg.Pool({ connectionString: DATABASE_URL });
+    pool = new pg.Pool({ connectionString: TEST_DATABASE_URL });
     harness = new PostgresDrawRepoHarness();
     await harness.ensurePrincipal('prn_uow');
     await harness.ensureFundingSource('fs_uow', 'prn_uow');

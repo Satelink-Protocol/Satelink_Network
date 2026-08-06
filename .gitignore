@@ -176,3 +176,6 @@ verify.sh
 fix_conflicts.sh
 x402-mainnet-test.*
 install-m0.sh
+
+# Transient fixture written by tools/architecture-tests/forbid-database-url.test.ts
+__dburl_fixture__/

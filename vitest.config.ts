@@ -77,6 +77,10 @@ export default defineConfig({
           name: 'integration',
           include: INTEGRATION_PATTERNS,
           exclude: ['**/node_modules/**', '.claude/worktrees/**'],
+          // Fail-closed guard: the suite refuses to run unless TEST_DATABASE_URL
+          // points at a database carrying __test_db_marker. Runs once before any
+          // integration test is collected. See libs/testing/src/assert-test-db.ts.
+          globalSetup: ['./libs/testing/src/assert-test-db.ts'],
           environment: 'node',
           testTimeout: 120_000,
           hookTimeout: 120_000,
