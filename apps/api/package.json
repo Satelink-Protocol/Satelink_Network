@@ -23,7 +23,7 @@
         "express-list-endpoints": "^7.1.1",
         "express-rate-limit": "^8.2.1",
         "helmet": "^8.1.0",
-        "ioredis": "^5.10.0",
+        "ioredis": "^6.0.0",
         "jsonwebtoken": "^9.0.3",
         "next": "0.4.1",
         "node-cron": "^4.6.0",
