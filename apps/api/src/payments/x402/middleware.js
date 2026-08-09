@@ -189,6 +189,39 @@ function writeSdkResponse(res, response) {
   return res.json(response.body || {});
 }
 
+// Egress trim (2026-08-10): the anonymous x402 402 embeds the legacy USDT-rail
+// body under `alternativePayment` so a machine that prefers the vault/USDT rail
+// over x402/USDC still has the essentials. That legacy body is ~4.1 KB — mostly
+// human-readable curl `examples`, a verbose `register` block, deposit prose, and
+// fields duplicated inside `error.data.payment`. The x402 client never reads
+// `alternativePayment` (verified against @x402/core@2.17.0 createPaymentPayload,
+// dist/cjs/client/index.js:257-303 — it reads only x402Version/accepts/
+// extensions/resource), so trimming it does not touch the payment path. We keep
+// the machine-actionable USDT fields (where to deposit, the token, chain,
+// minimum, calldata endpoint, how to get a key) plus the JSON-RPC `error`
+// envelope verbatim (RPC clients parse error.code -32005) and drop the ~3.4 KB
+// of prose/duplication — one docs fetch away. Served ~1.19M×/day.
+export function compactAlternativePayment(body) {
+  if (!body || typeof body !== 'object') return body;
+  const d = body.deposit || {};
+  const compact = {
+    // Verbatim: preserves the -32005 JSON-RPC error envelope RPC clients read,
+    // and whatever shape it carries (object with .data on the per-IP 402, or the
+    // 'payment_required' string on the keyless 402).
+    error: body.error,
+    deposit: {
+      vault_address: d.vault_address,
+      usdt_contract: d.usdt_contract,
+      chain_id: d.chain_id,
+      minimum_usdt: d.minimum_usdt,
+      calldata_url: d.calldata_url,
+    },
+    register_url: body.register_url,
+    docs: body.docs,
+  };
+  return compact;
+}
+
 export function createX402Middleware(pool, logger) {
   const log = logger || console;
   let httpServer = null;
@@ -400,7 +433,7 @@ export function createX402Middleware(pool, logger) {
             : {};
           bumpFunnel(pool, 'issued');
           bumpFunnelDaily(pool, 'x402_402_served'); // anonymous exhausted-tier 402 upgraded to a payable x402 challenge
-          return originalJson({ ...paymentRequired, alternativePayment: body });
+          return originalJson({ ...paymentRequired, alternativePayment: compactAlternativePayment(body) });
         } catch (err) {
           // Fail open to today's exact 402 — the USDT rail must never break
           // because the facilitator is unreachable.
