@@ -1,0 +1,26 @@
+{
+  "zone_id": "fe4da7402d406ef7e83cbafc95a33e5b",
+  "ruleset_id": "588535587915434b96654a5c243aa4d0",
+  "ruleset_name": "satelink-rate-limit",
+  "phase": "http_ratelimit",
+  "fetched_at": "2026-08-01T21:29:01.826402Z",
+  "rule": {
+    "action": "block",
+    "enabled": true,
+    "expression": "(http.host eq \"api.satelink.network\" or http.host eq \"rpc.satelink.network\") and not starts_with(http.request.uri.path, \"/admin/\")",
+    "id": "9c3b6ada45a24a54a954c89b35d61243",
+    "last_updated": "2026-08-01T21:29:01.826402Z",
+    "ratelimit": {
+      "characteristics": [
+        "cf.colo.id",
+        "ip.src"
+      ],
+      "mitigation_timeout": 10,
+      "period": 10,
+      "requests_per_period": 10
+    },
+    "ref": "9c3b6ada45a24a54a954c89b35d61243",
+    "version": "5"
+  },
+  "restore_note": "To restore verbatim: PATCH /zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule[id]} with body = this rule object (drop id/last_updated/version/ref keys, keep action/description/enabled/expression/ratelimit)."
+}
