@@ -22,3 +22,14 @@ unaffected. Two shadow ledger entries on acct_platform_suspense (debit 100000)
 and acct_platform_revenue (credit 100000) confirmed intact.
 
 Ledger append-only is absolute from this point.
+
+## 2026-08-10 — Cloudflare rate-limit auth-exclusion attempt (blocked)
+
+Attempted to add auth-signal exclusions to satelink-rate-limit.
+BLOCKED: Cloudflare free plan forbids http.request.headers and
+http.request.uri.args in rate-limiting expressions (Advanced Rate Limiting
+required). Rule unchanged, version 5. Known defect: throttles ALL callers
+at 10 req/10s including authenticated ones. Deferred — no external
+customers to affect. Free workaround when needed: WAF Custom Rule
+(http_request_firewall_custom phase) with a skip action. Backup at
+scripts/ops/cloudflare-ratelimit-rule-backup-20260810.json.
