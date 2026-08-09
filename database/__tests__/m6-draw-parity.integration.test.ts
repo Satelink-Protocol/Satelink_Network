@@ -76,7 +76,7 @@ describe('computeDrawParity', () => {
       )
       VALUES (
         'draw_x402_0x123', '0xabc', '0xabc', 'fs_x402_0xabc', 'auth_x402_0x123',
-        1500000, 'USDC', 'idem_x402_draw_0x123', 1234567890, 'settled'
+        1500000, 'USDC', 'idem_x402_draw_0x123', now(), 'settled'
       )
     `);
 

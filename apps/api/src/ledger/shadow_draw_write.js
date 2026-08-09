@@ -53,6 +53,10 @@ export async function shadowWriteDraw(pool, event, logger = console) {
     const fundingSourceId = `fs_x402_${payer}`;
     const authorizationId = `auth_x402_${txHash}`;
     const nowMs = Date.now();
+    // draws.created_at is timestamptz as of migration 009 (M6.5); pass a Date so
+    // node-pg serializes it correctly. settlements.confirmed_at is still BIGINT
+    // (epoch ms), so it keeps nowMs.
+    const nowDate = new Date(nowMs);
     const refType = 'draw';
     const idemKeyTx = `shadow:${txnId}`;
 
@@ -82,7 +86,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
           amount, currency, idempotency_key, state, reject_reason, version, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settled', NULL, 0, $9)
         ON CONFLICT (idempotency_key) DO NOTHING`,
-        [drawId, principalId, accountId, fundingSourceId, authorizationId, amountStr, SHADOW_CURRENCY, idempotencyKey, nowMs]
+        [drawId, principalId, accountId, fundingSourceId, authorizationId, amountStr, SHADOW_CURRENCY, idempotencyKey, nowDate]
       );
 
       // 2. Insert Settlement
@@ -94,7 +98,17 @@ export async function shadowWriteDraw(pool, event, logger = console) {
         [drawId, txHash, network || null, nowMs]
       );
 
-      // 3. Insert Ledger Entries (Debit Suspense, Credit Revenue)
+      // 3. Insert ledger_txns header (parent of ledger_entries via the FK
+      //    added in migration 009 / M6.5). Must exist before its entries.
+      await client.query(
+        `INSERT INTO ledger_txns
+           (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+         VALUES ($1, 'draw', $2, $3, $4, 'posted', now())
+         ON CONFLICT (txn_id) DO NOTHING`,
+        [txnId, refType, drawId, SHADOW_CURRENCY]
+      );
+
+      // 4. Insert Ledger Entries (Debit Suspense, Credit Revenue)
       await client.query(
         `INSERT INTO ledger_entries
            (txn_id, account_id, direction, amount, currency, state,
