@@ -28,6 +28,11 @@ describe('x402 payment rail', function () {
     // Low limit so the gate trips on the 3rd anonymous call. Must be set
     // BEFORE import: free_tier_gate.js reads it at module load.
     process.env.FREE_TIER_DAILY_LIMIT = '2';
+    // These tests exercise the x402 rail against a LIVE anonymous free tier
+    // (t5/t9 rely on under-limit anonymous calls being served). The anonymous
+    // cut defaults to 0 free calls; grant a matching quota so the pre-cut rail
+    // behavior is what's under test. Read at request time → import-order safe.
+    process.env.FREE_TIER_ANON_CALLS = '2';
     ({ createFreeTierGate } = await import('../src/middleware/free_tier_gate.js'));
     ({ createX402Middleware, recordSettlementOrReject } = await import('../src/payments/x402/middleware.js'));
     gate = createFreeTierGate(silent, null); // no redis → in-memory counters
@@ -178,7 +183,7 @@ describe('x402 payment rail', function () {
 
   it('t4: keyed request with credits — untouched, no x402 headers, no 402', async () => {
     process.env.X402_ENABLED = 'true';
-    const out = await runChain(makeReq({ headers: { 'x-api-key': 'sk_test_abc' }, ip: '10.4.0.1' }));
+    const out = await runChain(makeReq({ headers: { 'x-api-key': 'placeholder-key-abc' }, ip: '10.4.0.1' }));
     expect(out.nextCalled).to.equal(true);
     expect(out.headers).to.deep.equal({});
   });

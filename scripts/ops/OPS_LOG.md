@@ -22,3 +22,25 @@ unaffected. Two shadow ledger entries on acct_platform_suspense (debit 100000)
 and acct_platform_revenue (credit 100000) confirmed intact.
 
 Ledger append-only is absolute from this point.
+
+## 2026-08-10 — Anonymous free-tier RPC cut to 402-challenge-only
+
+Anonymous free-tier RPC cut to 402-challenge-only. Anonymous = a request
+carrying NONE of x-api-key, authorization, x-admin-key, x-admin-token,
+x-enterprise-key, x-payer-address, x-wallet-address, payment-signature,
+x-payment (headers) or api_key, token (query). Such callers now get 0 free
+calls (default) — the existing x402 402 payment challenge on the first
+request. Challenge body unchanged. Gate only on /rpc; /health and all
+liveness endpoints are ungated and unaffected. Only free_tier_gate.js
+touched (anonymous branch); no payments/ changes.
+
+Rollback: set FREE_TIER_ANON_CALLS=<n> in Railway (read at request time →
+takes effect on the restart the env change triggers, no code redeploy).
+FREE_TIER_ANON_CALLS=500 restores the prior per-IP behavior exactly.
+
+Baseline before: 238 GB/mo, $12.07, ~8 GB/day. Funnel issued=35,578,746
+attempts=7 settlements=4. Re-measure 2026-08-12.
+
+Known consequence: chainlist.org / erpc public-RPC listings will begin
+failing health checks (their anonymous probes to /rpc now 402); the free
+public-RPC distribution surface is being retired.

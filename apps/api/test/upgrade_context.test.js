@@ -108,6 +108,10 @@ describe('conversion patch — upgrade context', function () {
 
   describe('t4 gate integration', () => {
     it('the over-limit 402 carries the upgrade block; limit itself unchanged', async () => {
+      // This test drives the gate against a LIVE anonymous free tier (first call
+      // must serve, then wall). The anonymous cut defaults to 0 free calls, so
+      // grant a small anon quota here. Read at request time → import-order safe.
+      process.env.FREE_TIER_ANON_CALLS = '2';
       const { createFreeTierGate } = await import('../src/middleware/free_tier_gate.js');
       const gate = createFreeTierGate({ info() {}, warn() {}, error() {} }, null, null); // no redis/pool
       const app = express();
