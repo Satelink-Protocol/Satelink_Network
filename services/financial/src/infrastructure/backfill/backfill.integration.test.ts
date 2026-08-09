@@ -29,6 +29,10 @@ beforeAll(async () => {
   const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString: container.getConnectionUri() });
+  // Swallow idle-client connection errors (e.g. a socket reset when the
+  // testcontainer stops in afterAll) so they never surface as unhandled
+  // rejections. Query errors still reject their own promises.
+  pool.on('error', () => {});
   // Minimal legacy source tables the backfill reads from.
   await pool.query('CREATE TABLE IF NOT EXISTS revenue_events_v2 (client_id TEXT)');
   await pool.query('CREATE TABLE IF NOT EXISTS api_deposits (from_address TEXT)');

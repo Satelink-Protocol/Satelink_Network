@@ -30,6 +30,14 @@ const IO_PACKAGES = [
 /** Test files are exempt from purity rules — they may import vitest, fast-check, etc. */
 const NOT_A_TEST = '\\.(test|spec)\\.tsx?$';
 
+/**
+ * libs/testing is a TEST-support library, not domain. It legitimately performs
+ * I/O (it connects to the test database to verify the __test_db_marker), so the
+ * domain-purity rules below must not apply to it. It is deployed by nothing;
+ * only the vitest integration globalSetup references it.
+ */
+const NOT_TESTING_LIB = '^libs/testing/';
+
 module.exports = {
   forbidden: [
     // ---------------------------------------------------------------------
@@ -51,7 +59,7 @@ module.exports = {
       comment:
         'Domain code must be pure. Importing a node builtin means I/O has leaked into ' +
         'the domain layer, which is what forces mocks into domain tests.',
-      from: { path: '^libs/', pathNot: NOT_A_TEST },
+      from: { path: '^libs/', pathNot: [NOT_A_TEST, NOT_TESTING_LIB] },
       to: { dependencyTypes: ['core'], path: `^(${NODE_CORE})$` },
     },
     {
@@ -60,7 +68,7 @@ module.exports = {
       comment:
         'Domain code must not reach a database, network, or chain. Repositories and ' +
         'adapters belong in services/*/infrastructure, behind ports.',
-      from: { path: '^libs/', pathNot: NOT_A_TEST },
+      from: { path: '^libs/', pathNot: [NOT_A_TEST, NOT_TESTING_LIB] },
       // Two forms must both match: the bare specifier (when the package is not
       // installed, dependency-cruiser reports `pg`) and the resolved path
       // (when it is installed, it reports `node_modules/pg/...`). Matching only

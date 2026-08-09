@@ -40,6 +40,10 @@ beforeAll(async () => {
     throw new Error(`migration failed: ${result.errors.join('; ')}`);
   }
   pool = new Pool({ connectionString });
+  // Swallow idle-client connection errors (e.g. a socket reset when the
+  // testcontainer stops in afterAll) so they never surface as unhandled
+  // rejections. Query errors still reject their own promises.
+  pool.on('error', () => {});
 }, 120_000);
 
 afterAll(async () => {

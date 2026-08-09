@@ -21,6 +21,10 @@ beforeAll(async () => {
   const result = await migrate(connectionString, MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString });
+  // Swallow idle-client connection errors (e.g. a socket reset when the
+  // testcontainer stops in afterAll) so they never surface as unhandled
+  // rejections. Query errors still reject their own promises.
+  pool.on('error', () => {});
   
   await pool.query(`
     CREATE TABLE payment_sources (
@@ -76,7 +80,7 @@ describe('computeDrawParity', () => {
       )
       VALUES (
         'draw_x402_0x123', '0xabc', '0xabc', 'fs_x402_0xabc', 'auth_x402_0x123',
-        1500000, 'USDC', 'idem_x402_draw_0x123', 1234567890, 'settled'
+        1500000, 'USDC', 'idem_x402_draw_0x123', now(), 'settled'
       )
     `);
 
