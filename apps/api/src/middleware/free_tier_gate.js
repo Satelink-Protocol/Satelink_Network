@@ -57,6 +57,48 @@ function extractAsnPrefix(asnField) {
   return match ? match[0] : null;
 }
 
+// ── Anonymous free-tier cut (2026-08-10) ─────────────────────────────────────
+// A request is ANONYMOUS iff it carries NONE of the recognized authentication
+// signals below (headers OR query params, case-insensitive, empty value counts
+// as absent). This set is kept in sync with the x402 + auth middleware audit
+// (Part 0, 2026-08-10): wallet/API-key are already short-circuited at the top of
+// the gate; the remaining signals (authorization, admin/enterprise keys, x402
+// payer/payment headers, ?api_key/?token) mark an authenticated caller so they
+// are NOT throttled as anonymous free traffic. req.headers keys are already
+// lowercased by Node, so lowercase names here give case-insensitive matching.
+const AUTH_SIGNAL_HEADERS = [
+  'x-api-key', 'authorization', 'x-admin-key', 'x-admin-token',
+  'x-enterprise-key', 'x-payer-address', 'x-wallet-address',
+  'payment-signature', 'x-payment',
+];
+const AUTH_SIGNAL_QUERY = ['api_key', 'token'];
+
+function hasAuthSignal(req) {
+  const headers = req.headers || {};
+  for (const h of AUTH_SIGNAL_HEADERS) {
+    const v = headers[h];
+    if (v != null && String(v).length > 0) return true;
+  }
+  const q = req.query || {};
+  for (const name of AUTH_SIGNAL_QUERY) {
+    const v = q[name];
+    if (v != null && String(v).length > 0) return true;
+  }
+  return false;
+}
+
+// Free calls granted to ANONYMOUS callers before the x402 402 challenge is
+// returned. Default 0 → the challenge is served on the very first anonymous
+// request (no free RPC bodies for unauthenticated traffic). A positive integer
+// restores a per-IP anonymous quota. Read at REQUEST time (not module load) so
+// a Railway env-var change takes effect on the container restart it triggers —
+// instant rollback with no code redeploy. Invalid/negative values fail closed
+// to 0 (never unlimited: `count > NaN` would silently disable the gate).
+function anonFreeCalls() {
+  const raw = parseInt(process.env.FREE_TIER_ANON_CALLS ?? '0', 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+}
+
 // Layer 3 helper — tracks distinct IPs sharing a UA fingerprint in a sliding
 // window; flags the UA as a cluster (and blocks it for 24h) once the window
 // holds too many distinct IPs to be organic traffic.
@@ -153,6 +195,13 @@ export function createFreeTierGate(logger, redis, pool = null) {
     const walletHeader = req.headers['x-wallet-address'];
     const apiKeyHeader = req.headers['x-api-key'];
     if (walletHeader || apiKeyHeader) return next();
+
+    // Anonymous (no auth signal at all) → effective free-tier limit is
+    // FREE_TIER_ANON_CALLS (default 0). Any other authenticated caller that
+    // reaches this gate (e.g. authorization / x-payer-address / ?api_key)
+    // keeps the standard FREE_TIER_LIMIT — unaffected by the anonymous cut.
+    const anonymous = !hasAuthSignal(req);
+    const effectiveLimit = anonymous ? anonFreeCalls() : FREE_TIER_LIMIT;
 
     // Get real IP (Railway proxies requests)
     const ip =
@@ -327,8 +376,8 @@ export function createFreeTierGate(logger, redis, pool = null) {
       }
     }
 
-    if (count > FREE_TIER_LIMIT) {
-      log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${FREE_TIER_LIMIT}`);
+    if (count > effectiveLimit) {
+      log.warn(`${LOG_PREFIX} Free tier exceeded: ip=${ip} count=${count} limit=${effectiveLimit} anonymous=${anonymous}`);
 
       // Layer 4 — persistent 402-ignorer escalation: callers that keep retrying
       // after a 402 waste CPU re-rendering the same response. After enough

@@ -13,6 +13,11 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     // Low limit so the gate trips after 2 anonymous calls. Set BEFORE import:
     // the module reads FREE_TIER_DAILY_LIMIT at load time.
     process.env.FREE_TIER_DAILY_LIMIT = '2';
+    // This suite tests the authenticated-bypass mechanics with a working
+    // anonymous quota — NOT the anonymous-cut policy (default 0). Grant a small
+    // anon quota so "under limit → passes" holds. FREE_TIER_ANON_CALLS is read
+    // at request time, so this applies regardless of module import order.
+    process.env.FREE_TIER_ANON_CALLS = '2';
     ({ createFreeTierGate } = await import('../src/middleware/free_tier_gate.js'));
   });
 
@@ -112,8 +117,9 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     await exhaust(gate, '10.0.0.4'); // IP now over limit
     const r = await invoke(gate, {
       ip: '10.0.0.4',
-      // Placeholder key — the gate does NOT validate keys; any sk_ value bypasses.
-      headers: { 'x-api-key': 'sk_live_placeholder_not_a_real_key' },
+      // Placeholder key — the gate does NOT validate keys; any non-empty
+      // X-API-Key bypasses (value deliberately not a real-looking key prefix).
+      headers: { 'x-api-key': 'placeholder-key-not-validated' },
     });
     expect(r.nextCalled).to.equal(true); // reaches creditService instead of 402
     expect(r.statusCode).to.equal(null);
