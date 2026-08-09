@@ -44,3 +44,59 @@ jobs:
 
       - name: Architecture guard tests
         run: npm run test:arch
+
+  # Financial-OS integration suite (testcontainers). The 13 *.integration /
+  # *.smoke test files each spin up their OWN ephemeral Postgres via
+  # testcontainers (Docker is available by default on ubuntu-latest, socket at
+  # /var/run/docker.sock — no DOCKER_HOST override needed). The `services:`
+  # Postgres below exists ONLY to satisfy the fail-closed globalSetup guard
+  # (libs/testing/assert-test-db.ts), which requires TEST_DATABASE_URL to point
+  # at a database carrying the __test_db_marker table. DATABASE_URL is
+  # deliberately NOT set in this job: the guard must never fall back to it.
+  integration:
+    name: Financial OS Integration Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      marker-db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: satelink_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d satelink_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      # Create the marker in the service DB so the globalSetup guard proves it
+      # is talking to a deliberately-marked test database (not production).
+      - name: Create __test_db_marker in guard DB
+        env:
+          PGPASSWORD: testpass
+        run: |
+          psql -h localhost -p 5432 -U testuser -d satelink_test -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE __test_db_marker (ok boolean PRIMARY KEY DEFAULT true);" \
+            -c "INSERT INTO __test_db_marker VALUES (true);"
+
+      # The suite itself. TEST_DATABASE_URL points at the guard service DB; the
+      # test files ignore it and use their own testcontainers. No DATABASE_URL.
+      - name: Run integration suite
+        run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/satelink_test
