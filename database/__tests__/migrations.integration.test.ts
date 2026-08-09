@@ -76,11 +76,11 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 7 migrations to a fresh database', async () => {
+  it('applies all 9 migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(8);
+    expect(result.applied).toHaveLength(9);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
@@ -90,6 +90,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '006_principal_account_version.sql',
       '007_authorization.sql',
       '008_draws.sql',
+      '009_ledger_txn_header.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -99,13 +100,13 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(8);
+    expect(result.skipped).toHaveLength(9);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(8);
+    expect(statuses).toHaveLength(9);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);
@@ -301,21 +302,26 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
     await client.connect();
 
     try {
-      // First insert succeeds (already inserted in seed or insert fresh)
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
-        VALUES
-          ('txn_dup', 'acc_test_1', 'credit', 100, 'USDC', 'posted', 'test', 'ref_dup', 'idem_dup_test')
-      `);
+      await seedTestData(client);
+      await ensureCounterparty(client);
 
-      // Duplicate insert should fail
+      // First insert succeeds: a balanced txn establishes the
+      // (idem_dup_test, acc_test_1, credit) row. The debit leg lands on the
+      // counterparty so the transaction balances at COMMIT.
+      await insertBalancedTxn(client, 'txn_dup', [
+        { account_id: 'acc_test_1', direction: 'credit', amount: 100n, idem_key: 'idem_dup_test' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'debit', amount: 100n, idem_key: 'idem_dup_counter' },
+      ]);
+
+      // Duplicate insert should fail: same (idem_key, account_id, direction).
+      // The UNIQUE index is checked at INSERT time — before the deferred
+      // balance trigger — so the rejected row needs no header or balance.
       await expect(
         client.query(`
           INSERT INTO ledger_entries
             (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
           VALUES
-            ('txn_dup2', 'acc_test_1', 'credit', 200, 'USDC', 'posted', 'test', 'ref_dup2', 'idem_dup_test')
+            ('txn_dup', 'acc_test_1', 'credit', 200, 'USDC', 'posted', 'test', 'ref_dup2', 'idem_dup_test')
         `),
       ).rejects.toThrow(/unique|duplicate/i);
     } finally {
@@ -342,30 +348,29 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
         VALUES ('acc_view_test', 'prn_view_test', 'wallet', 'credit', 'USDC', 6)
         ON CONFLICT (id) DO NOTHING
       `);
+      await ensureCounterparty(client);
+
+      // Each subject leg on acc_view_test is balanced by an opposite leg on the
+      // counterparty account, which the per-account view does not fold into
+      // acc_view_test's row — so the subject's expected sums are unchanged.
 
       // Posted credit: 1000
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-        VALUES
-          ('txn_v1', 'acc_view_test', 'credit', 1000, 'USDC', 'posted', 'test', 'ref_v1', 'idem_v1', now())
-      `);
+      await insertBalancedTxn(client, 'txn_v1', [
+        { account_id: 'acc_view_test', direction: 'credit', amount: 1000n, idem_key: 'idem_v1' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'debit', amount: 1000n, idem_key: 'idem_v1_cp' },
+      ]);
 
       // Posted debit: 300
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-        VALUES
-          ('txn_v2', 'acc_view_test', 'debit', 300, 'USDC', 'posted', 'test', 'ref_v2', 'idem_v2', now())
-      `);
+      await insertBalancedTxn(client, 'txn_v2', [
+        { account_id: 'acc_view_test', direction: 'debit', amount: 300n, idem_key: 'idem_v2' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'credit', amount: 300n, idem_key: 'idem_v2_cp' },
+      ]);
 
       // Pending debit: 200
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
-        VALUES
-          ('txn_v3', 'acc_view_test', 'debit', 200, 'USDC', 'pending', 'test', 'ref_v3', 'idem_v3')
-      `);
+      await insertBalancedTxn(client, 'txn_v3', [
+        { account_id: 'acc_view_test', direction: 'debit', amount: 200n, idem_key: 'idem_v3', state: 'pending' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'credit', amount: 200n, idem_key: 'idem_v3_cp', state: 'pending' },
+      ]);
 
       const { rows } = await client.query<{
         account_id: string;
@@ -403,22 +408,20 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
         VALUES ('acc_pending_test', 'prn_pending_test', 'wallet', 'credit', 'USDC', 6)
         ON CONFLICT (id) DO NOTHING
       `);
+      await ensureCounterparty(client);
 
-      // Posted credit: 500
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-        VALUES
-          ('txn_p1', 'acc_pending_test', 'credit', 500, 'USDC', 'posted', 'test', 'ref_p1', 'idem_p1', now())
-      `);
+      // Posted credit: 500 (balanced by a posted debit on the counterparty)
+      await insertBalancedTxn(client, 'txn_p1', [
+        { account_id: 'acc_pending_test', direction: 'credit', amount: 500n, idem_key: 'idem_p1' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'debit', amount: 500n, idem_key: 'idem_p1_cp' },
+      ]);
 
-      // Pending credit: 9999 — this must NOT increase posted or available
-      await client.query(`
-        INSERT INTO ledger_entries
-          (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key)
-        VALUES
-          ('txn_p2', 'acc_pending_test', 'credit', 9999, 'USDC', 'pending', 'test', 'ref_p2', 'idem_p2')
-      `);
+      // Pending credit: 9999 — must NOT increase posted or available.
+      // Balanced by a pending debit on the counterparty.
+      await insertBalancedTxn(client, 'txn_p2', [
+        { account_id: 'acc_pending_test', direction: 'credit', amount: 9999n, idem_key: 'idem_p2', state: 'pending' },
+        { account_id: COUNTERPARTY_ACCOUNT_ID, direction: 'debit', amount: 9999n, idem_key: 'idem_p2_cp', state: 'pending' },
+      ]);
 
       const { rows } = await client.query<{
         posted_balance: string;
@@ -442,6 +445,75 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 });
 
 // ---------------------------------------------------------------------------
+// Helpers — balanced double-entry writes
+//
+// Migration 009 (M6.5) added two invariants the DB now enforces on every
+// ledger_entries write:
+//   - ledger_entries_txn_fk: each row must reference a parent ledger_txns row.
+//   - trg_ledger_entries_balance: a DEFERRABLE INITIALLY DEFERRED constraint
+//     trigger that, at COMMIT, requires SUM(debit) = SUM(credit) per txn_id.
+// So a test can no longer insert a lone entry: it must write a header plus a
+// balanced set of legs inside one transaction. The leg the test cares about
+// lands on the subject account; the equal-and-opposite leg lands on a
+// counterparty account, so the per-account account_balances view for the
+// subject is unchanged.
+// ---------------------------------------------------------------------------
+
+const COUNTERPARTY_ACCOUNT_ID = 'acc_test_counterparty';
+
+async function ensureCounterparty(client: Client): Promise<void> {
+  await client.query(`
+    INSERT INTO principals (id, kind) VALUES ('prn_test_counterparty', 'human')
+    ON CONFLICT (id) DO NOTHING
+  `);
+  await client.query(
+    `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals)
+     VALUES ($1, 'prn_test_counterparty', 'suspense', 'debit', 'USDC', 6)
+     ON CONFLICT (id) DO NOTHING`,
+    [COUNTERPARTY_ACCOUNT_ID],
+  );
+}
+
+interface Leg {
+  account_id: string;
+  direction: 'debit' | 'credit';
+  amount: bigint | number;
+  idem_key: string;
+  state?: 'pending' | 'posted';
+}
+
+/**
+ * Insert a ledger_txns header plus `legs` as one atomic transaction. `legs`
+ * must balance (SUM debit = SUM credit among non-voided legs) or the deferred
+ * balance trigger rejects the COMMIT — exactly the production invariant.
+ */
+async function insertBalancedTxn(client: Client, txnId: string, legs: Leg[]): Promise<void> {
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      `INSERT INTO ledger_txns (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+       VALUES ($1, 'deposit', 'test', $1, 'USDC', 'posted', now())
+       ON CONFLICT (txn_id) DO NOTHING`,
+      [txnId],
+    );
+    for (const leg of legs) {
+      const state = leg.state ?? 'posted';
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
+         VALUES ($1, $2, $3, $4, 'USDC', $5, 'test', $6, $7,
+                 CASE WHEN $5 = 'posted' THEN now() ELSE NULL END)`,
+        [txnId, leg.account_id, leg.direction, leg.amount.toString(), state, leg.idem_key, leg.idem_key],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helper — seed minimal test data for constraint tests
 // ---------------------------------------------------------------------------
 
@@ -459,10 +531,10 @@ async function seedTestData(client: Client): Promise<void> {
     INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals)
     VALUES ('acc_test_1', 'prn_test_1', 'wallet', 'credit', 'USDC', 6)
   `);
-  await client.query(`
-    INSERT INTO ledger_entries
-      (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-    VALUES
-      ('txn_seed_1', 'acc_test_1', 'credit', 1000000, 'USDC', 'posted', 'test', 'ref_seed', 'idem_seed_1', now())
-  `);
+  // A balanced deposit txn: debit and credit for the same amount. The debit is
+  // ledger_entries id=1, which the append-only permission tests target by id.
+  await insertBalancedTxn(client, 'txn_seed_1', [
+    { account_id: 'acc_test_1', direction: 'debit', amount: 1000000n, idem_key: 'idem_seed_1_debit' },
+    { account_id: 'acc_test_1', direction: 'credit', amount: 1000000n, idem_key: 'idem_seed_1_credit' },
+  ]);
 }
