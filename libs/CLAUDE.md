@@ -120,3 +120,24 @@ insufficient-capacity or currency-mismatch.
   (principals.state uses 'active', which is correct for principals.)
 - All Financial OS timestamps are timestamptz. draws.created_at was converted
   from BIGINT epoch-ms to timestamptz in migration 009.
+
+## Domain decisions (M7, 2026-08-12)
+
+- An x402 single-shot payment is a DEPOSIT — money arriving. It is recorded
+  once, by apps/api/src/ledger/shadow_ledger_write.js, as ledger_txns.kind=
+  'deposit' with ref_type='revenue_event'. It is NOT a draw.
+- A DRAW is consumption against an Authorization. Draws become real in M8
+  (capacity enforcement) and M9 (multi-nonce recurring). `draws` being empty
+  today is CORRECT, not a gap.
+- shadow_draw_write.js must NOT record x402 payments as draws — that would
+  double-credit acct_platform_revenue for one on-chain event. DRAW_SHADOW_WRITE
+  is 0 and must not be re-enabled in M7.
+- The M7 reconciler therefore reconciles LEDGER TRANSACTIONS against chain, not
+  draws: for every ledger_txns row with ref_type='revenue_event' whose ref_id
+  carries an on-chain tx hash, it verifies the tx exists+confirmed, the token
+  amount to the expected vault/payTo equals the ledger entry amount (minor
+  units), computed from DB + chain only. drift = signed sum of mismatches.
+- Known M8 prerequisite (NOT fixed in M7): shadow_draw_write.js inserts
+  settlements with state='confirmed', confirmations=0, required_confirmations=0
+  — asserting a confirmation it never verified. The settlement-poller should own
+  the pending→confirming→confirmed transition once draws are real.
