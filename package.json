@@ -9,7 +9,8 @@
     "services/*",
     "packages/*",
     "agents/*",
-    "libs/*"
+    "libs/*",
+    "workers/*"
   ],
   "overrides": {
     "react": "18.2.0",
@@ -51,12 +52,13 @@
     "deploy": "bash scripts/deploy.sh",
     "deploy:skip-cert": "bash scripts/deploy.sh --skip-cert",
     "watch:events": "node scripts/event-watcher.js",
-    "arch": "depcruise --config .dependency-cruiser.cjs --output-type err-long libs tools",
+    "arch": "depcruise --config .dependency-cruiser.cjs --output-type err-long libs tools workers",
     "arch:graph": "depcruise --config .dependency-cruiser.cjs --output-type dot libs | dot -T svg > architecture.svg",
     "test:arch": "vitest run --project tools",
     "test:libs": "vitest run --project libs",
     "test:integration": "vitest run --project integration",
-    "typecheck:libs": "npm run typecheck --workspace=@satelink/kernel && npm run typecheck --workspace=@satelink/financial-domain && npm run typecheck --workspace=@satelink/financial"
+    "typecheck:libs": "npm run typecheck --workspace=@satelink/kernel && npm run typecheck --workspace=@satelink/financial-domain && npm run typecheck --workspace=@satelink/financial",
+    "typecheck:workers": "npm run typecheck --workspace=@satelink/reconciler"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.0.2",
