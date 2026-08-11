@@ -1,0 +1,22 @@
+{
+  "name": "@satelink/reconciler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "M7 worker service: settlement-poller + reconciler (ledger ⟷ chain) + outbox-publisher. Single process, internal scheduling.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@satelink/kernel": "*",
+    "pg": "^8.13.1",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}
