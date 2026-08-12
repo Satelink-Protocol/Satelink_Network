@@ -13,7 +13,14 @@
  * NEVER throws.
  */
 
-import { toMinorUnits, SUSPENSE_ACCOUNT_ID, REVENUE_ACCOUNT_ID, SHADOW_CURRENCY, SHADOW_DECIMALS } from './shadow_ledger_write.js';
+import { toMinorUnits, SUSPENSE_ACCOUNT_ID, REVENUE_ACCOUNT_ID, SHADOW_DECIMALS } from './shadow_ledger_write.js';
+
+// Capacity accounts are USDT-denominated (M4 backfill). This writer is DISABLED
+// (DRAW_SHADOW_WRITE=0) and per the M7 decision must NOT record x402 payments as
+// draws; this constant only keeps its capacity-account lookup + dormant rows
+// well-formed. It is NOT the revenue currency — that is derived per asset in
+// asset_currency.js / shadow_ledger_write.js.
+const SHADOW_DRAW_CURRENCY = 'USDT';
 
 export function isDrawShadowWriteEnabled() {
   const v = process.env.DRAW_SHADOW_WRITE;
@@ -70,7 +77,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
 
       const aRes = await client.query(
         "SELECT id FROM accounts WHERE principal_id = $1 AND kind = 'capacity' AND currency = $2",
-        [principalId, SHADOW_CURRENCY]
+        [principalId, SHADOW_DRAW_CURRENCY]
       );
       if (aRes.rowCount === 0) {
         return { written: false, reason: 'account_not_found' };
@@ -86,7 +93,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
           amount, currency, idempotency_key, state, reject_reason, version, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settled', NULL, 0, $9)
         ON CONFLICT (idempotency_key) DO NOTHING`,
-        [drawId, principalId, accountId, fundingSourceId, authorizationId, amountStr, SHADOW_CURRENCY, idempotencyKey, nowDate]
+        [drawId, principalId, accountId, fundingSourceId, authorizationId, amountStr, SHADOW_DRAW_CURRENCY, idempotencyKey, nowDate]
       );
 
       // 2. Insert Settlement
@@ -105,7 +112,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
            (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
          VALUES ($1, 'draw', $2, $3, $4, 'posted', now())
          ON CONFLICT (txn_id) DO NOTHING`,
-        [txnId, refType, drawId, SHADOW_CURRENCY]
+        [txnId, refType, drawId, SHADOW_DRAW_CURRENCY]
       );
 
       // 4. Insert Ledger Entries (Debit Suspense, Credit Revenue)
@@ -115,7 +122,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
             ref_type, ref_id, idem_key, posted_at)
          VALUES ($1,$2,'debit',$3,$4,'posted',$5,$6,$7, now())
          ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
-        [txnId, SUSPENSE_ACCOUNT_ID, amountStr, SHADOW_CURRENCY, refType, drawId, idemKeyTx]
+        [txnId, SUSPENSE_ACCOUNT_ID, amountStr, SHADOW_DRAW_CURRENCY, refType, drawId, idemKeyTx]
       );
       await client.query(
         `INSERT INTO ledger_entries
@@ -123,7 +130,7 @@ export async function shadowWriteDraw(pool, event, logger = console) {
             ref_type, ref_id, idem_key, posted_at)
          VALUES ($1,$2,'credit',$3,$4,'posted',$5,$6,$7, now())
          ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
-        [txnId, REVENUE_ACCOUNT_ID, amountStr, SHADOW_CURRENCY, refType, drawId, idemKeyTx]
+        [txnId, REVENUE_ACCOUNT_ID, amountStr, SHADOW_DRAW_CURRENCY, refType, drawId, idemKeyTx]
       );
 
       await client.query('COMMIT');

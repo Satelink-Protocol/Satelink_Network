@@ -27,9 +27,12 @@
  * System accounts seeded by database/migrations/005_system_accounts.sql.
  */
 
+import { resolveRevenueCurrency } from './asset_currency.js';
+
 export const SUSPENSE_ACCOUNT_ID = 'acct_platform_suspense'; // debit-normal
 export const REVENUE_ACCOUNT_ID = 'acct_platform_revenue'; // credit-normal
-export const SHADOW_CURRENCY = 'USDT';
+// Currency is NO LONGER a constant: it is derived per-event from the on-chain
+// asset (see asset_currency.js). All supported settlement tokens are 6-decimal.
 export const SHADOW_DECIMALS = 6;
 
 /** True only when the shadow flag is explicitly enabled. Default OFF. */
@@ -113,6 +116,17 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
     }
     const amountStr = minor.toString();
 
+    // Derive the currency from the on-chain asset. An unknown on-chain asset
+    // halts the write (never defaulted) so a mislabel can never enter the ledger.
+    const currency = resolveRevenueCurrency(event);
+    if (currency === null) {
+      logger.error?.(
+        '[shadow-ledger] unknown on-chain asset — refusing to write ledger:',
+        requestId,
+      );
+      return { written: false, reason: 'unknown_asset' };
+    }
+
     if (!pool || typeof pool.connect !== 'function') {
       return { written: false, reason: 'no_pool' };
     }
@@ -131,7 +145,7 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
            (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
          VALUES ($1, 'deposit', $2, $3, $4, 'posted', now())
          ON CONFLICT (txn_id) DO NOTHING`,
-        [txnId, refType, refId, SHADOW_CURRENCY],
+        [txnId, refType, refId, currency],
       );
       // Debit suspense, credit revenue — balanced by construction.
       await client.query(
@@ -140,7 +154,7 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
             ref_type, ref_id, idem_key, posted_at)
          VALUES ($1,$2,'debit',$3,$4,'posted',$5,$6,$7, now())
          ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
-        [txnId, SUSPENSE_ACCOUNT_ID, amountStr, SHADOW_CURRENCY, refType, refId, idemKey],
+        [txnId, SUSPENSE_ACCOUNT_ID, amountStr, currency, refType, refId, idemKey],
       );
       await client.query(
         `INSERT INTO ledger_entries
@@ -148,7 +162,7 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
             ref_type, ref_id, idem_key, posted_at)
          VALUES ($1,$2,'credit',$3,$4,'posted',$5,$6,$7, now())
          ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
-        [txnId, REVENUE_ACCOUNT_ID, amountStr, SHADOW_CURRENCY, refType, refId, idemKey],
+        [txnId, REVENUE_ACCOUNT_ID, amountStr, currency, refType, refId, idemKey],
       );
       await client.query('COMMIT');
       return { written: true };
