@@ -7,11 +7,12 @@
  * ledger ref_id is `x402:0x<txhash>`. Polygon USDT vault deposits are declared
  * here for when they appear, but no such ledger row exists yet.
  *
- * ⚠ Currency-label wrinkle (documented, not hidden): the on-chain token for the
- * x402 kind is USDC, while the shadow ledger records the entry currency as USDT.
- * Both are 6-decimal. The reconciler compares amounts in integer minor units and
- * asserts `tokenDecimals === ledgerDecimals` before comparing; it never
- * constructs two different-currency Money objects (that is a compile error).
+ * Each target carries the currency the on-chain asset is denominated in. The
+ * reconciler requires the ledger row's currency to EQUAL it before building any
+ * Money, so both sides of the comparison are the SAME currency and Money's
+ * compile-time cross-currency guarantee holds — there is no decimals-magnitude
+ * fudge. The shadow ledger now records USDC for x402 (asset-derived), so the
+ * x402 row matches its target currency.
  */
 
 import { USDC, USDT, type Currency } from '@satelink/kernel';
@@ -38,9 +39,9 @@ export interface ReconcileTarget {
   readonly tokenContract: string;
   /** Address the transfer must be paid to. */
   readonly expectedRecipient: string;
-  /** The chain token (informational — decimals are what the comparison uses). */
-  readonly onChainToken: 'USDC' | 'USDT';
-  readonly tokenDecimals: number;
+  /** The currency the on-chain asset is denominated in — the ledger row must
+   *  match this exactly (kernel Currency code). No decimals-magnitude fudge. */
+  readonly currencyCode: 'USDC' | 'USDT';
 }
 
 /** Expected recipient for the x402 rail — the treasury / payTo (CLAUDE.md). */
@@ -66,8 +67,7 @@ export function targetForRefId(
       txHash: x402[1]!.toLowerCase(),
       tokenContract: USDC_BASE,
       expectedRecipient: x402PayTo(env),
-      onChainToken: 'USDC',
-      tokenDecimals: 6,
+      currencyCode: 'USDC',
     };
   }
   // Future: Polygon vault deposits, e.g. `vault:0x<txhash>`.
@@ -78,8 +78,7 @@ export function targetForRefId(
       txHash: vault[1]!.toLowerCase(),
       tokenContract: USDT_POLYGON,
       expectedRecipient: (env.REVENUE_VAULT_ADDRESS ?? '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF').toLowerCase(),
-      onChainToken: 'USDT',
-      tokenDecimals: 6,
+      currencyCode: 'USDT',
     };
   }
   return null;
@@ -87,8 +86,9 @@ export function targetForRefId(
 
 /**
  * The kernel Currency to denominate a ledger row's amount in for Money math.
- * Never mixes currencies: both ledger and chain amounts for a row are built in
- * this one currency, after a decimals-equality assertion in the reconciler.
+ * The reconciler requires the ledger row's currency to EQUAL the on-chain
+ * target's currency before building any Money — cross-currency is flagged, not
+ * compared by decimals.
  */
 export function currencyForCode(code: string): Currency | null {
   if (code === 'USDT') return USDT;

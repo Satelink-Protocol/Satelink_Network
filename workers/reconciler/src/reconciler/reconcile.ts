@@ -33,6 +33,7 @@ export type RowStatus =
   | 'failed'
   | 'amount_mismatch'
   | 'recipient_missing'
+  | 'currency_mismatch'
   | 'currency_error'
   | 'unreconcilable';
 
@@ -62,6 +63,7 @@ interface RevenueRow {
 }
 
 const ANOMALY_ORDER: readonly RowStatus[] = [
+  'currency_mismatch',
   'currency_error',
   'not_found',
   'failed',
@@ -73,7 +75,8 @@ const ANOMALY_ORDER: readonly RowStatus[] = [
 function haltReasonFor(rows: readonly RowReconciliation[]): string {
   for (const status of ANOMALY_ORDER) {
     if (rows.some((r) => r.status === status)) {
-      if (status === 'currency_error') return 'CURRENCY_DECIMALS_MISMATCH';
+      if (status === 'currency_mismatch') return 'LEDGER_CHAIN_CURRENCY_MISMATCH';
+      if (status === 'currency_error') return 'CURRENCY_UNKNOWN';
       return 'LEDGER_CHAIN_DRIFT';
     }
   }
@@ -120,9 +123,10 @@ export async function reconcileOnce(
       continue;
     }
 
-    const currency = currencyForCode(row.currency);
-    if (currency === null || currency.decimals !== target.tokenDecimals) {
-      // Cannot compare minor units safely — the ledger amount is unverifiable.
+    const ledgerCurrency = currencyForCode(row.currency);
+    const targetCurrency = currencyForCode(target.currencyCode);
+    if (ledgerCurrency === null || targetCurrency === null) {
+      // Unknown currency code — the ledger amount is unverifiable.
       rows.push({
         txnId: row.txn_id,
         refId: row.ref_id,
@@ -135,6 +139,27 @@ export async function reconcileOnce(
       reconciledCount += 1;
       continue;
     }
+    if (ledgerCurrency !== targetCurrency) {
+      // The ledger is denominated in a DIFFERENT currency than the on-chain
+      // asset. This is a real mismatch — NOT papered over by comparing minor
+      // units across currencies. (After the M7 currency fix the x402 ledger row
+      // is USDC, matching its target, so this branch stays clean.)
+      rows.push({
+        txnId: row.txn_id,
+        refId: row.ref_id,
+        status: 'currency_mismatch',
+        ledgerMinor,
+        chainMinor: 0n,
+        driftMinor: ledgerMinor,
+      });
+      driftMinor += ledgerMinor;
+      reconciledCount += 1;
+      continue;
+    }
+    // Ledger and chain agree on the currency: from here everything is
+    // Money<currency> in ONE currency, so subtract can never be a cross-currency
+    // comparison — the compile-time guarantee holds, no decimals-magnitude fudge.
+    const currency = ledgerCurrency;
 
     const obs = await chain.observeTransfer({
       chainKey: target.chain.chainKey,

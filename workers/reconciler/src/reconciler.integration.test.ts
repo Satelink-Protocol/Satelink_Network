@@ -45,7 +45,7 @@ function readerWith(tx: string, obs: TransferObservation): FakeChainReader {
 
 /** Seed one revenue_event ledger txn with balanced entries (one transaction so
  *  the deferred balance trigger sees debit == credit at COMMIT). */
-async function seedRevenueEvent(txHash: string, amountMinor: bigint): Promise<void> {
+async function seedRevenueEvent(txHash: string, amountMinor: bigint, currency = 'USDC'): Promise<void> {
   const txnId = `shadow:x402:${txHash}`;
   const refId = `x402:${txHash}`;
   const c = await pool.connect();
@@ -53,18 +53,18 @@ async function seedRevenueEvent(txHash: string, amountMinor: bigint): Promise<vo
     await c.query('BEGIN');
     await c.query(
       `INSERT INTO ledger_txns (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
-       VALUES ($1,'deposit','revenue_event',$2,'USDT','posted', now())`,
-      [txnId, refId],
+       VALUES ($1,'deposit','revenue_event',$2,$3,'posted', now())`,
+      [txnId, refId, currency],
     );
     await c.query(
       `INSERT INTO ledger_entries (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-       VALUES ($1,'acct_platform_suspense','debit',$2,'USDT','posted','revenue_event',$3,$4, now())`,
-      [txnId, amountMinor.toString(), refId, `${txnId}:d`],
+       VALUES ($1,'acct_platform_suspense','debit',$2,$5,'posted','revenue_event',$3,$4, now())`,
+      [txnId, amountMinor.toString(), refId, `${txnId}:d`, currency],
     );
     await c.query(
       `INSERT INTO ledger_entries (txn_id, account_id, direction, amount, currency, state, ref_type, ref_id, idem_key, posted_at)
-       VALUES ($1,'acct_platform_revenue','credit',$2,'USDT','posted','revenue_event',$3,$4, now())`,
-      [txnId, amountMinor.toString(), refId, `${txnId}:c`],
+       VALUES ($1,'acct_platform_revenue','credit',$2,$5,'posted','revenue_event',$3,$4, now())`,
+      [txnId, amountMinor.toString(), refId, `${txnId}:c`, currency],
     );
     await c.query('COMMIT');
   } catch (e) {
@@ -181,6 +181,18 @@ describe('reconciler — ledger ⟷ chain', () => {
     const res = await reconcileOnce(pool, chain, CFG);
     expect(res.halted).toBe(true);
     expect(res.rows[0]?.status).toBe('unconfirmed');
+    expect(res.driftMinorUnits).toBe(100_000n);
+  });
+
+  it('currency mismatch (ledger USDT, chain asset USDC) → halt, not papered over', async () => {
+    // The x402 target currency is USDC; a USDT-labelled ledger row must be
+    // flagged as a real mismatch, never compared across currencies by decimals.
+    await seedRevenueEvent(TX, 100_000n, 'USDT');
+    const chain = readerWith(TX, confirmed(100_000n));
+    const res = await reconcileOnce(pool, chain, CFG);
+    expect(res.halted).toBe(true);
+    expect(res.haltReason).toBe('LEDGER_CHAIN_CURRENCY_MISMATCH');
+    expect(res.rows[0]?.status).toBe('currency_mismatch');
     expect(res.driftMinorUnits).toBe(100_000n);
   });
 
