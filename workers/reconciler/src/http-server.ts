@@ -47,7 +47,7 @@ export function startHttpServer(deps: HttpDeps): Server {
     void (async () => {
       const url = req.url ?? '/';
       const path = url.split('?')[0];
-      if (req.method === 'GET' && path === '/health') {
+      if (req.method === 'GET' && (path === '/health' || path === '/')) {
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
         return;
