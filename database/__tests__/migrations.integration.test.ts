@@ -76,11 +76,11 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 10 migrations to a fresh database', async () => {
+  it('applies all 11 migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(10);
+    expect(result.applied).toHaveLength(11);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
@@ -92,6 +92,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '008_draws.sql',
       '009_ledger_txn_header.sql',
       '010_account_state_frozen.sql',
+      '011_reconciliation.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -101,13 +102,13 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(10);
+    expect(result.skipped).toHaveLength(11);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(10);
+    expect(statuses).toHaveLength(11);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);

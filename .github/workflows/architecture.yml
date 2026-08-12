@@ -39,6 +39,10 @@ jobs:
       - name: Strict typecheck (libs + services)
         run: npm run typecheck:libs
 
+      # Strict TS for the M7 worker deployable (workers/reconciler).
+      - name: Strict typecheck (workers)
+        run: npm run typecheck:workers
+
       - name: Domain tests
         run: npm run test:libs
 

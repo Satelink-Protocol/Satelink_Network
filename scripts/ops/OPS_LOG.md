@@ -69,3 +69,27 @@ Accept-Encoding is a forbidden header in Request Header Transform Rules. The
 reliable compression lever would be app-side forced gzip on the 402 (safe in
 the all-CF-fronted topology) or a CF Snippet/Worker — both deferred pending a
 decision, since the body shrink already removes most of the egress.
+
+## 2026-08-12 — Append-only EXCEPTION: correct x402 ledger currency USDT → USDC
+
+Reason: the shadow ledger writer hardcoded currency='USDT' for every entry, but
+x402 settles USDC on Base (asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).
+The one real revenue_event row was therefore mislabelled, and the M7 reconciler
+was papering over it with a same-decimals magnitude check that defeated M1's
+branded Currency compile-time guarantee.
+
+ledger_entries is append-only by policy (migration 004 REVOKEs UPDATE/DELETE
+from satelink_app). This is an explicit, one-time, human-authorized exception,
+performed as the `postgres` owner inside a single transaction with before/after
+verification and a balance re-check (SET CONSTRAINTS ALL IMMEDIATE) before COMMIT.
+
+Rows corrected (txn shadow:x402:0x7bc61296…ddc1f63): 3
+  - ledger_txns header:        1  (USDT → USDC)
+  - ledger_entries (debit+credit): 2  (USDT → USDC)
+Balance unchanged (debit 100000 = credit 100000). Amounts untouched.
+
+Going forward: shadow_ledger_write.js derives currency per event from the asset
+(apps/api/src/ledger/asset_currency.js); an unknown on-chain asset halts the
+write (reason 'unknown_asset') and is never defaulted. The reconciler now
+requires the ledger row's currency to equal the on-chain target's currency and
+compares same-currency Money — the magnitude check is deleted.
