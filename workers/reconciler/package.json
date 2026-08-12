@@ -6,7 +6,7 @@
   "description": "M7 worker service: settlement-poller + reconciler (ledger ⟷ chain) + outbox-publisher. Single process, internal scheduling.",
   "main": "./src/index.ts",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "npx tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
