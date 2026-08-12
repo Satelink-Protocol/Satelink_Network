@@ -4,4 +4,4 @@ COPY package*.json .npmrc ./
 RUN npm install
 COPY . .
 EXPOSE 8080
-CMD ["npm", "start", "--workspace=@satelink/reconciler"]
+ENTRYPOINT ["/bin/sh", "-c", "npm start --workspace=@satelink/reconciler"]
