@@ -141,3 +141,38 @@ insufficient-capacity or currency-mismatch.
   settlements with state='confirmed', confirmations=0, required_confirmations=0
   — asserting a confirmation it never verified. The settlement-poller should own
   the pending→confirming→confirmed transition once draws are real.
+
+## Domain decisions (M8, 2026-08-15)
+
+- FROZEN: nonces are SETTLEMENT events, never call events. Per-call capacity
+  enforcement compares `consumed_amount + cost` against `cap_amount` and touches
+  NO nonce. `Authorization.consume(nonce, amount)` is invoked only at settlement,
+  when an EIP-3009 authorization is redeemed on-chain. M9 adds pre-signed nonce
+  SCHEDULES for repeated settlement; it does NOT move nonce consumption into the
+  request path. The M8 request-path metering that updates `consumed_amount`
+  directly is CORRECT, not a bypass of the aggregate and not tech debt.
+- The M8 authorization is signed with the x402 "exact" scheme = EIP-3009
+  `TransferWithAuthorization` (EIP-712) on USDC/Base (chainId 8453), the only
+  installed scheme a funded wallet can both sign and later redeem on-chain. The
+  signature is VERIFIED (viem recoverTypedDataAddress == claimed signer ==
+  message.from) before persistence, by a services/financial adapter — apps/api/
+  src/payments/ is NOT touched. signature_envelope = {scheme:'exact', signature,
+  signer}. cap_amount / consumed_amount are USDC minor units (6 decimals).
+- The capacity account for an x402/Base authorization is currency='USDC'
+  (normality='credit', balance_invariant='non_negative', state='open',
+  decimals=6). The 9 legacy backfilled capacity accounts are currency='USDT'
+  (the Polygon-deposit rail) — a DIFFERENT funding path. A capacity account's
+  currency must equal its authorization's currency; cross-currency draws are
+  forbidden by Money.
+- CAPACITY_ENFORCEMENT_PATH = legacy (default) | dual | new, read at REQUEST
+  time (no redeploy to flip). legacy = api_credits authorizeAndMeter unchanged.
+  dual = evaluate both, SERVE LEGACY, record both, log disagreements (new-path
+  eval is read-only in dual — it never decrements). new = the atomic
+  consumed_amount decrement is the decision. Denial reasons are distinct and
+  machine-readable: no_authorization | insufficient_capacity |
+  authorization_expired. Never conflated.
+- Migration runner is `npx tsx database/runner.ts migrate|status|verify
+  "<connectionString>"` (takes the connection string as an ARGUMENT, never reads
+  env). `scripts/migrate.js` is a DEAD SQLite-era migrator pointed at the old
+  sql/ dir; it crashes on AUTOINCREMENT — NEVER run it. (Supersedes the stale
+  "there is no database/runner.ts" note in the Migration command section above.)

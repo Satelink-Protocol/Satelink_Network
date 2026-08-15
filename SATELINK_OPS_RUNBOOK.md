@@ -102,3 +102,52 @@ breakdown. Halting does not (yet) block anything — it is an alarm.
 4. The ledger is append-only (invariant #5): any correction is a NEW reversing
    entry, never an UPDATE/DELETE. Drift clears automatically on the next cycle
    once ledger and chain agree.
+
+## Capacity enforcement cutover (M8)
+
+The RPC gateway's authorize-and-meter step (`rpc_gateway.js`, the
+`authorizeAndMeter` call site) is wrapped by `enforceCapacity`
+(`apps/api/src/capacity/capacity_enforcement.js`). Behaviour is chosen by the
+env var **`CAPACITY_ENFORCEMENT_PATH`**, read at REQUEST time — a Railway env
+change reverts instantly with NO redeploy.
+
+| value | behaviour |
+|-------|-----------|
+| `legacy` (default) | api_credits `authorizeAndMeter`, unchanged. |
+| `dual` | evaluate BOTH paths, **serve legacy**, record both, log disagreements. The new-path eval is read-only (never decrements). |
+| `new` | the atomic `consumed_amount` draw against the caller's Authorization IS the decision. |
+
+- **Rollback**: set `CAPACITY_ENFORCEMENT_PATH=legacy` on the `Satelink-api`
+  Railway service. Takes effect on the next request; no deploy.
+- **Denial reasons** (machine-readable, never conflated): `no_authorization`,
+  `insufficient_capacity`, `authorization_expired`.
+- **Per-call cost**: `CAPACITY_CALL_COST_MINOR` (USDC minor units, default `30`
+  = $0.00003).
+- **Parity/latency**: `GET /internal/capacity-parity` → decisions evaluated,
+  agreements, disagreements by reason, p50/p99 per path, and the new−legacy p99
+  delta (gate: < 10ms). New-path query is a single index scan on
+  `idx_authorizations_principal` (~0.05ms observed on prod).
+- **Nonces are settlement events, not call events** (frozen, libs/CLAUDE.md M8):
+  per-call metering compares `consumed_amount + cost` vs `cap_amount` and touches
+  no nonce. `Authorization.consume(nonce, …)` runs only at settlement.
+
+### Creating an Authorization (funds capacity)
+
+Capacity requires ONE real signed authorization per caller. There is no backfill
+(a backfill would forge a signature). A wallet signs an x402 "exact"
+(EIP-3009 `TransferWithAuthorization`) envelope on USDC/Base; the signature is
+verified (recovered signer == claimed signer == `message.from`) before anything
+is persisted.
+
+```
+# 1) Sign OFFLINE (no network, no files; key read from env only, never echoed):
+M8_SIGNER_PRIVATE_KEY=0x<64hex> node scripts/ops/m8-sign-authorization.mjs > /secure/tmp/env.json
+#    → { main: $2 authorization, exhaustion: $0.005 } — BEARER INSTRUMENTS, never commit/log.
+
+# 2) Verify + persist (idempotent on the EIP-3009 nonce; signature redacted in output):
+DATABASE_URL=<sanctioned> npx tsx scripts/ops/m8-create-authorization.ts < /secure/tmp/env.json
+```
+
+Creates FundingSource + Authorization + a USDC capacity `accounts` row in one
+transaction. Re-running the same envelope creates nothing new. A tampered
+envelope is rejected and nothing is persisted.

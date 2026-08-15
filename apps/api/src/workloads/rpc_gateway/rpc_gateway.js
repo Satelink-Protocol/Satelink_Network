@@ -9,6 +9,7 @@ import { createMetricsRouter } from './metrics.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
 import { authorizeAndMeter } from '../../billing/credit_service.mjs';
+import { enforceCapacity } from '../../capacity/capacity_enforcement.js';
 import { paymentRequiredResponse } from '../../utils/payment_required.js';
 
 // Customer Zero P0 recovery: when CREDIT_CANONICAL=true, authenticated callers
@@ -253,12 +254,18 @@ export function createRpcGateway(db) {
             // No Redis, no credit_balances, no anonymous downgrade (unknown key → 401).
             let verdict;
             try {
-                verdict = await authorizeAndMeter(db, { apiKey, wallet: walletHdr });
+                // M8: capacity enforcement cutover. In legacy mode this is the
+                // unchanged api_credits authorizeAndMeter; in dual it evaluates
+                // both paths and serves legacy; in new the authorization
+                // capacity decision is served. Path is read at request time
+                // (CAPACITY_ENFORCEMENT_PATH) so a Railway flip reverts with no
+                // redeploy.
+                verdict = await enforceCapacity(db, { apiKey, wallet: walletHdr });
             } catch (err) {
                 console.error('[RPC Gateway] creditService error (fail-open + alert):', err.message);
                 verdict = { ok: true, tier: 'unknown', remaining: null, limit: null, balanceAfter: null, degraded: true };
             }
-            res.set('X-Credit-Source', 'api_credits');
+            res.set('X-Credit-Source', verdict.creditSource === 'authorization' ? 'authorization' : 'api_credits');
             if (!verdict.ok) {
                 if (verdict.code === 'account_not_found') {
                     return res.status(402).json(paymentRequiredBody(

@@ -18,7 +18,8 @@
   "dependencies": {
     "@satelink/kernel": "*",
     "@satelink/financial-domain": "*",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "viem": "^2.55.2"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
