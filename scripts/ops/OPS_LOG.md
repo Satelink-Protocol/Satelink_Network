@@ -94,6 +94,35 @@ write (reason 'unknown_asset') and is never defaulted. The reconciler now
 requires the ledger row's currency to equal the on-chain target's currency and
 compares same-currency Money — the magnitude check is deleted.
 
+## 2026-08-12 — M7 reconciler deployed to Railway
+
+Deployed the M7 reconciler as a new Railway service (`satelink-reconciler`) in the
+`Satelink-api` project (production environment).
+
+Service details:
+- **Service name**: `satelink-reconciler`
+- **Public domain**: `https://satelink-reconciler-production.up.railway.app`
+- **Source**: `Satelink-Protocol/Satelink_Network`, branch `main`, build from monorepo root
+- **Railway config**: `workers/reconciler/railway.json` (start command, healthcheck, restart policy)
+- **Postgres reference**: `${{Postgres-iQeW.DATABASE_URL}}` (the `Postgres-iQeW` service)
+
+Variables set (names only — values in Railway, never in repo):
+- `DATABASE_URL` — Railway reference to `Postgres-iQeW`
+- `INTERNAL_TOKEN` — strong random 32-byte hex; shared with operator out-of-band
+- `BASE_RPC_URL` — `https://mainnet.base.org`
+- `RECONCILE_INTERVAL_MS` — `30000`
+
+How to stop: scale `satelink-reconciler` to 0 replicas or stop the Railway service.
+Stopping is safe — the worker is fail-open at M7 (records halt flag, does not block the money path).
+
+`halted=true` operationally means: the reconciler found `drift_minor_units != 0` — the ledger and
+chain disagree on confirmed revenue. See SATELINK_OPS_RUNBOOK.md §"What `halted` means" for triage steps.
+
+Sanctioned migration runner (reaffirmed):
+- **Use**: `npx tsx database/runner.ts migrate "$DATABASE_URL"` — checksum-verified, tracks via `schema_migrations`.
+- **Never**: `node scripts/migrate.js` — the old SQLite-era runner; crashes on AUTOINCREMENT against production Postgres.
+  (libs/CLAUDE.md M8 superseding note confirms database/runner.ts is authoritative.)
+
 ## 2026-08-18 — M8 redeploy + capacity-enforcement exit gate
 
 Invoice paid, Railway deploys unblocked. Satelink-api's active deployment was
