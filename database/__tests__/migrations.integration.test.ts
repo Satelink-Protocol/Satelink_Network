@@ -80,7 +80,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(11);
+    expect(result.applied).toHaveLength(12);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
@@ -93,6 +93,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '009_ledger_txn_header.sql',
       '010_account_state_frozen.sql',
       '011_reconciliation.sql',
+      '012_nonce_schedule.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -102,13 +103,13 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(11);
+    expect(result.skipped).toHaveLength(12);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(11);
+    expect(statuses).toHaveLength(12);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);

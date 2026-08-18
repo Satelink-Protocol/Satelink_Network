@@ -31,7 +31,7 @@ export function startScheduler(
       log.info(
         `[reconciler] cycle done drift=${s.driftMinorUnits.toString()} halted=${String(s.halted)} ` +
           `reconciled=${s.reconciledCount} stuck=${s.stuckSettlementCount} advanced=${out.advancedCount} ` +
-          `published=${out.publishedCount} ms=${s.cycleDurationMs}`,
+          `published=${out.publishedCount} schedule_transitions=${out.scheduleTransitions} ms=${s.cycleDurationMs}`,
       );
     } catch (err) {
       log.error('[reconciler] cycle failed (fail-open, retrying next tick):', err);
