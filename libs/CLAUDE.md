@@ -101,6 +101,7 @@ npm run test:integration # docker, testcontainers
 - Never auto-merge. PRs only.
 - Never force push.
 - Never leave TODOs or placeholder implementations.
+- Never comment out or bypass assert-test-db.ts / globalSetup, even locally, even temporarily. If integration tests aren't running, the guard is not the obstacle — find the actual test-discovery or config issue first.
 
 ## Style
 
