@@ -56,8 +56,13 @@ async function resolvePrincipalId(db, { apiKey, wallet }) {
 /**
  * Classify a principal's capacity for `cost` at `nowMs` WITHOUT mutating
  * anything. Returns a distinct decision + reason.
+ *
+ * `authorizationId`, if given, restricts the aggregate to that one
+ * authorization — so a targeted enforceNew() draw (see authorizationId
+ * there) gets a denial reason scoped to the row it actually tried to draw
+ * from, not the principal's other, untargeted authorizations.
  */
-async function classifyCapacity(db, principalId, cost, nowMs) {
+async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = null) {
   if (!principalId) return { decision: 'deny', reason: 'no_authorization' };
   const { rows } = await db.query(
     `SELECT
@@ -70,8 +75,8 @@ async function classifyCapacity(db, principalId, cost, nowMs) {
                         AND valid_after <= $2 AND valid_before >= $2
                         AND currency = $3), 0)::numeric                                AS available_minor
      FROM authorizations
-     WHERE principal_id = $1`,
-    [principalId, nowMs, CAPACITY_CURRENCY],
+     WHERE principal_id = $1 AND ($4::text IS NULL OR id = $4)`,
+    [principalId, nowMs, CAPACITY_CURRENCY, authorizationId],
   );
   const r = rows[0];
   const activeCount = Number(r.active_count);
@@ -106,8 +111,23 @@ const DENY_MSG = {
  * against one active, in-window authorization with sufficient remaining
  * capacity. The UPDATE is the decision; on 0 rows we classify the precise
  * denial reason. Returns a verdict shaped like authorizeAndMeter's.
+ *
+ * Selection order: soonest-expiring first (valid_before ASC), same primary
+ * key as CapacitySelector's nonce selection (libs/financial-domain/src/
+ * authorization/capacity-selector.ts). Ties on valid_before — which M9's
+ * multi-authorization-per-principal designs can produce — break on id ASC,
+ * mirroring both CapacitySelector's lexicographic-by-identifier nonce
+ * tiebreak and postgres-authorization-repository.ts's existing
+ * `ORDER BY id`. This makes selection fully deterministic for a given
+ * clock and authorization set (issue #322).
+ *
+ * `authorizationId`, if given, constrains the draw to that one row —
+ * for tests and diagnostics that need to target a specific authorization
+ * without hand-writing SQL (previously done ad hoc during the M8 exit
+ * gate). Production callers never pass it; enforceCapacity's public
+ * signature is unchanged.
  */
-async function enforceNew(db, { apiKey, wallet, cost }) {
+async function enforceNew(db, { apiKey, wallet, cost, authorizationId = null }) {
   const principalId = await resolvePrincipalId(db, { apiKey, wallet });
   if (!principalId) {
     return { ok: false, code: 'no_authorization', http: 402, message: DENY_MSG.no_authorization };
@@ -121,12 +141,13 @@ async function enforceNew(db, { apiKey, wallet, cost }) {
          WHERE principal_id = $1 AND state = 'active' AND currency = $4
            AND valid_after <= $3 AND valid_before >= $3
            AND cap_amount - consumed_amount >= $2
-         ORDER BY valid_before ASC
+           AND ($5::text IS NULL OR id = $5)
+         ORDER BY valid_before ASC, id ASC
          LIMIT 1
          FOR UPDATE SKIP LOCKED
       )
       RETURNING id, cap_amount, consumed_amount`,
-    [principalId, String(cost), nowMs, CAPACITY_CURRENCY],
+    [principalId, String(cost), nowMs, CAPACITY_CURRENCY, authorizationId],
   );
 
   if ((upd.rowCount ?? 0) > 0) {
@@ -145,7 +166,7 @@ async function enforceNew(db, { apiKey, wallet, cost }) {
   }
 
   // 0 rows updated — classify why, so the reason is never conflated.
-  const cls = await classifyCapacity(db, principalId, cost, nowMs);
+  const cls = await classifyCapacity(db, principalId, cost, nowMs, authorizationId);
   const reason = cls.reason || 'insufficient_capacity';
   return { ok: false, code: reason, http: DENY_HTTP[reason] || 402, message: DENY_MSG[reason] };
 }
