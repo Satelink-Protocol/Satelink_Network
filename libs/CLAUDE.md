@@ -176,3 +176,6 @@ insufficient-capacity or currency-mismatch.
   env). `scripts/migrate.js` is a DEAD SQLite-era migrator pointed at the old
   sql/ dir; it crashes on AUTOINCREMENT — NEVER run it. (Supersedes the stale
   "there is no database/runner.ts" note in the Migration command section above.)
+- Railway workspace usage shows CUMULATIVE totals over a multi-month window.
+  Never compute a daily rate by differencing two dashboard readings — use
+  `railway metrics --network` for a specific window.
