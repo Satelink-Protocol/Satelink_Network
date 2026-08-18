@@ -71,6 +71,33 @@ async function seed(opts: { validAfter?: number; validBefore?: number; consumed?
   );
 }
 
+/** Seed a principal + funding source with N authorizations sharing one
+ * valid_before, for tiebreak testing (issue #322). */
+async function seedTied(
+  auths: { id: string; cap: number; consumed?: number }[],
+  validBefore = Date.now() + 30 * 24 * 3600 * 1000,
+) {
+  await pool.query(
+    `INSERT INTO principals (id, kind, external_ref, state) VALUES ($1,'machine',$2,'active')`,
+    [PRINCIPAL, WALLET],
+  );
+  await pool.query(
+    `INSERT INTO funding_sources (id, principal_id, rail_id, rail_reference, mode, capabilities, state, version)
+     VALUES ($1,$2,'x402-base-usdc','{"refType":"eip3009","refValue":"{}"}'::jsonb,'authorization',
+             '{"supportsRecurring":false,"supportsEscrow":false,"supportsRefund":false,"agentCompatible":true,"settlementLatency":"seconds","custodial":false}'::jsonb,
+             'verified',1)`,
+    [FUNDING, PRINCIPAL],
+  );
+  for (const a of auths) {
+    await pool.query(
+      `INSERT INTO authorizations
+         (id, principal_id, funding_source_id, cap_amount, currency, consumed_amount, valid_after, valid_before, signature_envelope, state, version)
+       VALUES ($1,$2,$3,$4,'USDC',$5,0,$6,'{"scheme":"exact","signature":"0xsig","signer":"0x00"}'::jsonb,'active',1)`,
+      [a.id, PRINCIPAL, FUNDING, a.cap, a.consumed ?? 0, validBefore],
+    );
+  }
+}
+
 beforeEach(async () => {
   await pool.query('TRUNCATE principals RESTART IDENTITY CASCADE');
 });
@@ -122,5 +149,122 @@ describe('capacity enforcement — new path (integration)', () => {
     expect(deny.reason).toBe('insufficient_capacity');
     const after = await pool.query('SELECT consumed_amount FROM authorizations WHERE id=$1', [AUTH]);
     expect(after.rows[0].consumed_amount).toBe(before.rows[0].consumed_amount); // unchanged
+  });
+
+  // Issue #322: enforceNew selected among a principal's authorizations by
+  // principal_id alone. Two authorizations sharing the same valid_before
+  // (M9's multi-authorization designs can produce this) had no tiebreak,
+  // so which one absorbed a draw was scan-order-dependent, not policy-
+  // dependent. Fix: ORDER BY valid_before ASC, id ASC — the same
+  // lexicographic-by-identifier tiebreak CapacitySelector already uses for
+  // nonces (libs/financial-domain/src/authorization/capacity-selector.ts)
+  // and the same key postgres-authorization-repository.ts already orders
+  // findByPrincipal by.
+  describe('authorization selection tiebreak (issue #322)', () => {
+    it('breaks a valid_before tie deterministically on id ASC, repeatedly', async () => {
+      // 'auth_test_aa' < 'auth_test_zz' lexicographically — aa must be
+      // drawn from first, every time, across repeated calls.
+      await seedTied([
+        { id: 'auth_test_zz', cap: 1_000_000 },
+        { id: 'auth_test_aa', cap: 60 }, // exactly 2 draws of cost 30
+      ]);
+
+      const v1 = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST });
+      expect(v1.ok).toBe(true);
+      expect(v1.authorizationId).toBe('auth_test_aa');
+
+      const v2 = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST });
+      expect(v2.ok).toBe(true);
+      expect(v2.authorizationId).toBe('auth_test_aa');
+
+      // auth_test_aa is now exhausted (60/60) — the next draw must fall
+      // through to auth_test_zz, not deny, proving the tiebreak governs
+      // ordering rather than excluding the other authorization entirely.
+      const v3 = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST });
+      expect(v3.ok).toBe(true);
+      expect(v3.authorizationId).toBe('auth_test_zz');
+
+      const rows = (
+        await pool.query(
+          'SELECT id, consumed_amount FROM authorizations WHERE id IN ($1,$2) ORDER BY id',
+          ['auth_test_aa', 'auth_test_zz'],
+        )
+      ).rows;
+      expect(rows).toEqual([
+        { id: 'auth_test_aa', consumed_amount: '60' },
+        { id: 'auth_test_zz', consumed_amount: '30' },
+      ]);
+    });
+
+    it('is deterministic regardless of insertion order', async () => {
+      // Same two ids, inserted in the opposite order — selection must still
+      // land on auth_test_aa first. Guards against relying on physical/
+      // insertion scan order instead of the explicit ORDER BY.
+      await seedTied([
+        { id: 'auth_test_aa', cap: 30 },
+        { id: 'auth_test_zz', cap: 30 },
+      ]);
+      const v = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST });
+      expect(v.ok).toBe(true);
+      expect(v.authorizationId).toBe('auth_test_aa');
+    });
+
+    it('an explicit authorizationId filter overrides the natural tiebreak', async () => {
+      // Both have headroom and share valid_before, so the natural order
+      // would pick auth_test_aa — but an explicit authorizationId targets
+      // auth_test_zz instead, for tests/diagnostics that need to reach a
+      // specific authorization without hand-writing SQL.
+      await seedTied([
+        { id: 'auth_test_aa', cap: 1_000_000 },
+        { id: 'auth_test_zz', cap: 1_000_000 },
+      ]);
+      const v = await __internal.enforceNew(pool, {
+        wallet: WALLET,
+        cost: COST,
+        authorizationId: 'auth_test_zz',
+      });
+      expect(v.ok).toBe(true);
+      expect(v.authorizationId).toBe('auth_test_zz');
+
+      const rows = (
+        await pool.query(
+          'SELECT id, consumed_amount FROM authorizations WHERE id IN ($1,$2) ORDER BY id',
+          ['auth_test_aa', 'auth_test_zz'],
+        )
+      ).rows;
+      expect(rows).toEqual([
+        { id: 'auth_test_aa', consumed_amount: '0' }, // untouched — filter excluded it
+        { id: 'auth_test_zz', consumed_amount: '30' },
+      ]);
+    });
+
+    it('a targeted authorizationId denies insufficient_capacity scoped to that row, even with headroom elsewhere', async () => {
+      // auth_test_aa is exhausted; auth_test_zz has plenty of headroom.
+      // Targeting auth_test_aa specifically must deny — the fallback
+      // classification must not "see" auth_test_zz's headroom and
+      // misreport allow.
+      await seedTied([
+        { id: 'auth_test_aa', cap: 30, consumed: 30 },
+        { id: 'auth_test_zz', cap: 1_000_000 },
+      ]);
+      const v = await __internal.enforceNew(pool, {
+        wallet: WALLET,
+        cost: COST,
+        authorizationId: 'auth_test_aa',
+      });
+      expect(v.ok).toBe(false);
+      expect(v.code).toBe('insufficient_capacity');
+
+      const rows = (
+        await pool.query(
+          'SELECT id, consumed_amount FROM authorizations WHERE id IN ($1,$2) ORDER BY id',
+          ['auth_test_aa', 'auth_test_zz'],
+        )
+      ).rows;
+      expect(rows).toEqual([
+        { id: 'auth_test_aa', consumed_amount: '30' }, // unchanged, still exhausted
+        { id: 'auth_test_zz', consumed_amount: '0' }, // untouched — filter excluded it
+      ]);
+    });
   });
 });
