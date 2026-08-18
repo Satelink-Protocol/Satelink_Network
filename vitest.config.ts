@@ -71,6 +71,14 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: 'workers',
+          include: ['workers/**/*.{test,spec}.ts'],
+          exclude: ['**/node_modules/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
+          environment: 'node',
+        },
+      },
+      {
         extends: true,
         plugins: [workspaceResolver],
         test: {

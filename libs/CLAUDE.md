@@ -171,6 +171,9 @@ insufficient-capacity or currency-mismatch.
   consumed_amount decrement is the decision. Denial reasons are distinct and
   machine-readable: no_authorization | insufficient_capacity |
   authorization_expired. Never conflated.
+  **M9 Note:** We accepted a global flip to `new` for the M9 test window. Blast
+  radius is exactly 5 internal/test/free keys that have `api_credits` but no
+  `authorizations`; no per-principal opt-in infrastructure will be built.
 - Migration runner is `npx tsx database/runner.ts migrate|status|verify
   "<connectionString>"` (takes the connection string as an ARGUMENT, never reads
   env). `scripts/migrate.js` is a DEAD SQLite-era migrator pointed at the old
@@ -179,3 +182,8 @@ insufficient-capacity or currency-mismatch.
 - Railway workspace usage shows CUMULATIVE totals over a multi-month window.
   Never compute a daily rate by differencing two dashboard readings — use
   `railway metrics --network` for a specific window.
+
+## Domain decisions (M9, 2026-08-19)
+
+- Refill is implicit in enforcement. `enforceNew` selects the active authorization using `ORDER BY valid_before ASC, id ASC`. There is no persisted `schedule_state` caching the "current" authorization for the request path or the `/internal/recurring` report. Both evaluate the current auth dynamically at read time using the identical query.
+- The refill monitor is purely observational. It maintains a lightweight, event-diffing cursor (originally designed as `schedule_state`) strictly for edge-detection between cycles to emit `nonce_transition`, `schedule_low`, and `schedule_exhausted` events. This cursor is never read for current-state reporting.

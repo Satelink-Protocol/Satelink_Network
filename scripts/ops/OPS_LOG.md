@@ -207,3 +207,24 @@ instruction.
    valid_before ASC, created_at ASC, id ASC`, or FIFO strictly by
    `created_at`). Not implemented here — M9 design must address it before
    cutover.
+
+## 2026-08-19 — M9 Blast Radius & Global Flip Decision
+
+Executed the blast-radius query on production (`Postgres-iQeW`) to identify principals holding `api_credits` with `credits_usdt > 0` but lacking an `authorizations` row (who would be broken by a global flip of `CAPACITY_ENFORCEMENT_PATH=new`):
+
+```sql
+SELECT api_credits.api_key, api_credits.wallet_address
+FROM api_credits
+LEFT JOIN principals ON principals.external_ref = api_credits.wallet_address
+LEFT JOIN authorizations ON authorizations.principal_id = principals.id
+WHERE authorizations.id IS NULL AND api_credits.credits_usdt > 0;
+```
+
+**Result (5 rows):**
+- `(anonymous x402 keys)` (3 keys)
+- `(free tier key)`
+- `(founder M8 test key)`
+
+**Decision:** The blast radius is limited to exactly 5 internal/test/free-tier keys (including the founder's M8 test key and 3 anonymous x402 keys). Given this negligible impact, we **accept the global flip**. We will NOT build per-principal opt-in infrastructure. 
+
+`CAPACITY_ENFORCEMENT_PATH=new` will be flipped globally for the 3-day M9 test window, then reverted to `legacy` per the rollback plan.

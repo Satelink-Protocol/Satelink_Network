@@ -2,6 +2,7 @@
  * Minimal HTTP surface for the worker:
  *   GET /health                  → 200 (Railway healthcheck, unauthenticated)
  *   GET /internal/reconciliation → the reconciliation snapshot (token-gated)
+ *   GET /internal/recurring      → M9 nonce schedule diagnostics (token-gated)
  *
  * The snapshot is read live from reconciliation_state so the endpoint always
  * reflects the last cycle the scheduler wrote.
@@ -10,6 +11,7 @@
 import { createServer, type Server } from 'node:http';
 import type { Queryable } from './db.js';
 import { readReconciliationState } from './state.js';
+import { buildRecurringReport } from './refill-monitor/recurring-report.js';
 
 export interface HttpDeps {
   readonly db: Queryable;
@@ -22,6 +24,12 @@ function timingSafeEqual(a: string, b: string): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+function checkToken(req: { headers: Record<string, string | string[] | undefined> }, token: string): boolean {
+  const provided = req.headers['x-internal-token'];
+  const val = Array.isArray(provided) ? (provided[0] ?? '') : (provided ?? '');
+  return token !== '' && timingSafeEqual(val, token);
 }
 
 export async function reconciliationBody(db: Queryable): Promise<Record<string, unknown>> {
@@ -53,9 +61,7 @@ export function startHttpServer(deps: HttpDeps): Server {
         return;
       }
       if (req.method === 'GET' && path === '/internal/reconciliation') {
-        const provided = req.headers['x-internal-token'];
-        const token = Array.isArray(provided) ? (provided[0] ?? '') : (provided ?? '');
-        if (deps.internalToken === '' || !timingSafeEqual(token, deps.internalToken)) {
+        if (!checkToken(req as { headers: Record<string, string | string[] | undefined> }, deps.internalToken)) {
           res.writeHead(401, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
           return;
@@ -64,6 +70,22 @@ export function startHttpServer(deps: HttpDeps): Server {
           const body = await reconciliationBody(deps.db);
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify(body));
+        } catch (err) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'internal_error', message: String(err) }));
+        }
+        return;
+      }
+      if (req.method === 'GET' && path === '/internal/recurring') {
+        if (!checkToken(req as { headers: Record<string, string | string[] | undefined> }, deps.internalToken)) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
+          return;
+        }
+        try {
+          const report = await buildRecurringReport(deps.db);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(report));
         } catch (err) {
           res.writeHead(500, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'internal_error', message: String(err) }));
