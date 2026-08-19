@@ -11,10 +11,11 @@
  *   - RPC status === 200 on every call (aborts with body on non-200)
  *   - Sample failures are HARD failures (no fail-open fallbacks)
  *   - total_consumed <= total_capacity
- *   - total_remaining decreases monotonically
+ *   - total_remaining decreases monotonically across the schedule
+ *   - current_authorization.remaining decreases monotonically within each auth lifecycle
  *   - drift_minor_units === 0 on every sample & reconciler not halted
  *   - nonces.signed === 5 throughout
- *   - At least one nonce transition occurs over the run
+ *   - At least one refill transition occurs (refill_events.length > initialRefillCount)
  * - Produces one evidence log: logs/m9_exit_gate_evidence.jsonl
  *
  * Usage:
@@ -81,7 +82,10 @@ async function main() {
   console.log(`    Evidence log: ${logPath}\n`);
 
   const intervalMs = (durationHours * 3600 * 1000) / totalCalls;
-  let lastRemaining: bigint | null = null;
+  let lastTotalRemaining: bigint | null = null;
+  let lastAuthId: string | null = null;
+  let lastAuthRemaining: bigint | null = null;
+
   let initialRefillCount = 0;
   let hasTransitioned = false;
 
@@ -125,16 +129,19 @@ async function main() {
       process.exit(1);
     }
 
-    const remainingStr = sched.total_remaining;
+    const totalRemainingStr = sched.total_remaining;
     const capacityStr = sched.total_capacity;
     const consumedStr = sched.total_consumed;
     const signedCount = sched.nonces?.signed;
     const refillEvents = sched.refill_events || [];
+    const currentAuth = sched.current_authorization;
 
     if (i === 1) {
       initialRefillCount = refillEvents.length;
     }
-    if (refillEvents.length > initialRefillCount || (sched.nonces?.consumed ?? 0) > 0) {
+
+    // Fix 1: Transition assertion requires refill_events.length > initialRefillCount alone
+    if (refillEvents.length > initialRefillCount) {
       hasTransitioned = true;
     }
 
@@ -154,7 +161,7 @@ async function main() {
     const halted = driftBody.halted;
 
     // d. Invariant Assertions (A3 & A4)
-    const remaining = BigInt(remainingStr);
+    const totalRemaining = BigInt(totalRemainingStr);
     const capacity = BigInt(capacityStr);
     const consumed = BigInt(consumedStr);
 
@@ -166,14 +173,29 @@ async function main() {
       process.exit(1);
     }
 
-    // Invariant 2: total_remaining decreases monotonically
-    if (lastRemaining !== null && remaining > lastRemaining) {
-      const err = `FATAL INVARIANT VIOLATION: remaining increased monotonically from ${lastRemaining} to ${remaining}`;
+    // Invariant 2a: total_remaining (schedule-wide) decreases monotonically
+    if (lastTotalRemaining !== null && totalRemaining > lastTotalRemaining) {
+      const err = `FATAL INVARIANT VIOLATION: total_remaining increased from ${lastTotalRemaining} to ${totalRemaining}`;
       console.error(`\n❌ ${err}`);
       fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
       process.exit(1);
     }
-    lastRemaining = remaining;
+    lastTotalRemaining = totalRemaining;
+
+    // Invariant 2b: current authorization remaining decreases monotonically within each auth lifecycle
+    if (currentAuth) {
+      const authRemaining = BigInt(currentAuth.remaining);
+      if (lastAuthId === currentAuth.id && lastAuthRemaining !== null) {
+        if (authRemaining > lastAuthRemaining) {
+          const err = `FATAL INVARIANT VIOLATION: auth ${currentAuth.id} remaining increased from ${lastAuthRemaining} to ${authRemaining}`;
+          console.error(`\n❌ ${err}`);
+          fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
+          process.exit(1);
+        }
+      }
+      lastAuthId = currentAuth.id;
+      lastAuthRemaining = authRemaining;
+    }
 
     // Invariant 3: drift_minor_units === 0 on every sample
     if (driftMinor !== 0) {
@@ -204,9 +226,11 @@ async function main() {
       call: i,
       timestamp: new Date().toISOString(),
       rpc_status: rpcStatus,
-      available_remaining: remainingStr,
+      total_remaining: totalRemainingStr,
       total_capacity: capacityStr,
       total_consumed: consumedStr,
+      current_auth_id: currentAuth?.id ?? null,
+      current_auth_remaining: currentAuth?.remaining ?? null,
       signed_nonces: signedCount,
       refill_events_count: refillEvents.length,
       drift_minor_units: driftMinor,
@@ -215,7 +239,7 @@ async function main() {
     fs.writeSync(logFile, JSON.stringify(evidence) + '\n');
 
     if (i % 10 === 0 || i === 1) {
-      console.log(`    [${new Date().toISOString()}] Call ${i}/${totalCalls} | RPC: ${rpcStatus} | Remaining: ${remainingStr} | Drift: ${driftMinor}`);
+      console.log(`    [${new Date().toISOString()}] Call ${i}/${totalCalls} | RPC: ${rpcStatus} | Remaining: ${totalRemainingStr} | Auth: ${currentAuth?.id ?? 'none'} | Drift: ${driftMinor}`);
     }
 
     // e. Sleep until next cycle
@@ -226,16 +250,16 @@ async function main() {
     }
   }
 
-  // A4 assertion: assert at least one nonce transition occurred during the run
+  // A4 assertion: assert at least one refill transition occurred during the run (refill_events.length > initialRefillCount)
   if (!hasTransitioned) {
-    const err = `FATAL INVARIANT VIOLATION: No nonce transition occurred during the test run!`;
+    const err = `FATAL INVARIANT VIOLATION: No refill_events transition occurred during the test run! (refill_events count did not increase from initial ${initialRefillCount})`;
     console.error(`\n❌ ${err}`);
     fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
     process.exit(1);
   }
 
   console.log(`\n=== Exit Gate Test Completed Successfully! ===`);
-  console.log(`Nonce transition verified: ${hasTransitioned}`);
+  console.log(`Refill transition verified: ${hasTransitioned}`);
   console.log(`Evidence saved to ${logPath}`);
 }
 
