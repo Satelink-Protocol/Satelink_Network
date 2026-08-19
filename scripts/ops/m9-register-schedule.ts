@@ -118,25 +118,16 @@ async function main(): Promise<void> {
       [fundingSourceIds],
     );
 
-    // 5. Initialize schedule_state with the first auth as current.
-    // Determine the principal from the first authorization.
+    // 5. Determine the principal from the first authorization for summary logging.
     const principalRes = await pool.query<{ principal_id: string }>(
       `SELECT principal_id FROM authorizations WHERE id = $1`,
       [authorizationIds[0]],
     );
     const principalId = principalRes.rows[0]?.principal_id;
     if (!principalId) {
-      console.error('[m9-register] could not resolve principal_id. Schedule state not initialized.');
+      console.error('[m9-register] could not resolve principal_id.');
       process.exit(2);
     }
-
-    await pool.query(
-      `INSERT INTO schedule_state (schedule_id, principal_id, current_auth_id, updated_at)
-            VALUES ($1, $2, $3, now())
-       ON CONFLICT (schedule_id) DO UPDATE
-            SET current_auth_id = $3, updated_at = now()`,
-      [scheduleId, principalId, authorizationIds[0]],
-    );
 
     // 6. Print summary.
     const summary = {
