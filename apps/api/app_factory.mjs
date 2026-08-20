@@ -444,7 +444,7 @@ app.get("/api/mode", (req, res) => {
   app.use("/internal", createDrawParityRouter(pool));
   // M8 — capacity enforcement cutover: dual-evaluation parity + latency.
   // GET /internal/capacity-parity.
-  app.use("/internal", createCapacityParityRouter());
+  app.use("/internal", createCapacityParityRouter(pool));
 
   // Conversion funnel: fetching deposit calldata is the "payment_started"
   // signal (the URL every 402 advertises). Counting middleware only — the
