@@ -354,4 +354,40 @@ describe('capacity enforcement — new-mode api_credits fallback (integration)',
     const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_a'`);
     expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt)); // untouched
   });
+
+  it('(d) revoked authorization + funded api_credits → denies authorization_revoked, does NOT fall through', async () => {
+    await seed(); // active authorization for WALLET
+    await pool.query(`UPDATE authorizations SET state='revoked' WHERE id=$1`, [AUTH]);
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_d', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const before = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(false);
+    expect(v.code).toBe('authorization_revoked'); // distinct code — NOT no_authorization
+    expect(v.http).toBe(402);
+    // revocation is terminal: the funded api_credits balance must be untouched
+    const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
+    expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt));
+  });
+
+  it('never-authorized principal (zero authorizations) + funded api_credits → still falls through (fix not over-broadened)', async () => {
+    // A principal that EXISTS but has NO authorizations at all must stay
+    // 'no_authorization' (fallback-eligible), NOT be reclassified as
+    // 'authorization_revoked'. Guards the nonactive_count===0 branch.
+    await pool.query(
+      `INSERT INTO principals (id, kind, external_ref, state) VALUES ($1,'machine',$2,'active')`,
+      [PRINCIPAL, WALLET],
+    );
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_never', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(true);
+    expect(v.tier).toBe('basic'); // fell through to api_credits, as intended
+  });
 });

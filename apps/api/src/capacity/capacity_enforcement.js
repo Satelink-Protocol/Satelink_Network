@@ -13,7 +13,7 @@
 //   new              — the atomic consumed_amount decrement IS the decision.
 //
 // Denial reasons are distinct and machine-readable and never conflated:
-//   no_authorization | insufficient_capacity | authorization_expired
+//   no_authorization | insufficient_capacity | authorization_expired | authorization_revoked
 //
 // Nonces are settlement events, never call events (see libs/CLAUDE.md M8 frozen
 // decision): per-call metering compares consumed_amount + cost against
@@ -68,6 +68,7 @@ async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = 
   const { rows } = await db.query(
     `SELECT
        count(*) FILTER (WHERE state='active')                                          AS active_count,
+       count(*) FILTER (WHERE state <> 'active')                                        AS nonactive_count,
        count(*) FILTER (WHERE state='active'
                         AND valid_after <= $2 AND valid_before >= $2
                         AND currency = $3)                                             AS in_window_count,
@@ -83,7 +84,19 @@ async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = 
   const activeCount = Number(r.active_count);
   const inWindowCount = Number(r.in_window_count);
   const availableMinor = BigInt(r.available_minor);
-  if (activeCount === 0) return { decision: 'deny', reason: 'no_authorization' };
+  if (activeCount === 0) {
+    // Distinguish a REVOKED authorization from a never-authorized identity.
+    // Both have zero active authorizations, but only the never-authorized case
+    // may fall through to api_credits under 'new' mode. A principal whose
+    // authorization was revoked (abuse response) must be a terminal deny — its
+    // distinct code keeps it out of enforceCapacity's fallback, which triggers
+    // ONLY on 'no_authorization'. Widening this to 'authorization_revoked' is
+    // what closes the bypass (#333 exit-gate finding).
+    if (Number(r.nonactive_count) > 0) {
+      return { decision: 'deny', reason: 'authorization_revoked' };
+    }
+    return { decision: 'deny', reason: 'no_authorization' };
+  }
   if (inWindowCount === 0) return { decision: 'deny', reason: 'authorization_expired' };
   if (availableMinor >= BigInt(cost)) {
     return { decision: 'allow', availableMinor, capReadMinor: availableMinor };
@@ -97,7 +110,12 @@ async function evaluateNewReadOnly(db, { apiKey, wallet, cost }) {
   return classifyCapacity(db, principalId, cost, Date.now());
 }
 
-const DENY_HTTP = { no_authorization: 402, insufficient_capacity: 402, authorization_expired: 402 };
+const DENY_HTTP = {
+  no_authorization: 402,
+  insufficient_capacity: 402,
+  authorization_expired: 402,
+  authorization_revoked: 402,
+};
 const DENY_MSG = {
   no_authorization:
     'No active capacity authorization for this identity. Sign an EIP-3009 authorization to fund capacity.',
@@ -105,6 +123,8 @@ const DENY_MSG = {
     'Capacity exhausted for this authorization. Sign a new authorization or increase the cap.',
   authorization_expired:
     'Your capacity authorization is outside its validity window. Sign a new authorization.',
+  authorization_revoked:
+    'Your capacity authorization has been revoked. This identity cannot draw capacity.',
 };
 
 /**
