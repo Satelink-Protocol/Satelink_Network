@@ -201,7 +201,22 @@ export async function enforceCapacity(db, { apiKey, wallet }) {
   }
 
   if (path === 'new') {
-    return enforceNew(db, { apiKey, wallet, cost: callCostMinor() });
+    const verdict = await enforceNew(db, { apiKey, wallet, cost: callCostMinor() });
+    // api_credits fallback: an identity with NO capacity authorization at all
+    // (code 'no_authorization' — either no matching principal, or a principal
+    // with zero active authorizations) is not an authorization-backed account,
+    // so it falls through to the legacy api_credits path. Without this, a global
+    // 'new' flip 402s every existing api_credits account (M9 exit-gate finding,
+    // 2026-08-21). enforceNew's UPDATE matches 0 rows in this case, so nothing
+    // was drawn — there is no double-charge before authorizeAndMeter runs.
+    //
+    // Genuine capacity denials on an authorization-backed account
+    // (insufficient_capacity / authorization_expired) are REAL and returned
+    // as-is — they must never silently draw api_credits instead.
+    if (!verdict.ok && verdict.code === 'no_authorization') {
+      return authorizeAndMeter(db, { apiKey, wallet });
+    }
+    return verdict;
   }
 
   // dual: evaluate both, time both, SERVE LEGACY, record parity.
