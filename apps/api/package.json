@@ -8,7 +8,7 @@
         "@openzeppelin/contracts": "^5.4.0",
         "@openzeppelin/defender-sdk": "^1.10.0",
         "@x402/core": "^2.17.0",
-        "@x402/evm": "^2.17.0",
+        "@x402/evm": "2.18.0",
         "@x402/express": "^2.17.0",
         "@x402/extensions": "^2.17.0",
         "base32.js": "^0.1.0",
