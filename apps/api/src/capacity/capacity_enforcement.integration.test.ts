@@ -18,7 +18,9 @@ import { Pool } from 'pg';
 import { resolve } from 'node:path';
 import { migrate } from '../../../../database/runner.js';
 // @ts-expect-error — importing the shipped JS enforcement module (no d.ts).
-import { __internal, enforcementPath } from './capacity_enforcement.js';
+import { __internal, enforcementPath, enforceCapacity } from './capacity_enforcement.js';
+// @ts-expect-error — shipped JS flag reader (no d.ts).
+import { bustCapacityPathCache } from '../lib/flags.js';
 
 const MIGRATIONS_DIR = resolve(
   import.meta.dirname ?? new URL('.', import.meta.url).pathname,
@@ -266,5 +268,126 @@ describe('capacity enforcement — new path (integration)', () => {
         { id: 'auth_test_zz', consumed_amount: '0' }, // untouched — filter excluded it
       ]);
     });
+  });
+});
+
+// api_credits fallback for 'new' mode (enforceCapacity, not enforceNew directly).
+// enforceNew has no api_credits path; enforceCapacity's 'new' branch adds one:
+// only a 'no_authorization' denial falls through to legacy authorizeAndMeter, so
+// api_credits accounts keep working under a global 'new' flip WITHOUT turning the
+// fallback into a bypass. These cases pin the three decisions the gate cares about:
+//   (a) over-cap authorization  -> still deny insufficient_capacity (no fallthrough)
+//   (b) no auth AND no account   -> still deny (account_not_found), not a bypass
+//   (c) no auth BUT has credits  -> fall through to api_credits (the only new behavior)
+// authorizeAndMeter reads api_credits / api_usage_daily, which are NOT in the
+// financial-domain migrations, so this block creates them as a fixture.
+describe('capacity enforcement — new-mode api_credits fallback (integration)', () => {
+  const UNFUNDED = '0x00000000000000000000000000000000000000b3'; // no auth, no account
+
+  beforeAll(async () => {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS api_credits (
+        api_key        text PRIMARY KEY,
+        wallet_address text,
+        tier           text        NOT NULL DEFAULT 'free',
+        daily_limit    integer,
+        credits_usdt   numeric     NOT NULL DEFAULT 0,
+        total_spent    numeric     NOT NULL DEFAULT 0,
+        status         text        NOT NULL DEFAULT 'active',
+        last_used      timestamptz,
+        created_at     timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS api_usage_daily (
+        api_key       text    NOT NULL,
+        date          date    NOT NULL,
+        request_count integer NOT NULL DEFAULT 0,
+        usdt_spent    numeric NOT NULL DEFAULT 0,
+        PRIMARY KEY (api_key, date)
+      );
+    `);
+  });
+
+  beforeEach(async () => {
+    // top-level beforeEach already truncated principals (→ no authorizations).
+    await pool.query('TRUNCATE api_credits');
+    await pool.query('TRUNCATE api_usage_daily');
+    await pool.query(`UPDATE platform_flags SET value='new' WHERE key='capacity_enforcement_path'`);
+    bustCapacityPathCache(); // 10s TTL — force enforceCapacity to observe 'new'
+  });
+
+  afterAll(async () => {
+    await pool.query(`UPDATE platform_flags SET value='legacy' WHERE key='capacity_enforcement_path'`);
+    bustCapacityPathCache();
+  });
+
+  it('(c) no authorization but funded api_credits → falls through to api_credits (allow)', async () => {
+    // No principal/authorization for WALLET (truncated); only an api_credits account.
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_c', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(true);
+    expect(v.tier).toBe('basic'); // served by authorizeAndMeter, not the 'capacity' path
+  });
+
+  it('(b) no authorization AND no api_credits account → denies, not a silent bypass', async () => {
+    const v = await enforceCapacity(pool, { wallet: UNFUNDED });
+    expect(v.ok).toBe(false);
+    expect(v.code).toBe('account_not_found'); // legacy path denies unknown identity
+  });
+
+  it('(a) over-cap authorization → denies insufficient_capacity, does NOT fall through to api_credits', async () => {
+    await seed({ consumed: CAP }); // authorization fully consumed (0 headroom < cost)
+    // Same wallet ALSO has a funded api_credits account. The fallback must NOT
+    // mask a real capacity denial by drawing api_credits instead.
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_a', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const before = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_a'`);
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(false);
+    expect(v.code).toBe('insufficient_capacity'); // real denial, NOT no_authorization
+    const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_a'`);
+    expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt)); // untouched
+  });
+
+  it('(d) revoked authorization + funded api_credits → denies authorization_revoked, does NOT fall through', async () => {
+    await seed(); // active authorization for WALLET
+    await pool.query(`UPDATE authorizations SET state='revoked' WHERE id=$1`, [AUTH]);
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_d', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const before = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(false);
+    expect(v.code).toBe('authorization_revoked'); // distinct code — NOT no_authorization
+    expect(v.http).toBe(402);
+    // revocation is terminal: the funded api_credits balance must be untouched
+    const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
+    expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt));
+  });
+
+  it('never-authorized principal (zero authorizations) + funded api_credits → still falls through (fix not over-broadened)', async () => {
+    // A principal that EXISTS but has NO authorizations at all must stay
+    // 'no_authorization' (fallback-eligible), NOT be reclassified as
+    // 'authorization_revoked'. Guards the nonactive_count===0 branch.
+    await pool.query(
+      `INSERT INTO principals (id, kind, external_ref, state) VALUES ($1,'machine',$2,'active')`,
+      [PRINCIPAL, WALLET],
+    );
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_never', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(true);
+    expect(v.tier).toBe('basic'); // fell through to api_credits, as intended
   });
 });
