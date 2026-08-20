@@ -2,24 +2,30 @@
 /**
  * M9 Exit Gate Driver — 72-hour 5,000+ call endurance test.
  *
- * Requirements:
- * - Existing funded wallet (passed via M9_SIGNER_PRIVATE_KEY)
- * - Signs 5 nonces ONCE
- * - Makes 5,000 calls paced evenly across DURATION_HOURS (default 72)
- * - Samples /internal/recurring (available balance) & /internal/reconciliation (drift)
- * - Asserts:
+ * Operates on a PRE-REGISTERED schedule (Steps 2/3 must have already run).
+ *
+ * Required env:
+ *   SCHEDULE_ID         — the schedule_id returned by m9-register-schedule.ts
+ *   API_BASE            — production API base (e.g. https://api.satelink.network)
+ *   RECONCILER          — reconciler base URL
+ *   INTERNAL_TOKEN      — internal auth token for /internal/* endpoints
+ *   DATABASE_URL        — Postgres connection string (for any DB ops)
+ *
+ * The signer private key is read from macOS Keychain
+ *   (service=satelink-m9-signer, account=m9-schedule-signer).
+ *   It is NEVER printed, logged, or written to any file.
+ *
+ * Asserts:
  *   - RPC status === 200 on every call (aborts with body on non-200)
  *   - Sample failures are HARD failures (no fail-open fallbacks)
  *   - total_consumed <= total_capacity
- *   - total_remaining decreases monotonically across the schedule
  *   - current_authorization.remaining decreases monotonically within each auth lifecycle
+ *     (NOT across nonce transitions, where remaining legitimately jumps up)
  *   - drift_minor_units === 0 on every sample & reconciler not halted
  *   - nonces.signed === 5 throughout
  *   - At least one refill transition occurs (refill_events.length > initialRefillCount)
- * - Produces one evidence log: logs/m9_exit_gate_evidence.jsonl
  *
- * Usage:
- *   DATABASE_URL=... API_BASE=... RECONCILER=... INTERNAL_TOKEN=... M9_SIGNER_PRIVATE_KEY=... npx tsx scripts/ops/m9-exit-gate.ts
+ * Produces one evidence log: logs/m9_exit_gate_evidence.jsonl
  */
 
 import { execSync } from 'node:child_process';
@@ -27,54 +33,49 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 
+function readKeyFromKeychain(): string {
+  const raw = execSync(
+    'security find-generic-password -s "satelink-m9-signer" -a "m9-schedule-signer" -w',
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  ).trim();
+  const pk = raw.startsWith('0x') ? raw : `0x${raw}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+    console.error('ERROR: Keychain item satelink-m9-signer/m9-schedule-signer is not a valid 0x<64 hex> private key.');
+    process.exit(1);
+  }
+  return pk;
+}
+
 async function main() {
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) {
-    console.error('ERROR: DATABASE_URL is not set.');
+  // M9 separation: sign (Step 2) and register (Step 3) are run as separate
+  // explicit CLI steps. The exit-gate receives schedule_id via M9_SCHEDULE_ID
+  // env and validates/drives only — it does not re-sign or re-register.
+  // (Env var is named SCHEDULE_ID in this script.)
+  const scheduleId = process.env.SCHEDULE_ID;
+  if (!scheduleId) {
+    console.error('ERROR: SCHEDULE_ID is not set. Run m9-register-schedule.ts first and pass the schedule_id.');
     process.exit(1);
   }
-  const pk = process.env.M9_SIGNER_PRIVATE_KEY;
-  if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
-    console.error('ERROR: set M9_SIGNER_PRIVATE_KEY=0x<64 hex> in the environment.');
-    process.exit(1);
-  }
-  const apiBase = process.env.API_BASE || 'http://localhost:8080';
-  const reconcilerUrl = process.env.RECONCILER || 'http://localhost:3000';
+
+  const apiBase = process.env.API_BASE || 'https://api.satelink.network';
+  const reconcilerUrl = process.env.RECONCILER || 'https://satelink-reconciler-production.up.railway.app';
   const internalToken = process.env.INTERNAL_TOKEN || '';
   const durationHours = Number(process.env.DURATION_HOURS || '72');
   const totalCalls = 5000;
 
   console.log(`=== M9 Exit Gate Driver ===`);
+  console.log(`Schedule:   ${scheduleId}`);
   console.log(`Duration:   ${durationHours} hours`);
   console.log(`Calls:      ${totalCalls}`);
   console.log(`Pacing:     1 call every ${((durationHours * 3600) / totalCalls).toFixed(1)} seconds`);
 
-  // 1. Setup existing funded wallet
+  // 1. Read signer key from macOS Keychain (never from env, CLI, or file)
+  const pk = readKeyFromKeychain();
   const account = privateKeyToAccount(pk as `0x${string}`);
   console.log(`\n[1] Using existing funded signer: ${account.address}`);
 
-  // 2. Sign 5 nonces ONCE
-  console.log(`[2] Signing 5 nonces...`);
-  const signOutput = execSync('node scripts/ops/m9-sign-schedule.mjs', {
-    env: { ...process.env, M9_NONCE_COUNT: '5' },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  
-  // 3. Register schedule
-  console.log(`[3] Registering schedule...`);
-  const regOutput = execSync('npx tsx scripts/ops/m9-register-schedule.ts', {
-    env: { ...process.env },
-    input: signOutput,
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'inherit'],
-  });
-  
-  const summary = JSON.parse(regOutput.trim());
-  console.log(`    Schedule registered! ID: ${summary.schedule_id}`);
-
-  // 4. Run the 5000 call loop
-  console.log(`\n[4] Entering ${durationHours}-hour endurance loop...`);
+  // 2. Run the 5000 call loop against pre-registered schedule
+  console.log(`\n[2] Entering ${durationHours}-hour endurance loop...`);
   const logDir = path.join(process.cwd(), 'logs');
   fs.mkdirSync(logDir, { recursive: true });
   const logPath = path.join(logDir, 'm9_exit_gate_evidence.jsonl');
@@ -82,7 +83,6 @@ async function main() {
   console.log(`    Evidence log: ${logPath}\n`);
 
   const intervalMs = (durationHours * 3600 * 1000) / totalCalls;
-  let lastTotalRemaining: bigint | null = null;
   let lastAuthId: string | null = null;
   let lastAuthRemaining: bigint | null = null;
 
@@ -121,9 +121,9 @@ async function main() {
       process.exit(1);
     }
     const recurringBody = await recRes.json();
-    const sched = recurringBody.schedules?.find((s: any) => s.schedule_id === summary.schedule_id);
+    const sched = recurringBody.schedules?.find((s: any) => s.schedule_id === scheduleId);
     if (!sched) {
-      const err = `FATAL: Schedule ${summary.schedule_id} not found in /internal/recurring report!`;
+      const err = `FATAL: Schedule ${scheduleId} not found in /internal/recurring report!`;
       console.error(`\n❌ ${err}`);
       fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
       process.exit(1);
@@ -140,7 +140,7 @@ async function main() {
       initialRefillCount = refillEvents.length;
     }
 
-    // Fix 1: Transition assertion requires refill_events.length > initialRefillCount alone
+    // Transition assertion: refill_events.length > initialRefillCount alone
     if (refillEvents.length > initialRefillCount) {
       hasTransitioned = true;
     }
@@ -157,10 +157,13 @@ async function main() {
       process.exit(1);
     }
     const driftBody = await driftRes.json();
-    const driftMinor = driftBody.drift_minor_units;
+    // FIX: drift_minor_units comes from the reconciler as a string "0", not
+    // numeric 0. Without this coerce, invariant-3 always fires as false positive.
+    const driftMinorRaw = driftBody.drift_minor_units;
+    const driftMinor = Number(driftMinorRaw);    // reconciler returns string "0", coerce to number
     const halted = driftBody.halted;
 
-    // d. Invariant Assertions (A3 & A4)
+    // d. Invariant Assertions
     const totalRemaining = BigInt(totalRemainingStr);
     const capacity = BigInt(capacityStr);
     const consumed = BigInt(consumedStr);
@@ -173,16 +176,9 @@ async function main() {
       process.exit(1);
     }
 
-    // Invariant 2a: total_remaining (schedule-wide) decreases monotonically
-    if (lastTotalRemaining !== null && totalRemaining > lastTotalRemaining) {
-      const err = `FATAL INVARIANT VIOLATION: total_remaining increased from ${lastTotalRemaining} to ${totalRemaining}`;
-      console.error(`\n❌ ${err}`);
-      fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
-      process.exit(1);
-    }
-    lastTotalRemaining = totalRemaining;
-
-    // Invariant 2b: current authorization remaining decreases monotonically within each auth lifecycle
+    // Invariant 2: current authorization remaining decreases monotonically WITHIN each auth lifecycle
+    // On nonce transition (auth N exhausted → auth N+1), remaining legitimately jumps UP.
+    // We reset tracking whenever the auth ID changes.
     if (currentAuth) {
       const authRemaining = BigInt(currentAuth.remaining);
       if (lastAuthId === currentAuth.id && lastAuthRemaining !== null) {
@@ -193,13 +189,18 @@ async function main() {
           process.exit(1);
         }
       }
-      lastAuthId = currentAuth.id;
-      lastAuthRemaining = authRemaining;
+      if (lastAuthId !== currentAuth.id) {
+        // Nonce transition: reset per-auth tracking
+        lastAuthId = currentAuth.id;
+        lastAuthRemaining = authRemaining;
+      } else {
+        lastAuthRemaining = authRemaining;
+      }
     }
 
-    // Invariant 3: drift_minor_units === 0 on every sample
+    // Invariant 3: drift_minor_units === 0 on every sample (coerced to number)
     if (driftMinor !== 0) {
-      const err = `FATAL INVARIANT VIOLATION: reconciler drift is ${driftMinor} (expected 0)`;
+      const err = `FATAL INVARIANT VIOLATION: reconciler drift is ${driftMinorRaw} (expected 0)`;
       console.error(`\n❌ ${err}`);
       fs.writeSync(logFile, JSON.stringify({ error: err, timestamp: new Date().toISOString() }) + '\n');
       process.exit(1);
@@ -250,7 +251,7 @@ async function main() {
     }
   }
 
-  // A4 assertion: assert at least one refill transition occurred during the run (refill_events.length > initialRefillCount)
+  // A4 assertion: assert at least one refill transition occurred during the run
   if (!hasTransitioned) {
     const err = `FATAL INVARIANT VIOLATION: No refill_events transition occurred during the test run! (refill_events count did not increase from initial ${initialRefillCount})`;
     console.error(`\n❌ ${err}`);

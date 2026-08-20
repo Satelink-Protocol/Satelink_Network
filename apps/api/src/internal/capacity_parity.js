@@ -14,13 +14,24 @@
 import { Router } from 'express';
 import { parityRecorder } from '../capacity/parity_recorder.js';
 import { enforcementPath } from '../capacity/capacity_enforcement.js';
+import { getCapacityPath } from '../lib/flags.js';
 
-export function createCapacityParityRouter() {
+export function createCapacityParityRouter(pool) {
   const router = Router();
-  router.get('/capacity-parity', (_req, res) => {
+  router.get('/capacity-parity', async (_req, res) => {
     try {
       const snap = parityRecorder.snapshot();
-      res.json({ ...snap, active_path: enforcementPath() });
+      // Report BOTH the authoritative served path (platform_flags via
+      // getCapacityPath — the same source enforceCapacity() decides on) AND the
+      // env var, so any drift between them is visible rather than hidden during
+      // the unattended M9 live test (issue #323). getCapacityPath fails closed
+      // to 'legacy' and never throws.
+      res.json({
+        ...snap,
+        enforcement_path_active: await getCapacityPath(pool), // DB — authoritative
+        enforcement_path_env: enforcementPath(),               // env — legacy, informational
+        flag_source: 'platform_flags',
+      });
     } catch (err) {
       res.status(500).json({ ok: false, error: err?.message ?? 'parity snapshot failed' });
     }
