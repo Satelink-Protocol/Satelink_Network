@@ -23,6 +23,7 @@
 
 import { authorizeAndMeter } from '../billing/credit_service.mjs';
 import { parityRecorder } from './parity_recorder.js';
+import { getCapacityPath } from '../lib/flags.js';
 
 const CAPACITY_CURRENCY = 'USDC';
 
@@ -186,7 +187,14 @@ function hrMs() {
  * so a Railway env change reverts with no redeploy.
  */
 export async function enforceCapacity(db, { apiKey, wallet }) {
-  const path = enforcementPath();
+  // Kill-switch source: the path is read from platform_flags (DB) via
+  // getCapacityPath, not the CAPACITY_ENFORCEMENT_PATH env var, so an operator
+  // can flip legacy⇄dual⇄new with a single row UPDATE and no redeploy
+  // (≤10s propagation). getCapacityPath fails closed to 'legacy' on any DB
+  // error and never throws, so the served decision is never made more
+  // permissive by an infra fault. (enforcementPath() still reflects the env var
+  // and is retained only for the /internal capacity_parity diagnostic report.)
+  const path = await getCapacityPath(db);
 
   if (path === 'legacy') {
     return authorizeAndMeter(db, { apiKey, wallet });
