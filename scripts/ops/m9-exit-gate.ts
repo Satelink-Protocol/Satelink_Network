@@ -11,9 +11,10 @@
  *   INTERNAL_TOKEN      — internal auth token for /internal/* endpoints
  *   DATABASE_URL        — Postgres connection string (for any DB ops)
  *
- * The signer private key is read from macOS Keychain
- *   (service=satelink-m9-signer, account=m9-schedule-signer).
- *   It is NEVER printed, logged, or written to any file.
+ * The signer private key comes from the M9_DRIVER_SIGNER_KEY env var if set
+ *   (Railway service execution, where the macOS Keychain is unavailable), else
+ *   the macOS Keychain (service=satelink-m9-signer, account=m9-schedule-signer)
+ *   for laptop runs. It is NEVER printed, logged, or written to any file.
  *
  * Asserts:
  *   - RPC status === 200 on every call (aborts with body on non-200)
@@ -33,14 +34,20 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 
-function readKeyFromKeychain(): string {
-  const raw = execSync(
-    'security find-generic-password -s "satelink-m9-signer" -a "m9-schedule-signer" -w',
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-  ).trim();
+function readSignerKey(): string {
+  // Prefer an injected env secret (Railway service execution, where the macOS
+  // Keychain is unavailable); fall back to the local Keychain for laptop runs.
+  // Validated below; never printed, logged, or written to a file either way.
+  const rawSource =
+    process.env.M9_DRIVER_SIGNER_KEY ??
+    execSync(
+      'security find-generic-password -s "satelink-m9-signer" -a "m9-schedule-signer" -w',
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+  const raw = rawSource.trim();
   const pk = raw.startsWith('0x') ? raw : `0x${raw}`;
   if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) {
-    console.error('ERROR: Keychain item satelink-m9-signer/m9-schedule-signer is not a valid 0x<64 hex> private key.');
+    console.error('ERROR: signer key (M9_DRIVER_SIGNER_KEY env or Keychain satelink-m9-signer/m9-schedule-signer) is not a valid 0x<64 hex> private key.');
     process.exit(1);
   }
   return pk;
@@ -69,8 +76,9 @@ async function main() {
   console.log(`Calls:      ${totalCalls}`);
   console.log(`Pacing:     1 call every ${((durationHours * 3600) / totalCalls).toFixed(1)} seconds`);
 
-  // 1. Read signer key from macOS Keychain (never from env, CLI, or file)
-  const pk = readKeyFromKeychain();
+  // 1. Read signer key from M9_DRIVER_SIGNER_KEY env (Railway) or macOS Keychain
+  //    (laptop). Never printed, logged, or written to a file.
+  const pk = readSignerKey();
   const account = privateKeyToAccount(pk as `0x${string}`);
   console.log(`\n[1] Using existing funded signer: ${account.address}`);
 
