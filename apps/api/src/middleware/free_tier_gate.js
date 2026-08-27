@@ -99,6 +99,20 @@ function anonFreeCalls() {
   return Number.isFinite(raw) && raw >= 0 ? raw : 0;
 }
 
+// Free calls granted to callers that present a NON-wallet/non-API-key auth signal
+// (e.g. `authorization`, `x-payer-address`, `?api_key`). Default 0 as of the
+// 2026-08-27 free-tier removal: /rpc/* now requires x-wallet-address or x-api-key
+// (both short-circuit to next() at the top of the gate) or a settled x402 payment
+// (bypasses this gate upstream). Every other caller gets a 402 with deposit
+// instructions on the FIRST call and never reaches the RPC gateway — so nothing
+// is written to the money path. FREE_TIER_DAILY_LIMIT is the emergency rollback
+// lever, read at REQUEST time so a Railway env change restores the tier on the
+// container restart it triggers, with no code redeploy. Fails closed to 0.
+function freeTierCalls() {
+  const raw = parseInt(process.env.FREE_TIER_DAILY_LIMIT ?? '0', 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+}
+
 // Layer 3 helper — tracks distinct IPs sharing a UA fingerprint in a sliding
 // window; flags the UA as a cluster (and blocks it for 24h) once the window
 // holds too many distinct IPs to be organic traffic.
@@ -196,12 +210,16 @@ export function createFreeTierGate(logger, redis, pool = null) {
     const apiKeyHeader = req.headers['x-api-key'];
     if (walletHeader || apiKeyHeader) return next();
 
-    // Anonymous (no auth signal at all) → effective free-tier limit is
-    // FREE_TIER_ANON_CALLS (default 0). Any other authenticated caller that
-    // reaches this gate (e.g. authorization / x-payer-address / ?api_key)
-    // keeps the standard FREE_TIER_LIMIT — unaffected by the anonymous cut.
+    // Free tier removed (2026-08-27): the ONLY ways past this gate are (1) an
+    // x-wallet-address or x-api-key header — both returned next() above — or
+    // (2) a settled x402 payment, which bypasses this gate entirely upstream
+    // (freeTierGateUnlessX402Paid in app_factory.mjs). Any caller reaching this
+    // line therefore has NO recognized paid credential; its effective allowance
+    // is 0, so it 402s on the first call and never reaches billing. Both limits
+    // default 0 and are read at request time (FREE_TIER_ANON_CALLS /
+    // FREE_TIER_DAILY_LIMIT) purely as emergency rollback levers.
     const anonymous = !hasAuthSignal(req);
-    const effectiveLimit = anonymous ? anonFreeCalls() : FREE_TIER_LIMIT;
+    const effectiveLimit = anonymous ? anonFreeCalls() : freeTierCalls();
 
     // Get real IP (Railway proxies requests)
     const ip =
@@ -419,10 +437,13 @@ export function createFreeTierGate(logger, redis, pool = null) {
         error: {
           code: -32005,
           // See subnet-402 note: error.message is the only human-visible string.
-            message: 'Satelink: free tier exhausted (500/day/IP). Rate limited (free tier). Remove this limit with a free machine key — no wallet, no email: curl -X POST https://rpc.satelink.network/v1/machine/register -H \'Content-Type: application/json\' -d \'{"mode":"instant"}\' — then send the returned key as X-API-Key.',
+          // error_code stays FREE_TIER_LIMIT_REACHED for backward-compat (RPC
+          // clients + x402 middleware match on it); the free tier is removed, so
+          // effectiveLimit is 0 and this fires on the first unauthenticated call.
+            message: 'Satelink: /rpc requires authentication — there is no free tier. Get a free machine key in one call — no wallet, no email: curl -X POST https://rpc.satelink.network/v1/machine/register -H \'Content-Type: application/json\' -d \'{"mode":"instant"}\' — then send the returned key as X-API-Key.',
           data: {
             error_code: 'FREE_TIER_LIMIT_REACHED',
-            limit: FREE_TIER_LIMIT,
+            limit: effectiveLimit,
             period: 'daily',
             resets_at: new Date(resetAt).toISOString(),
             payment: {
