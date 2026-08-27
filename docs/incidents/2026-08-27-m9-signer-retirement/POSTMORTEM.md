@@ -49,8 +49,8 @@ cannot fail silently.
 | # | action | status |
 |---|---|---|
 | 1 | Build the authorization-revocation path (`tools/ops/revoke-authorization.ts`) | **done** (this PR) |
-| 2 | Revoke the 5 `0x2821…` authorizations via that script | pending founder approval (STOP-1) |
-| 3 | Retire the Keychain signer | pending (STOP-2, after #2 + evidence committed) |
+| 2 | Revoke the 5 `0x2821…` authorizations via that script | **done 2026-08-27** — 5 revoked, verified (see REVOCATION-EXECUTED.md) |
+| 3 | Retire the Keychain signer | pending operator (STOP-2) — all 3 preconditions now hold |
 | 4 | Liveness alert on driver evidence files in `workers/reconciler` | **not built** — the load-bearing control; do not re-run any driver until it exists |
 | 5 | Driver terminal-record + heartbeat + runtime bound | spec above; apply before any M9 re-run |
 
