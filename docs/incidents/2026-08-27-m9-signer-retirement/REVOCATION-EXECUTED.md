@@ -37,4 +37,3 @@ at that point). Re-ran on the branch; succeeded.
 ## Next: STOP-2 (operator)
 All 3 preconditions now hold — see POSTMORTEM.md. Keychain deletion command is printed for the
 operator; it was NOT run by the agent.
-</content>
