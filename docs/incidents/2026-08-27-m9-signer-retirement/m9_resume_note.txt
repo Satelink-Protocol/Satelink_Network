@@ -1,0 +1,11 @@
+M9 driver PID 69800, started 2026-08-21 ~07:38 UTC, expected
+completion ~2026-08-24 07:36 UTC. Check:
+  tail -20 /Users/pradeepjakuraa/satelink/logs/m9_exit_gate_evidence.jsonl
+  tail ~/m9_heartbeat.log
+  ps -p 69800
+Stop-conditions requiring intervention: drift_halted=true,
+drift_minor_units!=0 for 2+ consecutive cycles, rpc_status!=200,
+heartbeat shows DEAD, or ps -p 69800 shows no process.
+Flag: capacity_enforcement_path=new (intentional, do not revert).
+Schedule: sched_c45b1fcb. Signer: 0x2821610d6DbF23eF2eb83BC5528920A04Cd62006
+(test wallet, $0.25 USDC, discard/rotate after completion).
