@@ -38,6 +38,25 @@ function getProviderWsUrl(chain) {
   return WS_PROVIDERS[normalized] || WS_PROVIDERS[chain] || null;
 }
 
+// Free tier removed (2026-08-27): WS RPC requires the SAME credential as HTTP
+// /rpc — x-api-key or x-wallet-address. Browser WS clients cannot set custom
+// headers, so ?api_key / ?token query params are accepted as equivalents (this
+// mirrors free_tier_gate.js's AUTH_SIGNAL_QUERY). An UNAUTHENTICATED upgrade is
+// rejected before any subscription can open. This is the fix for the Aug-2026
+// ws_subscription storm: an anonymous client could open a newPendingTransactions
+// firehose and recordWsRevenue wrote one revenue_events_v2 row PER streamed event
+// (100k+/hour), which filled the 1GB volume. No auth → no connection → no writes.
+export function wsHasAuth(request) {
+  const h = request.headers || {};
+  const nonEmpty = (v) => v != null && String(v).length > 0;
+  if (nonEmpty(h['x-api-key']) || nonEmpty(h['x-wallet-address'])) return true;
+  try {
+    const q = new URL(request.url, 'http://ws.local').searchParams;
+    if (nonEmpty(q.get('api_key')) || nonEmpty(q.get('token'))) return true;
+  } catch (_) { /* malformed URL → treat as unauthenticated */ }
+  return false;
+}
+
 export function createWsGateway(httpServer, db) {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -46,13 +65,22 @@ export function createWsGateway(httpServer, db) {
   httpServer.on('upgrade', (request, socket, head) => {
     const pathname = request.url?.split('?')[0] || '';
 
-    if (pathname.startsWith('/rpc/ws/')) {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
-    } else {
+    if (!pathname.startsWith('/rpc/ws/')) {
       socket.destroy();
+      return;
     }
+
+    // Reject unauthenticated WS RPC — no free tier. (x402 discovery is HTTP-only,
+    // so this 401 never touches the paid-discovery path; STOP-B is not implicated.)
+    if (!wsHasAuth(request)) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
   });
 
   wss.on('connection', (clientWs, req) => {

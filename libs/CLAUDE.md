@@ -188,3 +188,19 @@ insufficient-capacity or currency-mismatch.
 - Refill is implicit in enforcement. `enforceNew` selects the active authorization using `ORDER BY valid_before ASC, id ASC`. There is no persisted `schedule_state` caching the "current" authorization for the request path or the `/internal/recurring` report. Both evaluate the current auth dynamically at read time using the identical query.
 - The refill monitor is purely observational. It maintains a lightweight, event-diffing cursor (originally designed as `schedule_state`) strictly for edge-detection between cycles to emit `nonce_transition`, `schedule_low`, and `schedule_exhausted` events. This cursor is never read for current-state reporting.
 - Never rotate `POSTGRES_PASSWORD` (or any credential referenced by multiple services) without first confirming EVERY consuming service uses a live Railway reference variable (`${{Service.VAR}}`), not a hardcoded literal. A rotation is only safe when every consumer inherits it automatically. Audit all consumers before rotating, not after a failure surfaces one.
+
+## Edge + writer rules (2026-08-27, WS storm)
+
+- NEVER hard-block unauthenticated /rpc/* at the Cloudflare edge. x402 payment discovery REQUIRES
+  the app's 402 to reach the client — a Block rule returns 403 on the first request and kills the
+  only paid path (STOP-B). Rate-limit only (first N/min reach the app; exclude x-payment,
+  x-api-key, x-wallet-address). Never rate-limit /health, /internal/*, or any request carrying
+  x-payment. Details: docs/ops/cloudflare-rpc-ratelimit.md.
+- The Aug-2026 revenue storm (345,820 rows @ $0.000001) was the WebSocket gateway
+  (ws_gateway.js, op_type='ws_subscription'), NOT operations_engine/security-billing (those wrote
+  ZERO rows — dead code). WS RPC now requires the same credential as HTTP /rpc; unauthenticated WS
+  upgrades are rejected. Any per-event revenue writer (WS or streaming) must be authenticated AND
+  should aggregate, never write one revenue_events_v2 row per streamed event.
+- DB backstop (migration 015): revenue_events_v2 CHECK — is_billable=true requires amount_usdt>0.
+  A code guard can be bypassed by the next legacy writer; the constraint cannot. It does NOT catch
+  micro-charge floods (amount>0) — those are a code/auth problem, not a constraint problem.
