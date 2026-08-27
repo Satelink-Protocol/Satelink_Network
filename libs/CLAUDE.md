@@ -188,3 +188,22 @@ insufficient-capacity or currency-mismatch.
 - Refill is implicit in enforcement. `enforceNew` selects the active authorization using `ORDER BY valid_before ASC, id ASC`. There is no persisted `schedule_state` caching the "current" authorization for the request path or the `/internal/recurring` report. Both evaluate the current auth dynamically at read time using the identical query.
 - The refill monitor is purely observational. It maintains a lightweight, event-diffing cursor (originally designed as `schedule_state`) strictly for edge-detection between cycles to emit `nonce_transition`, `schedule_low`, and `schedule_exhausted` events. This cursor is never read for current-state reporting.
 - Never rotate `POSTGRES_PASSWORD` (or any credential referenced by multiple services) without first confirming EVERY consuming service uses a live Railway reference variable (`${{Service.VAR}}`), not a hardcoded literal. A rotation is only safe when every consumer inherits it automatically. Audit all consumers before rotating, not after a failure surfaces one.
+
+## Domain decisions (2026-08-27, free tier removed + billing/test columns)
+
+- `revenue_events_v2` has TWO independent boolean dimensions — never conflate them again:
+  - `is_billable` (migration 014) — was a real charge COLLECTED? true = credit deducted or x402
+    settled. This is the billing truth. Real revenue = `SUM(amount_usdt) WHERE is_billable AND NOT
+    is_test_data`.
+  - `is_test_data` — is this a founder/synthetic row excluded from EXTERNAL metrics? Orthogonal to
+    billing. Historically it was overloaded to ALSO mean "non-billable free-tier traffic," which is why
+    345,820 $0 free-tier rows were mis-flagged `is_test_data=false` (reclassified to true in the
+    2026-08-27 backfill — see docs/incidents/2026-08-27-freetier-backfill/). Going forward, "was it
+    paid?" is `is_billable`, NOT `is_test_data`.
+  - Real amount column is `amount_usdt` (not `amount_minor_units`). Only real external rail is
+    `source='x402'`; both current x402 depositors are founder wallets → real external revenue is $0.00.
+- The free tier is REMOVED from the money path. `/rpc/*` requires `x-wallet-address` or `x-api-key`
+  (or a settled x402 payment); every other caller gets a 402 on the first call and never reaches
+  billing, so nothing is written to `revenue_events_v2` / `ledger_entries`. `FREE_TIER_DAILY_LIMIT` and
+  `FREE_TIER_ANON_CALLS` default 0 and exist only as emergency rollback levers (read at request time,
+  no redeploy). Do not reintroduce a usage counter for unauthenticated traffic — there is none to count.

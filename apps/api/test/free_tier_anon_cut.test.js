@@ -52,33 +52,50 @@ describe('freeTierGate — anonymous free-tier cut (FREE_TIER_ANON_CALLS)', () =
     expect(payment?.token).to.equal('USDT');
   });
 
-  // Every recognized signal, one at a time → the caller is NOT anonymous, so it
-  // is served on the first call even with the anonymous quota at 0. Two of these
-  // (x-api-key, x-wallet-address) short-circuit at the top of the gate; the rest
-  // are caught by the anonymity check and fall into the standard free tier.
-  const SIGNAL_CASES = [
-    { name: 'x-api-key header',          req: { headers: { 'x-api-key': 'sk_free_placeholder' } } },
-    { name: 'authorization header',      req: { headers: { authorization: 'Bearer token.value' } } },
-    { name: 'x-admin-key header',        req: { headers: { 'x-admin-key': 'admin-secret' } } },
-    { name: 'x-admin-token header',      req: { headers: { 'x-admin-token': 'admin-token' } } },
-    { name: 'x-enterprise-key header',   req: { headers: { 'x-enterprise-key': 'ent-key' } } },
-    { name: 'x-payer-address header',    req: { headers: { 'x-payer-address': '0x' + '1'.repeat(40) } } },
-    { name: 'x-wallet-address header',   req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
-    { name: 'payment-signature header',  req: { headers: { 'payment-signature': 'base64payload' } } },
-    { name: 'x-payment header',          req: { headers: { 'x-payment': 'base64payload' } } },
-    { name: 'api_key query param',       req: { query: { api_key: 'sk_free_placeholder' } } },
-    { name: 'token query param',         req: { query: { token: 'admin-token' } } },
+  // Free-tier removal (2026-08-27): ONLY x-api-key and x-wallet-address bypass the
+  // gate (short-circuit at the top → creditService). Every OTHER auth signal used
+  // to keep the standard free tier; now it gets a 402 on the first call, because
+  // the free tier is gone (FREE_TIER_DAILY_LIMIT defaults 0). See
+  // free_tier_removed.test.js and docs/incidents/2026-08-27-freetier-backfill/.
+  const BYPASS_CASES = [
+    { name: 'x-api-key header',        req: { headers: { 'x-api-key': 'sk_free_placeholder' } } },
+    { name: 'x-wallet-address header', req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
+  ];
+  const REMOVED_TIER_CASES = [
+    { name: 'authorization header',     req: { headers: { authorization: 'Bearer token.value' } } },
+    { name: 'x-admin-key header',       req: { headers: { 'x-admin-key': 'admin-secret' } } },
+    { name: 'x-admin-token header',     req: { headers: { 'x-admin-token': 'admin-token' } } },
+    { name: 'x-enterprise-key header',  req: { headers: { 'x-enterprise-key': 'ent-key' } } },
+    { name: 'x-payer-address header',   req: { headers: { 'x-payer-address': '0x' + '1'.repeat(40) } } },
+    { name: 'payment-signature header', req: { headers: { 'payment-signature': 'base64payload' } } },
+    { name: 'x-payment header',         req: { headers: { 'x-payment': 'base64payload' } } },
+    { name: 'api_key query param',      req: { query: { api_key: 'sk_free_placeholder' } } },
+    { name: 'token query param',        req: { query: { token: 'admin-token' } } },
   ];
 
-  SIGNAL_CASES.forEach((c, i) => {
-    it(`auth signal "${c.name}" → NOT anonymous, served on first call (anon quota 0)`, async () => {
+  BYPASS_CASES.forEach((c, i) => {
+    it(`bypass credential "${c.name}" → served on first call (reaches creditService)`, async () => {
       process.env.FREE_TIER_ANON_CALLS = '0';
+      process.env.FREE_TIER_DAILY_LIMIT = '0';
       const gate = createFreeTierGate(silent);
       const r = await invoke(gate, { ...c.req, ip: `203.0.114.${i + 1}` });
 
       expect(r.error, 'no error thrown').to.equal(undefined);
-      expect(r.nextCalled, `${c.name} must pass through, not be 402'd as anonymous`).to.equal(true);
+      expect(r.nextCalled, `${c.name} must pass through to creditService`).to.equal(true);
       expect(r.statusCode).to.equal(null);
+    });
+  });
+
+  REMOVED_TIER_CASES.forEach((c, i) => {
+    it(`non-bypass auth signal "${c.name}" → 402 on first call (free tier removed)`, async () => {
+      process.env.FREE_TIER_ANON_CALLS = '0';
+      process.env.FREE_TIER_DAILY_LIMIT = '0';
+      const gate = createFreeTierGate(silent);
+      const r = await invoke(gate, { ...c.req, ip: `203.0.120.${i + 1}` });
+
+      expect(r.error, 'no error thrown').to.equal(undefined);
+      expect(r.nextCalled, `${c.name} must NOT be served — no free tier`).to.equal(false);
+      expect(r.statusCode).to.equal(402);
     });
   });
 
