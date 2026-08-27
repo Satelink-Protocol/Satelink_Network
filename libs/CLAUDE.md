@@ -202,3 +202,38 @@ insufficient-capacity or currency-mismatch.
   file: if the file stops advancing for >15 min while the run is marked active, page. M9's endurance
   driver died at call 64/5000 and went unnoticed for 6 days because this control does not exist. It
   belongs in `workers/reconciler` and is still unbuilt — do not re-run any such driver until it does.
+
+## Domain decisions (2026-08-27, free tier removed + billing/test columns)
+
+- `revenue_events_v2` has TWO independent boolean dimensions — never conflate them again:
+  - `is_billable` (migration 014) — was a real charge COLLECTED? true = credit deducted or x402
+    settled. This is the billing truth. Real revenue = `SUM(amount_usdt) WHERE is_billable AND NOT
+    is_test_data`.
+  - `is_test_data` — is this a founder/synthetic row excluded from EXTERNAL metrics? Orthogonal to
+    billing. Historically it was overloaded to ALSO mean "non-billable free-tier traffic," which is why
+    345,820 $0 free-tier rows were mis-flagged `is_test_data=false` (reclassified to true in the
+    2026-08-27 backfill — see docs/incidents/2026-08-27-freetier-backfill/). Going forward, "was it
+    paid?" is `is_billable`, NOT `is_test_data`.
+  - Real amount column is `amount_usdt` (not `amount_minor_units`). Only real external rail is
+    `source='x402'`; both current x402 depositors are founder wallets → real external revenue is $0.00.
+- The free tier is REMOVED from the money path. `/rpc/*` requires `x-wallet-address` or `x-api-key`
+  (or a settled x402 payment); every other caller gets a 402 on the first call and never reaches
+  billing, so nothing is written to `revenue_events_v2` / `ledger_entries`. `FREE_TIER_DAILY_LIMIT` and
+  `FREE_TIER_ANON_CALLS` default 0 and exist only as emergency rollback levers (read at request time,
+  no redeploy). Do not reintroduce a usage counter for unauthenticated traffic — there is none to count.
+
+## Edge + writer rules (2026-08-27, WS storm)
+
+- NEVER hard-block unauthenticated /rpc/* at the Cloudflare edge. x402 payment discovery REQUIRES
+  the app's 402 to reach the client — a Block rule returns 403 on the first request and kills the
+  only paid path (STOP-B). Rate-limit only (first N/min reach the app; exclude x-payment,
+  x-api-key, x-wallet-address). Never rate-limit /health, /internal/*, or any request carrying
+  x-payment. Details: docs/ops/cloudflare-rpc-ratelimit.md.
+- The Aug-2026 revenue storm (345,820 rows @ $0.000001) was the WebSocket gateway
+  (ws_gateway.js, op_type='ws_subscription'), NOT operations_engine/security-billing (those wrote
+  ZERO rows — dead code). WS RPC now requires the same credential as HTTP /rpc; unauthenticated WS
+  upgrades are rejected. Any per-event revenue writer (WS or streaming) must be authenticated AND
+  should aggregate, never write one revenue_events_v2 row per streamed event.
+- DB backstop (migration 015): revenue_events_v2 CHECK — is_billable=true requires amount_usdt>0.
+  A code guard can be bypassed by the next legacy writer; the constraint cannot. It does NOT catch
+  micro-charge floods (amount>0) — those are a code/auth problem, not a constraint problem.

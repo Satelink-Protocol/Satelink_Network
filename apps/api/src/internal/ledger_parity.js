@@ -8,6 +8,17 @@
  * Parity is measured on REAL revenue only: is_test_data rows are excluded on the
  * revenue side, and the shadow writer never writes test-data rows to the ledger
  * (invariant #10).
+ *
+ * Ledger-side exclusion (2026-08-27): the shadow writer skips test-data rows
+ * going FORWARD, but rows reclassified to is_test_data=true AFTER their ledger
+ * entries were already written stay in the append-only ledger (invariant #5 — no
+ * DELETE). The free-tier backfill of 2026-08-27 reclassified ~345,820 revenue
+ * rows whose ledger txns already existed. So the ledger side must ALSO exclude
+ * test rows — by joining ref_id -> revenue_events_v2.request_id — or parity would
+ * compare a test-filtered revenue count against an unfiltered ledger count and
+ * report a nonsensical drift. Ledger txns with no matching revenue row are kept
+ * (they cannot be test-classified), preserving the previous count semantics for
+ * every non-backfilled row.
  */
 
 import { Router } from 'express';
@@ -34,10 +45,17 @@ export async function computeParity(pool) {
         WHERE is_test_data IS NOT TRUE`,
     ),
     pool.query(
-      `SELECT COUNT(DISTINCT txn_id)::bigint AS txn_cnt,
-              COALESCE(SUM(amount) FILTER (WHERE direction = 'credit'), 0)::text AS sum_credits_minor
-         FROM ledger_entries
-        WHERE ref_type = 'revenue_event'`,
+      // Ledger side excludes revenue rows reclassified as test data. A ledger
+      // entry counts unless it maps to a revenue_events_v2 row that is
+      // is_test_data = true. LEFT JOIN + `r.is_test_data IS NOT TRUE` keeps
+      // entries with no matching revenue row (NULL) and drops only the ones now
+      // flagged test — mirroring the revenue-side filter for like-for-like parity.
+      `SELECT COUNT(DISTINCT le.txn_id)::bigint AS txn_cnt,
+              COALESCE(SUM(le.amount) FILTER (WHERE le.direction = 'credit'), 0)::text AS sum_credits_minor
+         FROM ledger_entries le
+         LEFT JOIN revenue_events_v2 r ON r.request_id = le.ref_id
+        WHERE le.ref_type = 'revenue_event'
+          AND r.is_test_data IS NOT TRUE`,
     ),
     pool.query(
       `SELECT r.request_id, r.created_at
