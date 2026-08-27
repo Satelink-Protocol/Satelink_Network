@@ -237,3 +237,20 @@ insufficient-capacity or currency-mismatch.
 - DB backstop (migration 015): revenue_events_v2 CHECK — is_billable=true requires amount_usdt>0.
   A code guard can be bypassed by the next legacy writer; the constraint cannot. It does NOT catch
   micro-charge floods (amount>0) — those are a code/auth problem, not a constraint problem.
+
+## Storm prevention rules (2026-08-27, guardrails)
+
+- `ws_gateway.js` was the Aug-2026 revenue storm source: an UNAUTHENTICATED WS upgrade on
+  `/rpc/ws/*` writing 1 revenue_events_v2 + 2 ledger_entries rows PER streamed event
+  ($0.000001, `op_type='ws_subscription'`, 345,820 rows). Any new streaming/subscription
+  endpoint must be BOTH authenticated AND batch-aggregated (one row per window, not per event)
+  before merge. See docs/design/ws-subscription-batching.md.
+- Row-growth alarms are HOURLY, not daily — the storm peaked at 111,581 ledger rows in ONE
+  hour; a daily check would fire ~12h too late. Guardrails live in workers/reconciler
+  (guardrails/*), thresholds behind platform_flags, alerts de-duped to one email/condition/hour.
+- Ops scripts (and migrations) that mutate PRODUCTION must be ON MAIN before execution. The
+  #342 revocation ran from an unmerged branch; it worked, but do not repeat it — merge first.
+- Any detached process that writes to the prod money path MUST upsert `driver_heartbeats`
+  (driver_name, status='active', last_heartbeat_at, calls_done/planned) on a fixed interval.
+  The reconciler alarms when an active driver's heartbeat goes stale >15 min. This is the
+  control whose absence let M9 die at call 64/5000 and go unnoticed for 6 days.
