@@ -189,6 +189,20 @@ insufficient-capacity or currency-mismatch.
 - The refill monitor is purely observational. It maintains a lightweight, event-diffing cursor (originally designed as `schedule_state`) strictly for edge-detection between cycles to emit `nonce_transition`, `schedule_low`, and `schedule_exhausted` events. This cursor is never read for current-state reporting.
 - Never rotate `POSTGRES_PASSWORD` (or any credential referenced by multiple services) without first confirming EVERY consuming service uses a live Railway reference variable (`${{Service.VAR}}`), not a hardcoded literal. A rotation is only safe when every consumer inherits it automatically. Audit all consumers before rotating, not after a failure surfaces one.
 
+## Ops: authorization revocation + detached-driver liveness (2026-08-27)
+
+- Authorization revocation is via `tools/ops/revoke-authorization.ts`, which drives the domain
+  `Authorization.revoke()` + `PostgresAuthorizationRepository.save()`. NEVER mutate `authorizations`
+  with raw SQL — the domain path enforces the terminal-state guard, optimistic version lock, and the
+  invariant that revocation preserves `consumed_amount` and every `ledger_entries` row (it kills
+  future draws; it does not rewrite history). Dry-run is the default; mutation requires `--confirm`.
+  There is no `revoked_at` column — revocation is `state='active' -> 'revoked'`; the timestamp lives
+  in the script's structured audit log, not the row.
+- Any detached process that writes to the prod money path MUST have a liveness alert on its evidence
+  file: if the file stops advancing for >15 min while the run is marked active, page. M9's endurance
+  driver died at call 64/5000 and went unnoticed for 6 days because this control does not exist. It
+  belongs in `workers/reconciler` and is still unbuilt — do not re-run any such driver until it does.
+
 ## Domain decisions (2026-08-27, free tier removed + billing/test columns)
 
 - `revenue_events_v2` has TWO independent boolean dimensions — never conflate them again:
