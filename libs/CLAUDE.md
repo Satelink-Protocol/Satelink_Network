@@ -207,3 +207,19 @@ insufficient-capacity or currency-mismatch.
   billing, so nothing is written to `revenue_events_v2` / `ledger_entries`. `FREE_TIER_DAILY_LIMIT` and
   `FREE_TIER_ANON_CALLS` default 0 and exist only as emergency rollback levers (read at request time,
   no redeploy). Do not reintroduce a usage counter for unauthenticated traffic — there is none to count.
+
+## Edge + writer rules (2026-08-27, WS storm)
+
+- NEVER hard-block unauthenticated /rpc/* at the Cloudflare edge. x402 payment discovery REQUIRES
+  the app's 402 to reach the client — a Block rule returns 403 on the first request and kills the
+  only paid path (STOP-B). Rate-limit only (first N/min reach the app; exclude x-payment,
+  x-api-key, x-wallet-address). Never rate-limit /health, /internal/*, or any request carrying
+  x-payment. Details: docs/ops/cloudflare-rpc-ratelimit.md.
+- The Aug-2026 revenue storm (345,820 rows @ $0.000001) was the WebSocket gateway
+  (ws_gateway.js, op_type='ws_subscription'), NOT operations_engine/security-billing (those wrote
+  ZERO rows — dead code). WS RPC now requires the same credential as HTTP /rpc; unauthenticated WS
+  upgrades are rejected. Any per-event revenue writer (WS or streaming) must be authenticated AND
+  should aggregate, never write one revenue_events_v2 row per streamed event.
+- DB backstop (migration 015): revenue_events_v2 CHECK — is_billable=true requires amount_usdt>0.
+  A code guard can be bypassed by the next legacy writer; the constraint cannot. It does NOT catch
+  micro-charge floods (amount>0) — those are a code/auth problem, not a constraint problem.
