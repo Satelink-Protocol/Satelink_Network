@@ -14,13 +14,21 @@ and the DB.
 external HTTP check catches both — from outside the failure domain.
 
 **SHIPPED: GitHub Actions workflow** (`.github/workflows/health-check.yml`). Runs on GitHub's
-infra (outside Railway/Postgres) every 5 min: probes `/health`, requires HTTP 200 **and**
-`"db":"ok"` (so a DB-down while the process is up still alarms), opens a de-duped GitHub issue
-labelled `health-incident` on failure, closes it on recovery, and fails the run so GitHub emails
-the workflow author. Manual test: **Actions → health-check → Run workflow**. Activates once merged
-to the default branch. Caveats: GitHub cron is best-effort (can lag 5–15 min) and scheduled
-workflows auto-disable after 60 days of repo inactivity — so UptimeRobot below is still the
-preferred upgrade for a tighter, independent interval.
+infra (outside Railway/Postgres) every 5 min. Opens a de-duped `health-incident` GitHub issue on
+failure, closes it on recovery, and fails the run so GitHub emails the workflow author. Manual
+test: **Actions → health-check → Run workflow**. Activates once merged to the default branch.
+
+**Why it probes the reconciler, not the API:** `api.satelink.network` is behind Cloudflare, and
+Cloudflare (Free plan) **blocks GitHub Actions' datacenter IPs with a 403** — proven live: the
+same probe returns 200 from a laptop and 403 from a GitHub runner, at a layer the rulesets API
+can't allowlist without a paid feature. So the check targets
+`satelink-reconciler-production.up.railway.app/readyz` — the reconciler's **Cloudflare-free**
+Railway domain. `/readyz` runs `SELECT 1` (DB-aware) and the reconciler shares the DB failure
+domain (it was `Failed` during the 2026-08-28 outage), so this catches the DB / compute-limit
+outage class. Caveats: GitHub cron is best-effort (can lag 5–15 min) and scheduled workflows
+auto-disable after 60 days of repo inactivity — UptimeRobot below remains the preferred tighter,
+independent upgrade (and, if pointed at `api.satelink.network`, would need a Cloudflare allowlist
+for its IPs, or point it at the reconciler `/readyz` too).
 
 **UptimeRobot (free tier, 5-min interval) — optional upgrade:**
 1. Create a free account at https://uptimerobot.com (the agent cannot create it for you).
