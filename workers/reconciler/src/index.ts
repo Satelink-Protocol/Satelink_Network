@@ -32,7 +32,13 @@ function main(): void {
   });
   const volumeCapacityBytes = Number(process.env.RECONCILER_VOLUME_BYTES ?? String(5 * GB)) || 5 * GB;
   const guardrails = async (): Promise<void> => {
-    await runGuardrails(pool, { send, volumeCapacityBytes, windowMs: 3_600_000 });
+    // Log every cycle so "the guardrails are running" is OBSERVABLE. Before this,
+    // a successful evaluation logged nothing — only failures logged (fail-open-
+    // silent), so a healthy cycle was indistinguishable from the hook never being
+    // invoked. The 2026-08-28 outage exposed this: the only guardrail evidence was
+    // a FAILURE line; there was no way to confirm a successful post-recovery cycle.
+    const r = await runGuardrails(pool, { send, volumeCapacityBytes, windowMs: 3_600_000 });
+    console.info(`[reconciler] guardrails evaluated=${r.evaluated} sent=${r.sent}`);
   };
 
   const server = startHttpServer({ db: pool, internalToken: cfg.internalToken, port: cfg.port });

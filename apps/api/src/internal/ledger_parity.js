@@ -81,8 +81,12 @@ export async function computeParity(pool) {
   const drift = revenueCount - ledgerTxnCount;
 
   const oldestRow = oldest.rows[0];
+  // revenue_events_v2.created_at is bigint SECONDS; the response `ts` below is
+  // Date.now() MILLISECONDS. Returning the raw seconds under `created_at` mixed
+  // epoch units in a single financial response (a consumer diffing the two was
+  // off by 1000×). Expose it explicitly as milliseconds to match `ts`.
   const oldestUnmatched = oldestRow
-    ? { request_id: oldestRow.request_id, created_at: oldestRow.created_at }
+    ? { request_id: oldestRow.request_id, created_at_ms: Number(oldestRow.created_at) * 1000 }
     : null;
 
   return {
