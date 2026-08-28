@@ -56,8 +56,27 @@ export function startHttpServer(deps: HttpDeps): Server {
       const url = req.url ?? '/';
       const path = url.split('?')[0];
       if (req.method === 'GET' && (path === '/health' || path === '/')) {
+        // Liveness only — used by Railway's own healthcheck. Must stay cheap and
+        // DB-independent so a DB blip does not trigger Railway restart loops.
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
+        return;
+      }
+      if (req.method === 'GET' && path === '/readyz') {
+        // Readiness — DB-aware. This service has a Cloudflare-FREE Railway domain
+        // (satelink-reconciler-production.up.railway.app), so an external check
+        // (GitHub Actions) can reach it — unlike api.satelink.network, which is
+        // behind Cloudflare and blocks datacenter IPs. `SELECT 1` makes this the
+        // DB-aware outer-layer probe. NOT wired to Railway's healthcheck, so a DB
+        // outage surfaces here without restart-looping the reconciler.
+        try {
+          await deps.db.query('SELECT 1');
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', db: 'ok' }));
+        } catch {
+          res.writeHead(503, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ status: 'error', db: 'down' }));
+        }
         return;
       }
       if (req.method === 'GET' && path === '/internal/reconciliation') {

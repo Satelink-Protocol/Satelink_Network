@@ -33,15 +33,20 @@ jobs:
       - name: Probe /health (3 attempts to avoid flapping on a single blip)
         id: probe
         run: |
-          url="https://api.satelink.network/health"
+          # Probe the reconciler's Cloudflare-FREE Railway domain, not
+          # api.satelink.network: Cloudflare (Free plan) blocks GitHub Actions'
+          # datacenter IPs with a 403, so the edge-fronted API is unreachable from
+          # here. The reconciler's /readyz runs `SELECT 1` (DB-aware) and shares the
+          # DB failure domain, so this catches the DB/compute-limit outage class.
+          url="https://satelink-reconciler-production.up.railway.app/readyz"
           healthy=false
           code=000
           for attempt in 1 2 3; do
             resp="$(curl -sS -m 15 -w $'\n%{http_code}' "$url" || true)"
             code="$(printf '%s' "$resp" | tail -n1)"
             payload="$(printf '%s' "$resp" | sed '$d')"
-            # Healthy = HTTP 200 AND the DB reports ok (catches DB-down while the
-            # process is still up — the exact 2026-08-28 outage signature).
+            # Healthy = HTTP 200 AND the DB reports ok (503 "db":"down" if the DB is
+            # unreachable — the 2026-08-28 outage signature).
             if [ "$code" = "200" ] && printf '%s' "$payload" | grep -q '"db":"ok"'; then
               healthy=true
               break
