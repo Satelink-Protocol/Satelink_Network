@@ -254,3 +254,19 @@ insufficient-capacity or currency-mismatch.
   (driver_name, status='active', last_heartbeat_at, calls_done/planned) on a fixed interval.
   The reconciler alarms when an active driver's heartbeat goes stale >15 min. This is the
   control whose absence let M9 die at call 64/5000 and go unnoticed for 6 days.
+
+## Incident learnings (2026-08-27, DB volume exhaustion)
+
+- NEVER prune `ledger_entries`, `ledger_txns`, or `revenue_events_v2` to reclaim disk. They are
+  append-only money-path tables (invariant 5) and balance is DERIVED from them (invariant 1). Deleting
+  rows corrupts every derived balance and is a failed milestone. When Postgres disk fills, the fix is
+  RESIZE THE VOLUME (operator), not prune the ledger. See docs/incidents/2026-08-27-volume-exhaustion.md.
+- `max_wal_size` must be < the Postgres volume size. The 2026-08-27 exhaustion happened because
+  `max_wal_size=1024MB` on a 1 GB volume let a single-day write storm's WAL fill the whole disk. Target
+  `max_wal_size=512MB`, `max_slot_wal_keep_size=256MB` (operator/Railway config — out of Claude scope).
+- `revenue_events_v2.is_test_data` is UNRELIABLE: the free-tier RPC path writes `status=success`,
+  empty-`source`, `is_test_data=false` rows for calls that collect $0 (345,820 such rows as of
+  2026-08-27). Do not treat the non-test count as paid conversions; the only real external rail is
+  `source='x402'`. The real amount column is `amount_usdt` (not `amount_minor_units`).
+- Redis is load-bearing (BullMQ workload queue via `apps/api/src/queue/*`), not just rate-limiting. Do
+  not propose replacing it with an in-process cache.
