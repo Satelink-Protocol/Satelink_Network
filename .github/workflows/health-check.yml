@@ -1,0 +1,110 @@
+name: health-check
+
+# External uptime check for api.satelink.network/health, run on GitHub's infra —
+# OUTSIDE the Railway + Postgres failure domain. The reconciler guardrails cannot
+# alarm on a DB-down / edge-404 outage because they run inside the reconciler,
+# which needs the DB (see docs/ops/external-monitoring.md). This is the outer layer.
+#
+# On failure it opens (and de-dups) a GitHub issue, and fails the run so GitHub
+# emails the workflow author. On recovery it closes the issue.
+#
+# Caveats: GitHub's scheduled cron is best-effort and can lag 5-15 min under load,
+# and scheduled workflows are auto-disabled after 60 days of repo inactivity. For a
+# tighter guarantee, a dedicated uptime service (UptimeRobot) is still preferable.
+# This activates only once merged to the default branch.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe /health (3 attempts to avoid flapping on a single blip)
+        id: probe
+        run: |
+          url="https://api.satelink.network/health"
+          healthy=false
+          code=000
+          for attempt in 1 2 3; do
+            resp="$(curl -sS -m 15 -w $'\n%{http_code}' "$url" || true)"
+            code="$(printf '%s' "$resp" | tail -n1)"
+            payload="$(printf '%s' "$resp" | sed '$d')"
+            # Healthy = HTTP 200 AND the DB reports ok (catches DB-down while the
+            # process is still up — the exact 2026-08-28 outage signature).
+            if [ "$code" = "200" ] && printf '%s' "$payload" | grep -q '"db":"ok"'; then
+              healthy=true
+              break
+            fi
+            echo "attempt $attempt: http=$code (not healthy), retrying..."
+            sleep 10
+          done
+          echo "healthy=$healthy" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Result: healthy=$healthy http=$code"
+
+      - name: Open / update / close the incident issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          HEALTHY: ${{ steps.probe.outputs.healthy }}
+          CODE: ${{ steps.probe.outputs.code }}
+        with:
+          script: |
+            const healthy = process.env.HEALTHY === 'true';
+            const code = process.env.CODE || '000';
+            const marker = '<!-- satelink-health-monitor -->';
+            const label = 'health-incident';
+            const { owner, repo } = context.repo;
+            const now = new Date().toISOString();
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: label, per_page: 20,
+            });
+            const existing = open.data.find((i) => (i.body || '').includes(marker));
+
+            if (!healthy) {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Still DOWN at ${now} (HTTP ${code}). ${runUrl}`,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner, repo,
+                  title: '🔴 Satelink /health is DOWN',
+                  labels: [label],
+                  body: `${marker}\nExternal health check failed at ${now}.\n\n`
+                      + `- URL: https://api.satelink.network/health\n`
+                      + `- HTTP: ${code}\n`
+                      + `- Run: ${runUrl}\n\n`
+                      + `Likely causes: Railway compute-limit kill switch, Postgres offline, or a failed deploy `
+                      + `(see docs/ops/external-monitoring.md). This issue auto-closes on recovery.`,
+                });
+              }
+            } else if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `✅ Recovered at ${now} (HTTP ${code}). Auto-closing.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, state: 'closed',
+              });
+            }
+
+      - name: Fail the run if unhealthy (surfaces the red X + GitHub notification)
+        if: steps.probe.outputs.healthy != 'true'
+        run: |
+          echo "::error title=Satelink health check::/health is DOWN (HTTP ${{ steps.probe.outputs.code }})"
+          exit 1
