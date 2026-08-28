@@ -19,6 +19,9 @@ export function startScheduler(
   cfg: CycleConfig & { reconcileIntervalMs: number },
   deliver: Deliver,
   log: Pick<Console, 'info' | 'error'> = console,
+  /** Optional post-cycle hook (guardrails). Runs fail-open — a throw here never
+   *  wedges the loop and never affects the reconcile cycle itself. */
+  afterCycle?: () => Promise<void>,
 ): Scheduler {
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
@@ -35,9 +38,15 @@ export function startScheduler(
       );
     } catch (err) {
       log.error('[reconciler] cycle failed (fail-open, retrying next tick):', err);
-    } finally {
-      if (!stopped) timer = setTimeout(() => void tick(), cfg.reconcileIntervalMs);
     }
+    if (afterCycle) {
+      try {
+        await afterCycle();
+      } catch (err) {
+        log.error('[reconciler] guardrails failed (fail-open):', err);
+      }
+    }
+    if (!stopped) timer = setTimeout(() => void tick(), cfg.reconcileIntervalMs);
   };
 
   void tick();

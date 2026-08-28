@@ -12,6 +12,10 @@ import { JsonRpcChainReader, rpcMapFrom } from './adapters/json-rpc-reader.js';
 import { startHttpServer } from './http-server.js';
 import { startScheduler } from './scheduler.js';
 import { webhookDeliver } from './outbox-publisher/publish.js';
+import { runGuardrails } from './guardrails/run.js';
+import { brevoSender } from './guardrails/notify.js';
+
+const GB = 1_073_741_824;
 
 function main(): void {
   const cfg = loadConfig();
@@ -19,8 +23,20 @@ function main(): void {
   const chain = new JsonRpcChainReader(rpcMapFrom(cfg));
   const deliver = webhookDeliver(cfg.outboxWebhookUrl);
 
+  // Guardrails: evaluated every cycle, one email per condition per hour.
+  const send = brevoSender({
+    apiKey: process.env.BREVO_API_KEY ?? '',
+    toEmail: process.env.GUARDRAIL_ALERT_TO ?? '',
+    fromEmail: process.env.GUARDRAIL_ALERT_FROM ?? 'alerts@satelink.network',
+    fromName: 'Satelink Guardrails',
+  });
+  const volumeCapacityBytes = Number(process.env.RECONCILER_VOLUME_BYTES ?? String(5 * GB)) || 5 * GB;
+  const guardrails = async (): Promise<void> => {
+    await runGuardrails(pool, { send, volumeCapacityBytes, windowMs: 3_600_000 });
+  };
+
   const server = startHttpServer({ db: pool, internalToken: cfg.internalToken, port: cfg.port });
-  const scheduler = startScheduler(pool, chain, cfg, deliver);
+  const scheduler = startScheduler(pool, chain, cfg, deliver, console, guardrails);
 
   console.info(
     `[reconciler] up — port=${cfg.port} interval=${cfg.reconcileIntervalMs}ms ` +
