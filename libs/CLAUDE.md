@@ -270,3 +270,27 @@ insufficient-capacity or currency-mismatch.
   `source='x402'`. The real amount column is `amount_usdt` (not `amount_minor_units`).
 - Redis is load-bearing (BullMQ workload queue via `apps/api/src/queue/*`), not just rate-limiting. Do
   not propose replacing it with an in-process cache.
+
+## Post-outage learnings (2026-08-28)
+
+- The Railway **Compute Usage Limit is a KILL SWITCH, not a budget**. Hitting it stops EVERY service
+  and database project-wide (2026-08-28: limit $11, usage $11.08 → total outage; raised to $25 and
+  everything recovered, no data loss). Keep headroom ≥2× expected spend; **cut usage, never lower the
+  cap toward actual spend.** Alert at 80% (see docs/ops/external-monitoring.md).
+- App-layer 402 gates stop DB WRITES but NOT egress/CPU/RAM — a 402 is still a full request cycle.
+  Cost control belongs at the **Cloudflare edge** (rate-limit), not the app. See
+  docs/ops/2026-08-28-cost-reduction.md.
+- The reconciler guardrails share the DB failure domain: they run inside the reconciler, which needs
+  Postgres, so they **cannot alarm on DB-down**. The outer layer is an external uptime check on
+  `/health` (UptimeRobot) + a Railway usage alert — both OUTSIDE Railway/the DB.
+- `platform_flags` columns are **`key`, `value`, `updated_at`, `updated_by`** (PK on `key`). There is
+  NO `name` column — read `\d platform_flags` before querying, never guess. #343's guardrail thresholds
+  are NOT seeded there; they fall back to code defaults (5000 rows/h, 70/85% volume, 2:1±0.5 ratio,
+  15-min driver stale). Seeding a `guardrail_*` row overrides without redeploy.
+- Revenue events WITHOUT a ledger entry are EXPECTED in M3 shadow mode: `shadow_ledger_write.js` is
+  fire-and-forget and gated on `LEDGER_SHADOW_WRITE`. The 62 `rpc_call` orphan rows (2026-06-22 →
+  08-20, all is_test_data=true) are historical rows written while that flag was off — not a bug, not a
+  writer surviving the gates. The write-amp guardrail's expected 2:1 ratio only holds while the shadow
+  flag is on.
+- Every PR appends to this file, so parallel PRs ALWAYS conflict here. Resolve by UNION — keep every
+  section from both sides; dedupe only byte-identical lines; never drop a section.
