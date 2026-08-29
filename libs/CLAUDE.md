@@ -294,3 +294,22 @@ insufficient-capacity or currency-mismatch.
   flag is on.
 - Every PR appends to this file, so parallel PRs ALWAYS conflict here. Resolve by UNION — keep every
   section from both sides; dedupe only byte-identical lines; never drop a section.
+
+## Cloudflare edge (2026-08-29, Free plan constraints — proven)
+
+- Cloudflare Free **403s GitHub Actions datacenter IPs** at an IP layer the rulesets API cannot
+  allowlist (custom + managed rulesets + all security-product skips all failed). Do NOT re-attempt
+  IP allowlisting. The external health check therefore probes the reconciler's Cloudflare-FREE
+  `.up.railway.app/readyz`, not `api.satelink.network`.
+- Free plan allows exactly ONE `http_ratelimit` rule — always EDIT `satelink-rate-limit`
+  (id `9c3b6ada45a24a54a954c89b35d61243`, zone `satelink.network`), never create a second
+  (error `50001: 2 out of 1`).
+- Free plan rate-limit expressions support **Path only** (+ Verified Bot); **request-header fields
+  are Enterprise-only** — the API rejects `http.request.headers.names` with `"not entitled ...
+  higher Advanced Rate Limiting plan is required"`. Period is locked to 10 s. So on Free you CANNOT
+  exclude `x-payment`/`x-api-key`/`x-wallet-address` from the counter — the live `/rpc/` rule counts
+  paying traffic too. Acceptable only because a single x402 client never bursts 20 req/10 s; do not
+  tighten the count below what a legit agent needs. NEVER hard-Block `/rpc/*` — x402 discovery needs
+  the app's 402 to reach the client; rate-limit action only.
+- Rollback snapshot for the rate-limit rule: `docs/ops/cloudflare-rollback-2026-08-28.json`.
+  Applied change recorded in `docs/ops/2026-08-29-cloudflare-ratelimit-applied.md`.
