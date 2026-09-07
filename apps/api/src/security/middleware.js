@@ -55,8 +55,13 @@ export function attachBaseMiddleware(app) {
 
     const corsOptions = {
         origin: function (origin, callback) {
-            if (!origin) return callback(null, true); // Server-to-server: allowed
-            if (CORS_ORIGINS.length === 0) return callback(null, true); // If env empty: all origins
+            if (!origin) return callback(null, true); // Server-to-server (no Origin header): allowed
+            // Fail closed: with no explicit allowlist, deny ALL cross-origin
+            // browser requests rather than reflecting the origin with
+            // credentials:true (P0-5, 2026-09). Public machine endpoints keep
+            // their own origin:"*" via publicCorsOptions above and are
+            // unaffected. Set CORS_ORIGINS to opt specific origins back in.
+            if (CORS_ORIGINS.length === 0) return callback(null, false);
             return callback(null, CORS_ORIGINS.includes(origin));
         },
         credentials: true,

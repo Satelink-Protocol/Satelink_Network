@@ -332,23 +332,25 @@ describe('x402 payment rail', function () {
       expect(ps.rows[0].credited_api_key).to.equal(out.creditedKey);
     });
 
-    it('t12: credited wallet is served without payment through authorizeAndMeter, balance decrements', async () => {
-      // alias step: middleware maps x-payer-address → x-wallet-address
+    it('t12: x-payer-address header does NOT become a billing identity (C1 fix, P0-2)', async () => {
+      // SECURITY (finding C1): a client-supplied x-payer-address must NEVER be
+      // aliased into the billing wallet. payerA holds a bundle balance from t11;
+      // an anonymous caller naming payerA via the header must not spend it. The
+      // old "Rail 1.5" aliasing was removed — see c1_payer_address.test.js for
+      // the full negative/positive/replay matrix.
       const mw = createX402Middleware(dbPool, silent);
       process.env.X402_ENABLED = 'true';
+      const before = await raw.query(`SELECT credits_usdt FROM api_credits WHERE api_key=$1`, [`x402_${payerA.toLowerCase()}`]);
       const req = makeReq({ headers: { 'x-payer-address': payerA }, ip: '10.12.0.1' });
-      const aliased = await new Promise((resolve) => {
+      const out = await new Promise((resolve) => {
         const res = makeRes(resolve);
         Promise.resolve(mw(req, res, () => resolve({ nextCalled: true }))).catch((e) => resolve({ error: e }));
       });
-      expect(aliased.nextCalled).to.equal(true);
-      expect(req.headers['x-wallet-address']).to.equal(payerA);
-      // consumption step: the EXISTING credit path deducts one call
-      const verdict = await authorizeAndMeter(dbPool, { wallet: payerA });
-      expect(verdict.ok).to.equal(true);
-      expect(verdict.tier).to.equal('x402');
-      expect(verdict.cost).to.be.closeTo(PRICE, 1e-12);
-      expect(verdict.balanceAfter).to.be.closeTo(BUNDLE * PRICE - PRICE, 1e-9);
+      expect(out.nextCalled).to.equal(true);                       // falls through to the normal flow
+      expect(req.headers['x-wallet-address']).to.equal(undefined); // NO alias into the billing header
+      expect(req.x402 && req.x402.settled).to.not.equal(true);     // no verified payment present
+      const after = await raw.query(`SELECT credits_usdt FROM api_credits WHERE api_key=$1`, [`x402_${payerA.toLowerCase()}`]);
+      expect(after.rows[0].credits_usdt).to.equal(before.rows[0].credits_usdt); // balance untouched
     });
 
     it('t13: exhausted credits → alias not applied → normal x402 402', async () => {

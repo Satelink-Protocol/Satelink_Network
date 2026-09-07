@@ -32,7 +32,6 @@ import {
 import { getX402Config } from './config.js';
 import { recordX402Settlement, DuplicateSettlementError } from './settlement.js';
 import { bumpFunnel, bumpFunnelDaily } from './funnel.js';
-import { PRICE_PER_CALL_USDT } from '../../billing/credit_service.mjs';
 
 const LOG_PREFIX = '[x402]';
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -336,14 +335,16 @@ export function createX402Middleware(pool, logger) {
       bumpFunnelDaily(pool, 'x402_settled');
 
       for (const [key, value] of Object.entries(settle.headers || {})) res.setHeader(key, value);
-      req.x402 = { settled: true, txHash: settle.transaction, payer: settle.payer };
-
-      // The settled call itself is served through the credited account: alias
-      // the payer onto the existing wallet-identity path so authorizeAndMeter
-      // deducts one bundle credit like every subsequent x-payer-address call.
-      if (recorded.creditedKey && WALLET_RE.test(settle.payer || '')) {
-        req.headers['x-wallet-address'] = settle.payer;
-      }
+      // The billing wallet is the facilitator-verified payer (signature-
+      // recovered), carried on a trusted request-scoped field. Downstream
+      // (rpc_gateway) reads req.x402.wallet — NEVER a client-supplied header —
+      // so no request can name a wallet it does not control (P0-2, 2026-09).
+      req.x402 = {
+        settled: true,
+        txHash: settle.transaction,
+        payer: settle.payer,
+        wallet: (recorded.creditedKey && WALLET_RE.test(settle.payer || '')) ? settle.payer : null,
+      };
 
       // Tell the machine how to continue: credited identity + remaining calls
       // appended to the JSON response body of this (served) request.
@@ -359,36 +360,13 @@ export function createX402Middleware(pool, logger) {
       return next();
     }
 
-    // ---- Rail 1.5: credited identity — a wallet that already bought a
-    // bundle presents x-payer-address and is served through the EXISTING
-    // credit-consumption path (authorizeAndMeter), no payment needed.
-    // v1 tradeoff (stated in PR): the header alone is not proof of ownership;
-    // an address only ever gains credits via its own on-chain payment, so the
-    // worst case is bounded at one bundle price. No/exhausted credits → fall
-    // through to the normal anonymous flow (402 below).
-    const payerAddr = req.headers['x-payer-address'];
-    if (
-      payerAddr && WALLET_RE.test(payerAddr) &&
-      !req.headers['x-api-key'] && !req.headers['x-wallet-address']
-    ) {
-      try {
-        // Same resolution as credit_service.resolveAccount (oldest row wins),
-        // so the row checked here is the row authorizeAndMeter will deduct.
-        const r = await pool.query(
-          `SELECT credits_usdt, status FROM api_credits
-            WHERE lower(wallet_address) = lower($1)
-            ORDER BY created_at ASC LIMIT 1`,
-          [payerAddr]
-        );
-        const row = r.rows[0];
-        if (row && row.status === 'active' && parseFloat(row.credits_usdt || 0) >= PRICE_PER_CALL_USDT) {
-          req.headers['x-wallet-address'] = payerAddr;
-          return next();
-        }
-      } catch (err) {
-        log.warn(`${LOG_PREFIX} credited-identity lookup failed (continuing anonymous): ${err.message}`);
-      }
-    }
+    // ---- Rail 1.5 REMOVED (P0-2, 2026-09) ----
+    // The former x-payer-address path trusted a client-supplied header to name
+    // the billing wallet, letting any caller drain another wallet's prepaid
+    // credits (finding C1). Payer identity now comes ONLY from a facilitator-
+    // verified x402 payment above (the recovered signer, carried on req.x402).
+    // A request with no valid signed authorization falls through to the 402
+    // challenge below — it is NEVER billed to a header-supplied wallet.
 
     // ---- Rail 1: no payment attached — upgrade a downstream exhausted-tier
     // 402 into a spec x402 402, preserving the USDT body as alternativePayment.

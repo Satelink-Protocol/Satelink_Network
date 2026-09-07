@@ -13,7 +13,7 @@
 import { ethers } from 'ethers';
 
 const PRIVATE_KEY = process.env.POLYGON_SIGNER_KEY;
-const RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
+const RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
 const API_BASE = process.env.API_BASE || 'https://rpc.satelink.network';
 const DEPOSIT_USDT = parseFloat(process.env.DEPOSIT_AMOUNT || '0.1');
 

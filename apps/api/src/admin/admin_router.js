@@ -47,7 +47,13 @@ export function requireAdminAuth(req, res, next) {
   if (!expected) {
     return res.status(503).json({ ok: false, error: 'ADMIN_SECRET_TOKEN not configured' });
   }
-  const token = req.headers['x-admin-token'] || req.query.token;
+  // Token sources (P0-6, 2026-09): the x-admin-token header (existing callers)
+  // and the standard Authorization: Bearer <token> header. The ?token= query
+  // param path was REMOVED — secrets in URLs leak into access logs, proxies and
+  // browser history.
+  const authHeader = req.headers['authorization'] || '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = req.headers['x-admin-token'] || bearer;
   if (!token || token !== expected) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }

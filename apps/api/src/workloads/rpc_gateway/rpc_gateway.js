@@ -201,7 +201,11 @@ export function createRpcGateway(db) {
         const startTime = Date.now();
         const { chain } = req.params;
         const apiKey = req.headers['x-api-key'];
-        const walletHdr = req.headers['x-wallet-address'];
+        // P0-2: for a settled x402 payment the billing wallet is the
+        // facilitator-verified payer carried on the trusted request-scoped
+        // field (req.x402.wallet), NEVER a client-supplied header. Non-x402
+        // callers are unchanged (x-wallet-address header as before).
+        const walletHdr = req.x402?.settled ? (req.x402.wallet || null) : req.headers['x-wallet-address'];
         const clientIp = getClientIp(req);
         const canonical = CREDIT_CANONICAL();
 

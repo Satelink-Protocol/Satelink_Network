@@ -136,7 +136,7 @@ app.get("/api/mode", (req, res) => {
   app.get("/api/treasury/status", async (req, res) => {
     const VAULT = process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
     const USDT  = process.env.USDT_CONTRACT_ADDRESS  || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
-    const RPC   = process.env.POLYGON_RPC             || 'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
+    const RPC   = process.env.POLYGON_RPC             || 'https://polygon-rpc.com';
 
     // Fetch on-chain vault USDT balance (balanceOf selector = 0x70a08231)
     async function onChainBalance() {
