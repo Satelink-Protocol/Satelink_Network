@@ -1,7 +1,9 @@
 // apps/api/src/middleware/free_tier_gate.js
 // Path C hybrid gate: free tier per IP, then 402 with deposit instructions
 // Free tier: FREE_TIER_LIMIT calls/day per IP (default 500)
-// Wallet-authenticated requests bypass IP limit entirely → go to creditGate
+// A valid API key bypasses the IP limit entirely → billed via creditGate/
+// creditService. x-wallet-address alone does NOT bypass (P0-wallet-auth,
+// 2026-09) — it names no verified identity.
 // Resets daily at midnight UTC. Redis-backed when available; falls back to in-memory.
 //
 // Anti-abuse env vars (all optional, have safe defaults):
@@ -201,17 +203,28 @@ export function createFreeTierGate(logger, redis, pool = null) {
   const upgradeContextFor = createUpgradeContext({ pool, redis, log });
 
   return async function freeTierGate(req, res, next) {
-    // Authenticated callers (bound wallet OR API key) skip the per-IP free-tier
-    // gate entirely and are handled by creditService (authorizeAndMeter):
-    // per-key daily limit, balance deduction, and metering. The credit system is
+    // Authenticated callers (a real API key) skip the per-IP free-tier gate
+    // entirely and are handled by creditService (authorizeAndMeter): per-key
+    // daily limit, balance deduction, and metering. The credit system is
     // api_credits-keyed, so an X-API-Key caller must NOT be IP-rate-limited as
     // anonymous free traffic — otherwise a funded key is 402'd before deduction.
-    const walletHeader = req.headers['x-wallet-address'];
+    //
+    // P0-wallet-auth (2026-09): x-wallet-address is NOT checked here anymore.
+    // It named no verified identity — a fabricated value bypassed this gate
+    // for free, and billing downstream no longer accepts it either (a bare
+    // wallet header now gets a 401 from rpc_gateway.js/credit_gate.js, so
+    // letting it skip throttling here would only buy a free ride to that 401).
+    // x-api-key presence (not shape/validity) is UNCHANGED by this fix: the
+    // gate was never the vulnerability for keys — a fabricated key still gets
+    // correctly rejected downstream by authorizeAndMeter (401 unknown key),
+    // it just isn't IP-throttled first. That's a documented, tested tradeoff
+    // (test/free_tier_gate.test.js), distinct from the wallet-header issue,
+    // which could actually BILL an unverified identity.
     const apiKeyHeader = req.headers['x-api-key'];
-    if (walletHeader || apiKeyHeader) return next();
+    if (apiKeyHeader) return next();
 
     // Free tier removed (2026-08-27): the ONLY ways past this gate are (1) an
-    // x-wallet-address or x-api-key header — both returned next() above — or
+    // x-api-key header — returned next() above — or
     // (2) a settled x402 payment, which bypasses this gate entirely upstream
     // (freeTierGateUnlessX402Paid in app_factory.mjs). Any caller reaching this
     // line therefore has NO recognized paid credential; its effective allowance

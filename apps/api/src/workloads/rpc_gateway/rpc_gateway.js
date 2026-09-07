@@ -201,19 +201,36 @@ export function createRpcGateway(db) {
         const startTime = Date.now();
         const { chain } = req.params;
         const apiKey = req.headers['x-api-key'];
-        // P0-2: for a settled x402 payment the billing wallet is the
-        // facilitator-verified payer carried on the trusted request-scoped
-        // field (req.x402.wallet), NEVER a client-supplied header. Non-x402
-        // callers are unchanged (x-wallet-address header as before).
-        const walletHdr = req.x402?.settled ? (req.x402.wallet || null) : req.headers['x-wallet-address'];
+        // P0-wallet-auth (2026-09): x-wallet-address is read but must NEVER
+        // reach billing on its own — it was C1's twin (an unauthenticated
+        // header trusted to name the deduction target). Billing identity now
+        // comes ONLY from a resolved api_key account, or a facilitator-
+        // verified x402 payment (req.x402.wallet, unchanged from P0-2).
+        // rawWalletHeader is kept ONLY for the 401 below and for
+        // logging/display — it must never be passed to enforceCapacity/
+        // authorizeAndMeter/credit_gate.
+        const rawWalletHeader = req.headers['x-wallet-address'] || null;
+        const walletForBilling = req.x402?.settled ? (req.x402.wallet || null) : null;
         const clientIp = getClientIp(req);
         const canonical = CREDIT_CANONICAL();
 
-        // Anonymous (no key, no wallet, no settled x402 payment): serve the
-        // free taste. The free-tier gate mounted BEFORE this router has
-        // already enforced the per-IP daily limit (over-limit IPs got a 402
-        // there, x402-upgraded by the middleware), so a request reaching this
-        // point is under-limit — it flows to the legacy branch below, which
+        // A bare x-wallet-address with no valid api_key and no settled x402
+        // payment is an insufficient credential. Reject before any billing or
+        // free-tier logic runs — never silently downgrade it to anonymous
+        // (that would serve the call for free) or bill an unverified wallet.
+        if (rawWalletHeader && !apiKey && !req.x402?.settled) {
+            return res.status(401).json({
+                ok: false,
+                error: 'wallet_header_insufficient',
+                message: 'x-wallet-address alone is not a billing credential. Present a valid X-API-Key (see POST /v1/machine/register) or pay via x402.'
+            });
+        }
+
+        // Anonymous (no key, no settled x402 payment): serve the free taste.
+        // The free-tier gate mounted BEFORE this router has already enforced
+        // the per-IP daily limit (over-limit IPs got a 402 there, x402-
+        // upgraded by the middleware), so a request reaching this point is
+        // under-limit — it flows to the legacy branch below, which
         // rate-limits, meters, and bills $0 (no revenue event).
         //
         // War room 2026-07-10: the unconditional 402 here (83eeaea) rejected
@@ -223,7 +240,7 @@ export function createRpcGateway(db) {
         // ANON_FREE_TIER_ENABLED=false to restore the hard 402 without a
         // deploy. x402-settled calls were always allowed through (revenue for
         // those is recorded at settlement with demand_source='x402').
-        if (!apiKey && !walletHdr && !req.x402?.settled
+        if (!apiKey && !req.x402?.settled
             && process.env.ANON_FREE_TIER_ENABLED === 'false') {
             return res.status(402).json(paymentRequiredBody(
                 'Anonymous access is disabled. Register a wallet for prepaid credits, or pay per call with an x402 payment header.'));
@@ -252,10 +269,11 @@ export function createRpcGateway(db) {
         // Phase 6: a revenue event is created ONLY for an actual deduction. This
         // holds the real amount deducted (0 for free/anonymous → no revenue event).
         let billedUsdt = 0;
-        if (canonical && (apiKey || walletHdr)) {
+        if (canonical && (apiKey || walletForBilling)) {
             // CANONICAL: api_credits is authoritative. One atomic call does the
             // daily-limit gate (429), balance deduct (402), and usage metering.
             // No Redis, no credit_balances, no anonymous downgrade (unknown key → 401).
+            // wallet is walletForBilling ONLY — never the raw header (P0-wallet-auth).
             let verdict;
             try {
                 // M8: capacity enforcement cutover. In legacy mode this is the
@@ -264,7 +282,7 @@ export function createRpcGateway(db) {
                 // capacity decision is served. Path is read at request time
                 // (CAPACITY_ENFORCEMENT_PATH) so a Railway flip reverts with no
                 // redeploy.
-                verdict = await enforceCapacity(db, { apiKey, wallet: walletHdr });
+                verdict = await enforceCapacity(db, { apiKey, wallet: walletForBilling });
             } catch (err) {
                 console.error('[RPC Gateway] creditService error (fail-open + alert):', err.message);
                 verdict = { ok: true, tier: 'unknown', remaining: null, limit: null, balanceAfter: null, degraded: true };
