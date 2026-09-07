@@ -93,9 +93,33 @@ CREATE TABLE IF NOT EXISTS credit_balances (
   wallet_address  TEXT UNIQUE,
   balance_usdt    NUMERIC(18,8) DEFAULT 0,
   total_deposited NUMERIC(18,8) DEFAULT 0,
+  total_spent     NUMERIC(18,8) DEFAULT 0,
   last_deposit_tx TEXT,
   last_deposit_at TIMESTAMPTZ,
   updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+-- Idempotent on a pre-existing table from an earlier version of this file
+-- (CREATE TABLE IF NOT EXISTS above is a no-op once the table exists).
+ALTER TABLE credit_balances ADD COLUMN IF NOT EXISTS total_spent NUMERIC(18,8) DEFAULT 0;
+
+-- Capacity-enforcement kill-switch (apps/api/src/lib/flags.js getCapacityPath).
+-- Even though getCapacityPath catches a missing-table error internally and
+-- fails closed to 'legacy', an uncaught SQL error still aborts the enclosing
+-- Postgres transaction — this table must exist for savepoint-wrapped tests
+-- that reach enforceCapacity to avoid poisoning the whole test transaction.
+CREATE TABLE IF NOT EXISTS platform_flags (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- credit_gate.js's getPricing() cache — same poisoned-transaction hazard as
+-- platform_flags above (its own try/catch swallows the JS error but not the
+-- aborted Postgres transaction). Left empty so getCost() falls back to
+-- DEFAULT_COST_USDT, same as production when no override row exists.
+CREATE TABLE IF NOT EXISTS rpc_method_pricing (
+  method_name TEXT PRIMARY KEY,
+  price_usdt  NUMERIC(18,8),
+  active      BOOLEAN DEFAULT TRUE
 );
 
 -- x402 conversion telemetry (payments/x402/funnel.js). Fire-and-forget writes

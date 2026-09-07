@@ -6,7 +6,10 @@
  *  2. Approve USDT to RevenueVault on-chain
  *  3. Deposit USDT to RevenueVault on-chain
  *  4. Poll /credits/balance until credited (max 5 min)
- *  5. Make one RPC call via /rpc/polygon with X-Wallet-Address
+ *  5. Register (or reuse) an API key bound to this wallet, then make one RPC
+ *     call via /rpc/polygon with X-API-Key (P0-wallet-auth, 2026-09:
+ *     X-Wallet-Address alone is no longer a billing credential — see
+ *     credit_gate.js / rpc_gateway.js)
  *  6. Verify balance decreased (credit deducted)
  */
 
@@ -16,6 +19,10 @@ const PRIVATE_KEY = process.env.POLYGON_SIGNER_KEY;
 const RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
 const API_BASE = process.env.API_BASE || 'https://rpc.satelink.network';
 const DEPOSIT_USDT = parseFloat(process.env.DEPOSIT_AMOUNT || '0.1');
+// Reuse an already-issued key across repeat runs (registration is one-time
+// per wallet — the API returns 409 wallet_already_registered on a retry and
+// the key cannot be re-issued, so a fresh run has no other way to get it back).
+const EXISTING_API_KEY = process.env.SMOKE_TEST_API_KEY || null;
 
 const USDT_ADDRESS = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const VAULT_ADDRESS = '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
@@ -187,14 +194,52 @@ async function main() {
     process.exit(1);
   }
 
-  // --- STEP 5: Make one RPC call with X-Wallet-Address ---
+  // --- STEP 4b: Register (or reuse) an API key bound to this wallet ---
+  // X-Wallet-Address alone is no longer a billing credential (P0-wallet-auth,
+  // 2026-09) — the RPC call below needs a real X-API-Key.
+  let apiKey = EXISTING_API_KEY;
+  if (!apiKey) {
+    log('STEP-4b', 'INFO', 'Registering wallet for an API key (POST /v1/machine/register)');
+    try {
+      const signature = await wallet.signMessage(`satelink:register:${address.toLowerCase()}`);
+      const regRes = await fetch(`${API_BASE}/v1/machine/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: address, signature }),
+      });
+      const regData = await regRes.json();
+      if (regRes.status === 201 && regData.api_key) {
+        apiKey = regData.api_key;
+        log('STEP-4b', 'PASS', `Registered — API key: ${apiKey} (save as SMOKE_TEST_API_KEY to reuse; it cannot be re-issued)`);
+      } else if (regRes.status === 409) {
+        log('STEP-4b', 'FAIL', 'Wallet already registered from a prior run and the key cannot be re-issued. Re-run with SMOKE_TEST_API_KEY=<the key from that run>.');
+        results.failures.push('api_key_required');
+        printSummary();
+        process.exit(1);
+      } else {
+        log('STEP-4b', 'FAIL', `Registration failed: ${JSON.stringify(regData)}`);
+        results.failures.push('registration_failed');
+        printSummary();
+        process.exit(1);
+      }
+    } catch (err) {
+      log('STEP-4b', 'FAIL', `Registration error: ${err.message}`);
+      results.failures.push('registration_failed');
+      printSummary();
+      process.exit(1);
+    }
+  } else {
+    log('STEP-4b', 'INFO', 'Using SMOKE_TEST_API_KEY (skipping registration)');
+  }
+
+  // --- STEP 5: Make one RPC call with X-API-Key ---
   log('STEP-5', 'INFO', `Making eth_blockNumber call to ${API_BASE}/rpc/polygon`);
   try {
     const rpcRes = await fetch(`${API_BASE}/rpc/polygon`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Wallet-Address': address
+        'X-API-Key': apiKey
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
