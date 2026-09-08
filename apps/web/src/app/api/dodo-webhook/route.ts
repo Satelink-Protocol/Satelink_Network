@@ -8,15 +8,17 @@
 //
 // Matching the payment back to a task_orders row: the checkout link carries
 // metadata_order_ref (and metadata_city / metadata_category) as query params,
-// set by /api/tasks/start. Dodo's docs confirm metadata_* query params are
-// supported on payment/checkout links and that metadata is included in
-// webhook events at event.data.metadata — but this wasn't independently
-// confirmed against a live account before this went into code (no live Dodo
-// account existed at build time). markOrderPaid() therefore matches by
-// order_ref FIRST, and falls back to "most recent pending_payment row for
-// this buyer's email" if metadata didn't come through as expected. This
-// fallback is real, not decorative — verify in STEP 4 which path actually
-// fires (raw_webhook_payload is stored either way for post-hoc inspection).
+// set by /api/tasks/start. Dodo's docs confirm the metadata_* query-param
+// SYNTAX for static payment links, but — checked again, still true as of
+// this comment — do not explicitly confirm that metadata set this way (vs.
+// via the API on a Checkout Session) reaches event.data.metadata on the
+// webhook. markOrderPaid() therefore matches by order_ref FIRST, and falls
+// back to "most recent pending_payment row for this buyer's email" if
+// metadata didn't come through as expected. This fallback is real, not
+// decorative — every time it fires, that's logged as a WARNING below (never
+// silent) until a real payment settles the question of which path actually
+// fires in production (raw_webhook_payload is stored either way for
+// post-hoc inspection).
 //
 // Reserved next.config.ts rewrite exclusion for this path — see the comment
 // there. Isolated: writes ONLY to task_orders, never touches apps/api.
@@ -45,14 +47,14 @@ export const POST = Webhooks({
     const orderRef = data.metadata?.order_ref;
     const payerEmail = data.customer?.email;
 
-    const matched = await markOrderPaid({
+    const { order, matchedVia } = await markOrderPaid({
       orderRef,
       payerEmail,
       dodoPaymentId,
       rawPayload: payload,
     });
 
-    if (!matched) {
+    if (matchedVia === "none") {
       // Loud, not silent: nothing to retry (Dodo won't resend a payload we
       // already 2xx'd), so this needs a human to reconcile manually against
       // raw_webhook_payload / the Dodo dashboard.
@@ -60,8 +62,23 @@ export const POST = Webhooks({
         "[dodo-webhook] payment.succeeded matched NO task_orders row",
         { dodoPaymentId, orderRef, payerEmail }
       );
+      return;
+    }
+
+    if (matchedVia === "email_fallback") {
+      // See the module-header comment: this means metadata_order_ref did NOT
+      // arrive on this webhook as expected. Flagged loudly every time, not
+      // just once, until confirmed live one way or the other.
+      console.warn(
+        "[dodo-webhook] matched via email fallback, NOT order_ref metadata — " +
+        "static-link metadata pass-through may not be reaching webhooks as documented",
+        { orderRef: order?.order_ref, dodoPaymentId, payerEmail }
+      );
     } else {
-      console.log("[dodo-webhook] order marked paid", { orderRef: matched.order_ref, dodoPaymentId });
+      console.log(`[dodo-webhook] order marked paid (matchedVia=${matchedVia})`, {
+        orderRef: order?.order_ref,
+        dodoPaymentId,
+      });
     }
   },
 });

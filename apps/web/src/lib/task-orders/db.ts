@@ -106,20 +106,35 @@ export async function createPendingOrder(params: {
   );
 }
 
+export type OrderMatchMethod = "order_ref" | "email_fallback" | "already_processed" | "none";
+
+export interface MarkOrderPaidResult {
+  order: TaskOrder | null;
+  matchedVia: OrderMatchMethod;
+}
+
 /**
- * Mark an order paid. Matches by order_ref (from webhook metadata) when
- * present; falls back to the most recent pending_payment row for the
- * payer's email if metadata pass-through didn't come through as expected
- * (documented gap in Dodo's static-link metadata behavior — see the route
- * handler comment). Returns the matched order, or null if nothing matched
- * (never throws — the webhook must still 2xx so Dodo doesn't retry forever).
+ * Mark an order paid. Matches by order_ref (from webhook metadata_order_ref
+ * query-param pass-through) when present; falls back to the most recent
+ * pending_payment row for the payer's email otherwise.
+ *
+ * The fallback exists because, as of this writing, Dodo's docs confirm the
+ * metadata_* query-param SYNTAX for static payment links but do not
+ * explicitly confirm that metadata set this way (as opposed to metadata set
+ * via the API on a Checkout Session) reaches event.data.metadata on the
+ * webhook — unverified against a live account. matchedVia tells the caller
+ * which path actually fired so it can log a warning on every fallback use
+ * (never silent) until this is confirmed one way or the other by a real
+ * payment.
+ *
+ * Never throws — the webhook must still 2xx so Dodo doesn't retry forever.
  */
 export async function markOrderPaid(params: {
   orderRef?: string | undefined;
   payerEmail?: string | undefined;
   dodoPaymentId: string;
   rawPayload: unknown;
-}): Promise<TaskOrder | null> {
+}): Promise<MarkOrderPaidResult> {
   await ensureTable();
   const client = await getPool().connect();
   try {
@@ -130,9 +145,8 @@ export async function markOrderPaid(params: {
       `SELECT * FROM task_orders WHERE dodo_payment_id = $1`,
       [params.dodoPaymentId]
     );
-    if (existing.rows[0]) return existing.rows[0];
+    if (existing.rows[0]) return { order: existing.rows[0], matchedVia: "already_processed" };
 
-    let row = null as TaskOrder | null;
     if (params.orderRef) {
       const r = await client.query<TaskOrder>(
         `UPDATE task_orders
@@ -142,10 +156,10 @@ export async function markOrderPaid(params: {
           RETURNING *`,
         [params.dodoPaymentId, params.payerEmail ?? null, JSON.stringify(params.rawPayload), params.orderRef]
       );
-      row = r.rows[0] ?? null;
+      if (r.rows[0]) return { order: r.rows[0], matchedVia: "order_ref" };
     }
 
-    if (!row && params.payerEmail) {
+    if (params.payerEmail) {
       const r = await client.query<TaskOrder>(
         `UPDATE task_orders
             SET status = 'paid', dodo_payment_id = $1, dodo_customer_email = $2,
@@ -158,10 +172,10 @@ export async function markOrderPaid(params: {
           RETURNING *`,
         [params.dodoPaymentId, params.payerEmail, JSON.stringify(params.rawPayload)]
       );
-      row = r.rows[0] ?? null;
+      if (r.rows[0]) return { order: r.rows[0], matchedVia: "email_fallback" };
     }
 
-    return row;
+    return { order: null, matchedVia: "none" };
   } finally {
     client.release();
   }
