@@ -73,7 +73,7 @@ async function ensureTable(): Promise<void> {
   return ensured;
 }
 
-export type TaskOrderStatus = "pending_payment" | "paid" | "fulfilled" | "failed";
+export type TaskOrderStatus = "pending_payment" | "paid" | "fulfilled" | "failed" | "refunded";
 
 export interface TaskOrder {
   id: number;
@@ -86,8 +86,10 @@ export interface TaskOrder {
   dodo_payment_id: string | null;
   dodo_customer_email: string | null;
   apify_run_id: string | null;
+  apify_cost_usd: string | null;
   paid_at: string | null;
   fulfilled_at: string | null;
+  refunded_at: string | null;
   created_at: string;
   updated_at: string;
 }
