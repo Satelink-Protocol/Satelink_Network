@@ -12,32 +12,17 @@
 
 import { Pool } from "pg";
 
-// Inlined (not read from schema.sql at runtime): a readFileSync on a file
-// that's never `import`-ed risks being pruned from Vercel's serverless
-// function file-trace, since Next.js traces dependencies via the module
-// graph. schema.sql stays on disk as the human-readable reference / for a
-// manual `psql -f` run; this string is the source of truth Vercel actually
-// executes, and must be kept in sync with it.
-const TASK_ORDERS_SCHEMA_SQL = `
-  CREATE TABLE IF NOT EXISTS task_orders (
-    id                    SERIAL PRIMARY KEY,
-    order_ref             TEXT UNIQUE NOT NULL,
-    status                TEXT NOT NULL DEFAULT 'pending_payment',
-    city                  TEXT NOT NULL,
-    category              TEXT NOT NULL,
-    buyer_email           TEXT NOT NULL,
-    price_inr             NUMERIC(10,2) NOT NULL DEFAULT 499.00,
-    dodo_payment_id       TEXT,
-    dodo_customer_email   TEXT,
-    apify_run_id          TEXT,
-    raw_webhook_payload   JSONB,
-    paid_at               TIMESTAMPTZ,
-    fulfilled_at          TIMESTAMPTZ,
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
-  );
-  CREATE INDEX IF NOT EXISTS idx_task_orders_status ON task_orders (status);
-  CREATE INDEX IF NOT EXISTS idx_task_orders_buyer_email ON task_orders (buyer_email);
+// The deployed role (task_commerce_web) is scoped to SELECT/INSERT/UPDATE on
+// task_orders ONLY — no CREATE privilege on the schema (least-privilege by
+// design). So this module never attempts to create the table; it exists
+// once, out-of-band, via an admin connection running schema.sql (source of
+// truth for the DDL — keep that file in sync with any column change here).
+// ensureTable() only CONFIRMS the table is there and fails loudly, naming
+// it, if it isn't — never silently continues.
+const TABLE_EXISTS_SQL = `
+  SELECT EXISTS (
+    SELECT FROM information_schema.tables WHERE table_name = 'task_orders'
+  ) AS exists
 `;
 
 let pool: Pool | null = null;
@@ -62,25 +47,28 @@ function getPool(): Pool {
 
 /**
  * Idempotent — safe to call on every request. Cached after the first success.
- *
- * The deployed role (task_commerce_web) is scoped to SELECT/INSERT/UPDATE on
- * task_orders ONLY — no CREATE privilege on the schema (least-privilege by
- * design; see apps/web/src/lib/task-orders/schema.sql header). That means
- * this CREATE TABLE IF NOT EXISTS always fails under the real deployed
- * credential with Postgres error 42501 (insufficient_privilege) — verified
- * empirically against the scoped role before this code shipped. The table
- * itself is created once, out-of-band, by an admin connection (see the
- * commit that added the role). A 42501 here is therefore expected and
- * harmless as long as the table already exists — treated as success. Any
- * OTHER error (bad connection, real syntax error, etc.) still fails loudly.
+ * Confirms task_orders exists; never attempts to create it (the deployed
+ * role has no CREATE privilege — see the module header). If the table is
+ * missing, fails loudly and by name rather than silently continuing into
+ * queries that would themselves fail confusingly later.
  */
 async function ensureTable(): Promise<void> {
   if (!ensured) {
-    ensured = getPool().query(TASK_ORDERS_SCHEMA_SQL).then(() => undefined).catch((err) => {
-      if (err?.code === "42501") return undefined; // insufficient_privilege — expected under the scoped role
-      ensured = null; // allow retry on the next call rather than caching a failure forever
-      throw err;
-    });
+    ensured = getPool()
+      .query<{ exists: boolean }>(TABLE_EXISTS_SQL)
+      .then((r) => {
+        if (!r.rows[0]?.exists) {
+          throw new Error(
+            "task_orders table does not exist. Run apps/web/src/lib/task-orders/schema.sql " +
+            "against the database via an admin connection before deploying — the deployed " +
+            "role (task_commerce_web) cannot create it itself."
+          );
+        }
+      })
+      .catch((err) => {
+        ensured = null; // allow retry on the next call rather than caching a failure forever
+        throw err;
+      });
   }
   return ensured;
 }
