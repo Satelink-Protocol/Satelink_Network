@@ -60,10 +60,24 @@ function getPool(): Pool {
   return pool;
 }
 
-/** Idempotent — safe to call on every request. Cached after the first success. */
+/**
+ * Idempotent — safe to call on every request. Cached after the first success.
+ *
+ * The deployed role (task_commerce_web) is scoped to SELECT/INSERT/UPDATE on
+ * task_orders ONLY — no CREATE privilege on the schema (least-privilege by
+ * design; see apps/web/src/lib/task-orders/schema.sql header). That means
+ * this CREATE TABLE IF NOT EXISTS always fails under the real deployed
+ * credential with Postgres error 42501 (insufficient_privilege) — verified
+ * empirically against the scoped role before this code shipped. The table
+ * itself is created once, out-of-band, by an admin connection (see the
+ * commit that added the role). A 42501 here is therefore expected and
+ * harmless as long as the table already exists — treated as success. Any
+ * OTHER error (bad connection, real syntax error, etc.) still fails loudly.
+ */
 async function ensureTable(): Promise<void> {
   if (!ensured) {
     ensured = getPool().query(TASK_ORDERS_SCHEMA_SQL).then(() => undefined).catch((err) => {
+      if (err?.code === "42501") return undefined; // insufficient_privilege — expected under the scoped role
       ensured = null; // allow retry on the next call rather than caching a failure forever
       throw err;
     });
