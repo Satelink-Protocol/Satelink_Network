@@ -144,11 +144,14 @@ const nextConfig: NextConfig = {
       })),
 
       // Proxy /api/* to the backend EXCEPT route handlers served by the web app
-      // itself: /api/grafana/* (embedded-Grafana BFF) and /api/ops-auth
-      // (ops.satelink.network session login). Without the exclusion the
+      // itself: /api/grafana/* (embedded-Grafana BFF), /api/ops-auth
+      // (ops.satelink.network session login), /api/dodo-webhook (isolated
+      // task-commerce payment webhook — Dodo Payments, task_orders table, has
+      // nothing to do with apps/api's money path) and /api/tasks/* (the
+      // task-commerce order-start route). Without the exclusion the
       // afterFiles rewrite shadows those local route handlers.
       {
-        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)).*)",
+        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)|dodo-webhook(?:/|$)|tasks(?:/|$)).*)",
         destination: `${API_BASE}/api/:path`,
       },
 
