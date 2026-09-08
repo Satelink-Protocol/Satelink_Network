@@ -10,7 +10,6 @@
 # ── Fail everywhere: the pre-existing baseline failures (CLAUDE.md 128/9) ──
 DepositListener — canonical crediting + hardening restart mid-block-range resumes from the DB cursor (no gap, no rescan-credit)
 EpochScheduler closes one OPEN epoch, aggregates revenue, applies 50/30/20 split, and opens the next epoch
-freeTierGate — authenticated bypass (revenue unblock) anonymous over limit → 402 FREE_TIER_LIMIT_REACHED
 instant trial machine key t1: instant mode issues a wallet-less trial key
 instant trial machine key t2: third instant mint from one IP in a day → 429
 instant trial machine key t3: wallet path unchanged — missing signature returns sign_message
@@ -30,3 +29,11 @@ x402 payment rail t3: duplicate settlement tx_hash → 409, exactly one payment_
 x402 payment rail ledger integrity + bundle credits t13: exhausted credits → alias not applied → normal x402 402
 x402 payment rail ledger integrity + bundle credits "before all" hook for "founder check: mainnet settlement from a founder wallet is is_test_data=true"
 x402 payment rail ledger integrity + bundle credits "after all" hook for "t15: keyed and free-tier traffic untouched (x-payer-address never overrides a key)"
+#
+# ── C1 / P0-wallet-auth regression suites: same DB-dependent pattern as the
+# x402 block above (real DATABASE_URL needed; CI's is a dummy unreachable
+# localhost URL, so their before()/after() hooks fail fast and deterministically). ──
+C1: x-payer-address credit theft is closed "before all" hook for "NEGATIVE: unauthenticated caller with x-payer-address:A never charges A"
+C1: x-payer-address credit theft is closed "after all" hook for "REPLAY: the same settlement submitted twice → 409, no double credit"
+P0-wallet-auth: x-wallet-address can no longer drive billing "before all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
+P0-wallet-auth: x-wallet-address can no longer drive billing "after all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
