@@ -83,14 +83,18 @@ describe('freeTierGate — free tier removed (auth required, nothing billed)', (
     expect(r.statusCode).to.equal(null);
   });
 
-  it('x-wallet-address header → passes through to creditService (next)', async () => {
+  it('x-wallet-address header alone → NOT a credential, treated as anonymous → 402 (P0 payer-identity)', async () => {
+    // SECURITY (2026-09): a bare wallet header no longer passes the gate — it
+    // names no verified identity. With the free tier removed (anon limit 0) it
+    // 402s on the first call, exactly like unauthenticated traffic. Only a real
+    // X-API-Key reaches creditService (previous test).
     const gate = createFreeTierGate(console);
     const r = await invoke(gate, {
       ip: '172.16.0.5',
       headers: { 'x-wallet-address': '0x1111111111111111111111111111111111111111' },
     });
-    expect(r.nextCalled).to.equal(true);
-    expect(r.statusCode).to.equal(null);
+    expect(r.nextCalled).to.equal(false);
+    expect(r.statusCode).to.equal(402);
   });
 
   it('the 402 body still carries the full self-onboarding path (register + deposit)', async () => {

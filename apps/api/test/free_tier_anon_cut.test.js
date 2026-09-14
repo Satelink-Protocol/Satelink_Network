@@ -59,13 +59,16 @@ describe('freeTierGate — anonymous free-tier cut (FREE_TIER_ANON_CALLS)', () =
   // free_tier_removed.test.js and docs/incidents/2026-08-27-freetier-backfill/.
   const BYPASS_CASES = [
     { name: 'x-api-key header',        req: { headers: { 'x-api-key': 'sk_free_placeholder' } } },
-    { name: 'x-wallet-address header', req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
   ];
+  // P0 payer-identity (2026-09): x-wallet-address is NO LONGER a bypass — a bare
+  // wallet header names no verified identity, so it is throttled like anonymous
+  // traffic (402), same as x-payer-address.
   const REMOVED_TIER_CASES = [
     { name: 'authorization header',     req: { headers: { authorization: 'Bearer token.value' } } },
     { name: 'x-admin-key header',       req: { headers: { 'x-admin-key': 'admin-secret' } } },
     { name: 'x-admin-token header',     req: { headers: { 'x-admin-token': 'admin-token' } } },
     { name: 'x-enterprise-key header',  req: { headers: { 'x-enterprise-key': 'ent-key' } } },
+    { name: 'x-wallet-address header',  req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
     { name: 'x-payer-address header',   req: { headers: { 'x-payer-address': '0x' + '1'.repeat(40) } } },
     { name: 'payment-signature header', req: { headers: { 'payment-signature': 'base64payload' } } },
     { name: 'x-payment header',         req: { headers: { 'x-payment': 'base64payload' } } },

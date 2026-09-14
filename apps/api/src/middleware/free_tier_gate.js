@@ -201,17 +201,25 @@ export function createFreeTierGate(logger, redis, pool = null) {
   const upgradeContextFor = createUpgradeContext({ pool, redis, log });
 
   return async function freeTierGate(req, res, next) {
-    // Authenticated callers (bound wallet OR API key) skip the per-IP free-tier
-    // gate entirely and are handled by creditService (authorizeAndMeter):
-    // per-key daily limit, balance deduction, and metering. The credit system is
+    // Authenticated callers (a real API key) skip the per-IP free-tier gate
+    // entirely and are handled by creditService (authorizeAndMeter): per-key
+    // daily limit, balance deduction, and metering. The credit system is
     // api_credits-keyed, so an X-API-Key caller must NOT be IP-rate-limited as
     // anonymous free traffic — otherwise a funded key is 402'd before deduction.
-    const walletHeader = req.headers['x-wallet-address'];
+    //
+    // P0 payer-identity (2026-09): x-wallet-address is NO LONGER a bypass here.
+    // It names no verified identity — a fabricated value used to skip this gate
+    // for free, and (worse) was trusted downstream to name a billing target
+    // (finding C1). Billing now rejects a bare wallet header (rpc_gateway.js /
+    // credit_gate.js return 401), so letting it skip throttling would only buy
+    // a free ride to that 401. x-api-key presence (not shape/validity) is
+    // unchanged: a fabricated key is still correctly rejected downstream by
+    // authorizeAndMeter (401 unknown key); it simply isn't IP-throttled first.
     const apiKeyHeader = req.headers['x-api-key'];
-    if (walletHeader || apiKeyHeader) return next();
+    if (apiKeyHeader) return next();
 
     // Free tier removed (2026-08-27): the ONLY ways past this gate are (1) an
-    // x-wallet-address or x-api-key header — both returned next() above — or
+    // x-api-key header — returned next() above — or
     // (2) a settled x402 payment, which bypasses this gate entirely upstream
     // (freeTierGateUnlessX402Paid in app_factory.mjs). Any caller reaching this
     // line therefore has NO recognized paid credential; its effective allowance

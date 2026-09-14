@@ -2,7 +2,8 @@
 // Pre-pay credit gate for RPC calls
 // Deducts USDT from credit_balances before serving request
 // Returns 402 Payment Required if balance insufficient
-// Only activates for requests with x-wallet-address header
+// Activates for requests presenting an X-API-Key bound to a wallet (the
+// deduction target is resolved from that binding, never from a header).
 // Fail-open: on DB error, request is served (never blocks on infra failure)
 
 import { paymentRequiredResponse } from '../utils/payment_required.js';
@@ -47,16 +48,44 @@ export function createCreditGate(db, logger) {
     // MUST step aside to avoid a double deduction (credit_balances + api_credits).
     if (process.env.CREDIT_CANONICAL === 'true') return next();
 
-    // Only gate wallet-authenticated requests
+    // P0 payer-identity (2026-09): x-wallet-address used to be read directly off
+    // the request and trusted as the credit_balances deduction target — C1's
+    // twin against this legacy table. A bare header is no longer sufficient: the
+    // wallet used for the atomic UPDATE below is resolved ONLY from the
+    // api_credits row bound to a presented X-API-Key (the same binding
+    // /v1/machine/register proves once, by signature). x-wallet-address alone
+    // → 401, never a deduction.
     const rawWallet = req.headers['x-wallet-address'];
-    if (!rawWallet) return next(); // public/unauthenticated — pass through
+    const apiKey = req.headers['x-api-key'];
+    if (!rawWallet && !apiKey) return next(); // public/unauthenticated — pass through
 
-    const wallet = rawWallet.toLowerCase();
+    if (!apiKey) {
+      return res.status(401).json({
+        error: 'wallet_header_insufficient',
+        message: 'x-wallet-address alone is not a billing credential. Present a valid X-API-Key (see POST /v1/machine/register).'
+      });
+    }
 
-    // Validate wallet format
-    if (!wallet.match(/^0x[0-9a-f]{40}$/)) {
-      return res.status(400).json({
-        error: 'Invalid x-wallet-address header format'
+    // Resolve the wallet from the account BOUND to the presented api_key — never
+    // from the header. Mirrors credit_service.mjs resolveAccount binding
+    // (api_credits.wallet_address), the one place api_key↔wallet ownership is
+    // established.
+    let wallet;
+    try {
+      const acct = await db.query(
+        `SELECT wallet_address FROM api_credits WHERE api_key = $1`,
+        [apiKey]
+      );
+      wallet = acct.rows[0]?.wallet_address ? acct.rows[0].wallet_address.toLowerCase() : null;
+    } catch (err) {
+      // Fail-open: same posture as the rest of this gate (DB error never blocks).
+      log.error(`${LOG_PREFIX} DB error resolving api_key (fail-open): ${err.message}`);
+      return next();
+    }
+    if (!wallet) {
+      return res.status(401).json({
+        error: 'api_key_not_wallet_bound',
+        message: 'This API key has no wallet bound; wallet-based (credit_balances) billing is unavailable for it.'
       });
     }
 

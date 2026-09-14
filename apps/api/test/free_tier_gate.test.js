@@ -101,15 +101,19 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
     expect(body.register.body.signature).to.include('satelink:register:');
   });
 
-  it('wallet-authenticated → bypasses the gate even when the IP is over limit', async () => {
+  it('bare x-wallet-address does NOT bypass the gate — it is not a verified credential (P0 payer-identity)', async () => {
+    // SECURITY (2026-09): x-wallet-address alone names no verified identity, so
+    // it must NOT skip the per-IP gate. An over-limit IP presenting only a
+    // (spoofable) wallet header is throttled like anonymous traffic — a 402,
+    // not a free pass. Only a real X-API-Key bypasses (next test).
     const gate = createFreeTierGate(console);
     await exhaust(gate, '10.0.0.3'); // IP now over limit
     const r = await invoke(gate, {
       ip: '10.0.0.3',
       headers: { 'x-wallet-address': '0x1111111111111111111111111111111111111111' },
     });
-    expect(r.nextCalled).to.equal(true);
-    expect(r.statusCode).to.equal(null);
+    expect(r.nextCalled).to.equal(false);
+    expect(r.statusCode).to.equal(402);
   });
 
   it('API-key-authenticated → bypasses the gate even when the IP is over limit (THE FIX)', async () => {
