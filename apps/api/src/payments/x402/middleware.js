@@ -20,6 +20,8 @@
 // When X402_ENABLED != 'true' this middleware is a bare next() — no response
 // wrapping, no SDK objects built — so gateway behavior is byte-identical.
 
+// Must stay first: CDP JWT signing needs globalThis.crypto (absent on Node 18).
+import './webcrypto.js';
 import { ExpressAdapter } from '@x402/express';
 import { x402ResourceServer, x402HTTPResourceServer, HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
