@@ -31,7 +31,7 @@ function getRedis() {
   return getSharedRedis();
 }
 
-export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId, amountUsdt }) {
+export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId, amountUsdt, opType = 'rpc_call' }) {
   // Customer Zero Phase 6 — phantom-billing elimination:
   // A revenue event is created ONLY for traffic that produced an ACTUAL credit
   // deduction. `amountUsdt` is the real amount deducted by creditService on the
@@ -87,7 +87,7 @@ export async function recordRpcRevenue({ pool, chain, method, apiKey, source, re
     await pool.query(
       `INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source, is_test_data)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      ['rpc_call', apiKey || 'public', costUsdt, 'completed', revRequestId, Math.floor(Date.now() / 1000), chain || null, method || null, source || null, isTestData]
+      [opType, apiKey || 'public', costUsdt, 'completed', revRequestId, Math.floor(Date.now() / 1000), chain || null, method || null, source || null, isTestData]
     );
     // M3 shadow ledger — flag-gated (LEDGER_SHADOW_WRITE, default OFF), isolated
     // pool, never throws. Same request_id so the shadow txn parity-matches this row.
