@@ -17,8 +17,10 @@ describe('wsHasAuth — WS RPC requires a credential (free tier removed)', () =>
     expect(wsHasAuth(upgrade({ headers: { 'x-api-key': 'k' } }))).to.equal(true);
   });
 
-  it('x-wallet-address header → authenticated', () => {
-    expect(wsHasAuth(upgrade({ headers: { 'x-wallet-address': '0x' + '1'.repeat(40) } }))).to.equal(true);
+  it('x-wallet-address header alone → NOT authenticated (P0-wallet-auth, same as HTTP C1 fix)', () => {
+    // Pre-fix this returned true — the same C1 vulnerability class as the HTTP
+    // path (#357). A bare x-wallet-address names no verified identity.
+    expect(wsHasAuth(upgrade({ headers: { 'x-wallet-address': '0x' + '1'.repeat(40) } }))).to.equal(false);
   });
 
   it('?api_key query → authenticated (browser WS clients cannot set headers)', () => {

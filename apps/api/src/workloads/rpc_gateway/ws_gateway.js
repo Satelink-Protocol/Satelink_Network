@@ -39,17 +39,20 @@ function getProviderWsUrl(chain) {
 }
 
 // Free tier removed (2026-08-27): WS RPC requires the SAME credential as HTTP
-// /rpc — x-api-key or x-wallet-address. Browser WS clients cannot set custom
-// headers, so ?api_key / ?token query params are accepted as equivalents (this
-// mirrors free_tier_gate.js's AUTH_SIGNAL_QUERY). An UNAUTHENTICATED upgrade is
-// rejected before any subscription can open. This is the fix for the Aug-2026
-// ws_subscription storm: an anonymous client could open a newPendingTransactions
-// firehose and recordWsRevenue wrote one revenue_events_v2 row PER streamed event
-// (100k+/hour), which filled the 1GB volume. No auth → no connection → no writes.
+// /rpc — x-api-key ONLY (not x-wallet-address). Browser WS clients cannot set
+// custom headers, so ?api_key / ?token query params are accepted as equivalents
+// (this mirrors free_tier_gate.js's AUTH_SIGNAL_QUERY). An UNAUTHENTICATED
+// upgrade is rejected before any subscription can open.
+//
+// P0-wallet-auth (2026-09): x-wallet-address alone does NOT authenticate — it
+// names no verified identity. Same vulnerability class as finding C1 (PR #357)
+// fixed on the HTTP path: a spoofed x-wallet-address header could bypass the
+// 401 gate and open an unbilled WS connection. Only x-api-key (bearer secret)
+// or the query equivalents constitute valid auth for WS.
 export function wsHasAuth(request) {
   const h = request.headers || {};
   const nonEmpty = (v) => v != null && String(v).length > 0;
-  if (nonEmpty(h['x-api-key']) || nonEmpty(h['x-wallet-address'])) return true;
+  if (nonEmpty(h['x-api-key'])) return true;
   try {
     const q = new URL(request.url, 'http://ws.local').searchParams;
     if (nonEmpty(q.get('api_key')) || nonEmpty(q.get('token'))) return true;
