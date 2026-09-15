@@ -94,8 +94,14 @@ export function costFor(account, methodPrice) {
  */
 export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = {}) {
   if (!pool || !pool.query) {
-    // Fail-open for infra absence (no DB) — never block on missing pool.
-    return { ok: true, tier: 'free', cost: 0, balanceAfter: null, remaining: null, degraded: true };
+    // Fail CLOSED (T-24): a DB outage must never mean free unlimited
+    // service. Without a pool we cannot check the daily limit or deduct a
+    // balance, so authorization cannot be granted — 503, not a free pass.
+    return {
+      ok: false, code: 'no_pool', http: 503,
+      message: 'Billing store unavailable — try again shortly',
+      degraded: true,
+    };
   }
 
   const account = await resolveAccount(pool, { apiKey, wallet });
@@ -194,8 +200,10 @@ export async function creditAccount(pool, { apiKey, wallet, amountUsdt, txHash, 
 
   const depositor = fromAddress || account.wallet_address || null;
   await pool.query(
-    `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    // credited_usdt == amount_usdt here: this path always credits 1:1 (no
+    // bundle pricing). Only x402 bundle settlements (settlement.js) diverge.
+    `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, credited_usdt, from_address, tier_before, tier_after, is_test_data)
+       VALUES ($1, $2, $3, $3, $4, $5, $6, $7)`,
     [key, txHash || `internal_${Date.now()}`, amount, depositor,
      account.tier, tier || account.tier, isFounderWallet(depositor)]
   );

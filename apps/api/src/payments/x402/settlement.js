@@ -77,10 +77,18 @@ export async function recordX402Settlement(pool, {
       // idempotency layer) + credits/total_deposited bump. A 'free' account
       // is lifted to the paid x402 tier so the deduction path actually
       // charges it; existing paid tiers are preserved.
+      //
+      // T-17b: amount_usdt is the amount actually SETTLED (amountUsd) — the
+      // same meaning it has on every other deposit path (api_keys_route.mjs,
+      // credit_service.creditAccount, deposit_listener.js). A bundle's
+      // credited spend capacity (creditUsdt, e.g. $0.03 of a $0.10 bundle)
+      // is NOT the settled amount and gets its own column, credited_usdt, so
+      // total_deposited (summed from amount_usdt) matches real revenue in
+      // payment_sources instead of understating it by the bundle margin.
       await client.query(
-        `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
-         VALUES ($1, $2, $3, $4, 'x402', 'x402', $5)`,
-        [creditedKey, txHash, creditUsdt, payer.toLowerCase(), isTest]
+        `INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, credited_usdt, from_address, tier_before, tier_after, is_test_data)
+         VALUES ($1, $2, $3, $4, $5, 'x402', 'x402', $6)`,
+        [creditedKey, txHash, amountUsd, creditUsdt, payer.toLowerCase(), isTest]
       );
       const upd = await client.query(
         `UPDATE api_credits

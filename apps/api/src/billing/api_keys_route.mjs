@@ -364,16 +364,18 @@ export function createSimpleApiKeysRouter(pool) {
           api_key VARCHAR(100) NOT NULL,
           tx_hash VARCHAR(66) UNIQUE NOT NULL,
           amount_usdt NUMERIC(18,6) NOT NULL,
+          credited_usdt NUMERIC(18,6),
           from_address VARCHAR(42),
           tier_before VARCHAR(20),
           tier_after VARCHAR(20),
           created_at TIMESTAMP DEFAULT NOW()
         )
       `).catch(() => {});
+      await pool.query(`ALTER TABLE api_deposits ADD COLUMN IF NOT EXISTS credited_usdt NUMERIC(18,6)`).catch(() => {});
 
       await pool.query(`
-        INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, from_address, tier_before, tier_after, is_test_data)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, credited_usdt, from_address, tier_before, tier_after, is_test_data)
+        VALUES ($1, $2, $3, $3, $4, $5, $6, $7)
       `, [key, tx_hash, depositAmount, fromAddress, keyRow.rows[0].tier, newTier, isFounderWallet(fromAddress)]);
 
       // Credit the account

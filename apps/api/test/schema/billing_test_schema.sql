@@ -66,15 +66,16 @@ CREATE TABLE IF NOT EXISTS payment_sources (
 );
 
 CREATE TABLE IF NOT EXISTS api_deposits (
-  id           SERIAL PRIMARY KEY,
-  api_key      TEXT,
-  tx_hash      VARCHAR(66) UNIQUE NOT NULL,
-  amount_usdt  NUMERIC(18,8),
-  from_address TEXT,
-  tier_before  TEXT,
-  tier_after   TEXT,
-  is_test_data BOOLEAN DEFAULT FALSE,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  api_key       TEXT,
+  tx_hash       VARCHAR(66) UNIQUE NOT NULL,
+  amount_usdt   NUMERIC(18,8),
+  credited_usdt NUMERIC(18,6),
+  from_address  TEXT,
+  tier_before   TEXT,
+  tier_after    TEXT,
+  is_test_data  BOOLEAN DEFAULT FALSE,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS credit_deposits (
