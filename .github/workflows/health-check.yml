@@ -72,7 +72,7 @@ jobs:
 
       - name: Open / update / close the x402 incident issue
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           OK: ${{ steps.probe.outputs.ok }}
           REASON: ${{ steps.probe.outputs.reason }}
@@ -158,7 +158,7 @@ jobs:
 
       - name: Open / update / close the incident issue
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           HEALTHY: ${{ steps.probe.outputs.healthy }}
           CODE: ${{ steps.probe.outputs.code }}
