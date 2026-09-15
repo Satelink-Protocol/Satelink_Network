@@ -248,8 +248,8 @@ async function recordWsRevenue(db, clientId, chain) {
     const now = Math.floor(Date.now() / 1000);
     const revRequestId = `ws_${Date.now()}`;
     await db.query(
-      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at)
-       VALUES ('ws_subscription', $1, $2, $3, 'success', $4, $5)`,
+      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at, is_billable)
+       VALUES ('ws_subscription', $1, $2, $3, 'success', $4, $5, false)`,
       [chain, clientId, WS_EVENT_PRICE_USDT, revRequestId, now]
     );
     // M3 shadow ledger — flag-gated, isolated pool, never throws.
