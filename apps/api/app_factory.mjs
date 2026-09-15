@@ -27,6 +27,8 @@ import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
 import { createIntelligenceRouter } from "./src/routes/intelligence_route.js";
 import { startIntelRefresh } from "./src/intelligence/engine.js";
+import { createDodoInternalRouter } from "./src/routes/internal_dodo.js";
+import { runReconciliation } from "./src/billing/reconciliation.mjs";
 import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
@@ -455,6 +457,21 @@ app.get("/api/mode", (req, res) => {
   // M8 — capacity enforcement cutover: dual-evaluation parity + latency.
   // GET /internal/capacity-parity.
   app.use("/internal", createCapacityParityRouter(pool));
+
+  // M5 — Dodo human payment rail: POST /internal/dodo/credit
+  // Reached ONLY by apps/web's verified webhook handler, authenticated by
+  // DODO_INTERNAL_SECRET (defense in depth). Inert if secret is not set (503).
+  app.use("/internal/dodo", createDodoInternalRouter(pool));
+
+  // Reconciliation — admin-protected read-only financial health check.
+  app.get("/internal/reconciliation", requireAdminAuth, async (_req, res) => {
+    try {
+      const report = await runReconciliation(pool);
+      res.json(report);
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
 
   // Conversion funnel: fetching deposit calldata is the "payment_started"
   // signal (the URL every 402 advertises). Counting middleware only — the
