@@ -20,6 +20,11 @@
 // When X402_ENABLED != 'true' this middleware is a bare next() — no response
 // wrapping, no SDK objects built — so gateway behavior is byte-identical.
 
+// Ensure globalThis.crypto (WebCrypto) exists BEFORE @coinbase/x402 is loaded —
+// on Node 18 it is otherwise undefined and CDP Ed25519 JWT signing throws
+// "crypto is not defined", killing facilitator sync (T-04 layer 2). Side-effect
+// import; must precede the @coinbase/x402 / @x402 imports below.
+import '../../bootstrap/webcrypto_global.js';
 import { ExpressAdapter } from '@x402/express';
 import { x402ResourceServer, x402HTTPResourceServer, HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
