@@ -1,0 +1,14 @@
+# T-04 runtime pin (2026-09-15): Satelink-api's Railway service has
+# rootDirectory=/apps/api, so Nixpacks looks for its config file INSIDE
+# apps/api/ — the pre-existing nixpacks.toml at the repo root (nodejs_20)
+# was never applied to this build; the deployed image was Nixpacks'
+# auto-detected default, Node v18.20.5 (confirmed via build logs), which
+# lacks a default globalThis.crypto and broke the x402 facilitator's CDP
+# auth (see apps/api/src/bootstrap/webcrypto_global.js).
+#
+# Only the Node version is pinned here — install/build/start stay on
+# Nixpacks' auto-detection, which already builds this service correctly
+# today (this directory has no committed package-lock.json; `npm ci`
+# would fail here, unlike the root nixpacks.toml's copy-pasted command).
+[phases.setup]
+nixPkgs = ["nodejs_20"]
