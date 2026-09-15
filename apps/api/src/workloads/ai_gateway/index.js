@@ -73,8 +73,8 @@ async function recordAiRevenue(db, inputTokens, outputTokens, apiKey, requestId,
     const now = Math.floor(Date.now() / 1000);
     const isTestData = await isFounderApiKey(db, apiKey);
     await db.query(
-      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at, is_test_data)
-       VALUES ('ai_inference', $1, $2, $3, 'success', $4, $5, $6)`,
+      `INSERT INTO revenue_events_v2 (op_type, node_id, client_id, amount_usdt, status, request_id, created_at, is_test_data, is_billable)
+       VALUES ('ai_inference', $1, $2, $3, 'success', $4, $5, $6, false)`,
       [`ai_${model}`, clientId, cost, requestId, now, isTestData]
     );
     // M3 shadow ledger — flag-gated, isolated pool, never throws.

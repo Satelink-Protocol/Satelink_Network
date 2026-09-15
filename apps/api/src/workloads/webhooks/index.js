@@ -140,8 +140,8 @@ export async function deliverWebhooks(pool, redis, chain, eventType, payload) {
           delivered++;
           const isTestData = await isFounderApiKey(pool, sub.api_key);
           await pool.query(
-            `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data)
-             VALUES ($1, 'webhook', $2, $3, 'completed', $4, $5)`,
+            `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data, is_billable)
+             VALUES ($1, 'webhook', $2, $3, 'completed', $4, $5, false)`,
             [sub.api_key, eventType, WEBHOOK_PRICE_USDT, Math.floor(Date.now() / 1000), isTestData]
           );
         }

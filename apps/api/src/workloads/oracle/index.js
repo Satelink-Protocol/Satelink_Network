@@ -93,8 +93,8 @@ export function createOracleRouter(pool, redis) {
       try {
         const isTestData = await isFounderApiKey(pool, apiKey);
         await pool.query(
-          `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data)
-           VALUES ($1, 'oracle', $2, $3, 'completed', $4, $5)`,
+          `INSERT INTO revenue_events_v2 (client_id, service, method, amount_usdt, status, created_at, is_test_data, is_billable)
+           VALUES ($1, 'oracle', $2, $3, 'completed', $4, $5, false)`,
           [apiKey, token, ORACLE_PRICE_USDT, Math.floor(Date.now() / 1000), isTestData]
         );
       } catch (e) {
