@@ -27,6 +27,104 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  x402-challenge:
+    # T-04 (2026-09-15): the anonymous /rpc 402 must stay a payable x402 challenge.
+    # From 2026-08-20 to 2026-09-15 it silently degraded to a non-payable legacy
+    # 402 (@x402/* version skew) while /health stayed green and CI passed.
+    #
+    # Target: repo variable X402_PROBE_URL, default the public API. Cloudflare
+    # (Free plan) has blocked GitHub runner IPs on api.satelink.network with a 403
+    # (see the probe job below). A blocked probe FAILS as "probe blocked" — it is
+    # never treated as healthy. Point X402_PROBE_URL at a Cloudflare-free
+    # Satelink-api domain (e.g. a Railway-generated *.up.railway.app) to make
+    # this check conclusive.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe the anonymous 402 shape (3 attempts)
+        id: probe
+        env:
+          PROBE_URL: ${{ vars.X402_PROBE_URL || 'https://api.satelink.network/rpc/polygon' }}
+        run: |
+          ok=false
+          reason=unknown
+          for attempt in 1 2 3; do
+            headers="$(mktemp)"; body="$(mktemp)"
+            code="$(curl -sS -m 20 -o "$body" -D "$headers" -w '%{http_code}' -X POST "$PROBE_URL" \
+              -H 'content-type: application/json' \
+              -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' || echo 000)"
+            if [ "$code" = "403" ] && grep -qi '^server: cloudflare' "$headers"; then
+              reason="probe blocked by Cloudflare (HTTP 403) — set X402_PROBE_URL"
+            elif [ "$code" != "402" ]; then
+              reason="expected HTTP 402, got $code"
+            elif ! grep -qi '^payment-required:' "$headers"; then
+              reason="402 missing PAYMENT-REQUIRED header (non-payable legacy 402)"
+            elif ! grep -q '"accepts"' "$body" || ! grep -q '"x402Version"' "$body"; then
+              reason="402 body missing accepts/x402Version"
+            else
+              ok=true; reason="payable x402 challenge"; break
+            fi
+            echo "attempt $attempt: $reason"
+            sleep 10
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Result: ok=$ok ($reason)"
+
+      - name: Open / update / close the x402 incident issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OK: ${{ steps.probe.outputs.ok }}
+          REASON: ${{ steps.probe.outputs.reason }}
+        with:
+          script: |
+            const ok = process.env.OK === 'true';
+            const reason = process.env.REASON || 'probe did not run';
+            const marker = '<!-- satelink-x402-challenge-monitor -->';
+            const label = 'health-incident';
+            const { owner, repo } = context.repo;
+            const now = new Date().toISOString();
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: label, per_page: 20,
+            });
+            const existing = open.data.find((i) => (i.body || '').includes(marker));
+
+            if (!ok) {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Still failing at ${now}: ${reason}. ${runUrl}`,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner, repo,
+                  title: '🔴 x402 402 challenge is not payable',
+                  labels: [label],
+                  body: `${marker}\nx402 challenge check failed at ${now}.\n\n`
+                      + `- Reason: ${reason}\n`
+                      + `- Run: ${runUrl}\n\n`
+                      + `Expected: anonymous POST /rpc/polygon → HTTP 402 with a PAYMENT-REQUIRED header `
+                      + `and a body containing "accepts" and "x402Version". This issue auto-closes on recovery.`,
+                });
+              }
+            } else if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `✅ Recovered at ${now}. Auto-closing.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, state: 'closed',
+              });
+            }
+
+      - name: Fail the run if the challenge is not payable
+        if: steps.probe.outputs.ok != 'true'
+        run: |
+          echo "::error title=x402 challenge::${{ steps.probe.outputs.reason }}"
+          exit 1
+
   probe:
     runs-on: ubuntu-latest
     steps:
