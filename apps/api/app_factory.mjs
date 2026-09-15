@@ -22,6 +22,7 @@ import { createFinancialTruthRouter } from "./src/services/financial/truth.js";
 import { createLedgerParityRouter } from "./src/internal/ledger_parity.js";
 import { createDrawParityRouter } from "./src/ledger/draw_parity.js";
 import { createCapacityParityRouter } from "./src/internal/capacity_parity.js";
+import { createDodoInternalRouter } from "./src/routes/internal_dodo.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
@@ -445,6 +446,13 @@ app.get("/api/mode", (req, res) => {
   // M8 — capacity enforcement cutover: dual-evaluation parity + latency.
   // GET /internal/capacity-parity.
   app.use("/internal", createCapacityParityRouter(pool));
+
+  // M5 — Dodo human payment rail (T-17): the money-writing half of the
+  // webhook apps/web's dodo-webhook route calls after Dodo's own signature
+  // verification passes. Guarded by its own shared secret (DODO_INTERNAL_SECRET),
+  // not requireAdminAuth — a narrower credential for a narrower purpose.
+  // POST /internal/dodo/credit.
+  app.use("/internal/dodo", createDodoInternalRouter(pool));
 
   // Conversion funnel: fetching deposit calldata is the "payment_started"
   // signal (the URL every 402 advertises). Counting middleware only — the
