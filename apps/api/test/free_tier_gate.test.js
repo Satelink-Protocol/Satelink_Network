@@ -114,7 +114,9 @@ describe('freeTierGate — authenticated bypass (revenue unblock)', () => {
       headers: { 'x-wallet-address': '0x1111111111111111111111111111111111111111' },
     });
     expect(stillOverLimit.nextCalled).to.equal(false);
-    expect(stillOverLimit.statusCode).to.equal(402);
+    // Gate M0(a): 401 insufficient credential, not the over-limit 402.
+    expect(stillOverLimit.statusCode).to.equal(401);
+    expect(stillOverLimit.payload.error).to.equal('wallet_header_insufficient');
   });
 
   it('API-key-authenticated → bypasses the gate even when the IP is over limit (THE FIX)', async () => {

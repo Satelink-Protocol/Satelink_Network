@@ -72,12 +72,23 @@ describe('freeTierGate — anonymous free-tier cut (FREE_TIER_ANON_CALLS)', () =
     { name: 'x-admin-token header',     req: { headers: { 'x-admin-token': 'admin-token' } } },
     { name: 'x-enterprise-key header',  req: { headers: { 'x-enterprise-key': 'ent-key' } } },
     { name: 'x-payer-address header',   req: { headers: { 'x-payer-address': '0x' + '1'.repeat(40) } } },
-    { name: 'x-wallet-address header',  req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
     { name: 'payment-signature header', req: { headers: { 'payment-signature': 'base64payload' } } },
     { name: 'x-payment header',         req: { headers: { 'x-payment': 'base64payload' } } },
     { name: 'api_key query param',      req: { query: { api_key: 'sk_free_placeholder' } } },
     { name: 'token query param',        req: { query: { token: 'admin-token' } } },
   ];
+
+  // Gate M0(a) (2026-09-15): a bare x-wallet-address is rejected outright
+  // (401 insufficient credential) — never served, never rate-limited as free.
+  it('x-wallet-address header alone → 401 on first call, not served', async () => {
+    process.env.FREE_TIER_ANON_CALLS = '0';
+    process.env.FREE_TIER_DAILY_LIMIT = '0';
+    const gate = createFreeTierGate(silent);
+    const r = await invoke(gate, { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) }, ip: '203.0.121.1' });
+    expect(r.error, 'no error thrown').to.equal(undefined);
+    expect(r.nextCalled).to.equal(false);
+    expect(r.statusCode).to.equal(401);
+  });
 
   BYPASS_CASES.forEach((c, i) => {
     it(`bypass credential "${c.name}" → served on first call (reaches creditService)`, async () => {

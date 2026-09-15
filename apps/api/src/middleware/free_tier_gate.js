@@ -223,6 +223,22 @@ export function createFreeTierGate(logger, redis, pool = null) {
     const apiKeyHeader = req.headers['x-api-key'];
     if (apiKeyHeader) return next();
 
+    // Gate M0(a) (2026-09-15): a bare x-wallet-address is an insufficient
+    // credential — answer 401 here, the same body rpc_gateway.js returns,
+    // instead of rate-limiting it as anonymous. Before this, the response
+    // depended on the caller's /24 budget: 401 from the gateway while budget
+    // remained, the legacy free-tier 402 once it was spent. Either way it was
+    // never served or billed; this makes the rejection uniform and stops junk
+    // wallet headers from consuming the subnet's free budget. A settled x402
+    // payment never reaches this gate (freeTierGateUnlessX402Paid).
+    if (req.headers['x-wallet-address']) {
+      return res.status(401).json({
+        ok: false,
+        error: 'wallet_header_insufficient',
+        message: 'x-wallet-address alone is not a billing credential. Present a valid X-API-Key (see POST /v1/machine/register) or pay via x402.'
+      });
+    }
+
     // Free tier removed (2026-08-27): the ONLY ways past this gate are (1) an
     // x-api-key header — returned next() above — or
     // (2) a settled x402 payment, which bypasses this gate entirely upstream

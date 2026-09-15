@@ -85,18 +85,19 @@ describe('freeTierGate — free tier removed (auth required, nothing billed)', (
     expect(r.statusCode).to.equal(null);
   });
 
-  it('x-wallet-address header alone → 402 on the FIRST call (P0-wallet-auth, 2026-09)', async () => {
+  it('x-wallet-address header alone → 401 on the FIRST call (P0-wallet-auth, 2026-09; Gate M0(a))', async () => {
     // It used to bypass here too — the same unverified-identity issue as
     // billing (finding C1's twin): a fabricated header got a free ride past
-    // IP throttling. It now falls through exactly like any other non-bypass
-    // auth signal (see free_tier_anon_cut.test.js REMOVED_TIER_CASES).
+    // IP throttling. It is now rejected outright as an insufficient
+    // credential — the same 401 rpc_gateway.js returns — regardless of budget.
     const gate = createFreeTierGate(console);
     const r = await invoke(gate, {
       ip: '172.16.0.5',
       headers: { 'x-wallet-address': '0x1111111111111111111111111111111111111111' },
     });
     expect(r.nextCalled).to.equal(false);
-    expect(r.statusCode).to.equal(402);
+    expect(r.statusCode).to.equal(401);
+    expect(r.payload.error).to.equal('wallet_header_insufficient');
   });
 
   it('the 402 body still carries the full self-onboarding path (register + deposit)', async () => {
