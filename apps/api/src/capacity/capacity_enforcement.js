@@ -21,6 +21,7 @@
 // (services/financial getCapacity) in raw SQL, the same pattern as
 // shadow_ledger_write.js — it does NOT import apps/api/src/payments/.
 
+import crypto from 'crypto';
 import { authorizeAndMeter } from '../billing/credit_service.mjs';
 import { parityRecorder } from './parity_recorder.js';
 import { getCapacityPath } from '../lib/flags.js';
@@ -63,19 +64,27 @@ async function resolvePrincipalId(db, { apiKey, wallet }) {
  * there) gets a denial reason scoped to the row it actually tried to draw
  * from, not the principal's other, untargeted authorizations.
  */
-async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = null) {
-  if (!principalId) return { decision: 'deny', reason: 'no_authorization' };
+/**
+ * G13: entitlement is a DISTINCT question from capacity (funds) — "is this
+ * identity allowed to draw AT ALL right now" vs "does it have enough left".
+ * A principal with zero authorizations, a revoked one, or one outside its
+ * validity window is not entitled — checked and denied BEFORE any capacity/
+ * funds arithmetic runs, with its own failure codes (no_authorization /
+ * authorization_revoked / authorization_expired), never conflated with
+ * insufficient_capacity (a capacity-layer code, see checkCapacity below).
+ *
+ * `authorizationId`, if given, restricts the check to that one row (see
+ * enforceNew's own doc comment for why).
+ */
+async function checkEntitlement(db, principalId, nowMs, authorizationId = null) {
+  if (!principalId) return { entitled: false, reason: 'no_authorization' };
   const { rows } = await db.query(
     `SELECT
        count(*) FILTER (WHERE state='active')                                          AS active_count,
        count(*) FILTER (WHERE state <> 'active')                                        AS nonactive_count,
        count(*) FILTER (WHERE state='active'
                         AND valid_after <= $2 AND valid_before >= $2
-                        AND currency = $3)                                             AS in_window_count,
-       COALESCE(sum(cap_amount - consumed_amount) FILTER (
-                        WHERE state='active'
-                        AND valid_after <= $2 AND valid_before >= $2
-                        AND currency = $3), 0)::numeric                                AS available_minor
+                        AND currency = $3)                                             AS in_window_count
      FROM authorizations
      WHERE principal_id = $1 AND ($4::text IS NULL OR id = $4)`,
     [principalId, nowMs, CAPACITY_CURRENCY, authorizationId],
@@ -83,7 +92,6 @@ async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = 
   const r = rows[0];
   const activeCount = Number(r.active_count);
   const inWindowCount = Number(r.in_window_count);
-  const availableMinor = BigInt(r.available_minor);
   if (activeCount === 0) {
     // Distinguish a REVOKED authorization from a never-authorized identity.
     // Both have zero active authorizations, but only the never-authorized case
@@ -93,15 +101,43 @@ async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = 
     // ONLY on 'no_authorization'. Widening this to 'authorization_revoked' is
     // what closes the bypass (#333 exit-gate finding).
     if (Number(r.nonactive_count) > 0) {
-      return { decision: 'deny', reason: 'authorization_revoked' };
+      return { entitled: false, reason: 'authorization_revoked' };
     }
-    return { decision: 'deny', reason: 'no_authorization' };
+    return { entitled: false, reason: 'no_authorization' };
   }
-  if (inWindowCount === 0) return { decision: 'deny', reason: 'authorization_expired' };
+  if (inWindowCount === 0) return { entitled: false, reason: 'authorization_expired' };
+  return { entitled: true };
+}
+
+/**
+ * The capacity (funds) layer — assumes entitlement was already checked (or,
+ * for a caller like classifyCapacity/dual-mode that wants one combined
+ * read, re-derives it from the same query it already ran). Distinct failure
+ * code: insufficient_capacity, never conflated with an entitlement denial.
+ */
+function checkCapacity(availableMinor, cost) {
   if (availableMinor >= BigInt(cost)) {
     return { decision: 'allow', availableMinor, capReadMinor: availableMinor };
   }
   return { decision: 'deny', reason: 'insufficient_capacity', availableMinor };
+}
+
+/** Combined read-only classification (dual-mode evaluator + enforceNew's own
+ * post-hoc "why did 0 rows update" diagnosis) — entitlement THEN capacity,
+ * G13-separated internally even though this helper returns one decision. */
+async function classifyCapacity(db, principalId, cost, nowMs, authorizationId = null) {
+  const entitlement = await checkEntitlement(db, principalId, nowMs, authorizationId);
+  if (!entitlement.entitled) return { decision: 'deny', reason: entitlement.reason };
+
+  const { rows } = await db.query(
+    `SELECT COALESCE(sum(cap_amount - consumed_amount) FILTER (
+              WHERE state='active' AND valid_after <= $2 AND valid_before >= $2 AND currency = $3
+            ), 0)::numeric AS available_minor
+     FROM authorizations
+     WHERE principal_id = $1 AND ($4::text IS NULL OR id = $4)`,
+    [principalId, nowMs, CAPACITY_CURRENCY, authorizationId],
+  );
+  return checkCapacity(BigInt(rows[0].available_minor), cost);
 }
 
 /** Read-only new-path evaluation used in `dual` mode (never decrements). */
@@ -148,28 +184,117 @@ const DENY_MSG = {
  * gate). Production callers never pass it; enforceCapacity's public
  * signature is unchanged.
  */
-async function enforceNew(db, { apiKey, wallet, cost, authorizationId = null }) {
+// Default confirmations required before a settlement is CONFIRMED (gate M6
+// clause 3 reads confirmed settlements only, never cap_amount or a pending
+// one). Provisional pending the real settlement design (M6-b, deferred) —
+// override with CAPACITY_SETTLEMENT_REQUIRED_CONFIRMATIONS once the actual
+// settlement rail/chain is finalized.
+function requiredConfirmations() {
+  const raw = Number(process.env.CAPACITY_SETTLEMENT_REQUIRED_CONFIRMATIONS || '12');
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
+}
+
+/**
+ * M6 (a): capacity consumption must create a Draw — mirrors
+ * libs/financial-domain/src/draw/draw.ts's requested→authorized→settling
+ * transitions (Settlement created as a pending entity at beginSettlement)
+ * collapsed into one synchronous write, the same raw-SQL-mirrors-the-TS-
+ * domain pattern this module already follows for authorizations. The actual
+ * on-chain settlement submission (M6-b) is a SEPARATE, later process (the
+ * settlement-poller) that advances settling → submitted → confirming →
+ * confirmed; creating the draw here does NOT submit anything on-chain.
+ *
+ * Best-effort, never breaks serving: the authorization UPDATE above is the
+ * real, already-committed capacity decision (within the SAME transaction as
+ * this insert, so if IT fails the whole draw is rolled back — no consumed
+ * capacity without a Draw row, closing the M6 "draws=0" gap) — but if the
+ * capacity account is missing (data-integrity gap, principal never
+ * provisioned one), this throws and the caller rolls back and classifies it
+ * as a hard failure rather than silently serving an untracked draw.
+ */
+async function insertDraw(client, { principalId, authorizationId, fundingSourceId, amountMinor, idempotencyKey, nowMs }) {
+  const acct = await client.query(
+    `SELECT id FROM accounts WHERE principal_id = $1 AND kind = 'capacity' AND currency = $2`,
+    [principalId, CAPACITY_CURRENCY],
+  );
+  const accountId = acct.rows[0]?.id;
+  if (!accountId) {
+    throw new Error(`no capacity account for principal ${principalId} currency ${CAPACITY_CURRENCY}`);
+  }
+  const drawId = `draw_${idempotencyKey}`;
+  await client.query(
+    `INSERT INTO draws (id, principal_id, authorization_id, funding_source_id, account_id, amount, currency, idempotency_key, state, version, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settling', 0, $9)
+     ON CONFLICT (idempotency_key) DO NOTHING`,
+    [drawId, principalId, authorizationId, fundingSourceId, accountId, String(amountMinor), CAPACITY_CURRENCY, idempotencyKey, nowMs],
+  );
+  await client.query(
+    `INSERT INTO settlements (draw_id, state, required_confirmations, confirmations, attempt_count)
+     VALUES ($1, 'pending', $2, 0, 0)
+     ON CONFLICT (draw_id) DO NOTHING`,
+    [drawId, requiredConfirmations()],
+  );
+  return drawId;
+}
+
+async function enforceNew(db, { apiKey, wallet, cost, authorizationId = null, requestId = null }) {
   const principalId = await resolvePrincipalId(db, { apiKey, wallet });
   if (!principalId) {
     return { ok: false, code: 'no_authorization', http: 402, message: DENY_MSG.no_authorization };
   }
   const nowMs = Date.now();
-  const upd = await db.query(
-    `UPDATE authorizations
-        SET consumed_amount = consumed_amount + $2
-      WHERE id = (
-        SELECT id FROM authorizations
-         WHERE principal_id = $1 AND state = 'active' AND currency = $4
-           AND valid_after <= $3 AND valid_before >= $3
-           AND cap_amount - consumed_amount >= $2
-           AND ($5::text IS NULL OR id = $5)
-         ORDER BY valid_before ASC, id ASC
-         LIMIT 1
-         FOR UPDATE SKIP LOCKED
-      )
-      RETURNING id, cap_amount, consumed_amount`,
-    [principalId, String(cost), nowMs, CAPACITY_CURRENCY, authorizationId],
-  );
+
+  // G13: entitlement (is this identity allowed to draw at all) runs BEFORE
+  // capacity (does it have enough left) — a distinct function, checked
+  // first, on its own failure codes. The atomic UPDATE below re-validates
+  // state/window in its WHERE clause regardless (defense in depth against
+  // a revoke racing this check), so this is not a TOCTOU gap — it is a
+  // fast, clean rejection for the common case (never entitled at all)
+  // before spending a row-lock on a capacity arithmetic attempt.
+  const entitlement = await checkEntitlement(db, principalId, nowMs, authorizationId);
+  if (!entitlement.entitled) {
+    const reason = entitlement.reason;
+    return { ok: false, code: reason, http: DENY_HTTP[reason] || 402, message: DENY_MSG[reason] };
+  }
+  const client = await db.connect();
+  let upd;
+  try {
+    await client.query('BEGIN');
+    upd = await client.query(
+      `UPDATE authorizations
+          SET consumed_amount = consumed_amount + $2
+        WHERE id = (
+          SELECT id FROM authorizations
+           WHERE principal_id = $1 AND state = 'active' AND currency = $4
+             AND valid_after <= $3 AND valid_before >= $3
+             AND cap_amount - consumed_amount >= $2
+             AND ($5::text IS NULL OR id = $5)
+           ORDER BY valid_before ASC, id ASC
+           LIMIT 1
+           FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id, cap_amount, consumed_amount, funding_source_id`,
+      [principalId, String(cost), nowMs, CAPACITY_CURRENCY, authorizationId],
+    );
+
+    if ((upd.rowCount ?? 0) > 0) {
+      const row = upd.rows[0];
+      // idempotency_key: the RPC gateway's own request_id when supplied (one
+      // request, one draw, matches revenue_events_v2.request_id); a random
+      // fallback for any other caller so this never breaks on a missing id.
+      const idempotencyKey = requestId || `auto_${crypto.randomUUID()}`;
+      await insertDraw(client, {
+        principalId, authorizationId: row.id, fundingSourceId: row.funding_source_id,
+        amountMinor: cost, idempotencyKey, nowMs,
+      });
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 
   if ((upd.rowCount ?? 0) > 0) {
     const row = upd.rows[0];
@@ -177,7 +302,10 @@ async function enforceNew(db, { apiKey, wallet, cost, authorizationId = null }) 
     return {
       ok: true,
       tier: 'capacity',
-      cost: 0, // capacity draw is recorded on the authorization, not as USDT revenue (M8)
+      // T-23: never 0 — this IS the real per-call cost, in the same decimal-
+      // dollar unit revenue_events_v2.amount_usdt uses everywhere else
+      // (rpc_billing.js), converted from capacity's minor-unit accounting.
+      cost: callCostMinor() / 1_000_000,
       limit: row.cap_amount,
       remaining: availableAfter.toString(),
       balanceAfter: availableAfter.toString(),
@@ -206,7 +334,7 @@ function hrMs() {
  * gateway call site. Behaviour depends on CAPACITY_ENFORCEMENT_PATH, read here
  * so a Railway env change reverts with no redeploy.
  */
-export async function enforceCapacity(db, { apiKey, wallet }) {
+export async function enforceCapacity(db, { apiKey, wallet, requestId = null }) {
   // Kill-switch source: the path is read from platform_flags (DB) via
   // getCapacityPath, not the CAPACITY_ENFORCEMENT_PATH env var, so an operator
   // can flip legacy⇄dual⇄new with a single row UPDATE and no redeploy
@@ -221,21 +349,34 @@ export async function enforceCapacity(db, { apiKey, wallet }) {
   }
 
   if (path === 'new') {
-    const verdict = await enforceNew(db, { apiKey, wallet, cost: callCostMinor() });
-    // api_credits fallback: an identity with NO capacity authorization at all
-    // (code 'no_authorization' — either no matching principal, or a principal
-    // with zero active authorizations) is not an authorization-backed account,
-    // so it falls through to the legacy api_credits path. Without this, a global
-    // 'new' flip 402s every existing api_credits account (M9 exit-gate finding,
-    // 2026-08-21). enforceNew's UPDATE matches 0 rows in this case, so nothing
-    // was drawn — there is no double-charge before authorizeAndMeter runs.
+    // T-23 (M6): the V1 waterfall, in this exact order —
+    //   prepaid api_credits  →  authorization cap  →  HARD STOP (402)
     //
-    // Genuine capacity denials on an authorization-backed account
-    // (insufficient_capacity / authorization_expired) are REAL and returned
-    // as-is — they must never silently draw api_credits instead.
-    if (!verdict.ok && verdict.code === 'no_authorization') {
-      return authorizeAndMeter(db, { apiKey, wallet });
-    }
+    // 1. Try prepaid FIRST. Any outcome that is NOT a clean allow (no
+    //    account, inactive, daily limit hit, credits exhausted) falls
+    //    through to the authorization layer — nothing was drawn on a
+    //    failed/partial prepaid attempt (authorizeAndMeter's own atomic
+    //    UPDATE only commits on success), so there is never a double-charge
+    //    across the two layers.
+    const prepaid = await authorizeAndMeter(db, { apiKey, wallet });
+    if (prepaid.ok) return prepaid;
+
+    // 2. Authorization cap. enforceNew's atomic UPDATE is the SOLE decision
+    //    point — no separate "is there capacity" read happens here, so this
+    //    can never disagree with what it actually drew.
+    const verdict = await enforceNew(db, { apiKey, wallet, cost: callCostMinor(), requestId });
+    if (verdict.ok) return verdict;
+
+    // 3. HARD STOP. Both layers denied — surface the authorization-layer
+    //    verdict: capacity_enforcement.js is the primary gate under 'new'
+    //    mode, and its denial codes/messages point at the specific fix
+    //    ("sign an authorization" / "insufficient capacity") rather than a
+    //    generic account-not-found. NOTE (intentional, not an oversight):
+    //    unlike the pre-T-23 order, a REVOKED authorization no longer
+    //    implicitly blocks a principal's separate, independently-funded
+    //    prepaid account — prepaid is checked on its own merits, first, per
+    //    the stated waterfall order; revocation is scoped to the one
+    //    authorization it names.
     return verdict;
   }
 
@@ -266,4 +407,4 @@ export async function enforceCapacity(db, { apiKey, wallet }) {
 }
 
 // Exposed for tests / diagnostics.
-export const __internal = { resolvePrincipalId, classifyCapacity, enforceNew, callCostMinor };
+export const __internal = { resolvePrincipalId, classifyCapacity, checkEntitlement, enforceNew, callCostMinor };
