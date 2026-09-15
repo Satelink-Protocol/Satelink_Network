@@ -4,7 +4,14 @@ updates:
   # The ONLY lockfile npm/CI reads is the root package-lock.json — never add or
   # commit a nested apps/*/package-lock.json, or Dependabot will target it
   # instead of the root lockfile and every PR it opens will fail `npm ci`.
-  # Frontend dependencies - weekly, grouped
+  #
+  # Policy (2026-09-16 consolidation): group minor+patch updates into one weekly
+  # PR per app; NEVER auto-open a major-version PR — majors are a manual,
+  # reviewed decision (see audit/PR_DECISIONS_2026-09-16.md and the "Dependency
+  # major upgrades" tracking issue). A critical security fix that happens to be
+  # a major bump still needs a human to act on it out-of-band (as this session
+  # did for the Next.js RCE, PR #375, which was fortunately a same-major patch)
+  # — Dependabot will not silently open one.
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
@@ -12,16 +19,16 @@ updates:
       day: "monday"
       time: "09:00"
     groups:
-      react-ecosystem:
-        patterns: ["react*", "next*", "@types/react*"]
-      ui-components:
-        patterns: ["@rainbow-me/*", "wagmi*", "viem*", "recharts*"]
+      web-minor-patch:
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 3
 
-  # Backend dependencies - weekly, grouped
+  # Backend dependencies - weekly, grouped. x402/@coinbase packages are the
+  # money-path (version skew here has caused real production outages — see
+  # merged PRs #362, #371) and are NEVER auto-bumped, minor or major.
   - package-ecosystem: "npm"
     directory: "/apps/api"
     schedule:
@@ -29,11 +36,13 @@ updates:
       day: "monday"
       time: "09:00"
     groups:
-      security-only:
-        update-types: ["security"]
+      api-minor-patch:
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@x402/*"
+      - dependency-name: "@coinbase/x402"
     open-pull-requests-limit: 2
 
   # GitHub Actions - monthly only
@@ -41,4 +50,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 2

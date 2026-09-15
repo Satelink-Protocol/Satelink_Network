@@ -221,8 +221,10 @@ function parseArgs(argv: string[]): {
     }
   }
   return {
-    ids: out.id ? out.id.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
-    signer: out.signer,
+    // Conditional spread — under exactOptionalPropertyTypes, an optional key
+    // must be OMITTED when absent, never present-with-value-undefined.
+    ...(out.id ? { ids: out.id.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
+    ...(out.signer ? { signer: out.signer } : {}),
     reason: out.reason ?? '',
     actor: out.actor ?? process.env.USER ?? 'unknown',
     confirm: flags.has('--confirm') && !flags.has('--dry-run'),
@@ -269,8 +271,8 @@ async function main() {
   pool.on('error', () => {});
   try {
     const results = await revokeAuthorizations(pool, {
-      ids: args.ids,
-      signer: args.signer,
+      ...(args.ids ? { ids: args.ids } : {}),
+      ...(args.signer ? { signer: args.signer } : {}),
       reason: args.reason,
       actor: args.actor,
       dryRun,
