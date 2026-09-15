@@ -141,6 +141,17 @@ describe('creditService — canonical api_credits source of truth', () => {
       expect(v.ok).to.equal(true);
       expect(pool.state.account.credits_usdt).to.be.below(1.0);
     });
+    it('no pool (DB outage) → fails CLOSED with 503, never a free pass (T-24)', async () => {
+      const v = await authorizeAndMeter(null, { apiKey: PRO.api_key });
+      expect(v.ok).to.equal(false);
+      expect(v.http).to.equal(503);
+      expect(v.code).to.equal('no_pool');
+    });
+    it('pool without .query (misconfigured) → also fails CLOSED with 503 (T-24)', async () => {
+      const v = await authorizeAndMeter({}, { apiKey: PRO.api_key });
+      expect(v.ok).to.equal(false);
+      expect(v.http).to.equal(503);
+    });
   });
 
   describe('VERIFY: deposit increases balance (same account, idempotent)', () => {

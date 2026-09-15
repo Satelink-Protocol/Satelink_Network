@@ -20,11 +20,16 @@ export function createCreditsRouter(db, logger) {
     }
 
     try {
+      // CANONICAL: api_credits is the only store the serving path deducts
+      // from (see billing/credit_service.mjs). credit_balances is legacy and
+      // is never updated by a real request, so a balance read from it here
+      // would show a number that never moves — the exact Customer Zero bug.
       const result = await db.query(
-        `SELECT wallet_address, balance_usdt, total_deposited, total_spent,
-                last_deposit_tx, last_deposit_at, created_at
-         FROM credit_balances
-         WHERE lower(wallet_address) = $1`,
+        `SELECT api_key, wallet_address, credits_usdt, total_deposited, total_spent,
+                last_used, created_at
+         FROM api_credits
+         WHERE lower(wallet_address) = $1
+         ORDER BY created_at ASC LIMIT 1`,
         [wallet]
       );
       const rows = result.rows || result;
@@ -45,12 +50,12 @@ export function createCreditsRouter(db, logger) {
       const row = rows[0];
       return res.json({
         wallet: row.wallet_address,
-        balance_usdt: parseFloat(row.balance_usdt),
-        total_deposited: parseFloat(row.total_deposited),
-        total_spent: parseFloat(row.total_spent),
-        last_deposit_tx: row.last_deposit_tx,
-        last_deposit_at: row.last_deposit_at,
-        status: parseFloat(row.balance_usdt) > 0 ? 'funded' : 'empty',
+        balance_usdt: parseFloat(row.credits_usdt || 0),
+        total_deposited: parseFloat(row.total_deposited || 0),
+        total_spent: parseFloat(row.total_spent || 0),
+        last_deposit_tx: null,
+        last_deposit_at: row.last_used,
+        status: parseFloat(row.credits_usdt || 0) > 0 ? 'funded' : 'empty',
         deposit_address: process.env.REVENUE_VAULT_ADDRESS,
         network: 'Polygon Mainnet (chainId: 137)'
       });
@@ -170,8 +175,11 @@ export function createCreditsRouter(db, logger) {
 
     try {
       const [balResult, priceResult] = await Promise.all([
+        // CANONICAL: api_credits, same store authorizeAndMeter deducts from.
         db.query(
-          'SELECT balance_usdt FROM credit_balances WHERE lower(wallet_address) = $1',
+          `SELECT credits_usdt FROM api_credits
+            WHERE lower(wallet_address) = $1
+            ORDER BY created_at ASC LIMIT 1`,
           [cleanWallet]
         ),
         db.query(
@@ -182,7 +190,7 @@ export function createCreditsRouter(db, logger) {
       const balRows = balResult.rows || balResult;
       const priceRows = priceResult.rows || priceResult;
 
-      const balance = parseFloat(balRows[0]?.balance_usdt ?? 0);
+      const balance = parseFloat(balRows[0]?.credits_usdt ?? 0);
       const costPerCall = parseFloat(priceRows[0]?.price_usdt ?? 0.00003);
       const totalCost = costPerCall * count;
       const canAfford = balance >= totalCost;

@@ -1,8 +1,9 @@
 // apps/api/src/services/deposit_listener.js
 // Polygon on-chain deposit watcher for RevenueVault
 // Polls for Deposited(address indexed from, uint256 amount) events and credits
-// the CANONICAL account store (api_credits via creditService.creditAccount),
-// plus the legacy credit_balances ledger for continuity.
+// the CANONICAL account store (api_credits via creditService.creditAccount).
+// credit_deposits is a scan-idempotency/audit ledger only — never a spendable
+// balance store (T-22: one deposit funds exactly one spendable store).
 //
 // Hardening (machine revenue activation):
 //   - Poll-based with a confirmation threshold: an event is only processed once
@@ -11,10 +12,11 @@
 //     credit_deposits, so a restart mid-block-range resumes where it left off
 //     (bounded by MAX_LOOKBACK_BLOCKS). Processing is idempotent on tx_hash,
 //     so overlap re-scans are harmless.
-//   - Real transactions: the legacy ledger write uses a single dedicated
+//   - Real transactions: the credit_deposits write uses a single dedicated
 //     client (pool.connect) — BEGIN/COMMIT on a pg Pool is NOT transactional.
-//   - Unregistered wallets are held in credit_balances only and logged; the
-//     machine can register the wallet and claim via POST /api/keys/deposit.
+//   - Unregistered wallets are NOT credited (no account to credit); the
+//     machine can register the wallet and claim via POST /api/keys/deposit,
+//     which re-verifies the deposit tx on-chain — nothing is lost.
 //
 // Chain: Polygon Mainnet (137)
 
@@ -181,9 +183,11 @@ export class DepositListener {
 
       this.log.info(`${LOG_PREFIX} Deposit confirmed: wallet=${wallet} amount=${amountUsdt} USDT tx=${txHash} block=${blockNumber}`);
 
-      // ── Legacy ledger (credit_balances) — one dedicated client so the
-      // transaction is real. A concurrent insert of the same tx_hash loses on
-      // the UNIQUE constraint and rolls back (no double-credit).
+      // ── Scan idempotency ledger (credit_deposits) — records that this
+      // on-chain event was seen, so a re-scan or overlap never double-processes
+      // it. This is NOT a spendable balance store (that is api_credits,
+      // written below by _creditCanonical) — one deposit funds exactly one
+      // spendable store (T-22).
       const client = this.db.connect ? await this.db.connect() : this.db;
       try {
         await client.query('BEGIN');
@@ -192,18 +196,6 @@ export class DepositListener {
              (wallet_address, amount_usdt, tx_hash, block_number, chain_id)
            VALUES ($1, $2, $3, $4, $5)`,
           [wallet, amountUsdt, txHash, blockNumber, chainId]
-        );
-        await client.query(
-          `INSERT INTO credit_balances
-             (wallet_address, balance_usdt, total_deposited, last_deposit_tx, last_deposit_at, updated_at)
-           VALUES ($1, $2, $2, $3, NOW(), NOW())
-           ON CONFLICT (wallet_address) DO UPDATE SET
-             balance_usdt    = credit_balances.balance_usdt + $2,
-             total_deposited = credit_balances.total_deposited + $2,
-             last_deposit_tx = $3,
-             last_deposit_at = NOW(),
-             updated_at      = NOW()`,
-          [wallet, amountUsdt, txHash]
         );
         await client.query('COMMIT');
       } catch (innerErr) {
@@ -235,7 +227,9 @@ export class DepositListener {
       if (!account) {
         this.log.warn(
           `${LOG_PREFIX} Deposit from UNREGISTERED wallet ${wallet} (${amountUsdt} USDT, tx=${txHash}) — ` +
-          `held in credit_balances. Register via POST /v1/machine/register, then claim via POST /api/keys/deposit.`
+          `not credited to any spendable store yet (recorded in credit_deposits only). ` +
+          `Register via POST /v1/machine/register, then claim via POST /api/keys/deposit ` +
+          `(which re-verifies the tx on-chain — no balance is lost by not registering first).`
         );
         return;
       }

@@ -101,16 +101,16 @@ function makeListener(pool, { events = [], currentBlock = 100_000 } = {}) {
 }
 
 describe('DepositListener — canonical crediting + hardening', () => {
-  it('credits BOTH ledgers for a registered wallet and upgrades free → basic', async () => {
+  it('credits the CANONICAL store for a registered wallet and upgrades free → basic (T-22: exactly one spendable store)', async () => {
     const pool = makePool({ account: FREE_ACCOUNT });
     const listener = makeListener(pool);
 
     const ok = await listener._handleDeposit(WALLET, usdt(5), '0x' + '1'.repeat(64), 50_000, 137);
 
     expect(ok).to.equal(true);
-    expect(pool.state.creditBalances.get(WALLET)).to.equal(5);           // legacy ledger
-    expect(pool.state.account.credits_usdt).to.equal(5);                 // CANONICAL api_credits
-    expect(pool.state.account.tier).to.equal('basic');                   // spendable tier
+    expect(pool.state.creditBalances.size).to.equal(0);                 // legacy ledger — never written
+    expect(pool.state.account.credits_usdt).to.equal(5);                // CANONICAL api_credits
+    expect(pool.state.account.tier).to.equal('basic');                  // spendable tier
     expect(pool.state.account.daily_limit).to.equal(10000);
   });
 
@@ -128,15 +128,18 @@ describe('DepositListener — canonical crediting + hardening', () => {
     expect(pool.state.creditDeposits).to.have.length(1);
   });
 
-  it('deposit from an UNREGISTERED wallet is held in credit_balances only', async () => {
+  it('deposit from an UNREGISTERED wallet is recorded (idempotency only) but credited nowhere (T-22)', async () => {
     const pool = makePool({ account: null });
     const listener = makeListener(pool);
 
     const ok = await listener._handleDeposit(WALLET, usdt(2), '0x' + '3'.repeat(64), 50_000, 137);
 
     expect(ok).to.equal(true);
-    expect(pool.state.creditBalances.get(WALLET)).to.equal(2);
-    expect(pool.state.canonicalCredits).to.have.length(0); // no api_credits touch
+    expect(pool.state.creditDeposits).to.have.length(1);    // scan idempotency only
+    expect(pool.state.creditBalances.size).to.equal(0);     // legacy ledger — never written
+    expect(pool.state.canonicalCredits).to.have.length(0);  // no api_credits touch
+    // Registering the wallet and calling POST /api/keys/deposit with this
+    // tx_hash re-verifies on-chain and credits it then — nothing is lost.
   });
 
   it('below-minimum deposit credits canonically but does NOT upgrade the tier', async () => {
@@ -156,10 +159,10 @@ describe('DepositListener — canonical crediting + hardening', () => {
     pool.state.failCanonicalWith = raceErr;
     const listener = makeListener(pool);
 
-    // Must not throw, and the legacy ledger entry still lands.
+    // Must not throw, and the scan-idempotency entry still lands.
     const ok = await listener._handleDeposit(WALLET, usdt(1), '0x' + '5'.repeat(64), 50_000, 137);
     expect(ok).to.equal(true);
-    expect(pool.state.creditBalances.get(WALLET)).to.equal(1);
+    expect(pool.state.creditDeposits).to.have.length(1);
     expect(pool.state.canonicalCredits).to.have.length(0);
   });
 
