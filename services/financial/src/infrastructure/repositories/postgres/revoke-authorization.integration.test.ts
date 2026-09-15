@@ -113,8 +113,8 @@ describe('revokeAuthorizations — domain-path revocation', () => {
     await repo.save(buildAuth('auth_a', '0xsigner_a', 100n, ['n0']));
     const res = await revokeAuthorizations(pool, { ids: ['auth_a'], dryRun: false, ...OPTS });
     expect(res).to.have.length(1);
-    expect(res[0].action).to.equal('revoke');
-    expect(res[0].mutated).to.equal(true);
+    expect(res[0]!.action).to.equal('revoke');
+    expect(res[0]!.mutated).to.equal(true);
     const after = await stateOf('auth_a');
     expect(after.state).to.equal('revoked');
     expect(after.version).to.equal(2); // version bumped by save()
@@ -126,8 +126,8 @@ describe('revokeAuthorizations — domain-path revocation', () => {
     const first = await stateOf('auth_b');
     // second call: idempotent no-op
     const res = await revokeAuthorizations(pool, { ids: ['auth_b'], dryRun: false, ...OPTS });
-    expect(res[0].action).to.equal('noop-already-revoked');
-    expect(res[0].mutated).to.equal(false);
+    expect(res[0]!.action).to.equal('noop-already-revoked');
+    expect(res[0]!.mutated).to.equal(false);
     const second = await stateOf('auth_b');
     expect(second).to.deep.equal(first); // NOTHING changed on the no-op (version too)
   });
@@ -136,8 +136,8 @@ describe('revokeAuthorizations — domain-path revocation', () => {
     await repo.save(buildAuth('auth_d', '0xsigner_d', 100n, ['n0']));
     const before = await stateOf('auth_d');
     const res = await revokeAuthorizations(pool, { ids: ['auth_d'], dryRun: true, ...OPTS });
-    expect(res[0].action).to.equal('revoke'); // plan says it WOULD revoke
-    expect(res[0].mutated).to.equal(false); // but did not
+    expect(res[0]!.action).to.equal('revoke'); // plan says it WOULD revoke
+    expect(res[0]!.mutated).to.equal(false); // but did not
     const after = await stateOf('auth_d');
     expect(after).to.deep.equal(before);
     expect(after.state).to.equal('active');
