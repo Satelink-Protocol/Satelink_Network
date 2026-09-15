@@ -113,15 +113,17 @@ function createMockPool() {
 
       // INSERT INTO payment_sources
       if (text.includes('INSERT INTO payment_sources')) {
-        const txHash = params[4];
+        const txHash = params[2];
+        const sourceMatch = text.match(/VALUES \('([^']+)'/);
+        const source = sourceMatch ? sourceMatch[1] : 'unknown';
         if (store.payment_sources.has(txHash)) throw Object.assign(new Error('dup'), { code: '23505' });
-        store.payment_sources.set(txHash, { source: params[0], amount: params[1], tx_hash: txHash });
+        store.payment_sources.set(txHash, { source, amount: params[0], tx_hash: txHash, credited_api_key: params[4] });
         return { rowCount: 1 };
       }
 
       // INSERT INTO revenue_events_v2
       if (text.includes('INSERT INTO revenue_events_v2')) {
-        store.revenue_events_v2.push({ op_type: params[0], client_id: params[1], amount: params[2], request_id: params[4] });
+        store.revenue_events_v2.push({ op_type: params[0], client_id: params[1], amount: params[2], request_id: params[2] });
         return { rowCount: 1 };
       }
 
@@ -221,8 +223,8 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
     pool = createMockPool();
 
     // Seed a test customer account
-    pool._store.api_credits.set('mock_key_human_001', {
-      api_key: 'mock_key_human_001',
+    pool._store.api_credits.set('sk_mock_human_001', {
+      api_key: 'sk_mock_human_001',
       wallet_address: null,
       tier: 'free',
       daily_limit: 500,
@@ -233,8 +235,8 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
     });
 
     // Seed a machine account with credits
-    pool._store.api_credits.set('mock_key_machine_001', {
-      api_key: 'mock_key_machine_001',
+    pool._store.api_credits.set('sk_mock_machine_001', {
+      api_key: 'sk_mock_machine_001',
       wallet_address: '0x1234567890abcdef1234567890abcdef12345678',
       tier: 'pro',
       daily_limit: 100000,
@@ -291,7 +293,7 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
           subscriptionId: 'sub_test_001',
           planProductId: null,
           customerEmail: 'test@customer.com',
-          apiKeyHint: 'mock_key_human_001',
+          apiKeyHint: 'sk_mock_human_001',
           currency: 'USD',
           amountMinor: 2499,
           isTestMode: true,
@@ -311,7 +313,7 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
           eventType: 'payment.succeeded',
           paymentId: 'pay_test_001',
           customerEmail: 'test@customer.com',
-          apiKeyHint: 'mock_key_human_001',
+          apiKeyHint: 'sk_mock_human_001',
           currency: 'USD',
           amountMinor: 2499,
         },
@@ -350,7 +352,7 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
           eventType: 'subscription.renewed',
           subscriptionId: 'sub_test_001',
           previousBillingDate: '2026-08-16',
-          apiKeyHint: 'mock_key_human_001',
+          apiKeyHint: 'sk_mock_human_001',
           currency: 'USD',
           amountMinor: 2499,
         },
@@ -439,21 +441,21 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
     it('M5: intelligence with funded key → billed + response', async () => {
       // The response will be 503 (warming_up) because no snapshot exists,
       // but the billing MUST have occurred. We check the credit was deducted.
-      const before = pool._store.api_credits.get('mock_key_machine_001').credits_usdt;
+      const before = pool._store.api_credits.get('sk_mock_machine_001').credits_usdt;
       const r = await fetchJson(`${baseUrl}/v1/intelligence/funding-rate-heatmap`, {
-        headers: { 'x-api-key': 'mock_key_machine_001' },
+        headers: { 'x-api-key': 'sk_mock_machine_001' },
       });
       // Either 200 (snapshot exists) or 503 (warming up) — both are valid
       assert.ok([200, 503].includes(r.status), `Expected 200 or 503, got ${r.status}`);
-      const after = pool._store.api_credits.get('mock_key_machine_001').credits_usdt;
+      const after = pool._store.api_credits.get('sk_mock_machine_001').credits_usdt;
       assert.ok(after < before, `Credits should be deducted: was ${before}, now ${after}`);
     });
 
     it('M6: intelligence with exhausted credits → 402', async () => {
       // Drain credits
-      pool._store.api_credits.get('mock_key_machine_001').credits_usdt = 0;
+      pool._store.api_credits.get('sk_mock_machine_001').credits_usdt = 0;
       const r = await fetchJson(`${baseUrl}/v1/intelligence/funding-rate-heatmap`, {
-        headers: { 'x-api-key': 'mock_key_machine_001' },
+        headers: { 'x-api-key': 'sk_mock_machine_001' },
       });
       assert.strictEqual(r.status, 402);
     });
@@ -463,9 +465,9 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
 
   describe('TENANT ISOLATION', () => {
     it('T1: Customer A cannot use Customer B API key', async () => {
-      // mock_key_machine_001 is drained; mock_key_human_001 has credits from Dodo
+      // sk_mock_machine_001 is drained; sk_mock_human_001 has credits from Dodo
       const r = await fetchJson(`${baseUrl}/v1/intelligence/funding-rate-heatmap`, {
-        headers: { 'x-api-key': 'mock_key_nonexistent' },
+        headers: { 'x-api-key': 'sk_mock_nonexistent' },
       });
       // Should get 401 or 402 — not 200 with another customer's data
       assert.ok([401, 402].includes(r.status));
@@ -482,13 +484,13 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
         body: {
           eventType: 'payment.succeeded',
           paymentId: 'pay_idem_001',
-          apiKeyHint: 'mock_key_human_001',
+          apiKeyHint: 'sk_mock_human_001',
           currency: 'USD',
           amountMinor: 500,
         },
       });
       assert.strictEqual(r1.status, 200);
-      const balanceAfterFirst = pool._store.api_credits.get('mock_key_human_001').credits_usdt;
+      const balanceAfterFirst = pool._store.api_credits.get('sk_mock_human_001').credits_usdt;
 
       const r2 = await fetchJson(`${baseUrl}/internal/dodo/credit`, {
         method: 'POST',
@@ -496,13 +498,13 @@ describe('Commerce E2E — Human + Machine Money Flow', function () {
         body: {
           eventType: 'payment.succeeded',
           paymentId: 'pay_idem_001',
-          apiKeyHint: 'mock_key_human_001',
+          apiKeyHint: 'sk_mock_human_001',
           currency: 'USD',
           amountMinor: 500,
         },
       });
       assert.strictEqual(r2.status, 409);
-      const balanceAfterSecond = pool._store.api_credits.get('mock_key_human_001').credits_usdt;
+      const balanceAfterSecond = pool._store.api_credits.get('sk_mock_human_001').credits_usdt;
       assert.strictEqual(balanceAfterFirst, balanceAfterSecond, 'MONEY MUST NOT CREATE TWICE');
     });
   });
