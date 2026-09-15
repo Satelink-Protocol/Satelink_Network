@@ -83,6 +83,13 @@ function pricingBody() {
       `atomically deducts ${PRICE_PER_CALL_USDT} USDT. Free tier bills 0 and is limited to ` +
       `${TIER_DAILY_LIMIT.free} calls/day. HTTP 402 with a machine-readable payment block is ` +
       'returned when credits are exhausted; HTTP 429 when the tier daily limit is reached.',
+    // M3 — derived trading intelligence product, metered off the SAME credits.
+    intelligence: {
+      catalog: `${API_BASE()}/v1/intelligence`,
+      price_usdt_per_call: 0.01,
+      note: 'Derived analytics from public market data (funding divergence, OI shifts, ' +
+        'liquidation-pressure model, microstructure). Not raw feed redistribution, not advice.',
+    },
   };
 }
 
