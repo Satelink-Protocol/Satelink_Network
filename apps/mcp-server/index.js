@@ -14,6 +14,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { buildPayingFetch } from './src/pay.mjs';
 import { createRpcExecutor } from './src/rpc.mjs';
+import { createIntelligenceExecutor } from './src/intelligence.mjs';
 import { createSatelinkMcpServer } from './src/server-factory.mjs';
 
 const RPC_URL = process.env.SATELINK_RPC_URL || 'https://rpc.satelink.network/rpc/polygon';
@@ -25,8 +26,12 @@ const executeRpc = createRpcExecutor({
   rpcUrl: RPC_URL,
   apiKey: process.env.SATELINK_API_KEY,
 });
+const executeIntelligence = createIntelligenceExecutor({
+  fetch: payingFetch,
+  apiKey: process.env.SATELINK_API_KEY,
+});
 
-const server = createSatelinkMcpServer({ executeRpc, rpcUrl: RPC_URL, wallet, canPay });
+const server = createSatelinkMcpServer({ executeRpc, executeIntelligence, rpcUrl: RPC_URL, wallet, canPay });
 
 async function main() {
   const transport = new StdioServerTransport();

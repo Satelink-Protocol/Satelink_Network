@@ -15,7 +15,7 @@ const PLUGIN_MANIFEST = {
   name_for_human: 'Satelink RPC',
   name_for_model: 'satelink_rpc',
   description_for_human: 'Execute blockchain RPC calls via Satelink DePIN network. Query Ethereum, Polygon, Arbitrum, and more. Pay-per-call via x402 (USDC on Base). After a small free allowance the endpoint returns a machine-payable HTTP 402; x402 v2 clients settle it automatically — no account needed.',
-  description_for_model: 'Use this plugin to execute JSON-RPC calls on multiple blockchains. Supports eth_blockNumber, eth_getBalance, eth_call, eth_getTransactionByHash, eth_getLogs, and all standard Ethereum JSON-RPC methods. Available chains: ethereum, polygon, arbitrum, base, polygon-amoy. Pay-per-call via x402 (USDC on Base). After a small free allowance the endpoint returns a machine-payable HTTP 402; x402 v2 clients settle it automatically — no account needed.',
+  description_for_model: 'Use this plugin to execute JSON-RPC calls on multiple blockchains. Supports eth_blockNumber, eth_getBalance, eth_call, eth_getTransactionByHash, eth_getLogs, and all standard Ethereum JSON-RPC methods. Available chains: ethereum, polygon, arbitrum, base, polygon-amoy. Pay-per-call via x402 (USDC on Base). After a small free allowance the endpoint returns a machine-payable HTTP 402; x402 v2 clients settle it automatically — no account needed. Four market-intelligence routes (funding-rate heatmap, open-interest shifts, liquidation clusters, market microstructure) are documented in the OpenAPI spec at $0.01/call via x402 but are not deployed yet — calling them returns 404, never fabricated data.',
   auth: {
     type: 'user_http',
     authorization_type: 'bearer'
@@ -250,6 +250,53 @@ const OPENAPI_SPEC = {
         responses: {
           '200': { description: 'Transaction submitted' }
         }
+      }
+    },
+    // M7 (T-26): intelligence routes. HONESTY NOTE — the M3 backend work that
+    // serves these was never built (M3 was skipped for M4/M5/M6); every entry
+    // below is real, priced, x402-payable routing metadata for a route that
+    // currently 404s. `x-not-yet-live: true` marks this explicitly rather
+    // than presenting it as indistinguishable from the working routes above.
+    // Remove that flag the moment the corresponding /v1/intelligence/*
+    // endpoint ships server-side — not before.
+    '/v1/intelligence/funding-rate-heatmap': {
+      get: {
+        operationId: 'fundingRateHeatmap',
+        summary: 'Funding-rate heatmap across perp markets',
+        description: 'Derived analytics, not raw quotes. $0.01/call via x402.',
+        'x-not-yet-live': true,
+        parameters: [{ name: 'symbol', in: 'query', required: false, schema: { type: 'string' }, description: 'Market symbol, e.g. BTC-USD (omit for all tracked markets)' }],
+        responses: { '200': { description: 'Heatmap payload' }, '404': { description: 'Not yet available' } }
+      }
+    },
+    '/v1/intelligence/open-interest-shifts': {
+      get: {
+        operationId: 'openInterestShifts',
+        summary: 'Recent shifts in open interest across markets',
+        description: 'Derived, not raw quotes. $0.01/call via x402.',
+        'x-not-yet-live': true,
+        parameters: [{ name: 'symbol', in: 'query', required: false, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Open interest shift payload' }, '404': { description: 'Not yet available' } }
+      }
+    },
+    '/v1/intelligence/liquidation-clusters': {
+      get: {
+        operationId: 'liquidationClusters',
+        summary: 'Clustered liquidation levels/density',
+        description: 'Derived, not raw quotes. $0.01/call via x402.',
+        'x-not-yet-live': true,
+        parameters: [{ name: 'symbol', in: 'query', required: false, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Liquidation cluster payload' }, '404': { description: 'Not yet available' } }
+      }
+    },
+    '/v1/intelligence/market-microstructure': {
+      get: {
+        operationId: 'marketMicrostructure',
+        summary: 'Market microstructure summary (spread, depth, imbalance)',
+        description: 'Derived, not raw quotes. $0.01/call via x402.',
+        'x-not-yet-live': true,
+        parameters: [{ name: 'symbol', in: 'query', required: false, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Microstructure payload' }, '404': { description: 'Not yet available' } }
       }
     }
   },
