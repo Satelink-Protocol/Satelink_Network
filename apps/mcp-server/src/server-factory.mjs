@@ -40,29 +40,78 @@ export const POLYGON_RPC_TOOL = {
   },
 };
 
+// M7 (T-11): four intelligence tools, $0.01/call via x402 — same rail as
+// polygon_rpc, distinct endpoints. See src/intelligence.mjs's header comment
+// for why these may currently return `not_yet_available` (M3 not shipped).
+const INTELLIGENCE_TOOL_DEFS = [
+  {
+    name: 'funding_rate_heatmap',
+    description:
+      'Funding-rate heatmap across perp markets — derived analytics, not raw quotes. $0.01/call via x402.',
+  },
+  {
+    name: 'open_interest_shifts',
+    description: 'Recent shifts in open interest across markets — derived, not raw quotes. $0.01/call via x402.',
+  },
+  {
+    name: 'liquidation_clusters',
+    description: 'Clustered liquidation levels/density — derived, not raw quotes. $0.01/call via x402.',
+  },
+  {
+    name: 'market_microstructure',
+    description: 'Market microstructure summary (spread, depth, imbalance) — derived, not raw quotes. $0.01/call via x402.',
+  },
+].map((t) => ({
+  ...t,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      symbol: { type: 'string', description: 'Market symbol, e.g. BTC-USD (optional — omit for all tracked markets).' },
+    },
+  },
+}));
+const INTELLIGENCE_TOOL_NAMES = new Set(INTELLIGENCE_TOOL_DEFS.map((t) => t.name));
+
 const PRICING_RESOURCE_URI = 'satelink://pricing';
 const CHECK_BALANCE_PROMPT = 'check_wallet_balance';
 
 /**
  * @param {object} deps
  * @param {(a:{method:string,params?:any[]})=>Promise<any>} deps.executeRpc
+ * @param {(a:{tool:string,symbol?:string})=>Promise<any>} [deps.executeIntelligence]
  * @param {string}  deps.rpcUrl
  * @param {string|null} deps.wallet
  * @param {boolean} deps.canPay
  */
-export function createSatelinkMcpServer({ executeRpc, rpcUrl, wallet, canPay }) {
+export function createSatelinkMcpServer({ executeRpc, executeIntelligence, rpcUrl, wallet, canPay }) {
   const server = new Server(
     { name: 'satelink-mcp', version: '2.0.0' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [POLYGON_RPC_TOOL] }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [POLYGON_RPC_TOOL, ...INTELLIGENCE_TOOL_DEFS],
+  }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name !== 'polygon_rpc') {
-      throw new Error(`Unknown tool: ${request.params.name}`);
+    const { name, arguments: args } = request.params;
+
+    if (INTELLIGENCE_TOOL_NAMES.has(name)) {
+      if (!executeIntelligence) {
+        return { content: [{ type: 'text', text: 'Intelligence tools are not configured on this server.' }], isError: true };
+      }
+      const out = await executeIntelligence({ tool: name, symbol: args?.symbol });
+      if (!out.ok) {
+        return { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], isError: true };
+      }
+      const note = out.paid ? `\n\n[x402 PAID] settlement=${out.payment_response || 'n/a'}` : '';
+      return { content: [{ type: 'text', text: JSON.stringify(out.result, null, 2) + note }] };
     }
-    const { method, params } = request.params.arguments || {};
+
+    if (name !== 'polygon_rpc') {
+      throw new Error(`Unknown tool: ${name}`);
+    }
+    const { method, params } = args || {};
     const out = await executeRpc({ method, params });
     if (!out.ok) {
       return { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], isError: true };

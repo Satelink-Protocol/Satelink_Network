@@ -24,6 +24,9 @@ import { ExpressAdapter } from '@x402/express';
 import { x402ResourceServer, x402HTTPResourceServer, HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { createCdpAuthHeaders } from '@coinbase/x402';
+// M7 (T-29): Discord alert on this exact fail-open path, rate-limited 1/hour.
+// Fire-and-forget, never throws, never affects the served response.
+import { alertX402UpgradeFailure } from '../../monitoring/x402_upgrade_alert.js';
 import {
   bazaarResourceServerExtension,
   declareDiscoveryExtension,
@@ -416,6 +419,10 @@ export function createX402Middleware(pool, logger) {
           // Fail open to today's exact 402 — the USDT rail must never break
           // because the facilitator is unreachable.
           log.error(`${LOG_PREFIX} 402 upgrade failed, serving legacy 402: ${err.message}`);
+          // T-29: this exact failure class went unnoticed for weeks in
+          // 2026-08 (T-04) because nothing alerted on it. Observe-only —
+          // never awaited, never allowed to affect the response above.
+          alertX402UpgradeFailure(err.message);
           return originalJson(body);
         }
       })();

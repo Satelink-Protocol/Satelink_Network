@@ -5,7 +5,6 @@ import { getSupportedChains, getChainConfig, CHAIN_ALIASES } from './providers.j
 import { getCached, setCached, isCacheable, getCacheStats } from './cache.js';
 import { checkRateLimit, incrementUsage, createApiKey, getUsageStats, getTiers } from './rate_limiter.js';
 import { createHealthEndpoint, startHealthMonitor } from './health_monitor.js';
-import { createMetricsRouter } from './metrics.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
 import { authorizeAndMeter } from '../../billing/credit_service.mjs';
@@ -69,8 +68,13 @@ export function createRpcGateway(db) {
     startHealthMonitor();
     createHealthEndpoint(router);
 
-    const metricsRouter = createMetricsRouter(db);
-    router.use('/', metricsRouter);
+    // M7 (T-30): /metrics moved OUT of this router — it used to live here as
+    // /rpc/metrics, behind freeTierGateUnlessX402Paid (the gate wraps the
+    // WHOLE /rpc mount in app_factory.mjs, so a rate-limited scraper could
+    // get 402'd). Mounted ungated at the top level now — see app_factory.mjs.
+    // next.config.ts's rewrite for /metrics has always pointed at the bare
+    // path, which this router never actually served — a real, previously
+    // broken discovery, not a hypothetical.
 
     router.get('/stats/:chain', async (req, res) => {
         const { chain } = req.params;

@@ -2,8 +2,11 @@
  * Metrics Dashboard Endpoint
  * S1-RPC-009: Comprehensive metrics + Prometheus format
  *
- * GET /rpc/metrics — JSON network performance snapshot
- * GET /rpc/metrics/prometheus — Prometheus text format
+ * GET /metrics — JSON network performance snapshot
+ * GET /metrics/prometheus — Prometheus text format
+ *
+ * M7 (T-30): mounted at the top level in app_factory.mjs, ungated — moved
+ * out from behind freeTierGate (was /rpc/metrics; see rpc_gateway.js).
  */
 
 import { Router } from 'express';

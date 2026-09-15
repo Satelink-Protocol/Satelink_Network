@@ -26,6 +26,8 @@ import { createDodoInternalRouter } from "./src/routes/internal_dodo.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
+import { createWellKnownX402Router } from "./src/routes/well_known_x402.js";
+import { createMetricsRouter } from "./src/workloads/rpc_gateway/metrics.js";
 import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
@@ -368,6 +370,15 @@ app.get("/api/mode", (req, res) => {
   const freeTierGateUnlessX402Paid = (req, res, next) =>
     req.x402?.settled ? next() : freeTierGate(req, res, next);
 
+  // M7 (T-30): /metrics + /metrics/prometheus, UNGATED — previously mounted
+  // inside the RPC gateway router as /rpc/metrics, behind freeTierGate (the
+  // gate wraps the whole /rpc prefix below, so a monitoring scraper could get
+  // rate-limited/402'd). Moved here, before that gate, and off the bare
+  // top-level path next.config.ts's rewrite has always expected (that
+  // rewrite pointed at /metrics while the backend only ever served
+  // /rpc/metrics — a real, previously-broken 404, not a hypothetical).
+  app.use("/", createMetricsRouter(pool));
+
   // RPC Gateway — freeTierGate runs before JSON parsing to reject rate-limited IPs
   // before their request body is allocated (prevents OOM from high-volume abusers).
   // Body limit 1mb covers all legitimate RPC batch calls; 50mb caused heap exhaustion.
@@ -400,6 +411,8 @@ app.get("/api/mode", (req, res) => {
   // + Satelink machine manifest (/.well-known/satelink.json)
   app.use("/.well-known", createWellKnownSatelinkRouter());
   app.use("/.well-known", createPluginManifestRouter());
+  // M7 (T-25): GET /.well-known/x402 — every priced route in one place.
+  app.use("/.well-known", createWellKnownX402Router());
   app.use("/openapi.json", createOpenApiRouter());
 
   // API Key management (with deposit verification for tier upgrades)
