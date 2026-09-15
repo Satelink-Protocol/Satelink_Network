@@ -12,8 +12,13 @@ export function createClaimsRouter(pool) {
     try {
       const { nodeId, adminSecret } = req.body;
 
-      // Simple admin secret check for this one-time operation
-      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET && adminSecret !== 'satelink-first-claim-2026') {
+      // T-02: no hard-coded fallback. ADMIN_BACKFILL_SECRET must be set in
+      // env, or every request is refused as misconfigured (never silently
+      // accepted via a literal — see 02_INVENTORY.md §4 B6).
+      if (!process.env.ADMIN_BACKFILL_SECRET) {
+        return res.status(503).json({ success: false, error: 'ADMIN_BACKFILL_SECRET not configured' });
+      }
+      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET) {
         return res.status(403).json({ success: false, error: 'Invalid admin secret' });
       }
 
@@ -70,7 +75,11 @@ export function createClaimsRouter(pool) {
     try {
       const { nodeId, walletAddress, adminSecret } = req.body;
 
-      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET && adminSecret !== 'satelink-first-claim-2026') {
+      // T-02: no hard-coded fallback (see backfill-revenue above).
+      if (!process.env.ADMIN_BACKFILL_SECRET) {
+        return res.status(503).json({ success: false, error: 'ADMIN_BACKFILL_SECRET not configured' });
+      }
+      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET) {
         return res.status(403).json({ success: false, error: 'Invalid admin secret' });
       }
 
@@ -154,7 +163,11 @@ export function createClaimsRouter(pool) {
     try {
       const { adminSecret } = req.body;
 
-      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET && adminSecret !== 'satelink-first-claim-2026') {
+      // T-02: no hard-coded fallback (see backfill-revenue above).
+      if (!process.env.ADMIN_BACKFILL_SECRET) {
+        return res.status(503).json({ success: false, error: 'ADMIN_BACKFILL_SECRET not configured' });
+      }
+      if (adminSecret !== process.env.ADMIN_BACKFILL_SECRET) {
         return res.status(403).json({ success: false, error: 'Invalid admin secret' });
       }
 
