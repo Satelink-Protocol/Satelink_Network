@@ -1,5 +1,8 @@
 process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=400';
 
+// Polyfill globalThis.crypto (WebCrypto) on Node 18 before anything else loads —
+// the CDP x402 facilitator auth needs it (T-04 layer 2). Side-effect import.
+import "./src/bootstrap/webcrypto_global.js";
 import express from "express";
 import { createPhase3Router } from "./src/gateway/routes/api_phase3.js";
 import { createServer } from 'http';
