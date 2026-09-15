@@ -15,6 +15,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { CHAIN_ALIASES } from './providers.js';
 import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
+import { resolveAccount } from '../../billing/credit_service.mjs';
 
 const WS_PROVIDERS = {
   'polygon-amoy': process.env.WS_POLYGON_AMOY || 'wss://polygon-amoy.g.alchemy.com/v2/demo',
@@ -39,17 +40,20 @@ function getProviderWsUrl(chain) {
 }
 
 // Free tier removed (2026-08-27): WS RPC requires the SAME credential as HTTP
-// /rpc — x-api-key or x-wallet-address. Browser WS clients cannot set custom
-// headers, so ?api_key / ?token query params are accepted as equivalents (this
-// mirrors free_tier_gate.js's AUTH_SIGNAL_QUERY). An UNAUTHENTICATED upgrade is
-// rejected before any subscription can open. This is the fix for the Aug-2026
-// ws_subscription storm: an anonymous client could open a newPendingTransactions
-// firehose and recordWsRevenue wrote one revenue_events_v2 row PER streamed event
-// (100k+/hour), which filled the 1GB volume. No auth → no connection → no writes.
+// /rpc — x-api-key ONLY (not x-wallet-address). Browser WS clients cannot set
+// custom headers, so ?api_key / ?token query params are accepted as equivalents
+// (this mirrors free_tier_gate.js's AUTH_SIGNAL_QUERY). An UNAUTHENTICATED
+// upgrade is rejected before any subscription can open.
+//
+// P0-wallet-auth (2026-09): x-wallet-address alone does NOT authenticate — it
+// names no verified identity. Same vulnerability class as finding C1 (PR #357)
+// fixed on the HTTP path: a spoofed x-wallet-address header could bypass the
+// 401 gate and open an unbilled WS connection. Only x-api-key (bearer secret)
+// or the query equivalents constitute valid auth for WS.
 export function wsHasAuth(request) {
   const h = request.headers || {};
   const nonEmpty = (v) => v != null && String(v).length > 0;
-  if (nonEmpty(h['x-api-key']) || nonEmpty(h['x-wallet-address'])) return true;
+  if (nonEmpty(h['x-api-key'])) return true;
   try {
     const q = new URL(request.url, 'http://ws.local').searchParams;
     if (nonEmpty(q.get('api_key')) || nonEmpty(q.get('token'))) return true;
@@ -57,12 +61,49 @@ export function wsHasAuth(request) {
   return false;
 }
 
+// The credential a WS upgrade presents: x-api-key header, else the ?api_key /
+// ?token query equivalents. Never x-wallet-address / x-payer-address.
+export function wsCredentialOf(request) {
+  const h = request?.headers || {};
+  const nonEmpty = (v) => v != null && String(v).length > 0;
+  if (nonEmpty(h['x-api-key'])) return String(h['x-api-key']);
+  try {
+    const q = new URL(request.url, 'http://ws.local').searchParams;
+    if (nonEmpty(q.get('api_key'))) return q.get('api_key');
+    if (nonEmpty(q.get('token'))) return q.get('token');
+  } catch {
+    // malformed url → no credential
+  }
+  return null;
+}
+
+// Step 2 (2026-09-15): wsHasAuth only proves a credential is PRESENT — any
+// fabricated "x-api-key: anything" passed it and opened an unmetered provider
+// subscription stream. Identity must be DERIVED: the key has to resolve to an
+// active api_credits account through the same resolveAccount() the HTTP path
+// uses (credit_service.mjs), by api_key only — never by a client-named wallet.
+// Fails closed: no pool, unknown key, inactive account or a DB error → null.
+export async function wsResolveAccount(request, pool) {
+  if (!wsHasAuth(request)) return null;
+  const apiKey = wsCredentialOf(request);
+  if (!apiKey || !pool || !pool.query) return null;
+  try {
+    const account = await resolveAccount(pool, { apiKey });
+    if (!account || account.api_key !== apiKey) return null;
+    if (account.status && account.status !== 'active') return null;
+    return account;
+  } catch (err) {
+    console.error('[WS Gateway] credential lookup failed (rejecting upgrade):', err.message);
+    return null;
+  }
+}
+
 export function createWsGateway(httpServer, db) {
   const wss = new WebSocketServer({ noServer: true });
 
   console.log('[WS Gateway] WebSocket server initialized');
 
-  httpServer.on('upgrade', (request, socket, head) => {
+  httpServer.on('upgrade', async (request, socket, head) => {
     const pathname = request.url?.split('?')[0] || '';
 
     if (!pathname.startsWith('/rpc/ws/')) {
@@ -72,11 +113,14 @@ export function createWsGateway(httpServer, db) {
 
     // Reject unauthenticated WS RPC — no free tier. (x402 discovery is HTTP-only,
     // so this 401 never touches the paid-discovery path; STOP-B is not implicated.)
-    if (!wsHasAuth(request)) {
+    // Presence is not identity: the key must resolve to an active account.
+    const account = await wsResolveAccount(request, db);
+    if (!account) {
       socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
       socket.destroy();
       return;
     }
+    request.wsAccount = { api_key: account.api_key };
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);

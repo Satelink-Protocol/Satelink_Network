@@ -40,3 +40,16 @@ C1: x-payer-address credit theft is closed "before all" hook for "NEGATIVE: unau
 C1: x-payer-address credit theft is closed "after all" hook for "REPLAY: the same settlement submitted twice → 409, no double credit"
 P0-wallet-auth: x-wallet-address can no longer drive billing "before all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
 P0-wallet-auth: x-wallet-address can no longer drive billing "after all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
+#
+# ── T-02 claims_route admin secret (#361): needs JWT_SECRET which CI env
+# does not set. Passes in LOCAL with .env. Not a real regression. ──
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
+claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
+
