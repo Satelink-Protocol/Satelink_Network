@@ -23,6 +23,9 @@ Withdrawal API "before all" hook for "should create a withdrawal successfully"
 # ── x402: need live CDP facilitator creds (401 without) and/or a real DB. ──
 # Pass in LOCAL with .env. Tighten by adding CDP_API_KEY_ID/SECRET secrets
 # and a real test DB in CI (founder decision — money-path creds).
+# t2/t9 are NOT a guard for the 2026-08-20 402 outage: CI's lockfile install
+# never has the @x402/* version skew Railway's lockfile-free build had. That
+# failure is caught offline by test/x402_dependency_skew.test.js (T-04).
 x402 payment rail t2: flag ON — 402 carries x402 accepts AND alternativePayment USDT instructions
 x402 payment rail t9: keyless handler 402 (under-limit anonymous) is upgraded with x402 accepts
 x402 payment rail t3: duplicate settlement tx_hash → 409, exactly one payment_sources row
