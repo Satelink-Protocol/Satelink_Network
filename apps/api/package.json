@@ -28,7 +28,7 @@
         "helmet": "^8.1.0",
         "ioredis": "^5.10.0",
         "jsonwebtoken": "^9.0.3",
-        "next": "0.4.1",
+        "next": "0.9.11",
         "node-cron": "^4.6.0",
         "node-fetch": "^3.3.2",
         "pg": "^8.22.0",
