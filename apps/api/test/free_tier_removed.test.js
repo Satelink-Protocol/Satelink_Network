@@ -1,8 +1,10 @@
-// Free-tier removal (2026-08-27 founder decision): /rpc/* requires
-// x-wallet-address or x-api-key (or a settled x402 payment, handled upstream).
-// Every other caller — anonymous OR presenting a non-wallet/non-key auth signal
-// (authorization / x-payer-address / ?api_key) — gets a 402 on the FIRST call
-// and NEVER reaches the RPC gateway, so nothing is written to the money path.
+// Free-tier removal (2026-08-27 founder decision): /rpc/* requires x-api-key
+// (or a settled x402 payment, handled upstream). x-wallet-address ALONE no
+// longer bypasses this gate or drives billing (P0-wallet-auth, 2026-09) — it
+// named no verified identity. Every other caller — anonymous OR presenting a
+// non-key auth signal (authorization / x-payer-address / x-wallet-address /
+// ?api_key) — gets a 402 on the FIRST call and NEVER reaches the RPC gateway,
+// so nothing is written to the money path.
 //
 // This is the behavioral inverse of the old free tier, where a caller with any
 // auth signal received FREE_TIER_DAILY_LIMIT (default 500) free calls first.
@@ -83,14 +85,18 @@ describe('freeTierGate — free tier removed (auth required, nothing billed)', (
     expect(r.statusCode).to.equal(null);
   });
 
-  it('x-wallet-address header → passes through to creditService (next)', async () => {
+  it('x-wallet-address header alone → 402 on the FIRST call (P0-wallet-auth, 2026-09)', async () => {
+    // It used to bypass here too — the same unverified-identity issue as
+    // billing (finding C1's twin): a fabricated header got a free ride past
+    // IP throttling. It now falls through exactly like any other non-bypass
+    // auth signal (see free_tier_anon_cut.test.js REMOVED_TIER_CASES).
     const gate = createFreeTierGate(console);
     const r = await invoke(gate, {
       ip: '172.16.0.5',
       headers: { 'x-wallet-address': '0x1111111111111111111111111111111111111111' },
     });
-    expect(r.nextCalled).to.equal(true);
-    expect(r.statusCode).to.equal(null);
+    expect(r.nextCalled).to.equal(false);
+    expect(r.statusCode).to.equal(402);
   });
 
   it('the 402 body still carries the full self-onboarding path (register + deposit)', async () => {

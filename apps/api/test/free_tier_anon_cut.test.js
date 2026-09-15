@@ -52,14 +52,19 @@ describe('freeTierGate — anonymous free-tier cut (FREE_TIER_ANON_CALLS)', () =
     expect(payment?.token).to.equal('USDT');
   });
 
-  // Free-tier removal (2026-08-27): ONLY x-api-key and x-wallet-address bypass the
-  // gate (short-circuit at the top → creditService). Every OTHER auth signal used
+  // Free-tier removal (2026-08-27): ONLY x-api-key bypasses the gate
+  // (short-circuit at the top → creditService). Every OTHER auth signal used
   // to keep the standard free tier; now it gets a 402 on the first call, because
   // the free tier is gone (FREE_TIER_DAILY_LIMIT defaults 0). See
   // free_tier_removed.test.js and docs/incidents/2026-08-27-freetier-backfill/.
+  //
+  // P0-wallet-auth (2026-09): x-wallet-address moved OUT of BYPASS_CASES and
+  // into REMOVED_TIER_CASES — it named no verified identity, so a fabricated
+  // header could bypass IP throttling for free (and billing downstream no
+  // longer accepts it either). It now falls through to the same 402 as every
+  // other non-bypass auth signal.
   const BYPASS_CASES = [
     { name: 'x-api-key header',        req: { headers: { 'x-api-key': 'sk_free_placeholder' } } },
-    { name: 'x-wallet-address header', req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
   ];
   const REMOVED_TIER_CASES = [
     { name: 'authorization header',     req: { headers: { authorization: 'Bearer token.value' } } },
@@ -67,6 +72,7 @@ describe('freeTierGate — anonymous free-tier cut (FREE_TIER_ANON_CALLS)', () =
     { name: 'x-admin-token header',     req: { headers: { 'x-admin-token': 'admin-token' } } },
     { name: 'x-enterprise-key header',  req: { headers: { 'x-enterprise-key': 'ent-key' } } },
     { name: 'x-payer-address header',   req: { headers: { 'x-payer-address': '0x' + '1'.repeat(40) } } },
+    { name: 'x-wallet-address header',  req: { headers: { 'x-wallet-address': '0x' + '2'.repeat(40) } } },
     { name: 'payment-signature header', req: { headers: { 'payment-signature': 'base64payload' } } },
     { name: 'x-payment header',         req: { headers: { 'x-payment': 'base64payload' } } },
     { name: 'api_key query param',      req: { query: { api_key: 'sk_free_placeholder' } } },

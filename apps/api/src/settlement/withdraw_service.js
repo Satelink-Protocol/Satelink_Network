@@ -22,7 +22,7 @@ const USDT_ABI = [
  */
 async function executeUsdtTransfer(toAddress, amountUsdt) {
     const rpcUrl = process.env.POLYGON_RPC_URL ||
-        'https://polygon-mainnet.g.alchemy.com/v2/ZdR6Od2Clb0P2Jq1URQkc';
+        'https://polygon-rpc.com';
 
     const signerKey = process.env.SETTLEMENT_EVM_SIGNER_PRIVATE_KEY;
     if (!signerKey) {

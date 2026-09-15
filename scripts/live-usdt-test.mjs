@@ -34,12 +34,14 @@ async function checkBalance(wallet) {
   return res.json();
 }
 
-async function testRpcCall(wallet) {
+// P0-wallet-auth (2026-09): X-Wallet-Address alone is no longer a billing
+// credential — this needs a real X-API-Key (see registerForApiKey below).
+async function testRpcCall(apiKey) {
   const res = await fetch(`${API_BASE}/rpc/polygon`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Wallet-Address': wallet
+      'X-API-Key': apiKey
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -49,6 +51,25 @@ async function testRpcCall(wallet) {
     })
   });
   return { status: res.status, body: await res.json() };
+}
+
+// Register (or reuse, via TEST_API_KEY) an API key bound to this wallet.
+// Registration is one-time per wallet — a retry gets 409 and the key cannot
+// be re-issued, so a repeat run needs TEST_API_KEY from the first run.
+async function registerForApiKey(wallet) {
+  if (process.env.TEST_API_KEY) return process.env.TEST_API_KEY;
+  const signature = await wallet.signMessage(`satelink:register:${wallet.address.toLowerCase()}`);
+  const res = await fetch(`${API_BASE}/v1/machine/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet_address: wallet.address, signature }),
+  });
+  const data = await res.json();
+  if (res.status === 201 && data.api_key) return data.api_key;
+  if (res.status === 409) {
+    throw new Error('Wallet already registered from a prior run — re-run with TEST_API_KEY=<the key from that run>.');
+  }
+  throw new Error(`Registration failed: ${JSON.stringify(data)}`);
 }
 
 async function main() {
@@ -79,9 +100,13 @@ async function main() {
     log('1. Sending $0.50 USDT directly to the RevenueVault contract');
     log('2. Watching the server logs for "[DepositListener] Deposit detected"');
     log('3. Checking balance: curl "$API_BASE_URL/credits/balance?wallet=YOUR_WALLET"');
-    log('4. Testing RPC: curl -X POST $API_BASE_URL/rpc/polygon \\');
+    log('4. Register for an API key (X-Wallet-Address alone no longer bills — P0-wallet-auth):');
+    log('     curl -X POST $API_BASE_URL/v1/machine/register \\');
     log('     -H "Content-Type: application/json" \\');
-    log('     -H "X-Wallet-Address: YOUR_WALLET" \\');
+    log('     -d \'{"wallet_address":"YOUR_WALLET","signature":"<personal_sign of satelink:register:your_wallet>"}\'');
+    log('5. Testing RPC: curl -X POST $API_BASE_URL/rpc/polygon \\');
+    log('     -H "Content-Type: application/json" \\');
+    log('     -H "X-API-Key: YOUR_ISSUED_KEY" \\');
     log('     -d \'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}\'');
     process.exit(1);
   }
@@ -121,6 +146,13 @@ async function main() {
     process.exit(1);
   }
 
+  // ── Register (or reuse) an API key bound to this wallet — needed for every
+  // RPC call below, since X-Wallet-Address alone no longer bills (P0-wallet-auth).
+  log('');
+  log('=== STEP 0: Register for an API key ===');
+  const apiKey = await registerForApiKey(wallet);
+  log(`API key: ${apiKey} (save as TEST_API_KEY to reuse; it cannot be re-issued)`);
+
   // ── Pre-deposit: Check Satelink credit balance
   log('');
   log('=== STEP 1: Check pre-deposit credit balance ===');
@@ -130,7 +162,7 @@ async function main() {
   // ── Pre-deposit: Test RPC (should return 402)
   log('');
   log('=== STEP 2: Test RPC call (should return 402) ===');
-  const preRpc = await testRpcCall(walletAddress);
+  const preRpc = await testRpcCall(apiKey);
   log(`RPC Response: HTTP ${preRpc.status}`);
   if (preRpc.status !== 402) {
     log(`WARNING: Expected 402, got ${preRpc.status}`);
@@ -187,7 +219,7 @@ async function main() {
   // ── Post-deposit: Test RPC (should return 200)
   log('');
   log('=== STEP 6: Test RPC call (should return 200) ===');
-  const postRpc = await testRpcCall(walletAddress);
+  const postRpc = await testRpcCall(apiKey);
   log(`RPC Response: HTTP ${postRpc.status}`);
   if (postRpc.status === 200) {
     log(`✓ RPC call succeeded!`);
