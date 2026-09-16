@@ -65,6 +65,14 @@ async function seed(opts: { validAfter?: number; validBefore?: number; consumed?
              'verified',1)`,
     [FUNDING, PRINCIPAL],
   );
+  // M6 (a): enforceNew now writes a draws row per consumption, which needs
+  // this principal's USDC capacity account to exist (same convention prod
+  // already uses: acct_<principal>_usdc, kind='capacity').
+  await pool.query(
+    `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
+     VALUES ($1,$2,'capacity','debit','USDC',6,'open')`,
+    [`acct_${PRINCIPAL}_usdc`, PRINCIPAL],
+  );
   await pool.query(
     `INSERT INTO authorizations
        (id, principal_id, funding_source_id, cap_amount, currency, consumed_amount, valid_after, valid_before, signature_envelope, state, version)
@@ -89,6 +97,11 @@ async function seedTied(
              '{"supportsRecurring":false,"supportsEscrow":false,"supportsRefund":false,"agentCompatible":true,"settlementLatency":"seconds","custodial":false}'::jsonb,
              'verified',1)`,
     [FUNDING, PRINCIPAL],
+  );
+  await pool.query(
+    `INSERT INTO accounts (id, principal_id, kind, normality, currency, decimals, state)
+     VALUES ($1,$2,'capacity','debit','USDC',6,'open')`,
+    [`acct_${PRINCIPAL}_usdc`, PRINCIPAL],
   );
   for (const a of auths) {
     await pool.query(
@@ -138,6 +151,50 @@ describe('capacity enforcement — new path (integration)', () => {
     const { rows } = await pool.query('SELECT cap_amount, consumed_amount FROM authorizations WHERE id=$1', [AUTH]);
     expect(rows[0].cap_amount).toBe('150');
     expect(rows[0].consumed_amount).toBe('150'); // exactly cap, never over
+  });
+
+  // M6 (a/c): "Prod serves capacity for cost: 0 against signed EIP-3009
+  // promises that nothing ever redeems. draws = 0." — this pins the fix.
+  it('a successful draw creates a draws row (settling) + a settlements row (pending), and cost is never 0', async () => {
+    await seed();
+    const v = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST, requestId: 'rpc_test_m6_1' });
+    expect(v.ok).toBe(true);
+    expect(v.cost).toBeGreaterThan(0);
+    expect(v.cost).toBe(COST / 1_000_000); // decimal-dollar, same unit as rpc_billing.js
+
+    const draws = await pool.query('SELECT * FROM draws WHERE idempotency_key = $1', ['rpc_test_m6_1']);
+    expect(draws.rows).toHaveLength(1);
+    expect(draws.rows[0].state).toBe('settling');
+    expect(draws.rows[0].amount).toBe(String(COST));
+    expect(draws.rows[0].principal_id).toBeTruthy();
+    expect(draws.rows[0].authorization_id).toBe(AUTH);
+    expect(draws.rows[0].account_id).toBe(`acct_${PRINCIPAL}_usdc`);
+
+    const settlement = await pool.query('SELECT * FROM settlements WHERE draw_id = $1', [draws.rows[0].id]);
+    expect(settlement.rows).toHaveLength(1);
+    expect(settlement.rows[0].state).toBe('pending');
+    expect(settlement.rows[0].confirmations).toBe(0);
+  });
+
+  it('a denied draw creates NO draws row (invariant #1: never partially apply)', async () => {
+    await seed({ consumed: CAP }); // fully consumed — will deny
+    const v = await __internal.enforceNew(pool, { wallet: WALLET, cost: COST, requestId: 'rpc_test_m6_deny' });
+    expect(v.ok).toBe(false);
+    const draws = await pool.query('SELECT * FROM draws WHERE idempotency_key = $1', ['rpc_test_m6_deny']);
+    expect(draws.rows).toHaveLength(0);
+  });
+
+  it('missing capacity account rolls back the WHOLE draw — no consumed capacity without a Draw row', async () => {
+    await seed();
+    // Remove the capacity account seed() created, simulating the data-integrity
+    // gap insertDraw() must never paper over.
+    await pool.query(`DELETE FROM accounts WHERE principal_id = $1`, [PRINCIPAL]);
+    const before = await pool.query('SELECT consumed_amount FROM authorizations WHERE id=$1', [AUTH]);
+    await expect(
+      __internal.enforceNew(pool, { wallet: WALLET, cost: COST, requestId: 'rpc_test_m6_noacct' }),
+    ).rejects.toThrow(/no capacity account/);
+    const after = await pool.query('SELECT consumed_amount FROM authorizations WHERE id=$1', [AUTH]);
+    expect(after.rows[0].consumed_amount).toBe(before.rows[0].consumed_amount); // rolled back, not silently consumed
   });
 
   it('classifies capacity read-only without mutating (dual-mode eval)', async () => {
@@ -271,17 +328,20 @@ describe('capacity enforcement — new path (integration)', () => {
   });
 });
 
-// api_credits fallback for 'new' mode (enforceCapacity, not enforceNew directly).
-// enforceNew has no api_credits path; enforceCapacity's 'new' branch adds one:
-// only a 'no_authorization' denial falls through to legacy authorizeAndMeter, so
-// api_credits accounts keep working under a global 'new' flip WITHOUT turning the
-// fallback into a bypass. These cases pin the three decisions the gate cares about:
-//   (a) over-cap authorization  -> still deny insufficient_capacity (no fallthrough)
-//   (b) no auth AND no account   -> still deny (account_not_found), not a bypass
-//   (c) no auth BUT has credits  -> fall through to api_credits (the only new behavior)
+// T-23 (M6) waterfall for 'new' mode (enforceCapacity, not enforceNew
+// directly): prepaid api_credits -> authorization cap -> HARD STOP (402).
+// Prepaid is tried FIRST, unconditionally, before the authorization layer
+// is even consulted — a deliberate reordering from the pre-M6 behavior
+// (authorization-primary, api_credits only as a no_authorization fallback).
+// Pinned here:
+//   (a) prepaid funded, authorization ALSO exists (even exhausted/revoked)
+//       -> prepaid wins, authorization untouched (waterfall order, not a bug)
+//   (b) neither prepaid nor authorization -> HARD STOP, authorization
+//       layer's denial is the one surfaced (no_authorization, 402)
+//   (c) no authorization but funded api_credits -> prepaid serves it
 // authorizeAndMeter reads api_credits / api_usage_daily, which are NOT in the
 // financial-domain migrations, so this block creates them as a fixture.
-describe('capacity enforcement — new-mode api_credits fallback (integration)', () => {
+describe('capacity enforcement — new-mode T-23 waterfall (integration)', () => {
   const UNFUNDED = '0x00000000000000000000000000000000000000b3'; // no auth, no account
 
   beforeAll(async () => {
@@ -332,62 +392,78 @@ describe('capacity enforcement — new-mode api_credits fallback (integration)',
     expect(v.tier).toBe('basic'); // served by authorizeAndMeter, not the 'capacity' path
   });
 
-  it('(b) no authorization AND no api_credits account → denies, not a silent bypass', async () => {
+  it('(b) HARD STOP: no prepaid AND no authorization → denies, authorization layer has the last word', async () => {
     const v = await enforceCapacity(pool, { wallet: UNFUNDED });
     expect(v.ok).toBe(false);
-    expect(v.code).toBe('account_not_found'); // legacy path denies unknown identity
-  });
-
-  it('(a) over-cap authorization → denies insufficient_capacity, does NOT fall through to api_credits', async () => {
-    await seed({ consumed: CAP }); // authorization fully consumed (0 headroom < cost)
-    // Same wallet ALSO has a funded api_credits account. The fallback must NOT
-    // mask a real capacity denial by drawing api_credits instead.
-    await pool.query(
-      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
-       VALUES ('sk_fallback_a', $1, 'basic', 10000, 1.0, 'active')`,
-      [WALLET],
-    );
-    const before = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_a'`);
-    const v = await enforceCapacity(pool, { wallet: WALLET });
-    expect(v.ok).toBe(false);
-    expect(v.code).toBe('insufficient_capacity'); // real denial, NOT no_authorization
-    const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_a'`);
-    expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt)); // untouched
-  });
-
-  it('(d) revoked authorization + funded api_credits → denies authorization_revoked, does NOT fall through', async () => {
-    await seed(); // active authorization for WALLET
-    await pool.query(`UPDATE authorizations SET state='revoked' WHERE id=$1`, [AUTH]);
-    await pool.query(
-      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
-       VALUES ('sk_fallback_d', $1, 'basic', 10000, 1.0, 'active')`,
-      [WALLET],
-    );
-    const before = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
-    const v = await enforceCapacity(pool, { wallet: WALLET });
-    expect(v.ok).toBe(false);
-    expect(v.code).toBe('authorization_revoked'); // distinct code — NOT no_authorization
+    // Prepaid (authorizeAndMeter) is tried first and also denies
+    // (account_not_found), but the FINAL denial surfaced is the
+    // authorization layer's — capacity_enforcement.js is the primary gate
+    // under 'new' mode (see enforceCapacity's 'new' branch comment).
+    expect(v.code).toBe('no_authorization');
     expect(v.http).toBe(402);
-    // revocation is terminal: the funded api_credits balance must be untouched
-    const after = await pool.query(`SELECT credits_usdt FROM api_credits WHERE api_key='sk_fallback_d'`);
-    expect(String(after.rows[0].credits_usdt)).toBe(String(before.rows[0].credits_usdt));
   });
 
-  it('never-authorized principal (zero authorizations) + funded api_credits → still falls through (fix not over-broadened)', async () => {
-    // A principal that EXISTS but has NO authorizations at all must stay
-    // 'no_authorization' (fallback-eligible), NOT be reclassified as
-    // 'authorization_revoked'. Guards the nonactive_count===0 branch.
-    await pool.query(
-      `INSERT INTO principals (id, kind, external_ref, state) VALUES ($1,'machine',$2,'active')`,
-      [PRINCIPAL, WALLET],
-    );
+  it('(a) prepaid funded + authorization fully consumed → prepaid wins (waterfall order), authorization untouched', async () => {
+    await seed({ consumed: CAP }); // authorization fully consumed (0 headroom < cost)
     await pool.query(
       `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
-       VALUES ('sk_fallback_never', $1, 'basic', 10000, 1.0, 'active')`,
+       VALUES ('sk_waterfall_a', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(true); // T-23: prepaid is tried FIRST, so a funded account always wins here
+    expect(v.tier).toBe('basic');
+    const authRow = await pool.query(`SELECT consumed_amount FROM authorizations WHERE id=$1`, [AUTH]);
+    expect(authRow.rows[0].consumed_amount).toBe(String(CAP)); // authorization never touched — prepaid served it
+  });
+
+  it('exhausted prepaid + authorization with headroom → falls through to authorization (the actual waterfall)', async () => {
+    await seed(); // active authorization, headroom available
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_waterfall_exhausted', $1, 'basic', 10000, 0, 'active')`, // 0 credits — prepaid denies
       [WALLET],
     );
     const v = await enforceCapacity(pool, { wallet: WALLET });
     expect(v.ok).toBe(true);
-    expect(v.tier).toBe('basic'); // fell through to api_credits, as intended
+    expect(v.creditSource).toBe('authorization'); // fell through, second layer served it
+    const authRow = await pool.query(`SELECT consumed_amount FROM authorizations WHERE id=$1`, [AUTH]);
+    expect(authRow.rows[0].consumed_amount).toBe(String(COST)); // authorization WAS drawn
+  });
+
+  it('(d) revoked authorization + funded prepaid → prepaid still works (revocation is scoped to that one authorization)', async () => {
+    await seed(); // active authorization for WALLET
+    await pool.query(`UPDATE authorizations SET state='revoked' WHERE id=$1`, [AUTH]);
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_waterfall_d', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    // Intentional (see enforceCapacity's 'new' branch comment): T-23's
+    // prepaid-first order means a revoked authorization no longer
+    // implicitly blocks a SEPARATE, independently-funded prepaid account.
+    expect(v.ok).toBe(true);
+    expect(v.tier).toBe('basic');
+  });
+
+  it('revoked authorization + NO prepaid account → denies authorization_revoked (the revocation still bites when nothing else can serve it)', async () => {
+    await seed();
+    await pool.query(`UPDATE authorizations SET state='revoked' WHERE id=$1`, [AUTH]);
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(false);
+    expect(v.code).toBe('authorization_revoked');
+    expect(v.http).toBe(402);
+  });
+
+  it('(c) no authorization but funded api_credits → prepaid serves it', async () => {
+    await pool.query(
+      `INSERT INTO api_credits (api_key, wallet_address, tier, daily_limit, credits_usdt, status)
+       VALUES ('sk_fallback_c', $1, 'basic', 10000, 1.0, 'active')`,
+      [WALLET],
+    );
+    const v = await enforceCapacity(pool, { wallet: WALLET });
+    expect(v.ok).toBe(true);
+    expect(v.tier).toBe('basic'); // served by authorizeAndMeter, not the 'capacity' path
   });
 });

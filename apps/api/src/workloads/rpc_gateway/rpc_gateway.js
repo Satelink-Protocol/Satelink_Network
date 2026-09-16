@@ -273,6 +273,11 @@ export function createRpcGateway(db) {
         // Phase 6: a revenue event is created ONLY for an actual deduction. This
         // holds the real amount deducted (0 for free/anonymous → no revenue event).
         let billedUsdt = 0;
+        // Generated HERE (not at the old billing-record call site below) so the
+        // 'new' capacity path (enforceCapacity → enforceNew, M6) can use the
+        // SAME id as the draws.idempotency_key that recordRpcRevenue later uses
+        // for revenue_events_v2.request_id — one request, one id, everywhere.
+        const request_id = `rpc_${crypto.randomUUID()}`;
         if (canonical && (apiKey || walletForBilling)) {
             // CANONICAL: api_credits is authoritative. One atomic call does the
             // daily-limit gate (429), balance deduct (402), and usage metering.
@@ -286,10 +291,15 @@ export function createRpcGateway(db) {
                 // capacity decision is served. Path is read at request time
                 // (CAPACITY_ENFORCEMENT_PATH) so a Railway flip reverts with no
                 // redeploy.
-                verdict = await enforceCapacity(db, { apiKey, wallet: walletForBilling });
+                verdict = await enforceCapacity(db, { apiKey, wallet: walletForBilling, requestId: request_id });
             } catch (err) {
-                console.error('[RPC Gateway] creditService error (fail-open + alert):', err.message);
-                verdict = { ok: true, tier: 'unknown', remaining: null, limit: null, balanceAfter: null, degraded: true };
+                // M6: fail CLOSED, same principle as T-24 (credit_service.mjs
+                // authorizeAndMeter) — a capacity-check exception (DB hiccup, or
+                // now also a data-integrity gap like a principal with an active
+                // authorization but no capacity account, see capacity_enforcement.js
+                // insertDraw) must never silently become free unlimited service.
+                console.error('[RPC Gateway] capacity check error (fail-closed):', err.message);
+                verdict = { ok: false, code: 'capacity_check_failed', http: 503, message: 'Capacity check unavailable — try again shortly' };
             }
             res.set('X-Credit-Source', verdict.creditSource === 'authorization' ? 'authorization' : 'api_credits');
             if (!verdict.ok) {
@@ -381,7 +391,8 @@ export function createRpcGateway(db) {
             incrementUsage(apiKey, clientIp).catch(() => {});
         }
 
-        const request_id = `rpc_${crypto.randomUUID()}`;
+        // request_id declared earlier (before enforceCapacity) — see the
+        // AUTHORIZE + METER block above.
         const method = body.method;
         const params = body.params || [];
 
