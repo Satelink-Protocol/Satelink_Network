@@ -41,15 +41,11 @@ C1: x-payer-address credit theft is closed "after all" hook for "REPLAY: the sam
 P0-wallet-auth: x-wallet-address can no longer drive billing "before all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
 P0-wallet-auth: x-wallet-address can no longer drive billing "after all" hook in "P0-wallet-auth: x-wallet-address can no longer drive billing"
 #
-# ── T-02 claims_route admin secret (#361): needs JWT_SECRET which CI env
-# does not set. Passes in LOCAL with .env. Not a real regression. ──
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/backfill-revenue ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/allocate-earnings ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET unset -> 503, even with the old literal
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET set -> the old literal is rejected (403)
-claims_route — T-02 admin secret (no hard-coded fallback) POST /admin/close-epoch ADMIN_BACKFILL_SECRET set -> the correct secret passes the gate
+# ── PRUNED 2026-09-17: T-02 claims_route admin secret (#361), 9 tests.
+# The old rationale ("CI does not set JWT_SECRET") was stale — .github/
+# workflows/ci.yml sets JWT_SECRET for the baseline job, so all 9 tests RUN
+# and PASS in CI (verified green across #382/#383/#384 baseline runs) and
+# pass in LOCAL (test/claims_route_admin_secret.test.js: 11 passing). They
+# were the union-file's only truly-reliably-passing entries, so they are
+# removed from the allowlist rather than left as advisory noise. ──
 
