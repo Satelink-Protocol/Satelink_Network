@@ -107,6 +107,85 @@ async function creditViaInternalApi(body: DodoCreditBody): Promise<void> {
   }
 }
 
+type DodoReversalBody = {
+  eventType:
+    | "refund.succeeded"
+    | "refund.failed"
+    | "dispute.opened"
+    | "dispute.accepted"
+    | "dispute.cancelled"
+    | "dispute.challenged"
+    | "dispute.expired"
+    | "dispute.won"
+    | "dispute.lost";
+  dodoRef: string; // refund_id or dispute_id
+  paymentId?: string;
+  isPartial?: boolean;
+  amountMinor?: number;
+  currency?: string;
+  isTestMode?: boolean;
+};
+
+// Refund/dispute reversals — the money-reversing half. Same delivery contract as
+// creditViaInternalApi: throw on non-2xx/network failure so an uncaught error
+// becomes a 500 and Dodo retries (every reversal write is idempotent on the
+// Dodo refund/dispute id, so a retried delivery is safe). A 200 {matched:false}
+// (payment not from this surface) is NOT an error.
+async function reverseViaInternalApi(body: DodoReversalBody): Promise<void> {
+  const secret = process.env.DODO_INTERNAL_SECRET;
+  if (!secret) {
+    throw new Error("[dodo-webhook] DODO_INTERNAL_SECRET is not set — cannot reverse in apps/api");
+  }
+  const res = await fetch(`${INTERNAL_API_URL}/internal/dodo/reversal`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-dodo-internal-secret": secret },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`[dodo-webhook] internal reversal call failed: ${res.status} ${text}`.slice(0, 500));
+  }
+}
+
+// Refund object (@dodopayments/core RefundSchema). amount is minor units.
+type RefundPayload = {
+  refund_id?: string;
+  payment_id?: string;
+  is_partial?: boolean;
+  amount?: number | null;
+  currency?: string | null;
+  metadata?: Record<string, string>;
+};
+
+// Dispute object (@dodopayments/core DisputeSchema). amount is a STRING; no metadata.
+type DisputePayload = {
+  dispute_id?: string;
+  payment_id?: string;
+  amount?: string;
+  currency?: string;
+};
+
+async function forwardDispute(
+  eventType: DodoReversalBody["eventType"],
+  payload: unknown
+): Promise<void> {
+  const data = payload as DisputePayload;
+  if (!data.dispute_id) {
+    console.error(`[dodo-webhook] ${eventType} missing dispute_id`, data);
+    return;
+  }
+  const amt = data.amount != null ? Number(data.amount) : undefined;
+  await reverseViaInternalApi({
+    eventType,
+    dodoRef: data.dispute_id,
+    paymentId: data.payment_id,
+    amountMinor: Number.isFinite(amt) ? amt : undefined,
+    currency: data.currency ?? undefined,
+    // Disputes carry no metadata — is_test_data is derived server-side from the
+    // original payment's funding record.
+  });
+}
+
 type PaymentPayload = {
   payment_id?: string;
   subscription_id?: string | null;
@@ -278,6 +357,45 @@ function getHandler() {
           isTestMode: isTestModePayload(data),
         });
       },
+
+      // ── Refunds & disputes (money-reversing) — forwarded to apps/api, which
+      // decides matched/unmatched via the original payment record. Disputes have
+      // no metadata; is_test_data is derived server-side from the funding row. ──
+      onRefundSucceeded: async (payload: unknown) => {
+        const data = payload as RefundPayload;
+        if (!data.refund_id || !data.payment_id) {
+          console.error("[dodo-webhook] refund.succeeded missing refund_id/payment_id", data);
+          return;
+        }
+        await reverseViaInternalApi({
+          eventType: "refund.succeeded",
+          dodoRef: data.refund_id,
+          paymentId: data.payment_id,
+          isPartial: !!data.is_partial,
+          amountMinor: data.amount ?? undefined,
+          currency: data.currency ?? undefined,
+          isTestMode: isTestModePayload(data),
+        });
+      },
+
+      onRefundFailed: async (payload: unknown) => {
+        const data = payload as RefundPayload;
+        if (!data.refund_id) return;
+        await reverseViaInternalApi({
+          eventType: "refund.failed",
+          dodoRef: data.refund_id,
+          paymentId: data.payment_id,
+          isTestMode: isTestModePayload(data),
+        });
+      },
+
+      onDisputeOpened: (p: unknown) => forwardDispute("dispute.opened", p),
+      onDisputeWon: (p: unknown) => forwardDispute("dispute.won", p),
+      onDisputeLost: (p: unknown) => forwardDispute("dispute.lost", p),
+      onDisputeAccepted: (p: unknown) => forwardDispute("dispute.accepted", p),
+      onDisputeCancelled: (p: unknown) => forwardDispute("dispute.cancelled", p),
+      onDisputeExpired: (p: unknown) => forwardDispute("dispute.expired", p),
+      onDisputeChallenged: (p: unknown) => forwardDispute("dispute.challenged", p),
     });
   }
   return _handler;

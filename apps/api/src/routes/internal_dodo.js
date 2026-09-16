@@ -42,7 +42,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { creditAccount, resolveAccount, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
-import { shadowWriteRevenueLedger } from '../ledger/shadow_ledger_write.js';
+import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
 
 const ENTITLING_EVENTS = new Set(['payment.succeeded', 'subscription.renewed']);
 
@@ -153,6 +153,139 @@ async function resolveOrCreateApiKey(client, { apiKeyHint, subscriptionId, custo
     [apiKey, plan, PLAN_DAILY_LIMIT[plan] || PLAN_DAILY_LIMIT.starter, customerEmail || null]
   );
   return apiKey;
+}
+
+// ── Refund & dispute reversal (M5 follow-up) ─────────────────────────────────
+//
+// Event names & payload fields are SDK-verified against the INSTALLED
+// @dodopayments/core zod schemas (node_modules/@dodopayments/core/dist/
+// chunk-F4N6VZ2P.js): refund.succeeded/refund.failed (RefundSchema:292 —
+// refund_id, payment_id, is_partial, amount) and dispute.{opened,accepted,
+// cancelled,challenged,expired,won,lost} (DisputeSchema:307 — dispute_id,
+// payment_id, dispute_status).
+//
+// Money direction per event. The task specifies opened→freeze, won→unfreeze,
+// lost→clawback; the other dispute terminals are mapped by their obvious
+// favourability so funds are never left frozen forever (documented, beyond the
+// literal spec — founder to confirm Dodo's exact semantics):
+//   MERCHANT-FAVOURABLE  (unfreeze): dispute.won, dispute.cancelled, dispute.expired
+//   MERCHANT-LOSES       (clawback): dispute.lost, dispute.accepted
+//   IN-PROGRESS          (log only) : dispute.challenged
+const DISPUTE_UNFREEZE = new Set(['dispute.won', 'dispute.cancelled', 'dispute.expired']);
+const DISPUTE_CLAWBACK = new Set(['dispute.lost', 'dispute.accepted']);
+const NO_MONEY_EVENTS = new Set(['refund.failed', 'dispute.challenged']);
+
+/** Resolve which api_key a Dodo payment funded, and how much it credited (USD). */
+async function resolveFunding(client, paymentId) {
+  if (!paymentId) return null;
+  const key = `dodo:${paymentId}`;
+  const dep = await client.query(
+    `SELECT api_key, credited_usdt, is_test_data FROM api_deposits WHERE tx_hash = $1`, [key]
+  );
+  if (dep.rows[0]?.api_key) {
+    return { apiKey: dep.rows[0].api_key, creditedUsd: Number(dep.rows[0].credited_usdt) || 0, isTestData: !!dep.rows[0].is_test_data };
+  }
+  const ps = await client.query(
+    `SELECT credited_api_key, amount_usd, is_test_data FROM payment_sources WHERE tx_hash = $1`, [key]
+  );
+  if (ps.rows[0]?.credited_api_key) {
+    return { apiKey: ps.rows[0].credited_api_key, creditedUsd: Number(ps.rows[0].amount_usd) || 0, isTestData: !!ps.rows[0].is_test_data };
+  }
+  return null;
+}
+
+/** Claw back up to `amount` from spendable credits, floored at 0. */
+async function clawbackCredits(client, apiKey, amount) {
+  const cur = await client.query(
+    `SELECT credits_usdt FROM api_credits WHERE api_key = $1 FOR UPDATE`, [apiKey]
+  );
+  const bal = cur.rows[0] ? Number(cur.rows[0].credits_usdt) : 0;
+  const actual = Math.min(amount, bal);
+  if (actual > 0) {
+    await client.query(
+      `UPDATE api_credits SET credits_usdt = credits_usdt - $1 WHERE api_key = $2`,
+      [actual, apiKey]
+    );
+  }
+  return { actual: +actual.toFixed(6), shortfall: +(amount - actual).toFixed(6) };
+}
+
+/** Move up to `amount` from spendable into frozen (not spendable). */
+async function freezeCredits(client, apiKey, amount) {
+  const cur = await client.query(
+    `SELECT credits_usdt FROM api_credits WHERE api_key = $1 FOR UPDATE`, [apiKey]
+  );
+  const bal = cur.rows[0] ? Number(cur.rows[0].credits_usdt) : 0;
+  const frozen = Math.min(amount, bal);
+  if (frozen > 0) {
+    await client.query(
+      `UPDATE api_credits SET credits_usdt = credits_usdt - $1, frozen_usdt = frozen_usdt + $1 WHERE api_key = $2`,
+      [frozen, apiKey]
+    );
+  }
+  return { frozen: +frozen.toFixed(6), shortfall: +(amount - frozen).toFixed(6) };
+}
+
+/** Return `amount` from frozen back to spendable. */
+async function unfreezeCredits(client, apiKey, amount) {
+  if (amount > 0) {
+    await client.query(
+      `UPDATE api_credits SET credits_usdt = credits_usdt + $1, frozen_usdt = GREATEST(0, frozen_usdt - $1) WHERE api_key = $2`,
+      [amount, apiKey]
+    );
+  }
+}
+
+/** Forfeit `amount` of frozen funds (dispute lost — funds are gone). */
+async function releaseFrozen(client, apiKey, amount) {
+  if (amount > 0) {
+    await client.query(
+      `UPDATE api_credits SET frozen_usdt = GREATEST(0, frozen_usdt - $1) WHERE api_key = $2`,
+      [amount, apiKey]
+    );
+  }
+}
+
+/** Append-only reversal row in revenue_events_v2 (negative; is_billable=false to
+ *  satisfy 015's CHECK). NEVER mutates or deletes the original revenue row. */
+async function insertReversalRow(client, { clientId, magnitude, requestId, isTest }) {
+  await client.query(
+    `INSERT INTO revenue_events_v2
+       (op_type, client_id, amount_usdt, status, request_id, created_at, chain, method, source, demand_source, is_test_data, is_billable)
+     VALUES ('refund_reversal', $1, $2, 'reversed', $3, $4, null, null, 'dodo', 'dodo', $5, false)
+     ON CONFLICT (client_id, op_type, request_id) DO NOTHING`,
+    [clientId, -Math.abs(magnitude), requestId, Math.floor(Date.now() / 1000), isTest]
+  );
+}
+
+/** Full refund / dispute lost on a subscription payment → expire the entitlement. */
+async function cancelEntitlementIfSubscription(client, apiKey) {
+  await client.query(
+    `UPDATE subscriptions
+        SET status = 'cancelled', cancelled_at = COALESCE(cancelled_at, now()), updated_at = now()
+      WHERE api_key = $1 AND provider = 'dodo' AND status <> 'cancelled'`,
+    [apiKey]
+  );
+}
+
+/** The prior dispute.opened log row (how much was frozen), if any. */
+async function getOpenedFreeze(client, disputeId) {
+  const r = await client.query(
+    `SELECT amount_usd, shortfall_usd FROM dodo_refund_dispute_log WHERE event_id = $1`,
+    [`dispute:${disputeId}:opened`]
+  );
+  if (!r.rows[0]) return null;
+  return { frozen: Number(r.rows[0].amount_usd) || 0, shortfall: Number(r.rows[0].shortfall_usd) || 0 };
+}
+
+async function logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount, shortfall, isTest }) {
+  await client.query(
+    `INSERT INTO dodo_refund_dispute_log
+       (event_id, kind, event_type, dodo_ref, payment_id, api_key, amount_usd, shortfall_usd, is_test_data, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [eventId, kind, eventType, dodoRef, paymentId || null, apiKey || null,
+     amount || 0, shortfall || 0, !!isTest, Date.now()]
+  );
 }
 
 export function createDodoInternalRouter(pool) {
@@ -271,6 +404,144 @@ export function createDodoInternalRouter(pool) {
         return res.status(409).json({ ok: false, code: 'duplicate', message: 'already credited' });
       }
       console.error('[internal/dodo] credit failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /internal/dodo/reversal — the money-REVERSING half of the rail:
+  // refund.succeeded/failed and dispute.* events. One DB transaction per event;
+  // idempotent on dodo_refund_dispute_log.event_id; FAIL CLOSED (500 → Dodo
+  // retries) on any unexpected error, safe because every write is idempotent.
+  router.post('/reversal', async (req, res) => {
+    const body = req.body || {};
+    const { eventType, dodoRef, paymentId, isPartial, amountMinor, currency, isTestMode } = body;
+
+    if (!eventType) return res.status(400).json({ ok: false, error: 'eventType required' });
+    if (!dodoRef) return res.status(400).json({ ok: false, error: 'dodoRef required' });
+
+    const kind = eventType.startsWith('refund.') ? 'refund'
+      : eventType.startsWith('dispute.') ? 'dispute' : null;
+    if (!kind) return res.status(400).json({ ok: false, error: `unsupported eventType: ${eventType}` });
+
+    // Preliminary flag for the pre-funding branches (no-money / unmatched); for
+    // matched events it is overridden by the ORIGINAL payment's is_test_data
+    // below (authoritative — disputes carry no metadata to infer it from).
+    let isTest = !!isTestMode;
+    // Deterministic idempotency key. A refund_id is terminal-unique; a dispute_id
+    // repeats across its lifecycle, so it is qualified by the event's own stage.
+    const eventId = kind === 'refund'
+      ? `refund:${dodoRef}`
+      : `dispute:${dodoRef}:${eventType.slice('dispute.'.length)}`;
+
+    // Amount to reverse against, after any shadow-ledger mirror (set inside tx).
+    let shadow = null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Idempotency gate — checked inside the tx before any write.
+      const dup = await client.query(
+        `SELECT 1 FROM dodo_refund_dispute_log WHERE event_id = $1`, [eventId]
+      );
+      if (dup.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(200).json({ ok: true, duplicate: true, eventType });
+      }
+
+      // Events that never move money: record for visibility, then done.
+      if (NO_MONEY_EVENTS.has(eventType)) {
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey: null, amount: 0, shortfall: 0, isTest });
+        await client.query('COMMIT');
+        return res.status(200).json({ ok: true, action: 'logged', eventType });
+      }
+
+      const funding = await resolveFunding(client, paymentId);
+      if (!funding) {
+        // No Dodo-credit record for this payment (e.g. a task-commerce order, or
+        // a subscription-renewal refund keyed by synthetic sub-id). Definitively
+        // unmatchable — record and 200 (a 5xx here would loop Dodo's retries).
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey: null, amount: 0, shortfall: 0, isTest });
+        await client.query('COMMIT');
+        return res.status(200).json({ ok: true, matched: false, eventType });
+      }
+      const { apiKey, creditedUsd } = funding;
+      isTest = funding.isTestData; // authoritative: match the original payment
+
+      let result;
+      if (eventType === 'refund.succeeded') {
+        // Full: reverse the whole credited amount. Partial: the refunded portion
+        // (credit was 1:1 with the payment, so USD of the refunded minor units IS
+        // the proportional clawback). Capped at what was credited.
+        const partial = !!isPartial;
+        let refundUsd = partial ? toUsdApprox(amountMinor, currency) : creditedUsd;
+        refundUsd = Math.min(+refundUsd.toFixed(6), creditedUsd);
+        if (!(refundUsd > 0)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ ok: false, error: 'refund amount could not be determined' });
+        }
+        const { actual, shortfall } = await clawbackCredits(client, apiKey, refundUsd);
+        const requestId = `dodo:refund:${dodoRef}`;
+        await insertReversalRow(client, { clientId: apiKey, magnitude: refundUsd, requestId, isTest });
+        if (!partial) await cancelEntitlementIfSubscription(client, apiKey);
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: actual, shortfall, isTest });
+        shadow = { requestId, amountUsdt: refundUsd, isTestData: isTest };
+        result = { action: partial ? 'refund_partial' : 'refund_full', clawedBack: actual, shortfall };
+
+      } else if (eventType === 'dispute.opened') {
+        const { frozen, shortfall } = await freezeCredits(client, apiKey, creditedUsd);
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: frozen, shortfall, isTest });
+        result = { action: 'frozen', frozen, shortfall };
+
+      } else if (DISPUTE_UNFREEZE.has(eventType)) {
+        const opened = await getOpenedFreeze(client, dodoRef);
+        const frozen = opened ? opened.frozen : 0;
+        if (frozen > 0) await unfreezeCredits(client, apiKey, frozen);
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: frozen, shortfall: 0, isTest });
+        result = { action: 'unfrozen', unfrozen: frozen };
+
+      } else if (DISPUTE_CLAWBACK.has(eventType)) {
+        const opened = await getOpenedFreeze(client, dodoRef);
+        let shortfall;
+        if (opened) {
+          // Funds were frozen at open; forfeit the hold. Already-spent portion
+          // (couldn't be frozen then) is the shortfall.
+          await releaseFrozen(client, apiKey, opened.frozen);
+          shortfall = opened.shortfall;
+        } else {
+          // No prior freeze on record — claw back from spendable, like a full refund.
+          const cb = await clawbackCredits(client, apiKey, creditedUsd);
+          shortfall = cb.shortfall;
+        }
+        const requestId = `dodo:dispute:${dodoRef}`;
+        await insertReversalRow(client, { clientId: apiKey, magnitude: creditedUsd, requestId, isTest });
+        await cancelEntitlementIfSubscription(client, apiKey);
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: creditedUsd, shortfall, isTest });
+        shadow = { requestId, amountUsdt: creditedUsd, isTestData: isTest };
+        result = { action: 'dispute_clawback', reversed: creditedUsd, shortfall };
+
+      } else {
+        // Unknown dispute.* stage — record, no money movement.
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: 0, shortfall: 0, isTest });
+        result = { action: 'logged' };
+      }
+
+      await client.query('COMMIT');
+
+      // Shadow-ledger reversal fired AFTER commit (mirrors the credit path);
+      // own pool/tx, never throws, no-op unless LEDGER_SHADOW_WRITE is enabled.
+      if (shadow) shadowReverseRevenueLedger(pool, shadow);
+
+      return res.status(200).json({ ok: true, matched: true, eventType, ...result });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (err.code === '23505') {
+        // Race on the event_id UNIQUE — another delivery won; idempotent.
+        return res.status(200).json({ ok: true, duplicate: true, eventType });
+      }
+      console.error('[internal/dodo] reversal failed:', err.message);
       return res.status(500).json({ ok: false, error: 'internal_error' });
     } finally {
       client.release();
