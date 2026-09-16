@@ -28,6 +28,8 @@ import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
 import { createWellKnownX402Router } from "./src/routes/well_known_x402.js";
 import { createMetricsRouter } from "./src/workloads/rpc_gateway/metrics.js";
+import { createIntelligenceRouter } from "./src/routes/intelligence_route.js";
+import { startIntelRefresh } from "./src/intelligence/engine.js";
 import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
 import { createFreeTierGate, getFreeTierStats } from "./src/middleware/free_tier_gate.js";
@@ -400,6 +402,14 @@ app.get("/api/mode", (req, res) => {
   // Machine decision APIs — /v1/compare + /v1/capabilities (pricing intel).
   // Read-only; mounted BEFORE the "/v1" ai-gateway for the same shadowing reason.
   app.use("/v1", createMachineIntelRouter(pool, redis));
+
+  // M3 — Derived trading intelligence — /v1/intelligence (+ /:metric).
+  // Metered via the canonical api_credits path; mounted BEFORE the "/v1"
+  // ai-gateway so its paths are not shadowed. Background refresh is opt-in
+  // (INTEL_REFRESH_ENABLED=true) so this mount is inert unless a snapshot loop
+  // is running — serving returns an honest 503 warming_up until then.
+  app.use("/v1", express.json({ limit: '16kb' }), createIntelligenceRouter(pool));
+  startIntelRefresh(pool, { logger: console });
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));

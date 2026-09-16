@@ -6,12 +6,18 @@
 // the actual payment enforcement (src/payments/x402/middleware.js) reads, but
 // is an independent file so a change here can never affect payment behavior.
 //
-// HONESTY NOTE: the four /v1/intelligence/* routes are listed because they
-// are real, wired x402-payable routes in the product plan (T-27/T-11) — but
-// the M3 work that serves them was never built (see apps/web's /intelligence
-// page and apps/mcp-server's intelligence tools for the same note). Each
-// entry below carries `live: false` and says so plainly; this file must
-// never claim a route is live when it 404s.
+// HONESTY NOTE (updated, M3 clean rebuild): the four /v1/intelligence/*
+// routes are now REAL and serving (src/routes/intelligence_route.js,
+// src/intelligence/{compute,connectors,engine}.js). Payment mechanism is
+// DIFFERENT from /rpc/polygon's direct x402 challenge, though: x402Middleware
+// is hardwired to the /rpc resource (its `routes` config and `resource` string
+// are literal, not path-generic — confirmed by reading its source), so
+// intelligence calls are metered via the canonical api_credits balance
+// instead — funded by the SAME x402 bundle payment on /rpc/polygon, or a
+// direct USDT deposit. `live: true` below means the route serves real data to
+// a funded API key; it does NOT mean this specific path negotiates its own
+// x402 402 challenge. See the route's own 402 body (no API key) for the exact
+// acquire-credits pointer.
 
 import { Router } from 'express';
 
@@ -53,8 +59,8 @@ function listing() {
         resource: `${base}/v1/intelligence/${path}`,
         price: '$0.01/call',
         description,
-        live: false,
-        note: 'Wired end-to-end (same x402 rail as /rpc/polygon); the serving endpoint is not deployed yet — returns 404, never a fabricated response.',
+        live: true,
+        note: 'Metered via api_credits (funded by the x402 bundle on /rpc/polygon or a USDT deposit) — not a direct x402 challenge on this path. Free discovery: GET /v1/intelligence.',
       })),
     ],
     manifest_url: `${base}/.well-known/satelink.json`,

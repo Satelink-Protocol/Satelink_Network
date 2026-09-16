@@ -3,15 +3,17 @@
 // ($0.01/call, x402) market intelligence: funding rate heatmap, open interest
 // shifts, liquidation clusters, market microstructure.
 //
-// HONESTY NOTE (do not remove without re-checking): the M3 plan (the actual
-// /v1/intelligence/* endpoints these tools call) was never built — M3 was
-// skipped in favor of M4/M5/M6. This file is real, working client plumbing —
-// it pays via the same x402 rail as polygon_rpc, reuses buildPayingFetch, and
-// will start returning real data the moment those routes ship server-side.
-// Until then, every call gets a clean 404 from production, which this
-// executor turns into an explicit `not_yet_available` result — never a
-// confusing raw error, and never a fabricated response. Same discipline as
-// apps/web/src/app/intelligence/page.tsx (M5, T-27).
+// HONESTY NOTE (updated, M3 clean rebuild): the /v1/intelligence/* endpoints
+// this file calls are now real (src/routes/intelligence_route.js). No code
+// change was needed here — this executor already checked `response.status`
+// rather than assuming success, so it started working the moment the route
+// shipped. One correction: the real route meters via api_credits (funded by
+// the x402 bundle on /rpc/polygon or a USDT deposit), not a direct x402
+// challenge on THIS path — the `payment_required` branch below still fires
+// correctly (the route returns a plain 402 with acquire-credits guidance,
+// same status code, different payment mechanics), so behavior is unaffected.
+// The 404 branch below is now a genuine "unreachable/misconfigured" signal,
+// not the expected case — kept as a safe fallback, not the primary path.
 
 const DEFAULT_INTELLIGENCE_BASE =
   process.env.SATELINK_INTELLIGENCE_URL || 'https://rpc.satelink.network/v1/intelligence';
