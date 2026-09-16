@@ -36,6 +36,7 @@
 // (DODO_INTERNAL_SECRET, distinct from ADMIN_SECRET_TOKEN — narrower blast
 // radius if it ever leaks), keeps that boundary intact.
 
+import type { NextRequest, NextResponse } from "next/server";
 import { Webhooks } from "@dodopayments/nextjs";
 import { markOrderPaid } from "@/lib/task-orders/db";
 
@@ -138,134 +139,150 @@ function isTestModePayload(data: { metadata?: Record<string, string> }): boolean
   return data.metadata?.test_mode === "true";
 }
 
-export const POST = Webhooks({
-  webhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY!,
+// Webhooks(...) validates webhookKey eagerly inside its own constructor (throws
+// "Secret can't be empty" if unset) — calling it at MODULE LOAD TIME would crash
+// Next.js's build-time page-data collection in any environment lacking this one
+// secret (local dev, CI, a Vercel preview build for an unrelated PR). Deferred to
+// first request instead: identical verification behavior (still the official
+// standardWebhook.verify() over the same handlers), just constructed lazily.
+let _handler: ((req: NextRequest) => Promise<NextResponse<unknown>>) | null = null;
+function getHandler() {
+  if (!_handler) {
+    _handler = Webhooks({
+      webhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY!,
 
-  onPaymentSucceeded: async (payload: unknown) => {
-    const data = payload as PaymentPayload;
-    const orderRef = data.metadata?.order_ref;
+      onPaymentSucceeded: async (payload: unknown) => {
+        const data = payload as PaymentPayload;
+        const orderRef = data.metadata?.order_ref;
 
-    // ── Surface 1: task-commerce (pre-existing, unchanged) ──────────────
-    if (orderRef !== undefined) {
-      const dodoPaymentId = data.payment_id;
-      if (!dodoPaymentId) {
-        console.error("[dodo-webhook] payment.succeeded with no payment_id — cannot record", data);
-        return;
-      }
-      const payerEmail = data.customer?.email;
-      const { order, matchedVia } = await markOrderPaid({
-        orderRef,
-        payerEmail,
-        dodoPaymentId,
-        rawPayload: payload,
-      });
-      if (matchedVia === "none") {
-        console.error("[dodo-webhook] payment.succeeded matched NO task_orders row", {
-          dodoPaymentId, orderRef, payerEmail,
+        // ── Surface 1: task-commerce (pre-existing, unchanged) ──────────────
+        if (orderRef !== undefined) {
+          const dodoPaymentId = data.payment_id;
+          if (!dodoPaymentId) {
+            console.error("[dodo-webhook] payment.succeeded with no payment_id — cannot record", data);
+            return;
+          }
+          const payerEmail = data.customer?.email;
+          const { order, matchedVia } = await markOrderPaid({
+            orderRef,
+            payerEmail,
+            dodoPaymentId,
+            rawPayload: payload,
+          });
+          if (matchedVia === "none") {
+            console.error("[dodo-webhook] payment.succeeded matched NO task_orders row", {
+              dodoPaymentId, orderRef, payerEmail,
+            });
+            return;
+          }
+          if (matchedVia === "email_fallback") {
+            console.warn(
+              "[dodo-webhook] matched via email fallback, NOT order_ref metadata — " +
+              "static-link metadata pass-through may not be reaching webhooks as documented",
+              { orderRef: order?.order_ref, dodoPaymentId, payerEmail }
+            );
+          } else {
+            console.log(`[dodo-webhook] order marked paid (matchedVia=${matchedVia})`, {
+              orderRef: order?.order_ref, dodoPaymentId,
+            });
+          }
+          return;
+        }
+
+        // ── Surface 2: /intelligence subscription payment (M5) ──────────────
+        if (!data.payment_id) {
+          console.error("[dodo-webhook] payment.succeeded with no payment_id — cannot credit", data);
+          return;
+        }
+        await creditViaInternalApi({
+          eventType: "payment.succeeded",
+          paymentId: data.payment_id,
+          subscriptionId: data.subscription_id ?? undefined,
+          planProductId: data.metadata?.plan_product_id,
+          customerEmail: data.customer?.email,
+          apiKeyHint: data.metadata?.api_key,
+          // Prefer settlement_* (what actually lands in the merchant account)
+          // over the customer-facing charge currency/amount when both are
+          // present — see internal_dodo.js's FX note for why this still isn't
+          // exact accounting without a confirmed settlement currency.
+          currency: data.settlement_currency || data.currency,
+          amountMinor: data.settlement_amount ?? data.total_amount,
+          isTestMode: isTestModePayload(data),
         });
-        return;
-      }
-      if (matchedVia === "email_fallback") {
-        console.warn(
-          "[dodo-webhook] matched via email fallback, NOT order_ref metadata — " +
-          "static-link metadata pass-through may not be reaching webhooks as documented",
-          { orderRef: order?.order_ref, dodoPaymentId, payerEmail }
-        );
-      } else {
-        console.log(`[dodo-webhook] order marked paid (matchedVia=${matchedVia})`, {
-          orderRef: order?.order_ref, dodoPaymentId,
+      },
+
+      onPaymentFailed: async (payload: unknown) => {
+        const data = payload as PaymentPayload;
+        if (data.metadata?.order_ref !== undefined) return; // task-commerce: no money-path handling needed
+        await creditViaInternalApi({
+          eventType: "payment.failed",
+          paymentId: data.payment_id,
+          subscriptionId: data.subscription_id ?? undefined,
+          isTestMode: isTestModePayload(data),
         });
-      }
-      return;
-    }
+      },
 
-    // ── Surface 2: /intelligence subscription payment (M5) ──────────────
-    if (!data.payment_id) {
-      console.error("[dodo-webhook] payment.succeeded with no payment_id — cannot credit", data);
-      return;
-    }
-    await creditViaInternalApi({
-      eventType: "payment.succeeded",
-      paymentId: data.payment_id,
-      subscriptionId: data.subscription_id ?? undefined,
-      planProductId: data.metadata?.plan_product_id,
-      customerEmail: data.customer?.email,
-      apiKeyHint: data.metadata?.api_key,
-      // Prefer settlement_* (what actually lands in the merchant account)
-      // over the customer-facing charge currency/amount when both are
-      // present — see internal_dodo.js's FX note for why this still isn't
-      // exact accounting without a confirmed settlement currency.
-      currency: data.settlement_currency || data.currency,
-      amountMinor: data.settlement_amount ?? data.total_amount,
-      isTestMode: isTestModePayload(data),
-    });
-  },
+      onSubscriptionActive: async (payload: unknown) => {
+        const data = payload as SubscriptionPayload;
+        // Gate M5-c: active alone (fires before a UPI mandate confirms) must
+        // NEVER credit or entitle — internal_dodo.js enforces this server-side
+        // regardless of what this handler sends, but the eventType alone is
+        // enough here; no amount/currency needed for a non-entitling event.
+        await creditViaInternalApi({
+          eventType: "subscription.active",
+          subscriptionId: data.subscription_id,
+          planProductId: data.product_id,
+          customerEmail: data.customer?.email,
+          apiKeyHint: data.metadata?.api_key,
+          currency: data.currency,
+          amountMinor: data.recurring_pre_tax_amount,
+          currentPeriodStart: data.current_period_start,
+          isTestMode: isTestModePayload(data),
+        });
+      },
 
-  onPaymentFailed: async (payload: unknown) => {
-    const data = payload as PaymentPayload;
-    if (data.metadata?.order_ref !== undefined) return; // task-commerce: no money-path handling needed
-    await creditViaInternalApi({
-      eventType: "payment.failed",
-      paymentId: data.payment_id,
-      subscriptionId: data.subscription_id ?? undefined,
-      isTestMode: isTestModePayload(data),
-    });
-  },
+      onSubscriptionRenewed: async (payload: unknown) => {
+        const data = payload as SubscriptionPayload;
+        if (!data.subscription_id || !data.previous_billing_date) {
+          console.error("[dodo-webhook] subscription.renewed missing subscription_id/previous_billing_date — cannot credit", data);
+          return;
+        }
+        await creditViaInternalApi({
+          eventType: "subscription.renewed",
+          subscriptionId: data.subscription_id,
+          planProductId: data.product_id,
+          customerEmail: data.customer?.email,
+          apiKeyHint: data.metadata?.api_key,
+          currency: data.currency,
+          amountMinor: data.recurring_pre_tax_amount,
+          previousBillingDate: data.previous_billing_date,
+          currentPeriodEnd: data.next_billing_date,
+          isTestMode: isTestModePayload(data),
+        });
+      },
 
-  onSubscriptionActive: async (payload: unknown) => {
-    const data = payload as SubscriptionPayload;
-    // Gate M5-c: active alone (fires before a UPI mandate confirms) must
-    // NEVER credit or entitle — internal_dodo.js enforces this server-side
-    // regardless of what this handler sends, but the eventType alone is
-    // enough here; no amount/currency needed for a non-entitling event.
-    await creditViaInternalApi({
-      eventType: "subscription.active",
-      subscriptionId: data.subscription_id,
-      planProductId: data.product_id,
-      customerEmail: data.customer?.email,
-      apiKeyHint: data.metadata?.api_key,
-      currency: data.currency,
-      amountMinor: data.recurring_pre_tax_amount,
-      currentPeriodStart: data.current_period_start,
-      isTestMode: isTestModePayload(data),
-    });
-  },
+      onSubscriptionOnHold: async (payload: unknown) => {
+        const data = payload as SubscriptionPayload;
+        await creditViaInternalApi({
+          eventType: "subscription.on_hold",
+          subscriptionId: data.subscription_id,
+          isTestMode: isTestModePayload(data),
+        });
+      },
 
-  onSubscriptionRenewed: async (payload: unknown) => {
-    const data = payload as SubscriptionPayload;
-    if (!data.subscription_id || !data.previous_billing_date) {
-      console.error("[dodo-webhook] subscription.renewed missing subscription_id/previous_billing_date — cannot credit", data);
-      return;
-    }
-    await creditViaInternalApi({
-      eventType: "subscription.renewed",
-      subscriptionId: data.subscription_id,
-      planProductId: data.product_id,
-      customerEmail: data.customer?.email,
-      apiKeyHint: data.metadata?.api_key,
-      currency: data.currency,
-      amountMinor: data.recurring_pre_tax_amount,
-      previousBillingDate: data.previous_billing_date,
-      currentPeriodEnd: data.next_billing_date,
-      isTestMode: isTestModePayload(data),
+      onSubscriptionCancelled: async (payload: unknown) => {
+        const data = payload as SubscriptionPayload;
+        await creditViaInternalApi({
+          eventType: "subscription.cancelled",
+          subscriptionId: data.subscription_id,
+          isTestMode: isTestModePayload(data),
+        });
+      },
     });
-  },
+  }
+  return _handler;
+}
 
-  onSubscriptionOnHold: async (payload: unknown) => {
-    const data = payload as SubscriptionPayload;
-    await creditViaInternalApi({
-      eventType: "subscription.on_hold",
-      subscriptionId: data.subscription_id,
-      isTestMode: isTestModePayload(data),
-    });
-  },
-
-  onSubscriptionCancelled: async (payload: unknown) => {
-    const data = payload as SubscriptionPayload;
-    await creditViaInternalApi({
-      eventType: "subscription.cancelled",
-      subscriptionId: data.subscription_id,
-      isTestMode: isTestModePayload(data),
-    });
-  },
-});
+export async function POST(req: NextRequest) {
+  return getHandler()(req);
+}
