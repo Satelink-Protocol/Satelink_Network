@@ -54,17 +54,37 @@ It NEVER reads or changes `SETTLEMENT_DRY_RUN` or any settlement flag.
 
 ### Deploy (Railway)
 
-New service in the existing project, root `workers/reconciler` (config in
-`workers/reconciler/railway.json`):
-1. `railway add` a service; connect this repo/branch.
-2. Set the env vars above (reference the project `DATABASE_URL`; set a strong
-   `INTERNAL_TOKEN`).
-3. Start command: `npm start --workspace=@satelink/reconciler`. Healthcheck:
-   `/health`.
-4. Generate a domain; verify: `curl -H "x-internal-token: …" https://…/internal/reconciliation`.
+New service in the existing project (`Satelink-api`, production environment):
+1. `railway add` a service; connect this repo (`Satelink-Protocol/Satelink_Network`), branch `main`.
+   - Leave root directory empty (builds from monorepo root so workspace deps resolve).
+   - Set `railwayConfigFile: "workers/reconciler/railway.json"` or set start command explicitly.
+2. Set the four required env vars (see below).
+3. Start command: `npm start --workspace=@satelink/reconciler`. Healthcheck: `/health`.
+4. Generate a Railway domain; verify: `curl -H "x-internal-token: …" https://…/internal/reconciliation`.
+
+#### Deployed service (2026-08-12)
+
+| Setting | Value |
+|---------|-------|
+| Railway service name | `satelink-reconciler` |
+| Railway project | `Satelink-api` (production) |
+| Public domain | `https://satelink-reconciler-production.up.railway.app` |
+| Source repo | `Satelink-Protocol/Satelink_Network`, branch `main` |
+| Build root | monorepo root (no rootDirectory restriction) |
+
+#### Required environment variables (set on reconciler service only)
+
+| Variable | How set |
+|----------|---------|
+| `DATABASE_URL` | Railway reference to `Postgres-iQeW` service: `${{Postgres-iQeW.DATABASE_URL}}` |
+| `INTERNAL_TOKEN` | Strong random secret; stored in Railway only, never in repo |
+| `BASE_RPC_URL` | `https://mainnet.base.org` |
+| `RECONCILE_INTERVAL_MS` | `30000` |
+
+4. Generate a Railway domain; verify: `curl -H "x-internal-token: …" https://…/internal/reconciliation`.
 
 Migrations `010`+`011` must be applied to the target DB first
-(`npx tsx database/runner.ts migrate <connectionString>`).
+(`npx tsx database/runner.ts migrate "$DATABASE_URL"`).
 
 ### How to stop it (rollback)
 
