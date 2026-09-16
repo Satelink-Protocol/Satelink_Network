@@ -20,6 +20,7 @@ import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { buildPayingFetch } from './src/pay.mjs';
 import { createRpcExecutor } from './src/rpc.mjs';
+import { createIntelligenceExecutor, INTELLIGENCE_ENDPOINTS } from './src/intelligence.mjs';
 import { createSatelinkMcpServer } from './src/server-factory.mjs';
 
 const PORT = parseInt(process.env.PORT || '8402', 10);
@@ -32,6 +33,10 @@ const executeRpc = createRpcExecutor({
   rpcUrl: RPC_URL,
   apiKey: process.env.SATELINK_API_KEY,
 });
+const executeIntelligence = createIntelligenceExecutor({
+  fetch: payingFetch,
+  apiKey: process.env.SATELINK_API_KEY,
+});
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -41,6 +46,18 @@ app.post('/execute', async (req, res) => {
   const { method, params } = req.body || {};
   const out = await executeRpc({ method, params });
   // 402 → payment was required and could not be completed.
+  if (!out.ok && out.error === 'payment_required') return res.status(402).json(out);
+  if (!out.ok) return res.status(out.status && out.status >= 400 ? out.status : 400).json(out);
+  return res.status(200).json(out);
+});
+
+// ── GET /execute/intelligence/:tool — REST alias for the M7/T-11 tools ────────
+app.get('/execute/intelligence/:tool', async (req, res) => {
+  if (!INTELLIGENCE_ENDPOINTS[req.params.tool]) {
+    return res.status(404).json({ ok: false, error: 'unknown_tool', known: Object.keys(INTELLIGENCE_ENDPOINTS) });
+  }
+  const out = await executeIntelligence({ tool: req.params.tool, symbol: req.query.symbol });
+  if (!out.ok && out.error === 'not_yet_available') return res.status(404).json(out);
   if (!out.ok && out.error === 'payment_required') return res.status(402).json(out);
   if (!out.ok) return res.status(out.status && out.status >= 400 ? out.status : 400).json(out);
   return res.status(200).json(out);
@@ -75,7 +92,7 @@ app.get('/.well-known/mcp.json', (_req, res) => {
 // independent (no session handshake required to persist), which is what a
 // per-request server/transport pair needs.
 app.post('/mcp', async (req, res) => {
-  const server = createSatelinkMcpServer({ executeRpc, rpcUrl: RPC_URL, wallet, canPay });
+  const server = createSatelinkMcpServer({ executeRpc, executeIntelligence, rpcUrl: RPC_URL, wallet, canPay });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
