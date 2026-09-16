@@ -3,17 +3,15 @@
 // M5 (T-27): product/pricing page for the Dodo human payment rail.
 // Standalone page, no nested layout — same pattern as /tasks and /status.
 //
-// HONESTY NOTE (do not remove without re-checking): the M3 plan (funding
-// rate heatmap, open interest shifts, liquidation clusters, market
-// microstructure — the four derived-analytics endpoints under
-// /v1/intelligence) was never built; M5 shipped before it. Starter/Pro
-// checkout and crediting (Dodo -> api_credits, this page's whole point) are
-// fully real and gate-tested (see apps/api/test/internal_dodo.test.js) — a
-// paying customer gets a real, spendable, billed account today. What that
-// account can actually CALL is not live yet. This page must never claim a
-// working /v1/intelligence curl example or a live example response — only
-// the RPC gateway (x402 $0.00003/call) is real today. Update the "coming
-// soon" language the moment M3 ships, not before.
+// HONESTY NOTE (updated, M3 clean rebuild): the four derived-analytics
+// endpoints under /v1/intelligence (funding rate heatmap, open interest
+// shifts, liquidation clusters, market microstructure) are now real
+// (src/routes/intelligence_route.js on apps/api). Starter/Pro checkout and
+// crediting (Dodo -> api_credits) remain fully real and gate-tested (see
+// apps/api/test/internal_dodo.test.js) — a paying customer's account can now
+// actually CALL what it's billed for. The curl example below hits the real,
+// live discovery route (GET /v1/intelligence, no auth, no cost) — verified
+// against the route's own free-discovery handler, not fabricated.
 
 export const metadata = {
   title: "Intelligence — Satelink",
@@ -120,9 +118,19 @@ export default function IntelligencePage() {
       </p>
 
       <div className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        The analytics endpoints are launching soon. Subscribing today reserves
-        your account and tier — billing and crediting are live now, the
-        endpoints are not yet.
+        <p className="font-medium text-foreground">Try it now — free discovery, no signup:</p>
+        <pre className="mt-2 overflow-x-auto rounded bg-background px-3 py-2 text-xs">
+          <code>curl https://rpc.satelink.network/v1/intelligence</code>
+        </pre>
+        <p className="mt-2">
+          Lists every metric, its price, and how to pay. Metered calls (e.g.
+          <code className="mx-1 rounded bg-background px-1">
+            /v1/intelligence/funding-rate-heatmap
+          </code>
+          ) need a funded API key — a Starter/Pro subscription credits one
+          automatically, or fund one yourself via the x402 bundle on{" "}
+          <code className="rounded bg-background px-1">/rpc/polygon</code>.
+        </p>
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
