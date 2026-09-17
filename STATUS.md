@@ -25,9 +25,9 @@ Tagged ENGINEERING (Claude Code / eng can execute) or FOUNDER-GATED (requires a 
 
 | Item | Owner |
 |---|---|
-| M5 human gate: Dodo test payment E2E (real sandbox checkout → webhook → entitlement) | ENGINEERING |
+| M5 human gate: Dodo test payment E2E (real sandbox checkout → webhook → entitlement) — **NOT RUN** (needs a live Dodo sandbox checkout; code paths ready) | ENGINEERING |
 | M2 machine gate: real x402 payment → credits → paid intelligence call, end to end | ENGINEERING |
-| Refund/dispute handling: Dodo refund and dispute webhooks must revoke/claw back granted credits (currently absent — see `internal_dodo.js`) | ENGINEERING |
+| Refund/dispute handling: Dodo refund/dispute webhooks claw back / freeze granted credits — **IMPLEMENTED** (PR #386: `POST /internal/dodo/reversal`, idempotent, reversal rows, migration 033). Not yet exercised against a live Dodo sandbox — see M5 gate above | ENGINEERING |
 | Key rotation (JWT_SECRET, ADMIN_SECRET_TOKEN, DODO_* secrets, signer key) | FOUNDER-GATED |
 | GitHub Pro + branch protection on `main` with 0 required reviewers (so solo merges stay unblocked but checks stay required) | FOUNDER-GATED |
 | `satelink_app` least-privilege DB role: create in prod and repoint `DATABASE_URL` to it (see `audit/CONSOLIDATION_REPORT_2026-09-16.md` P1) | FOUNDER-GATED |
