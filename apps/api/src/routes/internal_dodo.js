@@ -89,6 +89,34 @@ function planFromProductId(productId) {
   return 'starter';
 }
 
+// ── Credit-pack product allowlist (money-leak fix) ───────────────────────────
+//
+// apps/web's dodo-webhook handles TWO surfaces on one Dodo account/webhook:
+// task-commerce one-shot purchases and /intelligence subscriptions. It
+// discriminates them by metadata.order_ref — a soft signal that file's own
+// comments flag as unconfirmed against a live account ("static-link metadata
+// pass-through may not be reaching webhooks as documented"). If that metadata
+// is ever dropped, a task-commerce payment.succeeded would fall through to
+// this router's entitling path with no product check and get credited as if
+// it were a subscription payment.
+//
+// This allowlist is the authoritative, server-side gate for ONE-TIME
+// payment.succeeded credit grants: a payment whose product is not explicitly
+// listed here is NEVER credited, no matter what apps/web believed it was.
+// Fail CLOSED — unset or empty allowlist credits NOTHING, it never falls back
+// to "credit everything" the way planFromProductId's tier lookup does. Read
+// live (not cached at module load) — same pattern as DODO_PRODUCT_PRO_ID /
+// DODO_PRODUCT_STARTER_ID above, and required for the env var to be testable.
+function isAllowlistedCreditPackProduct(productId) {
+  const ids = new Set(
+    (process.env.DODO_CREDIT_PACK_PRODUCT_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+  return ids.size > 0 && !!productId && ids.has(productId);
+}
+
 function requireInternalSecret(req, res, next) {
   const configured = process.env.DODO_INTERNAL_SECRET;
   if (!configured) {
@@ -356,6 +384,18 @@ export function createDodoInternalRouter(pool) {
     let idKey;
     if (eventType === 'payment.succeeded') {
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId required' });
+      // Money-leak gate: never credit a one-time payment whose product isn't
+      // an explicitly allowlisted credit pack (see CREDIT_PACK_PRODUCT_IDS
+      // above). 200, not 5xx — this is a legitimate non-credit outcome (e.g.
+      // a task-commerce order that reached here despite apps/web's order_ref
+      // discriminator), not an error Dodo should retry forever.
+      if (!isAllowlistedCreditPackProduct(planProductId)) {
+        console.error(
+          `[internal/dodo] payment.succeeded product "${planProductId || '(none)'}" not in ` +
+          `DODO_CREDIT_PACK_PRODUCT_IDS allowlist — not crediting (payment ${paymentId})`
+        );
+        return res.json({ ok: true, entitled: false, eventType, reason: 'product_not_allowlisted' });
+      }
       idKey = `dodo:${paymentId}`;
     } else {
       if (!subscriptionId || !previousBillingDate) {

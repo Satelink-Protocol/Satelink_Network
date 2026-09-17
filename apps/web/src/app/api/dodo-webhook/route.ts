@@ -195,6 +195,11 @@ type PaymentPayload = {
   total_amount?: number;
   settlement_amount?: number;
   settlement_currency?: string;
+  // SDK-verified (@dodopayments/core PaymentSchema) — the actual product(s)
+  // purchased, independent of metadata. Preferred over metadata.plan_product_id
+  // below because apps/api's DODO_CREDIT_PACK_PRODUCT_IDS allowlist gate needs
+  // an authoritative signal, not a soft one.
+  product_cart?: { product_id: string; quantity: number }[] | null;
 };
 
 type SubscriptionPayload = {
@@ -277,7 +282,7 @@ function getHandler() {
           eventType: "payment.succeeded",
           paymentId: data.payment_id,
           subscriptionId: data.subscription_id ?? undefined,
-          planProductId: data.metadata?.plan_product_id,
+          planProductId: data.product_cart?.[0]?.product_id || data.metadata?.plan_product_id,
           customerEmail: data.customer?.email,
           apiKeyHint: data.metadata?.api_key,
           // Prefer settlement_* (what actually lands in the merchant account)
