@@ -63,6 +63,7 @@ function makePool(account, { dailyCount = 0, deposits = new Set() } = {}) {
 
 const FREE = { api_key: 'sk_free_' + 'a'.repeat(48), wallet_address: '0xAaa0000000000000000000000000000000000001', tier: 'free', daily_limit: 500, credits_usdt: 0, status: 'active' };
 const PRO = { api_key: 'sk_pro_' + 'b'.repeat(48), wallet_address: '0xBbb0000000000000000000000000000000000002', tier: 'pro', daily_limit: 100000, credits_usdt: 1.0, status: 'active' };
+const HELD = { ...PRO, api_key: 'sk_held_' + 'c'.repeat(47), payment_hold: true }; // refund/dispute shortfall
 
 describe('creditService — canonical api_credits source of truth', () => {
 
@@ -116,6 +117,26 @@ describe('creditService — canonical api_credits source of truth', () => {
       const v2 = await authorizeAndMeter(pool, { apiKey: PRO.api_key });
       expect(v2.ok).to.equal(false);
       expect(v2.http).to.equal(402);
+    });
+  });
+
+  describe('VERIFY: payment_hold blocks paid calls', () => {
+    it('held account → 402 payment_hold, no deduction, no usage', async () => {
+      const pool = makePool(HELD, { dailyCount: 0 });
+      const v = await authorizeAndMeter(pool, { apiKey: HELD.api_key });
+      expect(v.ok).to.equal(false);
+      expect(v.http).to.equal(402);
+      expect(v.code).to.equal('payment_hold');
+      expect(v.reason).to.equal('payment_hold');
+      expect(pool.state.account.credits_usdt).to.equal(1.0); // untouched
+      expect(pool.state.dailyCount).to.equal(0);             // no metered request
+    });
+    it('non-held account with balance is unaffected → ok, deducts normally', async () => {
+      const pool = makePool(PRO, { dailyCount: 0 }); // no payment_hold flag
+      const v = await authorizeAndMeter(pool, { apiKey: PRO.api_key });
+      expect(v.ok).to.equal(true);
+      expect(v.code).to.equal(undefined);
+      expect(pool.state.account.credits_usdt).to.equal(+(1.0 - PRICE_PER_CALL_USDT).toFixed(6));
     });
   });
 

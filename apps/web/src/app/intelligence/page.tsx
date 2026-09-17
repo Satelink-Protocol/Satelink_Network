@@ -22,6 +22,13 @@ export const metadata = {
 const DODO_STARTER_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_STARTER_URL;
 const DODO_PRO_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_PRO_URL;
 
+// Dodo subscriptions are DISABLED by default (flag OFF). Renewal-refund matching
+// does not exist yet (a subscription-renewal refund can't be linked back to the
+// funding payment_id — see PR #386), so recurring billing must not be sold until
+// it does. Set NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED=true to re-enable.
+const SUBSCRIPTIONS_ENABLED =
+  process.env.NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED === "true";
+
 type Tier = {
   name: string;
   price: string;
@@ -29,6 +36,7 @@ type Tier = {
   blurb: string;
   features: string[];
   cta: { label: string; href?: string; disabled?: boolean };
+  subscription?: boolean; // recurring Dodo billing — hidden unless the flag is on
 };
 
 const TIERS: Tier[] = [
@@ -47,6 +55,7 @@ const TIERS: Tier[] = [
     blurb: "For a single agent or a small workload.",
     features: ["Higher daily cap", "Card or UPI via Dodo", "Cancel anytime"],
     cta: { label: "Subscribe with Dodo", href: DODO_STARTER_URL },
+    subscription: true,
   },
   {
     name: "Pro",
@@ -55,6 +64,7 @@ const TIERS: Tier[] = [
     blurb: "For production agents calling continuously.",
     features: ["Highest daily cap", "Card or UPI via Dodo", "Cancel anytime"],
     cta: { label: "Subscribe with Dodo", href: DODO_PRO_URL },
+    subscription: true,
   },
   {
     name: "x402 (pay-per-call)",
@@ -134,7 +144,7 @@ export default function IntelligencePage() {
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {TIERS.map((tier) => (
+        {TIERS.filter((tier) => SUBSCRIPTIONS_ENABLED || !tier.subscription).map((tier) => (
           <TierCard key={tier.name} tier={tier} />
         ))}
       </div>

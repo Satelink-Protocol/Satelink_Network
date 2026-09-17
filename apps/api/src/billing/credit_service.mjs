@@ -39,6 +39,21 @@ function isApiKey(s) {
   return typeof s === 'string' && s.startsWith('sk_');
 }
 
+// payment_hold is a newer column (migration 033 / ensureBillingTables). Read it
+// via to_jsonb(...)->>'payment_hold' so a DB that predates the column (a fresh
+// test DB, or the prod boot window before ensureBillingTables runs) returns NULL
+// instead of erroring — a plain "SELECT payment_hold" would raise 42703 and, in a
+// caller's transaction, poison the whole transaction. Value comes back as text
+// ('true'/'false') or null; isOnPaymentHold() normalizes it.
+const ACCOUNT_COLS =
+  `api_key, wallet_address, tier, daily_limit, credits_usdt, status, ` +
+  `(to_jsonb(api_credits) ->> 'payment_hold') AS payment_hold`;
+
+/** True iff the resolved account row is flagged payment_hold (text or boolean). */
+export function isOnPaymentHold(account) {
+  return account && (account.payment_hold === true || account.payment_hold === 'true');
+}
+
 /**
  * Resolve an account row from the canonical store by API key OR bound wallet.
  * Returns the api_credits row, or null if no account exists.
@@ -47,16 +62,14 @@ export async function resolveAccount(pool, { apiKey, wallet } = {}) {
   if (!pool || !pool.query) return null;
   if (isApiKey(apiKey)) {
     const r = await pool.query(
-      `SELECT api_key, wallet_address, tier, daily_limit, credits_usdt, status
-         FROM api_credits WHERE api_key = $1`,
+      `SELECT ${ACCOUNT_COLS} FROM api_credits WHERE api_key = $1`,
       [apiKey]
     );
     if (r.rows[0]) return r.rows[0];
   }
   if (wallet && WALLET_RE.test(wallet)) {
     const r = await pool.query(
-      `SELECT api_key, wallet_address, tier, daily_limit, credits_usdt, status
-         FROM api_credits WHERE lower(wallet_address) = lower($1)
+      `SELECT ${ACCOUNT_COLS} FROM api_credits WHERE lower(wallet_address) = lower($1)
          ORDER BY created_at ASC LIMIT 1`,
       [wallet]
     );
@@ -110,6 +123,16 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = 
   }
   if (account.status && account.status !== 'active') {
     return { ok: false, code: 'account_inactive', http: 403, message: `Account status: ${account.status}` };
+  }
+
+  // Payment hold: a Dodo refund/dispute clawback could not be fully covered
+  // (credits already spent). Block paid calls until an operator clears the hold.
+  if (isOnPaymentHold(account)) {
+    return {
+      ok: false, code: 'payment_hold', http: 402,
+      tier: account.tier, reason: 'payment_hold',
+      message: 'Account is on payment hold (refund/dispute shortfall) — contact support',
+    };
   }
 
   const key = account.api_key;

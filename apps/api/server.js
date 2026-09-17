@@ -21,6 +21,7 @@ import { startOfflineDetector, offlineDetectorStatus } from "./src/services/node
 import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/economics/epoch_scheduler.js";
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
+import { ensureDodoRailSchema } from "./src/db/dodo_rail_schema.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
@@ -208,6 +209,13 @@ async function ensureBillingTables(pool) {
   } catch (err) {
     console.error('[STARTUP] Billing migration failed:', err.message);
   }
+
+  // ── Dodo human payment rail schema (PR #386) — hardened, advisory-locked,
+  // fail-safe boot DDL. Runs OUTSIDE the try above and never throws: on failure
+  // it flips the Dodo readiness flag so the webhook fails closed (503) while RPC
+  // and x402 stay up. apps/api/migrations/*.sql have no auto-runner, so this is
+  // the only reliable prod application of the Dodo schema.
+  await ensureDodoRailSchema(pool);
 }
 
 async function start() {

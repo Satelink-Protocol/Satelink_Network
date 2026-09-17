@@ -186,3 +186,110 @@ export async function shadowWriteRevenueLedger(pool, event, logger = console) {
     return { written: false, reason: 'error' };
   }
 }
+
+/**
+ * Write the shadow ledger REVERSAL for one revenue reversal (refund / dispute
+ * lost). This is the mirror of shadowWriteRevenueLedger: the original credited
+ * revenue by debiting suspense / crediting revenue; a reversal undoes that by
+ * debiting revenue / crediting suspense for the (positive) reversed magnitude.
+ * Same hard constraints: gated by LEDGER_SHADOW_WRITE (default OFF), never
+ * throws, own connection/transaction, test data skipped, idempotent.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {object} event
+ * @param {string} event.requestId  reversal request_id (e.g. 'dodo:refund:<id>')
+ * @param {string|number} event.amountUsdt  POSITIVE magnitude being reversed
+ * @param {boolean} [event.isTestData]  founder/test — skipped if true
+ * @param {object} [logger]
+ * @returns {Promise<{written: boolean, reason?: string}>}
+ */
+export async function shadowReverseRevenueLedger(pool, event, logger = console) {
+  try {
+    if (!isShadowWriteEnabled()) {
+      return { written: false, reason: 'flag_off' };
+    }
+    if (!event || typeof event !== 'object') {
+      return { written: false, reason: 'no_event' };
+    }
+    if (event.isTestData === true) {
+      return { written: false, reason: 'test_data_excluded' };
+    }
+
+    const requestId = event.requestId;
+    if (typeof requestId !== 'string' || requestId.trim().length === 0) {
+      return { written: false, reason: 'no_request_id' };
+    }
+
+    // Reversal magnitude must be a positive amount (toMinorUnits rejects <= 0).
+    const minor = toMinorUnits(event.amountUsdt);
+    if (minor === null) {
+      return { written: false, reason: 'non_positive_or_invalid_amount' };
+    }
+    const amountStr = minor.toString();
+
+    const currency = resolveRevenueCurrency(event);
+    if (currency === null) {
+      logger.error?.(
+        '[shadow-ledger] unknown on-chain asset — refusing to write reversal:',
+        requestId,
+      );
+      return { written: false, reason: 'unknown_asset' };
+    }
+
+    if (!pool || typeof pool.connect !== 'function') {
+      return { written: false, reason: 'no_pool' };
+    }
+
+    const txnId = `shadow-reversal:${requestId}`;
+    const idemKey = `shadow-reversal:${requestId}`;
+    const refType = 'revenue_reversal';
+    const refId = requestId;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO ledger_txns
+           (txn_id, kind, ref_type, ref_id, currency, state, posted_at)
+         VALUES ($1, 'refund', $2, $3, $4, 'posted', now())
+         ON CONFLICT (txn_id) DO NOTHING`,
+        [txnId, refType, refId, currency],
+      );
+      // Reverse the original direction: debit revenue, credit suspense.
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state,
+            ref_type, ref_id, idem_key, posted_at)
+         VALUES ($1,$2,'debit',$3,$4,'posted',$5,$6,$7, now())
+         ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
+        [txnId, REVENUE_ACCOUNT_ID, amountStr, currency, refType, refId, idemKey],
+      );
+      await client.query(
+        `INSERT INTO ledger_entries
+           (txn_id, account_id, direction, amount, currency, state,
+            ref_type, ref_id, idem_key, posted_at)
+         VALUES ($1,$2,'credit',$3,$4,'posted',$5,$6,$7, now())
+         ON CONFLICT (idem_key, account_id, direction) DO NOTHING`,
+        [txnId, SUSPENSE_ACCOUNT_ID, amountStr, currency, refType, refId, idemKey],
+      );
+      await client.query('COMMIT');
+      return { written: true };
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    try {
+      logger.error?.('[shadow-ledger] reversal failed (non-fatal):', err?.message ?? err);
+    } catch {
+      /* logging must never throw either */
+    }
+    return { written: false, reason: 'error' };
+  }
+}

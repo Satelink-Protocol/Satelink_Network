@@ -104,6 +104,31 @@ export async function runMigrations(pool) {
       ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS demand_source TEXT NOT NULL DEFAULT 'direct';
     `);
 
+    // 033 — Dodo refund & dispute handling (M5 follow-up).
+    // Additive only: a held-funds column, the is_billable column the negative
+    // reversal rows depend on (015's CHECK allows amount_usdt <= 0 ONLY when
+    // is_billable = false), and an idempotency+tracking log for reversals.
+    await pool.query(`
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS frozen_usdt NUMERIC(18,6) NOT NULL DEFAULT 0;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS payment_hold BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS is_billable BOOLEAN NOT NULL DEFAULT true;
+      CREATE TABLE IF NOT EXISTS dodo_refund_dispute_log (
+        id BIGSERIAL PRIMARY KEY,
+        event_id TEXT UNIQUE NOT NULL,      -- 'refund:<refund_id>' | 'dispute:<dispute_id>:<event_type>'
+        kind TEXT NOT NULL,                 -- 'refund' | 'dispute'
+        event_type TEXT NOT NULL,           -- refund.succeeded | dispute.opened | dispute.won | ...
+        dodo_ref TEXT NOT NULL,             -- refund_id or dispute_id
+        payment_id TEXT,
+        api_key TEXT,
+        amount_usd NUMERIC(18,6) NOT NULL DEFAULT 0,      -- clawed-back or frozen amount actually applied
+        shortfall_usd NUMERIC(18,6) NOT NULL DEFAULT 0,   -- credits already spent, could not be recovered
+        is_test_data BOOLEAN NOT NULL DEFAULT false,
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_payment ON dodo_refund_dispute_log(payment_id);
+      CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_ref ON dodo_refund_dispute_log(dodo_ref);
+    `);
+
     const verify = await pool.query(`SELECT COUNT(*) as cnt FROM credit_balances`);
     console.log('[Migrate] Tables created. Rows in credit_balances:', verify.rows[0]?.cnt);
     console.log('========== MIGRATE DONE ==========\n\n');
