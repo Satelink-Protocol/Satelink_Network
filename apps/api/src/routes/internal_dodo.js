@@ -43,6 +43,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { creditAccount, resolveAccount, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
 import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
+import { discord } from '../services/discord_notify.mjs';
 
 const ENTITLING_EVENTS = new Set(['payment.succeeded', 'subscription.renewed']);
 
@@ -171,9 +172,16 @@ async function resolveOrCreateApiKey(client, { apiKeyHint, subscriptionId, custo
 //   MERCHANT-FAVOURABLE  (unfreeze): dispute.won, dispute.cancelled, dispute.expired
 //   MERCHANT-LOSES       (clawback): dispute.lost, dispute.accepted
 //   IN-PROGRESS          (log only) : dispute.challenged
-const DISPUTE_UNFREEZE = new Set(['dispute.won', 'dispute.cancelled', 'dispute.expired']);
+const DISPUTE_UNFREEZE = new Set(['dispute.won', 'dispute.cancelled']);
 const DISPUTE_CLAWBACK = new Set(['dispute.lost', 'dispute.accepted']);
 const NO_MONEY_EVENTS = new Set(['refund.failed', 'dispute.challenged']);
+// dispute.expired: the installed @dodopayments SDK defines 'dispute_expired'
+// ONLY as a bare enum value (disputes.d.ts:55 / webhook.d.ts:58) — there is NO
+// documented semantics for whether an expired dispute favours the merchant or
+// the customer. Because it is genuinely ambiguous, we take NO automatic money
+// action: the credits stay FROZEN (as set at dispute.opened) and a human is
+// alerted to resolve it. Never auto-unfreeze or auto-clawback on expiry.
+const DISPUTE_HOLD_ALERT = new Set(['dispute.expired']);
 
 /** Resolve which api_key a Dodo payment funded, and how much it credited (USD). */
 async function resolveFunding(client, paymentId) {
@@ -208,6 +216,13 @@ async function clawbackCredits(client, apiKey, amount) {
     );
   }
   return { actual: +actual.toFixed(6), shortfall: +(amount - actual).toFixed(6) };
+}
+
+/** Flag an account so authorizeAndMeter blocks paid calls with 402 payment_hold. */
+async function setPaymentHold(client, apiKey) {
+  await client.query(
+    `UPDATE api_credits SET payment_hold = true WHERE api_key = $1`, [apiKey]
+  );
 }
 
 /** Move up to `amount` from spendable into frozen (not spendable). */
@@ -437,6 +452,7 @@ export function createDodoInternalRouter(pool) {
 
     // Amount to reverse against, after any shadow-ledger mirror (set inside tx).
     let shadow = null;
+    const alerts = []; // discord/error alerts fired AFTER commit (never block the tx)
 
     const client = await pool.connect();
     try {
@@ -486,9 +502,14 @@ export function createDodoInternalRouter(pool) {
         const requestId = `dodo:refund:${dodoRef}`;
         await insertReversalRow(client, { clientId: apiKey, magnitude: refundUsd, requestId, isTest });
         if (!partial) await cancelEntitlementIfSubscription(client, apiKey);
+        if (shortfall > 0) {
+          await setPaymentHold(client, apiKey);   // clawback under-covered → hold the account
+          alerts.push(['Dodo refund shortfall — account on payment_hold',
+            `refund ${dodoRef} (payment ${paymentId}) clawed back ${actual}, shortfall ${shortfall} on ${apiKey}`, 'warning']);
+        }
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: actual, shortfall, isTest });
         shadow = { requestId, amountUsdt: refundUsd, isTestData: isTest };
-        result = { action: partial ? 'refund_partial' : 'refund_full', clawedBack: actual, shortfall };
+        result = { action: partial ? 'refund_partial' : 'refund_full', clawedBack: actual, shortfall, paymentHold: shortfall > 0 };
 
       } else if (eventType === 'dispute.opened') {
         const { frozen, shortfall } = await freezeCredits(client, apiKey, creditedUsd);
@@ -518,9 +539,25 @@ export function createDodoInternalRouter(pool) {
         const requestId = `dodo:dispute:${dodoRef}`;
         await insertReversalRow(client, { clientId: apiKey, magnitude: creditedUsd, requestId, isTest });
         await cancelEntitlementIfSubscription(client, apiKey);
+        if (shortfall > 0) {
+          await setPaymentHold(client, apiKey);
+          alerts.push(['Dodo dispute clawback shortfall — account on payment_hold',
+            `dispute ${dodoRef} (payment ${paymentId}) reversed ${creditedUsd}, shortfall ${shortfall} on ${apiKey}`, 'warning']);
+        }
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: creditedUsd, shortfall, isTest });
         shadow = { requestId, amountUsdt: creditedUsd, isTestData: isTest };
-        result = { action: 'dispute_clawback', reversed: creditedUsd, shortfall };
+        result = { action: 'dispute_clawback', reversed: creditedUsd, shortfall, paymentHold: shortfall > 0 };
+
+      } else if (DISPUTE_HOLD_ALERT.has(eventType)) {
+        // dispute.expired — ambiguous (see DISPUTE_HOLD_ALERT). Keep the credits
+        // FROZEN (no unfreeze, no clawback); record and alert a human to decide.
+        const opened = await getOpenedFreeze(client, dodoRef);
+        const frozen = opened ? opened.frozen : 0;
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: frozen, shortfall: 0, isTest });
+        console.error(`[internal/dodo] dispute.expired ${dodoRef} (payment ${paymentId}) — credits kept FROZEN (${frozen}) on ${apiKey}, needs manual resolution`);
+        alerts.push(['Dodo dispute EXPIRED — credits held, manual decision needed',
+          `dispute ${dodoRef} (payment ${paymentId}) expired; ${frozen} kept frozen on ${apiKey}. Dodo SDK does not define expiry semantics — resolve manually (unfreeze or clawback).`, 'critical']);
+        result = { action: 'expired_hold_frozen', frozen };
 
       } else {
         // Unknown dispute.* stage — record, no money movement.
@@ -533,6 +570,11 @@ export function createDodoInternalRouter(pool) {
       // Shadow-ledger reversal fired AFTER commit (mirrors the credit path);
       // own pool/tx, never throws, no-op unless LEDGER_SHADOW_WRITE is enabled.
       if (shadow) shadowReverseRevenueLedger(pool, shadow);
+
+      // Alerts fired AFTER commit — discord.alert() is gated + never throws.
+      for (const [title, message, severity] of alerts) {
+        discord.alert(title, message, severity).catch(() => {});
+      }
 
       return res.status(200).json({ ok: true, matched: true, eventType, ...result });
     } catch (err) {

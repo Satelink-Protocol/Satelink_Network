@@ -110,6 +110,7 @@ export async function runMigrations(pool) {
     // is_billable = false), and an idempotency+tracking log for reversals.
     await pool.query(`
       ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS frozen_usdt NUMERIC(18,6) NOT NULL DEFAULT 0;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS payment_hold BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS is_billable BOOLEAN NOT NULL DEFAULT true;
       CREATE TABLE IF NOT EXISTS dodo_refund_dispute_log (
         id BIGSERIAL PRIMARY KEY,

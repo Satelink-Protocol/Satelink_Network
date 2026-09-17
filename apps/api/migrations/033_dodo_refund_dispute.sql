@@ -23,6 +23,12 @@
 ALTER TABLE api_credits
   ADD COLUMN IF NOT EXISTS frozen_usdt NUMERIC(18,6) NOT NULL DEFAULT 0;
 
+-- payment_hold: set true when a refund/dispute clawback cannot be fully covered
+-- (credits already spent). authorizeAndMeter returns 402 "payment_hold" for the
+-- account until it is manually cleared.
+ALTER TABLE api_credits
+  ADD COLUMN IF NOT EXISTS payment_hold BOOLEAN NOT NULL DEFAULT false;
+
 ALTER TABLE revenue_events_v2
   ADD COLUMN IF NOT EXISTS is_billable BOOLEAN NOT NULL DEFAULT true;
 

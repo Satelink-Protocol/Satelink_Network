@@ -79,6 +79,11 @@ function makePool() {
           row.credits_usdt = +(row.credits_usdt - amt).toFixed(6);
           return { rowCount: 1, rows: [{ credits_usdt: row.credits_usdt }] };
         }
+        if (s.includes('SET payment_hold = true')) {                  // payment hold
+          const row = state.apiCredits.get(params[0]);
+          if (row) row.payment_hold = true;
+          return { rowCount: row ? 1 : 0, rows: [] };
+        }
 
         // ── reversal revenue row
         if (s.includes('INSERT INTO revenue_events_v2')) {
@@ -122,6 +127,7 @@ function seedFunding(pool, { paymentId, apiKey, credited, isTest = false, balanc
     api_key: apiKey,
     credits_usdt: balance == null ? credited : balance,
     frozen_usdt: 0,
+    payment_hold: false,
     status: 'active',
   });
 }
@@ -175,7 +181,9 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
     expect(res.status).to.equal(200);
     expect(res.body.clawedBack).to.equal(3);
     expect(res.body.shortfall).to.equal(7);
+    expect(res.body.paymentHold).to.equal(true);
     expect(pool.state.apiCredits.get('sk_c').credits_usdt).to.equal(0); // floored, never negative
+    expect(pool.state.apiCredits.get('sk_c').payment_hold).to.equal(true); // shortfall → held
     expect(pool.state.reversalLog.get('refund:ref_3').shortfall_usd).to.equal(7);
     const rev = pool.state.revenueEvents.find(r => r.request_id === 'dodo:refund:ref_3');
     expect(rev.amount_usdt).to.equal(-10); // full gross reversed regardless of shortfall
@@ -230,6 +238,23 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
     const rev = pool.state.revenueEvents.find(r => r.request_id === 'dodo:dispute:dsp_2');
     expect(rev.amount_usdt).to.equal(-8);
     expect(pool.state.subscriptions.get('sk_f').status).to.equal('cancelled');
+  });
+
+  it('dispute open → expired: credits stay FROZEN, no unfreeze, no clawback', async () => {
+    seedFunding(pool, { paymentId: 'pay_dx', apiKey: 'sk_g', credited: 5 });
+
+    const opened = await post({ eventType: 'dispute.opened', dodoRef: 'dsp_3', paymentId: 'pay_dx' });
+    expect(opened.status).to.equal(200);
+    expect(pool.state.apiCredits.get('sk_g').frozen_usdt).to.equal(5);
+    expect(pool.state.apiCredits.get('sk_g').credits_usdt).to.equal(0);
+
+    const expired = await post({ eventType: 'dispute.expired', dodoRef: 'dsp_3', paymentId: 'pay_dx' });
+    expect(expired.status).to.equal(200);
+    expect(expired.body.action).to.equal('expired_hold_frozen');
+    const acct = pool.state.apiCredits.get('sk_g');
+    expect(acct.frozen_usdt).to.equal(5);   // STILL frozen — no auto unfreeze
+    expect(acct.credits_usdt).to.equal(0);  // and not returned to spendable
+    expect(pool.state.revenueEvents).to.have.length(0); // no clawback/reversal
   });
 
   it('unknown payment id: no balance change, matched:false, 200 (no retry storm)', async () => {
