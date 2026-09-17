@@ -38,3 +38,33 @@ Tagged ENGINEERING (Claude Code / eng can execute) or FOUNDER-GATED (requires a 
 | MCP live E2E (intelligence tools against real payment-gated calls) | ENGINEERING |
 | Path-aware x402 (per-resource pricing instead of wildcard `/rpc/:var1`) | ENGINEERING |
 | Node-operator dashboard (post-launch) | ENGINEERING |
+
+---
+
+## 🚀 Dodo M5 — merge-day runbook (PR #386)
+
+The Dodo-rail schema is applied at boot by `ensureDodoRailSchema` (apps/api has no
+migration auto-runner). The boot DDL is advisory-locked, idempotent, additive, and
+fail-safe (on failure the server keeps booting and the Dodo webhook fails closed
+with 503 — RPC/x402 stay up).
+
+**Pre-merge**
+- [ ] Keys rotated (founder confirms): `DODO_INTERNAL_SECRET`, `DODO_PAYMENTS_WEBHOOK_KEY`, `ADMIN_SECRET_TOKEN`, `JWT_SECRET`.
+- [ ] Read-only prod SQL run and **results recorded here** (query 1 = payment_sources CHECK, query 2 = migration trackers, query 3 = api_credits columns): _paste outputs into the PR / this section_.
+
+**Merge → watch `railway logs --service Satelink-api`** for the boot DDL lines. Expect exactly ONE of:
+- Already fixed: `[dodo-schema] payment_sources_source_check already allows 'dodo' — skipping recreate`
+- First-time fix: `[dodo-schema] recreated payment_sources_source_check (NOT VALID) allowing: <values>`
+- then always: `[dodo-schema] ✅ Dodo-rail schema ensured`
+- If any unknown source value existed: `[dodo-schema] payment_sources has source values the code did not know: <values> — preserving them in the CHECK` (also a Discord alert)
+- FAILURE (must NOT happen): `[dodo-schema] ❌ Dodo-rail schema DDL failed — webhook will fail closed (503): <err>` → RPC/x402 still up; fix + redeploy before enabling Dodo.
+
+**Post-deploy smoke** (against `https://api.satelink.network`)
+- [ ] `GET /healthz` → **200** `{"status":"ok"}`
+- [ ] `POST /rpc/polygon` (anonymous) → **402** (payment required)
+- [ ] `POST /internal/dodo/credit` with **no** `x-dodo-internal-secret` → **401** `invalid_dodo_internal_secret` (a **503** `dodo_internal_secret_missing` here means the secret env var is unset — fix it; a **503** `dodo_schema_not_ready` means the boot DDL failed — see logs)
+- [ ] Rerun **query 1** → `payment_sources_source_check` definition now includes `'dodo'`
+- [ ] Rerun **query 3** → `api_credits` has both `frozen_usdt` and `payment_hold`
+- [ ] (manual, when convenient) run `apps/api/migrations/035_dodo_source_check.sql` to `VALIDATE` the CHECK against existing rows (boot only adds it `NOT VALID`).
+
+**Rollback**: redeploy the previous Git deployment from the Railway dashboard. Safe because every schema change in #386 is **additive** (ADD COLUMN IF NOT EXISTS, a widened CHECK, a new table) — the older image simply ignores the extra column/table/values, so no data migration is needed to go back.

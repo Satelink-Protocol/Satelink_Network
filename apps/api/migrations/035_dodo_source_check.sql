@@ -20,6 +20,16 @@
 -- schema path, so this fix reaches prod on the next deploy even without a
 -- manual run.
 
+-- NOTE: the boot-time path (ensureDodoRailSchema) recreates this CHECK
+-- self-discovering the values prod already allows/uses, so it never drops an
+-- unknown value. This manual migration uses the KNOWN set + 'dodo' — if the
+-- read-only query on prod (pg_get_constraintdef) revealed any ADDITIONAL value,
+-- add it to the IN list below before running.
+--
+-- Two-step so the manual run mirrors the boot path but ALSO validates existing
+-- rows (boot adds NOT VALID to avoid a full-table scan on every restart; the
+-- VALIDATE here does the one-time scan when an operator runs it).
 ALTER TABLE payment_sources DROP CONSTRAINT IF EXISTS payment_sources_source_check;
 ALTER TABLE payment_sources ADD CONSTRAINT payment_sources_source_check
-  CHECK (source IN ('polygon_usdt_vault', 'x402', 'dodo', 'marketplace', 'other'));
+  CHECK (source IN ('polygon_usdt_vault', 'x402', 'dodo', 'marketplace', 'other')) NOT VALID;
+ALTER TABLE payment_sources VALIDATE CONSTRAINT payment_sources_source_check;

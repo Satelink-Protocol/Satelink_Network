@@ -21,6 +21,7 @@ import { startOfflineDetector, offlineDetectorStatus } from "./src/services/node
 import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/economics/epoch_scheduler.js";
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
+import { ensureDodoRailSchema } from "./src/db/dodo_rail_schema.js";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
@@ -204,50 +205,17 @@ async function ensureBillingTables(pool) {
     // wallet_auth.js uses ON CONFLICT (address) — requires unique constraint on address alone
     await pool.query(`ALTER TABLE auth_nonces ADD CONSTRAINT auth_nonces_address_unique UNIQUE (address)`).catch(() => {});
 
-    // ── Dodo human payment rail schema (M5 + refund/dispute reversal, PR #386).
-    // CRITICAL: apps/api/migrations/*.sql have NO auto-runner in prod — only this
-    // function runs at boot (root db/migrate.js is not the apps/api entrypoint).
-    // The numbered migrations (027/031/033/035) are applied MANUALLY. Ensuring the
-    // Dodo-rail schema here guarantees it reaches prod on deploy — otherwise a
-    // real Dodo payment hits a missing column/constraint and the customer pays
-    // but gets nothing. All statements are idempotent + individually guarded.
-    //
-    // 035 — payment_sources.source CHECK must allow 'dodo' (027/migrate.js created
-    // it without 'dodo'; 031 adds it). Drop+recreate the ONE named CHECK with every
-    // value currently allowed, plus 'dodo'.
-    await pool.query(`ALTER TABLE payment_sources DROP CONSTRAINT IF EXISTS payment_sources_source_check`).catch(() => {});
-    await pool.query(`ALTER TABLE payment_sources ADD CONSTRAINT payment_sources_source_check CHECK (source IN ('polygon_usdt_vault','x402','dodo','marketplace','other'))`).catch(() => {});
-    // 027 columns the Dodo credit path INSERTs into (belt-and-suspenders for a DB
-    // where 027 was not applied).
-    await pool.query(`ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS demand_source TEXT NOT NULL DEFAULT 'direct'`).catch(() => {});
-    // 033 — refund/dispute reversal schema.
-    await pool.query(`ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS is_billable BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
-    await pool.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS frozen_usdt NUMERIC(18,6) NOT NULL DEFAULT 0`).catch(() => {});
-    // payment_hold: set when a clawback cannot be fully covered (credits already
-    // spent). authorizeAndMeter returns 402 payment_hold for such an account.
-    await pool.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS payment_hold BOOLEAN NOT NULL DEFAULT false`).catch(() => {});
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS dodo_refund_dispute_log (
-        id BIGSERIAL PRIMARY KEY,
-        event_id TEXT UNIQUE NOT NULL,
-        kind TEXT NOT NULL,
-        event_type TEXT NOT NULL,
-        dodo_ref TEXT NOT NULL,
-        payment_id TEXT,
-        api_key TEXT,
-        amount_usd NUMERIC(18,6) NOT NULL DEFAULT 0,
-        shortfall_usd NUMERIC(18,6) NOT NULL DEFAULT 0,
-        is_test_data BOOLEAN NOT NULL DEFAULT false,
-        created_at BIGINT NOT NULL
-      )
-    `).catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_payment ON dodo_refund_dispute_log(payment_id)`).catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_ref ON dodo_refund_dispute_log(dodo_ref)`).catch(() => {});
-
     console.log('[STARTUP] Billing tables ensured');
   } catch (err) {
     console.error('[STARTUP] Billing migration failed:', err.message);
   }
+
+  // ── Dodo human payment rail schema (PR #386) — hardened, advisory-locked,
+  // fail-safe boot DDL. Runs OUTSIDE the try above and never throws: on failure
+  // it flips the Dodo readiness flag so the webhook fails closed (503) while RPC
+  // and x402 stay up. apps/api/migrations/*.sql have no auto-runner, so this is
+  // the only reliable prod application of the Dodo schema.
+  await ensureDodoRailSchema(pool);
 }
 
 async function start() {

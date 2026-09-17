@@ -44,6 +44,7 @@ import crypto from 'crypto';
 import { creditAccount, resolveAccount, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
 import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
 import { discord } from '../services/discord_notify.mjs';
+import { isDodoSchemaReady } from '../db/dodo_schema_state.js';
 
 const ENTITLING_EVENTS = new Set(['payment.succeeded', 'subscription.renewed']);
 
@@ -307,6 +308,15 @@ export function createDodoInternalRouter(pool) {
   const router = express.Router();
   router.use(express.json({ limit: '64kb' }));
   router.use(requireInternalSecret);
+  // Fail closed if the Dodo-rail boot DDL failed (schema not ready): never write
+  // credits/reversals against a half-migrated schema. 503 → apps/web throws →
+  // Dodo retries later, by which time a fixed deploy has made the schema ready.
+  router.use((req, res, next) => {
+    if (!isDodoSchemaReady()) {
+      return res.status(503).json({ ok: false, error: 'dodo_schema_not_ready' });
+    }
+    return next();
+  });
 
   router.post('/credit', async (req, res) => {
     const body = req.body || {};

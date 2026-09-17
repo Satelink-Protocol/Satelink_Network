@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import express from 'express';
 import request from 'supertest';
 import { createDodoInternalRouter } from '../src/routes/internal_dodo.js';
+import { setDodoSchemaReady } from '../src/db/dodo_schema_state.js';
 
 // In-memory mock pool for POST /internal/dodo/reversal. Same substring-matching
 // style as internal_dodo.test.js / credit_service.test.js. One shared state seen
@@ -139,8 +140,8 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
   let pool, app;
   const prevSecret = process.env.DODO_INTERNAL_SECRET;
   before(() => { process.env.DODO_INTERNAL_SECRET = SECRET; });
-  after(() => { process.env.DODO_INTERNAL_SECRET = prevSecret; });
-  beforeEach(() => { pool = makePool(); app = buildApp(pool); });
+  after(() => { process.env.DODO_INTERNAL_SECRET = prevSecret; setDodoSchemaReady(true); });
+  beforeEach(() => { pool = makePool(); app = buildApp(pool); setDodoSchemaReady(true); });
 
   const post = (body, headers = H) =>
     request(app).post('/internal/dodo/reversal').set(headers).send(body);
@@ -263,6 +264,19 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
     expect(res.body.matched).to.equal(false);
     expect(pool.state.revenueEvents).to.have.length(0);
     expect(pool.state.reversalLog.has('refund:ref_x')).to.equal(true); // recorded for visibility
+  });
+
+  it('boot DDL failed (schema not ready) → webhook fails closed with 503', async () => {
+    setDodoSchemaReady(false);
+    try {
+      seedFunding(pool, { paymentId: 'pay_nr', apiKey: 'sk_nr', credited: 5 });
+      const res = await post({ eventType: 'refund.succeeded', dodoRef: 'ref_nr', paymentId: 'pay_nr', isPartial: false });
+      expect(res.status).to.equal(503);
+      expect(res.body.error).to.equal('dodo_schema_not_ready');
+      expect(pool.state.apiCredits.get('sk_nr').credits_usdt).to.equal(5); // untouched
+    } finally {
+      setDodoSchemaReady(true);
+    }
   });
 
   it('secret missing → 503', async () => {
