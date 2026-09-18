@@ -165,11 +165,27 @@ type DisputePayload = {
   currency?: string;
 };
 
+// Dodo Standard Webhooks wraps all events in an envelope:
+// { business_id, type, timestamp, data: { ...actual payload... } }
+// Handle both wrapped (@dodopayments/nextjs runtime dispatch) and unwrapped (mock/direct calls).
+function unwrapPayload<T>(payload: unknown): T {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    (payload as Record<string, unknown>).data &&
+    typeof (payload as Record<string, unknown>).data === "object"
+  ) {
+    return (payload as Record<string, unknown>).data as T;
+  }
+  return payload as T;
+}
+
 async function forwardDispute(
   eventType: DodoReversalBody["eventType"],
   payload: unknown
 ): Promise<void> {
-  const data = payload as DisputePayload;
+  const data = unwrapPayload<DisputePayload>(payload);
   if (!data.dispute_id) {
     console.error(`[dodo-webhook] ${eventType} missing dispute_id`, data);
     return;
@@ -236,7 +252,7 @@ function getHandler() {
       webhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY!,
 
       onPaymentSucceeded: async (payload: unknown) => {
-        const data = payload as PaymentPayload;
+        const data = unwrapPayload<PaymentPayload>(payload);
         const orderRef = data.metadata?.order_ref;
 
         // ── Surface 1: task-commerce (pre-existing, unchanged) ──────────────
@@ -296,7 +312,7 @@ function getHandler() {
       },
 
       onPaymentFailed: async (payload: unknown) => {
-        const data = payload as PaymentPayload;
+        const data = unwrapPayload<PaymentPayload>(payload);
         if (data.metadata?.order_ref !== undefined) return; // task-commerce: no money-path handling needed
         await creditViaInternalApi({
           eventType: "payment.failed",
@@ -307,7 +323,7 @@ function getHandler() {
       },
 
       onSubscriptionActive: async (payload: unknown) => {
-        const data = payload as SubscriptionPayload;
+        const data = unwrapPayload<SubscriptionPayload>(payload);
         // Gate M5-c: active alone (fires before a UPI mandate confirms) must
         // NEVER credit or entitle — internal_dodo.js enforces this server-side
         // regardless of what this handler sends, but the eventType alone is
@@ -326,7 +342,7 @@ function getHandler() {
       },
 
       onSubscriptionRenewed: async (payload: unknown) => {
-        const data = payload as SubscriptionPayload;
+        const data = unwrapPayload<SubscriptionPayload>(payload);
         if (!data.subscription_id || !data.previous_billing_date) {
           console.error("[dodo-webhook] subscription.renewed missing subscription_id/previous_billing_date — cannot credit", data);
           return;
@@ -346,7 +362,7 @@ function getHandler() {
       },
 
       onSubscriptionOnHold: async (payload: unknown) => {
-        const data = payload as SubscriptionPayload;
+        const data = unwrapPayload<SubscriptionPayload>(payload);
         await creditViaInternalApi({
           eventType: "subscription.on_hold",
           subscriptionId: data.subscription_id,
@@ -355,7 +371,7 @@ function getHandler() {
       },
 
       onSubscriptionCancelled: async (payload: unknown) => {
-        const data = payload as SubscriptionPayload;
+        const data = unwrapPayload<SubscriptionPayload>(payload);
         await creditViaInternalApi({
           eventType: "subscription.cancelled",
           subscriptionId: data.subscription_id,
@@ -367,7 +383,7 @@ function getHandler() {
       // decides matched/unmatched via the original payment record. Disputes have
       // no metadata; is_test_data is derived server-side from the funding row. ──
       onRefundSucceeded: async (payload: unknown) => {
-        const data = payload as RefundPayload;
+        const data = unwrapPayload<RefundPayload>(payload);
         if (!data.refund_id || !data.payment_id) {
           console.error("[dodo-webhook] refund.succeeded missing refund_id/payment_id", data);
           return;
@@ -384,7 +400,7 @@ function getHandler() {
       },
 
       onRefundFailed: async (payload: unknown) => {
-        const data = payload as RefundPayload;
+        const data = unwrapPayload<RefundPayload>(payload);
         if (!data.refund_id) return;
         await reverseViaInternalApi({
           eventType: "refund.failed",
