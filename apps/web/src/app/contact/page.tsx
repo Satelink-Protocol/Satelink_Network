@@ -2,7 +2,7 @@
 //
 // New route — no dedicated contact page existed (only a footer mailto:).
 // Support email, registered address, and response-time commitment are
-// founder-owned facts, not invented here.
+// founder-provided facts (2026-09-18).
 import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export const metadata = {
@@ -23,20 +23,22 @@ export default function ContactPage() {
         <dl className="space-y-4">
           <div>
             <dt className="text-sm font-medium text-muted-foreground">Support email</dt>
-            <dd className="mt-1 rounded-md border border-dashed border-foreground/30 px-3 py-2 text-sm text-muted-foreground">
-              [FOUNDER: support email]
+            <dd className="mt-1 text-sm text-foreground">
+              <a href="mailto:support@satelink.network" className="underline">
+                support@satelink.network
+              </a>
             </dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-muted-foreground">Registered business address</dt>
-            <dd className="mt-1 rounded-md border border-dashed border-foreground/30 px-3 py-2 text-sm text-muted-foreground">
-              [FOUNDER: registered address]
+            <dd className="mt-1 text-sm text-foreground">
+              38, 39 Malaviya Street, Ram Nagar, Coimbatore &ndash; 641009, Tamil Nadu, India
             </dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-muted-foreground">Response time</dt>
-            <dd className="mt-1 rounded-md border border-dashed border-foreground/30 px-3 py-2 text-sm text-muted-foreground">
-              [FOUNDER: response-time commitment, e.g. &ldquo;within 2 business days&rdquo;]
+            <dd className="mt-1 text-sm text-foreground">
+              We respond within 24 hours.
             </dd>
           </div>
         </dl>

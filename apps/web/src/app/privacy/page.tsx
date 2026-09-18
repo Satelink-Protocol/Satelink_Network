@@ -151,8 +151,9 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-xl font-semibold text-foreground">11. Data Controller</h2>
-          <p className="mt-2 rounded-md border border-dashed border-foreground/30 px-4 py-3 text-sm">
-            [FOUNDER: legal entity name] · [FOUNDER: registered business address]
+          <p className="mt-2">
+            Jakuraa Commercial Pvt Ltd, 38, 39 Malaviya Street, Ram Nagar,
+            Coimbatore &ndash; 641009, Tamil Nadu, India.
           </p>
         </section>
 

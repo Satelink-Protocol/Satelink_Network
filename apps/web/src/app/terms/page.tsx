@@ -1,9 +1,9 @@
 // apps/web/src/app/terms/page.tsx
 //
 // Real /terms route, migrated forward from the static public/terms.html
-// (last updated May 19, 2026) with the missing legal-entity/jurisdiction
-// details marked as founder TODOs rather than invented, the free-tier figure
-// corrected to match production (500/day, not the stale 200/day), and the
+// (last updated May 19, 2026) with the legal-entity/jurisdiction details
+// (Section 11) founder-provided 2026-09-18, the free-tier figure corrected
+// to match production (500/day, not the stale 200/day), and the
 // intelligence product + one-time credit-pack payment method added.
 // public/terms.html itself is removed; /terms.html redirects here
 // (next.config.ts) so the old URL still resolves.
@@ -162,10 +162,10 @@ export default function TermsPage() {
 
         <section>
           <h2 className="text-xl font-semibold text-foreground">11. Governing Law &amp; Dispute Resolution</h2>
-          <p className="mt-2 rounded-md border border-dashed border-foreground/30 px-4 py-3 text-sm">
-            [FOUNDER: legal entity name] · [FOUNDER: registered business
-            address / jurisdiction] — these Terms are governed by the laws of
-            that jurisdiction.
+          <p className="mt-2">
+            Satelink Network is operated by Jakuraa Commercial Pvt Ltd, 38, 39
+            Malaviya Street, Ram Nagar, Coimbatore &ndash; 641009, Tamil Nadu,
+            India. These Terms are governed by the laws of Tamil Nadu, India.
           </p>
         </section>
 
