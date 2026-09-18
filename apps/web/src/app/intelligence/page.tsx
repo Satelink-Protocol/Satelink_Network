@@ -1,24 +1,30 @@
 // apps/web/src/app/intelligence/page.tsx
 //
-// M5 (T-27): product/pricing page for the Dodo human payment rail.
-// Standalone page, no nested layout — same pattern as /tasks and /status.
+// Product/pricing page for the trading-intelligence product — Satelink's
+// primary product for the Dodo merchant review (see /pricing, which this
+// page must match exactly). Standalone page, no nested layout — same
+// pattern as /tasks and /status.
+//
+// PRICING MODEL: one-time USD credit pack (Dodo Payments), spent per call —
+// same account, same billing path as an x402 payment or a USDT deposit. No
+// subscription by default. Monthly INR subscriptions (Starter/Pro) exist in
+// code but stay behind NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED (default OFF,
+// per PR #386 — a subscription-renewal refund can't yet be matched back to
+// its funding payment_id) and are never mentioned in copy while the flag is
+// off, so this page never states a price the flag would contradict.
 //
 // HONESTY NOTE (updated, M3 clean rebuild): the four derived-analytics
 // endpoints under /v1/intelligence (funding rate heatmap, open interest
-// shifts, liquidation clusters, market microstructure) are now real
-// (src/routes/intelligence_route.js on apps/api). Starter/Pro checkout and
-// crediting (Dodo -> api_credits) remain fully real and gate-tested (see
-// apps/api/test/internal_dodo.test.js) — a paying customer's account can now
-// actually CALL what it's billed for. The curl example below hits the real,
-// live discovery route (GET /v1/intelligence, no auth, no cost) — verified
-// against the route's own free-discovery handler, not fabricated.
+// shifts, liquidation clusters, market microstructure) are real
+// (src/routes/intelligence_route.js on apps/api) — a paying customer's
+// account can actually CALL what it's billed for. The curl example below
+// hits the real, live discovery route (GET /v1/intelligence, no auth, no
+// cost), verified against the route's own free-discovery handler.
 
-export const metadata = {
-  title: "Intelligence — Satelink",
-  description:
-    "Market intelligence for machine-commerce agents: funding rate heatmaps, open interest shifts, liquidation clusters, market microstructure. Free discovery tier, ₹499 Starter, ₹1,999 Pro, or $0.01/call via x402.",
-};
+import Link from "next/link";
+import { LegalFooterLinks } from "@/components/legal-footer-links";
 
+const DODO_CREDIT_PACK_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_CREDIT_PACK_URL;
 const DODO_STARTER_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_STARTER_URL;
 const DODO_PRO_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_PRO_URL;
 
@@ -28,6 +34,13 @@ const DODO_PRO_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_PRO_URL;
 // it does. Set NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED=true to re-enable.
 const SUBSCRIPTIONS_ENABLED =
   process.env.NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED === "true";
+
+export const metadata = {
+  title: "Intelligence — Satelink",
+  description: SUBSCRIPTIONS_ENABLED
+    ? "Market intelligence for machine-commerce agents: funding rate heatmaps, open interest shifts, liquidation clusters, market microstructure. Free discovery tier, one-time USD credit pack, monthly subscription, or $0.01/call via x402."
+    : "Market intelligence for machine-commerce agents: funding rate heatmaps, open interest shifts, liquidation clusters, market microstructure. Free discovery tier, one-time USD credit pack, or $0.01/call via x402.",
+};
 
 type Tier = {
   name: string;
@@ -49,6 +62,22 @@ const TIERS: Tier[] = [
     cta: { label: "No signup needed", disabled: true },
   },
   {
+    name: "Credit pack",
+    price: "USD",
+    period: "one-time",
+    blurb: "Pay once, spend it as you go. No subscription, credits never expire.",
+    features: ["Card or UPI via Dodo", "1:1 credit, no bundle discount", "Cancel anytime — there's nothing recurring"],
+    cta: { label: "Buy a credit pack", href: DODO_CREDIT_PACK_URL },
+  },
+  {
+    name: "x402 (pay-per-call)",
+    price: "$0.01",
+    period: "/call",
+    blurb: "No account, no subscription — machine-to-machine, USDC on Base.",
+    features: ["Zero-commitment", "Agent-native (HTTP 402)", "No human checkout"],
+    cta: { label: "See x402 docs", href: "https://docs.satelink.network" },
+  },
+  {
     name: "Starter",
     price: "₹499",
     period: "/month",
@@ -65,14 +94,6 @@ const TIERS: Tier[] = [
     features: ["Highest daily cap", "Card or UPI via Dodo", "Cancel anytime"],
     cta: { label: "Subscribe with Dodo", href: DODO_PRO_URL },
     subscription: true,
-  },
-  {
-    name: "x402 (pay-per-call)",
-    price: "$0.01",
-    period: "/call",
-    blurb: "No account, no subscription — machine-to-machine, USDC on Base.",
-    features: ["Zero-commitment", "Agent-native (HTTP 402)", "No human checkout"],
-    cta: { label: "See x402 docs", href: "https://docs.satelink.network" },
   },
 ];
 
@@ -122,9 +143,12 @@ export default function IntelligencePage() {
       </h1>
       <p className="mt-4 max-w-2xl text-base text-muted-foreground">
         Funding rate heatmaps, open interest shifts, liquidation clusters, and
-        market microstructure — derived analytics, not raw quotes. Pay a
-        human subscription with a card or UPI, or pay per call as an agent
-        with x402. Same underlying account either way.
+        market microstructure — derived analytics computed from public market
+        data, not raw exchange feeds. We never redistribute a raw feed; every
+        response is a statistic we compute. Pay once for a USD credit pack,
+        or pay per call as an agent with x402
+        {SUBSCRIPTIONS_ENABLED ? ", or subscribe monthly" : ""}. Same
+        underlying account either way.
       </p>
 
       <div className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -137,8 +161,8 @@ export default function IntelligencePage() {
           <code className="mx-1 rounded bg-background px-1">
             /v1/intelligence/funding-rate-heatmap
           </code>
-          ) need a funded API key — a Starter/Pro subscription credits one
-          automatically, or fund one yourself via the x402 bundle on{" "}
+          ) need a funded API key — a one-time credit pack funds one
+          immediately, or fund one yourself via the x402 bundle on{" "}
           <code className="rounded bg-background px-1">/rpc/polygon</code>.
         </p>
       </div>
@@ -149,19 +173,28 @@ export default function IntelligencePage() {
         ))}
       </div>
 
+      <p className="mt-4 text-xs text-muted-foreground">
+        Full rate card at{" "}
+        <Link href="/pricing" className="underline">/pricing</Link>. Refunds
+        claw back unused credit-pack balance — see{" "}
+        <Link href="/refund" className="underline">Refund &amp; Cancellation</Link>.
+      </p>
+
       <div className="mt-16 border-t border-border pt-8">
         <h2 className="text-lg font-semibold">API access</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          A Starter or Pro subscription credits your Satelink API key the same
-          way an on-chain deposit or an x402 payment does — it is spent per
-          call, same billing path as the RPC gateway. Full reference, request
-          signing, and the x402 client libraries are documented at{" "}
+          A credit pack funds your Satelink API key the same way an on-chain
+          deposit or an x402 payment does — it is spent per call, same
+          billing path as the RPC gateway. Full reference, request signing,
+          and the x402 client libraries are documented at{" "}
           <a href="https://docs.satelink.network" className="underline">
             docs.satelink.network
           </a>
           .
         </p>
       </div>
+
+      <LegalFooterLinks />
     </div>
   );
 }

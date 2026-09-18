@@ -17,6 +17,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createPendingOrder } from "@/lib/task-orders/db";
+import { isTasksProductEnabled } from "@/lib/tasks-product";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,11 @@ function backToFormWithError(req: Request, error: string): NextResponse {
 }
 
 export async function POST(req: Request) {
+  // Flag-gated (default OFF) — same reasoning as /tasks/page.tsx.
+  if (!isTasksProductEnabled()) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   let form: FormData;
   try {
     form = await req.formData();

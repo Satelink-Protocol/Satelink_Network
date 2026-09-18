@@ -59,6 +59,19 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
+      // Migrated to real routes (src/app/terms, src/app/privacy) — the old
+      // static public/terms.html and public/privacy.html files are removed,
+      // so these paths must redirect rather than 404.
+      {
+        source: '/terms.html',
+        destination: '/terms',
+        permanent: true,
+      },
+      {
+        source: '/privacy.html',
+        destination: '/privacy',
+        permanent: true,
+      },
       {
         source: '/status',
         destination: 'https://status.satelink.network/',
