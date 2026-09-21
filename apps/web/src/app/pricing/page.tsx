@@ -13,6 +13,8 @@
 
 import Link from "next/link";
 import { LegalFooterLinks } from "@/components/legal-footer-links";
+import { getCreditPacks } from "@/lib/dodo/credit-packs";
+import { CreditPackCard } from "../intelligence/CreditPackCard";
 
 export const metadata = {
   title: "Pricing",
@@ -20,9 +22,8 @@ export const metadata = {
     "Satelink pricing: buy a one-time USD credit pack, then spend it on derived trading intelligence ($0.01/call) or RPC ($0.00003/call). No subscription, credits never expire.",
 };
 
-const DODO_CREDIT_PACK_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_CREDIT_PACK_URL;
-
 export default function PricingPage() {
+  const creditPacks = getCreditPacks();
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       <p className="text-sm font-medium text-muted-foreground">Satelink Pricing</p>
@@ -35,27 +36,28 @@ export default function PricingPage() {
         is no recurring charge and nothing to cancel.
       </p>
 
-      <div className="mt-10 rounded-lg border border-border p-6">
+      <div className="mt-10">
         <h2 className="text-sm font-medium text-muted-foreground">Credit pack</h2>
-        <p className="mt-2 text-base">
-          One-time payment via card or UPI (Dodo Payments). The exact amount
-          is set at checkout — whatever you pay is credited to your account
-          1:1 in USD, no bundle discount, no expiry.
+        <p className="mt-2 mb-4 text-base">
+          One-time payment via card or UPI (Dodo Payments), credited to your
+          account 1:1 in USD, no bundle discount, no expiry.
         </p>
-        <div className="mt-4">
-          {DODO_CREDIT_PACK_URL ? (
-            <a
-              href={DODO_CREDIT_PACK_URL}
-              className="inline-block rounded-md bg-foreground px-4 py-2 text-center text-sm font-medium text-background"
-            >
-              Buy a credit pack
-            </a>
-          ) : (
-            <span className="inline-block rounded-md border border-border px-4 py-2 text-center text-sm text-muted-foreground">
-              Checkout link not configured yet
-            </span>
-          )}
-        </div>
+        {creditPacks.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {creditPacks.map((pack) => (
+              <CreditPackCard
+                key={pack.productId}
+                productId={pack.productId}
+                label={pack.label}
+                usdValue={pack.usdValue}
+              />
+            ))}
+          </div>
+        ) : (
+          <span className="inline-block rounded-md border border-border px-4 py-2 text-center text-sm text-muted-foreground">
+            Checkout link not configured yet
+          </span>
+        )}
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">

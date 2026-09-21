@@ -122,6 +122,37 @@ export async function ensureDodoRailSchema(pool, deps = {}) {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_payment ON dodo_refund_dispute_log(payment_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_dodo_rd_log_ref ON dodo_refund_dispute_log(dodo_ref)`);
 
+    // 036: identity-mapping fallback — payments whose checkout metadata does
+    // not resolve to an existing account land here instead of being credited,
+    // dropped, or matched by email guess. See migrations/036_dodo_unmatched_payments.sql.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS unmatched_payments (
+        id                BIGSERIAL PRIMARY KEY,
+        provider          TEXT NOT NULL DEFAULT 'dodo',
+        event_type        TEXT NOT NULL,
+        payment_id        TEXT,
+        subscription_id   TEXT,
+        product_id        TEXT,
+        customer_email    TEXT,
+        currency          TEXT,
+        amount_minor      BIGINT,
+        metadata          JSONB,
+        reason            TEXT NOT NULL,
+        raw_payload       JSONB,
+        resolved          BOOLEAN NOT NULL DEFAULT false,
+        resolved_api_key  TEXT,
+        resolved_by       TEXT,
+        resolved_at       BIGINT,
+        is_test_data      BOOLEAN NOT NULL DEFAULT false,
+        created_at        BIGINT NOT NULL
+      )
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_unmatched_payments_payment_id
+        ON unmatched_payments(provider, payment_id) WHERE payment_id IS NOT NULL
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_unmatched_payments_resolved ON unmatched_payments(resolved)`);
+
     await client.query('COMMIT');
     setDodoSchemaReady(true);
     logger.log?.('[dodo-schema] ✅ Dodo-rail schema ensured');

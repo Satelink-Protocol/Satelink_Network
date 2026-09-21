@@ -23,8 +23,9 @@
 
 import Link from "next/link";
 import { LegalFooterLinks } from "@/components/legal-footer-links";
+import { getCreditPacks } from "@/lib/dodo/credit-packs";
+import { CreditPackCard } from "./CreditPackCard";
 
-const DODO_CREDIT_PACK_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_CREDIT_PACK_URL;
 const DODO_STARTER_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_STARTER_URL;
 const DODO_PRO_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_PRO_URL;
 
@@ -60,14 +61,6 @@ const TIERS: Tier[] = [
     blurb: "Explore the product. Rate-limited, no card required.",
     features: ["Daily request cap", "Full response shape", "No credit card"],
     cta: { label: "No signup needed", disabled: true },
-  },
-  {
-    name: "Credit pack",
-    price: "USD",
-    period: "one-time",
-    blurb: "Pay once, spend it as you go. No subscription, credits never expire.",
-    features: ["Card or UPI via Dodo", "1:1 credit, no bundle discount", "Cancel anytime — there's nothing recurring"],
-    cta: { label: "Buy a credit pack", href: DODO_CREDIT_PACK_URL },
   },
   {
     name: "x402 (pay-per-call)",
@@ -170,6 +163,14 @@ export default function IntelligencePage() {
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {TIERS.filter((tier) => SUBSCRIPTIONS_ENABLED || !tier.subscription).map((tier) => (
           <TierCard key={tier.name} tier={tier} />
+        ))}
+        {getCreditPacks().map((pack) => (
+          <CreditPackCard
+            key={pack.productId}
+            productId={pack.productId}
+            label={pack.label}
+            usdValue={pack.usdValue}
+          />
         ))}
       </div>
 

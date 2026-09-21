@@ -12,11 +12,48 @@ export function createCreditsRouter(db, logger) {
   const router = express.Router();
   const log = logger || console;
 
-  // GET /credits/balance?wallet=0x...
+  // GET /credits/balance?wallet=0x...  OR  GET /credits/balance?apiKey=sk_...
+  //
+  // apiKey lookup added for T-1.4 (Dodo checkout success page): a
+  // Dodo-funded account (api_credits row keyed by api_key, e.g. "sk_dodo_...")
+  // has no wallet_address at all, so the wallet-only lookup below can never
+  // find it. Exactly one of wallet/apiKey is required.
   router.get('/balance', async (req, res) => {
     const wallet = req.query.wallet?.toLowerCase();
+    const apiKey = typeof req.query.apiKey === 'string' ? req.query.apiKey.trim() : '';
+
+    if (apiKey) {
+      if (!apiKey.startsWith('sk_')) {
+        return res.status(400).json({ error: 'Invalid apiKey parameter' });
+      }
+      try {
+        const result = await db.query(
+          `SELECT api_key, credits_usdt, total_deposited, total_spent, tier, last_used, created_at
+             FROM api_credits WHERE api_key = $1`,
+          [apiKey]
+        );
+        const rows = result.rows || result;
+        if (rows.length === 0) {
+          return res.status(404).json({ error: 'no account for this apiKey' });
+        }
+        const row = rows[0];
+        return res.json({
+          api_key: row.api_key,
+          balance_usdt: parseFloat(row.credits_usdt || 0),
+          total_deposited: parseFloat(row.total_deposited || 0),
+          total_spent: parseFloat(row.total_spent || 0),
+          tier: row.tier,
+          last_deposit_at: row.last_used,
+          status: parseFloat(row.credits_usdt || 0) > 0 ? 'funded' : 'empty',
+        });
+      } catch (err) {
+        log.error('[Credits] balance (apiKey) error:', err.message);
+        return res.status(500).json({ error: 'Internal error' });
+      }
+    }
+
     if (!wallet || !wallet.match(/^0x[0-9a-f]{40}$/)) {
-      return res.status(400).json({ error: 'Invalid or missing wallet parameter' });
+      return res.status(400).json({ error: 'Invalid or missing wallet parameter (or pass apiKey instead)' });
     }
 
     try {

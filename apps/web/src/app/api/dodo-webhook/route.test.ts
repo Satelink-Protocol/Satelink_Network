@@ -98,6 +98,41 @@ describe("dodo-webhook route handler and envelope unwrapping", () => {
       expect(body.paymentId).toBe("pay_direct_456");
       expect(body.amountMinor).toBe(500);
     });
+
+    it("T-1.4: reads apiKeyHint from metadata.satelink_account_id (set by /api/dodo-checkout) and forwards metadata verbatim", async () => {
+      const wrappedPayload = {
+        type: "payment.succeeded",
+        data: {
+          payment_id: "pay_with_account",
+          currency: "USD",
+          total_amount: 990,
+          customer: { email: "buyer@example.com" },
+          product_cart: [{ product_id: "pdt_pack" }],
+          metadata: { satelink_account_id: "sk_dodo_abc123", extra_field: "kept" },
+        },
+      };
+
+      await capturedCallbacks.onPaymentSucceeded(wrappedPayload);
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.apiKeyHint).toBe("sk_dodo_abc123");
+      expect(body.metadata).toEqual({ satelink_account_id: "sk_dodo_abc123", extra_field: "kept" });
+    });
+
+    it("T-1.4: a payment with no metadata at all sends apiKeyHint undefined (never falls back to a guess)", async () => {
+      const directPayload = {
+        payment_id: "pay_no_metadata",
+        currency: "USD",
+        total_amount: 990,
+        customer: { email: "stray@example.com" },
+      };
+
+      await capturedCallbacks.onPaymentSucceeded(directPayload);
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.apiKeyHint).toBeUndefined();
+      expect(body.paymentId).toBe("pay_no_metadata");
+    });
   });
 
   describe("onPaymentFailed", () => {

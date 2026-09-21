@@ -69,6 +69,9 @@ type DodoCreditBody = {
   currentPeriodStart?: string;
   currentPeriodEnd?: string;
   previousBillingDate?: string;
+  // Forwarded verbatim so an unmatched payment (T-1.4) carries full context
+  // into unmatched_payments for the admin reconciliation script.
+  metadata?: Record<string, string>;
 };
 
 // Deliberately throws (does not catch) on a non-2xx or network failure — see
@@ -300,14 +303,23 @@ function getHandler() {
           subscriptionId: data.subscription_id ?? undefined,
           planProductId: data.product_cart?.[0]?.product_id || data.metadata?.plan_product_id,
           customerEmail: data.customer?.email,
-          apiKeyHint: data.metadata?.api_key,
+          // T-1.4: satelink_account_id is set ONLY by /api/dodo-checkout at
+          // session-creation time (the sole accepted identity signal for
+          // crediting — see internal_dodo.js's resolveAccountForOneTimePayment).
+          // A payment made before this existed, or via a manually-shared
+          // link, has no such field and lands in unmatched_payments instead
+          // of being credited by guesswork.
+          apiKeyHint: data.metadata?.satelink_account_id,
           // Prefer settlement_* (what actually lands in the merchant account)
           // over the customer-facing charge currency/amount when both are
           // present — see internal_dodo.js's FX note for why this still isn't
-          // exact accounting without a confirmed settlement currency.
+          // exact accounting without a confirmed settlement currency. Used
+          // only as a fallback now: internal_dodo.js prefers the product's
+          // own configured USD value (DODO_CREDIT_PACK_USD_VALUES) over both.
           currency: data.settlement_currency || data.currency,
           amountMinor: data.settlement_amount ?? data.total_amount,
           isTestMode: isTestModePayload(data),
+          metadata: data.metadata,
         });
       },
 
