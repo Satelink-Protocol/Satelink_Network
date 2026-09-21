@@ -7,6 +7,13 @@
 //
 // The form is a plain HTML POST (no client JS) to /api/tasks/start, which
 // writes a pending task_orders row and redirects to the Dodo checkout link.
+//
+// Flag-gated (TASKS_PRODUCT_ENABLED, default OFF): this is a separate,
+// unrelated business (lead-data brokerage) from the RPC/intelligence
+// products under merchant review — see isTasksProductEnabled().
+
+import { notFound } from "next/navigation";
+import { isTasksProductEnabled } from "@/lib/tasks-product";
 
 export const metadata = {
   title: "500 Verified Local Business Leads — Satelink",
@@ -27,6 +34,8 @@ export default async function TasksLandingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  if (!isTasksProductEnabled()) notFound();
+
   const { error } = await searchParams;
   const errorMessage = error ? ERROR_MESSAGES[error] ?? "Please check your details and try again." : null;
 

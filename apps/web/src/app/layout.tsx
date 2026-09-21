@@ -8,22 +8,24 @@ const FAVICON =
 export const metadata: Metadata = {
   metadataBase: new URL("https://satelink.network"),
   title: {
-    default: "Satelink — Pay-per-call RPC for the Machine Economy | DePIN",
+    default: "Satelink — Derived Trading Intelligence for the Machine Economy",
     template: "%s | Satelink",
   },
   description:
-    "DePIN RPC gateway on Polygon PoS. Developers and autonomous machines pay $0.00003 USDT per call — no subscriptions. Node operators earn 50% of routed revenue, settled on-chain.",
+    "Derived trading intelligence — funding-rate divergence, open interest shifts, market microstructure — computed from public market data, never raw feeds redistributed. One-time USD credit packs from $0.01/call. Runs on our own pay-per-call Polygon RPC gateway ($0.00003/call).",
   keywords: [
+    "trading intelligence",
+    "funding rate",
+    "open interest",
+    "market microstructure",
+    "derived analytics API",
     "DePIN",
-    "decentralized infrastructure",
     "RPC gateway",
     "Polygon RPC",
     "pay per call API",
     "USDT settlement",
-    "node operator earnings",
     "machine economy",
     "HTTP 402",
-    "blockchain API",
   ],
   authors: [{ name: "Satelink Network" }],
   robots: "index, follow",
@@ -33,16 +35,16 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://satelink.network",
     siteName: "Satelink Network",
-    title: "Satelink — Pay-per-call RPC for the Machine Economy",
+    title: "Satelink — Derived Trading Intelligence for the Machine Economy",
     description:
-      "DePIN RPC gateway on Polygon PoS. $0.00003 per call in USDT, permissionless deposits, 50% of revenue to node operators.",
+      "Funding-rate divergence, open interest shifts, and market microstructure — derived from public market data. One-time USD credit packs, no subscription. Built on our own pay-per-call Polygon RPC gateway.",
     images: ["https://satelink.network/og-image.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Satelink — Pay-per-call RPC for the Machine Economy",
+    title: "Satelink — Derived Trading Intelligence for the Machine Economy",
     description:
-      "DePIN RPC gateway on Polygon PoS. $0.00003 per call in USDT. Machines onboard via HTTP 402 — no human required.",
+      "Derived market analytics for machine-commerce agents. One-time USD credit packs from $0.01/call, or pay per call via x402 — no subscription.",
   },
 };
 
@@ -51,14 +53,40 @@ const ORG_JSON_LD = {
   "@type": "Organization",
   name: "Satelink Network",
   description:
-    "DePIN RPC gateway on Polygon PoS with pay-per-call USDT metering, permissionless deposits, and on-chain revenue sharing for node operators.",
+    "Derived trading intelligence and pay-per-call Polygon RPC, metered per call with on-chain and Dodo Payments settlement.",
   url: "https://satelink.network",
   email: "satelinknetwork@gmail.com",
   foundingDate: "2025",
-  sameAs: ["https://github.com/Satelink-Protocol/Satelink_Network"],
+  sameAs: ["https://github.com/Satelink-Protocol/x402-kit"],
 };
 
-const PRODUCT_JSON_LD = {
+// Primary product for this merchant account.
+const INTELLIGENCE_PRODUCT_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  name: "Satelink Trading Intelligence",
+  description:
+    "Derived trading intelligence — funding-rate heatmaps, open-interest shifts, liquidation clusters, market microstructure — computed from public market data. Raw exchange feeds are never redistributed.",
+  url: "https://satelink.network/intelligence",
+  offers: {
+    "@type": "Offer",
+    price: "0.01",
+    priceCurrency: "USD",
+    priceSpecification: {
+      "@type": "UnitPriceSpecification",
+      price: "0.01",
+      priceCurrency: "USD",
+      unitText: "per call",
+    },
+    description:
+      "One-time USD credit pack (non-recurring), spent per call at $0.01/call. See /pricing.",
+    availability: "https://schema.org/InStock",
+  },
+};
+
+// Secondary — the infrastructure the intelligence product runs on, also sold
+// directly.
+const RPC_PRODUCT_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: "Satelink RPC Gateway",
@@ -71,7 +99,7 @@ const PRODUCT_JSON_LD = {
     "@type": "Offer",
     price: "0.00003",
     priceCurrency: "USD",
-    description: "Flat metered rate per RPC call, prepaid in USDT on Polygon PoS.",
+    description: "Flat metered rate per RPC call, from the same one-time USD credit pack.",
   },
 };
 
@@ -101,7 +129,11 @@ export default function RootLayout({
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(PRODUCT_JSON_LD) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(INTELLIGENCE_PRODUCT_JSON_LD) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(RPC_PRODUCT_JSON_LD) }}
         />
         <link
           rel="alternate"

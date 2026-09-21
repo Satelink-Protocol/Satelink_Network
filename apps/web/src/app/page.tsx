@@ -218,12 +218,17 @@ export default function Home() {
           <nav className="nav">
             <ul className="nav-links">
               <li>
+                <a href="/intelligence" className="nav-link">
+                  Intelligence
+                </a>
+              </li>
+              <li>
                 <a href="#products" className="nav-link">
                   Products
                 </a>
               </li>
               <li>
-                <a href="#pricing" className="nav-link">
+                <a href="/pricing" className="nav-link">
                   Pricing
                 </a>
               </li>
@@ -290,8 +295,9 @@ export default function Home() {
         {menuOpen && (
           <nav id="mobileNav" className="mobile-nav" aria-label="Mobile">
             {[
+              { href: "/intelligence", label: "Intelligence" },
               { href: "#products", label: "Products" },
-              { href: "#pricing", label: "Pricing" },
+              { href: "/pricing", label: "Pricing" },
               { href: "/node", label: "Node Operators" },
               { href: "/docs", label: "Docs" },
               { href: "/status", label: "Status" },
@@ -319,11 +325,11 @@ export default function Home() {
             <div className="hero-content">
               <div className="hero-badge fade-up">
                 <span className="badge-dot" />
-                Live on Polygon PoS Mainnet
+                Live — derived intelligence + on-chain settlement
               </div>
 
               <h1 className="hero-title fade-up">
-                Pay-per-call RPC for the
+                Derived trading intelligence for the
                 <br />
                 <span className="hero-title-gradient">
                   Machine Economy
@@ -331,24 +337,24 @@ export default function Home() {
               </h1>
 
               <p className="hero-subtitle fade-up">
-                A DePIN RPC gateway with on-chain USDT metering. Developers and
-                autonomous machines pay $0.00003 per call — no subscriptions,
-                no accounts, one HTTP 402 away from your first request.
+                Funding-rate divergence, open-interest shifts, and market
+                microstructure — computed from public market data, never raw
+                exchange feeds redistributed. Pay once for a USD credit pack
+                and call it from $0.01, or pay per call as an agent with
+                x402. Runs on the same infrastructure that also serves
+                pay-per-call Polygon RPC at $0.00003/call.
               </p>
 
               <div className="hero-cta fade-up">
-                <a
-                  href="/satelink/os/mission-control"
-                  className="btn btn-primary btn-lg"
-                >
-                  Launch Console
+                <a href="/intelligence" className="btn btn-primary btn-lg">
+                  Explore Intelligence
                   <ArrowIcon />
                 </a>
-                <a href="/docs" className="btn btn-secondary btn-lg">
-                  View Docs
+                <a href="/pricing" className="btn btn-secondary btn-lg">
+                  View Pricing
                 </a>
-                <a href="/node" className="btn btn-ghost btn-lg">
-                  Run a Node
+                <a href="/docs" className="btn btn-ghost btn-lg">
+                  View Docs
                 </a>
               </div>
 
@@ -560,7 +566,7 @@ export default function Home() {
             </table>
 
             <div style={{ textAlign: "center", marginTop: 32 }} className="fade-up">
-              <a href="/docs/pricing" className="btn btn-secondary">
+              <a href="/pricing" className="btn btn-secondary">
                 Full Pricing Details
               </a>
             </div>
@@ -635,13 +641,14 @@ export default function Home() {
                     <path d="M2 12l10 5 10-5" />
                   </svg>
                 </div>
-                <h3 className="proof-title">Open Source</h3>
+                <h3 className="proof-title">Open Source Components</h3>
                 <p className="proof-desc">
-                  Full codebase on GitHub. Transparent development,
-                  community-driven, verifiable.
+                  x402-kit — the USDC paywall middleware powering our x402
+                  rail — is extracted and published standalone, MIT-licensed,
+                  mainnet-proven.
                 </p>
                 <a
-                  href="https://github.com/Satelink-Protocol/Satelink_Network"
+                  href="https://github.com/Satelink-Protocol/x402-kit"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="proof-link"
@@ -669,21 +676,38 @@ export default function Home() {
           <div className="container">
             <div className="section-header fade-up">
               <div className="section-eyebrow">Products</div>
-              <h2 className="section-title">Infrastructure You Can Build On</h2>
+              <h2 className="section-title">What Satelink Sells</h2>
               <p className="section-subtitle">
-                Decentralized infrastructure services with transparent pricing
-                and on-chain settlement.
+                Derived market intelligence, and the pay-per-call RPC
+                infrastructure it runs on. Transparent pricing, on-chain
+                settlement.
               </p>
             </div>
 
             <div className="products-grid">
               <div className="product-card fade-up">
                 <span className="product-badge">Live</span>
+                <h3 className="product-title">Trading Intelligence</h3>
+                <p className="product-desc">
+                  Funding-rate heatmaps, open-interest shifts, liquidation
+                  clusters, and market microstructure — derived statistics
+                  computed from public market data. We never redistribute a
+                  raw exchange feed.
+                </p>
+                <a href="/intelligence" className="product-link">
+                  View Intelligence
+                  <ArrowIcon />
+                </a>
+              </div>
+
+              <div className="product-card fade-up">
+                <span className="product-badge">Live</span>
                 <h3 className="product-title">RPC Gateway</h3>
                 <p className="product-desc">
                   Multi-chain RPC across Polygon, Ethereum, Base, and Arbitrum
                   with provider health monitoring, circuit breakers, and
-                  automatic failover.
+                  automatic failover — the infrastructure the intelligence
+                  product runs on, also sold directly.
                 </p>
                 <a href="/docs/api-reference" className="product-link">
                   API Reference
@@ -1115,7 +1139,8 @@ export default function Home() {
               <div className="section-eyebrow">Pricing</div>
               <h2 className="section-title">Simple, Transparent Pricing</h2>
               <p className="section-subtitle">
-                Pay for what you use. No subscriptions. No hidden fees.
+                One-time USD credit packs, or pay per call. No subscriptions.
+                No hidden fees.
               </p>
             </div>
 
@@ -1130,10 +1155,10 @@ export default function Home() {
                 </p>
                 <ul className="pricing-features">
                   <li>
-                    <CheckIcon /> 500 requests/day per IP
+                    <CheckIcon /> 500 RPC requests/day per IP
                   </li>
                   <li>
-                    <CheckIcon /> All chains included
+                    <CheckIcon /> Free intelligence discovery tier
                   </li>
                   <li>
                     <CheckIcon /> No account required
@@ -1148,29 +1173,29 @@ export default function Home() {
               </div>
 
               <div className="pricing-card featured">
-                <div className="pricing-tier">Pay as you go</div>
+                <div className="pricing-tier">Credit pack</div>
                 <div className="pricing-price">
-                  $0.00003<span>/call</span>
+                  USD<span>one-time</span>
                 </div>
                 <p className="pricing-desc">
-                  For production workloads at any scale
+                  Pay once, spend it as you go — no subscription
                 </p>
                 <ul className="pricing-features">
                   <li>
-                    <CheckIcon /> $1 &asymp; 33,333 calls
+                    <CheckIcon /> $0.01/intelligence call
                   </li>
                   <li>
-                    <CheckIcon /> Permissionless USDT deposits
+                    <CheckIcon /> $0.00003/RPC call
                   </li>
                   <li>
                     <CheckIcon /> Credits never expire
                   </li>
                   <li>
-                    <CheckIcon /> On-chain deposit verification
+                    <CheckIcon /> Card, UPI, or USDT deposit
                   </li>
                 </ul>
-                <a href="/satelink/os/deposit" className="btn btn-primary pricing-cta">
-                  Get Started
+                <a href="/pricing" className="btn btn-primary pricing-cta">
+                  Full Pricing Details
                 </a>
               </div>
             </div>
@@ -1448,7 +1473,7 @@ export default function Home() {
               </p>
               <div className="footer-social">
                 <a
-                  href="https://github.com/Satelink-Protocol/Satelink_Network"
+                  href="https://github.com/Satelink-Protocol/x402-kit"
                   className="social-icon"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1478,7 +1503,7 @@ export default function Home() {
                   <a href="#products">RPC Gateway</a>
                 </li>
                 <li>
-                  <a href="#pricing">Pricing</a>
+                  <a href="/pricing">Pricing</a>
                 </li>
                 <li>
                   <a href="#roadmap">Roadmap</a>
@@ -1502,8 +1527,8 @@ export default function Home() {
                   <a href="/docs/quick-start">Quick Start</a>
                 </li>
                 <li>
-                  <a href="https://github.com/Satelink-Protocol/Satelink_Network">
-                    GitHub
+                  <a href="https://github.com/Satelink-Protocol/x402-kit">
+                    GitHub (x402-kit)
                   </a>
                 </li>
               </ul>
@@ -1542,7 +1567,16 @@ export default function Home() {
                   <a href="/docs/security">Security</a>
                 </li>
                 <li>
-                  <a href="mailto:satelinknetwork@gmail.com">Contact</a>
+                  <a href="/terms">Terms of Service</a>
+                </li>
+                <li>
+                  <a href="/privacy">Privacy Policy</a>
+                </li>
+                <li>
+                  <a href="/refund">Refund &amp; Cancellation</a>
+                </li>
+                <li>
+                  <a href="/contact">Contact</a>
                 </li>
               </ul>
             </div>
@@ -1553,8 +1587,10 @@ export default function Home() {
               &copy; 2026 Satelink Network. All rights reserved.
             </p>
             <div className="footer-legal">
-              <a href="/privacy.html">Privacy Policy</a>
-              <a href="/terms.html">Terms of Service</a>
+              <a href="/privacy">Privacy Policy</a>
+              <a href="/terms">Terms of Service</a>
+              <a href="/refund">Refund &amp; Cancellation</a>
+              <a href="/contact">Contact</a>
             </div>
           </div>
         </div>

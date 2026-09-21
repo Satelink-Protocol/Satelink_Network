@@ -29,7 +29,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             <Link href="/docs/api-reference">API</Link>
             <Link href="/status">Status</Link>
             <a
-              href="https://github.com/Satelink-Protocol/Satelink_Network"
+              href="https://github.com/Satelink-Protocol/x402-kit"
               target="_blank"
               rel="noopener noreferrer"
             >
