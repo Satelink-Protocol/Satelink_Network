@@ -15,6 +15,7 @@ function makePool() {
     revenueEvents: [],
     subscriptions: new Map(),   // `${provider}:${provider_subscription_id}` -> row
     usageDaily: new Map(),
+    unmatchedPayments: [],      // rows, in insertion order
   };
 
   function client() {
@@ -37,14 +38,31 @@ function makePool() {
           return { rowCount: 1, rows: [] };
         }
 
-        // ── resolveOrCreateApiKey
+        // ── unmatched_payments (T-1.4)
+        if (s.startsWith('INSERT INTO unmatched_payments')) {
+          const [eventType, paymentId, subscriptionId, productId, customerEmail, currency,
+            amountMinor, metadata, reason, rawPayload, isTest] = params;
+          if (paymentId && state.unmatchedPayments.some((r) => r.payment_id === paymentId)) {
+            return { rowCount: 0, rows: [] }; // ON CONFLICT DO NOTHING
+          }
+          state.unmatchedPayments.push({
+            id: state.unmatchedPayments.length + 1, event_type: eventType, payment_id: paymentId,
+            subscription_id: subscriptionId, product_id: productId, customer_email: customerEmail,
+            currency, amount_minor: amountMinor, metadata, reason, raw_payload: rawPayload,
+            is_test_data: isTest, resolved: false,
+          });
+          return { rowCount: 1, rows: [] };
+        }
+
+        // ── resolveAccount (credit_service.mjs) — used by both the strict
+        // one-time-payment resolution and the checkout-time resolve-or-create.
         if (s.startsWith('SELECT api_key, wallet_address') && s.includes('WHERE api_key')) {
           const row = state.apiCredits.get(params[0]);
           return { rows: row ? [row] : [] };
         }
         if (s.includes('SELECT api_key FROM subscriptions WHERE')) {
           const row = state.subscriptions.get(`dodo:${params[0]}`);
-          return { rows: row ? [{ api_key: row.api_key }] : [] };
+          return { rows: row?.api_key ? [{ api_key: row.api_key }] : [] };
         }
         if (s.includes('SELECT api_key FROM api_credits WHERE lower(email)')) {
           for (const row of state.apiCredits.values()) {
@@ -128,6 +146,16 @@ function buildApp(pool) {
   return app;
 }
 
+/** Seed a pre-existing account directly into the mock store — simulates an
+ * account already provisioned by /internal/dodo/resolve-account (checkout
+ * time) before any payment.succeeded webhook arrives. */
+function seedAccount(pool, apiKey, { email, tier = 'free' } = {}) {
+  pool.state.apiCredits.set(apiKey, {
+    api_key: apiKey, tier, daily_limit: 500, credits_usdt: 0, total_deposited: 0, total_spent: 0,
+    email: email || null, status: 'active',
+  });
+}
+
 const SECRET = 'test-secret-xyz';
 const CREDIT_PACK_PRODUCT_ID = 'prod_credit_pack_test';
 
@@ -135,6 +163,7 @@ describe('POST /internal/dodo/credit', () => {
   let pool, app;
   const prevSecret = process.env.DODO_INTERNAL_SECRET;
   const prevAllowlist = process.env.DODO_CREDIT_PACK_PRODUCT_IDS;
+  const prevValues = process.env.DODO_CREDIT_PACK_USD_VALUES;
   before(() => {
     process.env.DODO_INTERNAL_SECRET = SECRET;
     process.env.DODO_CREDIT_PACK_PRODUCT_IDS = CREDIT_PACK_PRODUCT_ID;
@@ -142,6 +171,7 @@ describe('POST /internal/dodo/credit', () => {
   after(() => {
     process.env.DODO_INTERNAL_SECRET = prevSecret;
     process.env.DODO_CREDIT_PACK_PRODUCT_IDS = prevAllowlist;
+    process.env.DODO_CREDIT_PACK_USD_VALUES = prevValues;
   });
 
   beforeEach(() => {
@@ -162,41 +192,38 @@ describe('POST /internal/dodo/credit', () => {
     expect(res2.status).to.equal(401);
   });
 
-  it('gate a: payment.succeeded credits payment_sources + revenue_events_v2 + api_credits, and upserts subscriptions', async () => {
+  it('gate a: payment.succeeded (with a pre-resolved account) credits payment_sources + revenue_events_v2 + api_credits', async () => {
+    seedAccount(pool, 'sk_dodo_buyer1', { email: 'buyer@example.com' });
     const res = await request(app)
       .post('/internal/dodo/credit')
       .set('x-dodo-internal-secret', SECRET)
       .send({
-        eventType: 'payment.succeeded', paymentId: 'pay_1', subscriptionId: 'sub_1',
+        eventType: 'payment.succeeded', paymentId: 'pay_1', apiKeyHint: 'sk_dodo_buyer1',
         planProductId: CREDIT_PACK_PRODUCT_ID,
         customerEmail: 'buyer@example.com', currency: 'USD', amountMinor: 499_00,
-        currentPeriodStart: '2026-09-01T00:00:00Z', currentPeriodEnd: '2026-10-01T00:00:00Z',
       });
 
     expect(res.status).to.equal(200);
     expect(res.body.ok).to.equal(true);
     expect(res.body.entitled).to.equal(true);
+    expect(res.body.apiKey).to.equal('sk_dodo_buyer1');
     expect(pool.state.paymentSources.has('dodo:pay_1')).to.equal(true);
     expect(pool.state.revenueEvents).to.have.length(1);
     expect(pool.state.revenueEvents[0].requestId).to.equal('dodo:pay_1');
-    const account = pool.state.apiCredits.get(res.body.apiKey);
+    const account = pool.state.apiCredits.get('sk_dodo_buyer1');
     expect(account.credits_usdt).to.be.closeTo(499, 1e-6);
-    expect(account.tier).to.equal('starter');
-    const sub = pool.state.subscriptions.get('dodo:sub_1');
-    expect(sub.status).to.equal('active');
-    expect(sub.api_key).to.equal(res.body.apiKey);
   });
 
   it('gate b: replaying the same payment_id → 409, no second credit', async () => {
-    const payload = { eventType: 'payment.succeeded', paymentId: 'pay_2', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'b@example.com', currency: 'USD', amountMinor: 499_00 };
+    seedAccount(pool, 'sk_dodo_buyer2');
+    const payload = { eventType: 'payment.succeeded', paymentId: 'pay_2', apiKeyHint: 'sk_dodo_buyer2', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'b@example.com', currency: 'USD', amountMinor: 499_00 };
     const first = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
     expect(first.status).to.equal(200);
-    const apiKey = first.body.apiKey;
-    const balanceAfterFirst = pool.state.apiCredits.get(apiKey).credits_usdt;
+    const balanceAfterFirst = pool.state.apiCredits.get('sk_dodo_buyer2').credits_usdt;
 
     const second = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
     expect(second.status).to.equal(409);
-    expect(pool.state.apiCredits.get(apiKey).credits_usdt).to.equal(balanceAfterFirst);
+    expect(pool.state.apiCredits.get('sk_dodo_buyer2').credits_usdt).to.equal(balanceAfterFirst);
     expect(pool.state.revenueEvents).to.have.length(1);
   });
 
@@ -230,7 +257,13 @@ describe('POST /internal/dodo/credit', () => {
     expect(pool.state.apiCredits.size).to.equal(0); // never touched api_credits
   });
 
-  it('subscription.renewed (no payment_id in Dodo\'s payload) credits using the synthetic idempotency key', async () => {
+  it('subscription.renewed credits the account already linked on the subscriptions row (no email fallback, no creation)', async () => {
+    // Simulates an account already linked to this subscription (e.g. by an
+    // earlier payment.succeeded that also carried subscriptionId) — renewal
+    // resolution reads ONLY this link, never guesses by email.
+    pool.state.subscriptions.set('dodo:sub_5', { id: 'dodo:sub_5', provider: 'dodo', provider_subscription_id: 'sub_5', api_key: 'sk_dodo_sub5' });
+    seedAccount(pool, 'sk_dodo_sub5', { email: 'c@example.com' });
+
     const payload = {
       eventType: 'subscription.renewed', subscriptionId: 'sub_5', customerEmail: 'c@example.com',
       currency: 'USD', amountMinor: 499_00, previousBillingDate: '2026-10-01T00:00:00Z',
@@ -238,19 +271,35 @@ describe('POST /internal/dodo/credit', () => {
     const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
     expect(res.status).to.equal(200);
     expect(res.body.entitled).to.equal(true);
+    expect(res.body.apiKey).to.equal('sk_dodo_sub5');
     expect(pool.state.paymentSources.has('dodo:sub:sub_5:2026-10-01T00:00:00Z')).to.equal(true);
 
     // A different renewal cycle (different previousBillingDate) is a DIFFERENT charge, not a duplicate.
     const res2 = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
       .send({ ...payload, previousBillingDate: '2026-11-01T00:00:00Z' });
     expect(res2.status).to.equal(200);
-    const account = pool.state.apiCredits.get(res.body.apiKey);
+    const account = pool.state.apiCredits.get('sk_dodo_sub5');
     expect(account.credits_usdt).to.be.closeTo(998, 1e-6); // two renewals credited
   });
 
-  it('gate e: the credited key is a real, spendable api_credits paid tier (not free)', async () => {
+  it('subscription.renewed with NO prior link (subscription.active never carried an account) → unmatched, not guessed', async () => {
     const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
-      .send({ eventType: 'payment.succeeded', paymentId: 'pay_6', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'd@example.com', currency: 'USD', amountMinor: 499_00 });
+      .send({
+        eventType: 'subscription.renewed', subscriptionId: 'sub_orphan', customerEmail: 'orphan@example.com',
+        currency: 'USD', amountMinor: 499_00, previousBillingDate: '2026-10-01T00:00:00Z',
+      });
+    expect(res.status).to.equal(200);
+    expect(res.body.entitled).to.equal(false);
+    expect(res.body.matched).to.equal(false);
+    expect(pool.state.apiCredits.size).to.equal(0);
+    expect(pool.state.unmatchedPayments).to.have.length(1);
+    expect(pool.state.unmatchedPayments[0].reason).to.equal('account_not_found');
+  });
+
+  it('gate e: the credited key is a real, spendable api_credits paid tier (not free)', async () => {
+    seedAccount(pool, 'sk_dodo_d', { email: 'd@example.com', tier: 'starter' });
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({ eventType: 'payment.succeeded', paymentId: 'pay_6', apiKeyHint: 'sk_dodo_d', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'd@example.com', currency: 'USD', amountMinor: 499_00 });
     const account = pool.state.apiCredits.get(res.body.apiKey);
     // authorizeAndMeter's costFor() only exempts tier === 'free' — anything
     // else (here 'starter') is charged PRICE_PER_CALL_USDT and drawn from
@@ -259,14 +308,86 @@ describe('POST /internal/dodo/credit', () => {
     expect(account.credits_usdt).to.be.greaterThan(0);
   });
 
-  it('INR settlement is booked at the documented approximate rate, not silently as USD', async () => {
+  it('INR settlement (no configured product USD value) is booked at the documented approximate rate, not silently as USD', async () => {
+    seedAccount(pool, 'sk_dodo_e', { email: 'e@example.com' });
     const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
-      .send({ eventType: 'payment.succeeded', paymentId: 'pay_inr', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'e@example.com', currency: 'INR', amountMinor: 49900 });
+      .send({ eventType: 'payment.succeeded', paymentId: 'pay_inr', apiKeyHint: 'sk_dodo_e', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'e@example.com', currency: 'INR', amountMinor: 49900 });
     expect(res.status).to.equal(200);
-    const account = pool.state.apiCredits.get(res.body.apiKey);
+    const account = pool.state.apiCredits.get('sk_dodo_e');
     // 499 INR at the approx rate must be well under 499 USD-equivalent.
     expect(account.credits_usdt).to.be.lessThan(499);
     expect(account.credits_usdt).to.be.greaterThan(0);
+  });
+
+  it('T-1.3: a product with a configured USD value is credited THAT value, ignoring an INR total_amount entirely', async () => {
+    process.env.DODO_CREDIT_PACK_USD_VALUES = `${CREDIT_PACK_PRODUCT_ID}:9.90`;
+    seedAccount(pool, 'sk_dodo_f', { email: 'f@example.com' });
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({
+        eventType: 'payment.succeeded', paymentId: 'pay_configured', apiKeyHint: 'sk_dodo_f',
+        planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'f@example.com',
+        // Mirrors the real reported payment: INR total_amount 100x the intended
+        // USD value. If this were used, the account would be credited ~590 not 9.90.
+        currency: 'INR', amountMinor: 58988,
+      });
+    expect(res.status).to.equal(200);
+    expect(res.body.entitled).to.equal(true);
+    const account = pool.state.apiCredits.get('sk_dodo_f');
+    expect(account.credits_usdt).to.be.closeTo(9.90, 1e-6);
+    delete process.env.DODO_CREDIT_PACK_USD_VALUES;
+  });
+
+  it('T-1.4: payment.succeeded with NO apiKeyHint (metadata.satelink_account_id missing) → unmatched, not guessed, not auto-created', async () => {
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({
+        eventType: 'payment.succeeded', paymentId: 'pay_no_metadata', planProductId: CREDIT_PACK_PRODUCT_ID,
+        customerEmail: 'stray@example.com', currency: 'USD', amountMinor: 999_00,
+      });
+    expect(res.status).to.equal(200);
+    expect(res.body.ok).to.equal(true);
+    expect(res.body.entitled).to.equal(false);
+    expect(res.body.matched).to.equal(false);
+    expect(res.body.reason).to.equal('no_account_metadata');
+    expect(pool.state.apiCredits.size).to.equal(0); // critically: nothing auto-created
+    expect(pool.state.paymentSources.size).to.equal(0);
+    expect(pool.state.unmatchedPayments).to.have.length(1);
+    expect(pool.state.unmatchedPayments[0].payment_id).to.equal('pay_no_metadata');
+    expect(pool.state.unmatchedPayments[0].product_id).to.equal(CREDIT_PACK_PRODUCT_ID);
+  });
+
+  it('T-1.4: payment.succeeded with an apiKeyHint that resolves to NO account → unmatched, not guessed by email', async () => {
+    // An account DOES exist for this email, under a DIFFERENT key — proves
+    // the resolver never falls back to matching by email once a hint is given.
+    seedAccount(pool, 'sk_dodo_real_g', { email: 'g@example.com' });
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({
+        eventType: 'payment.succeeded', paymentId: 'pay_wrong_hint', apiKeyHint: 'sk_dodo_does_not_exist',
+        planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'g@example.com', currency: 'USD', amountMinor: 999_00,
+      });
+    expect(res.status).to.equal(200);
+    expect(res.body.entitled).to.equal(false);
+    expect(res.body.reason).to.equal('account_not_found');
+    expect(pool.state.apiCredits.get('sk_dodo_real_g').credits_usdt).to.equal(0); // untouched
+    expect(pool.state.unmatchedPayments).to.have.length(1);
+  });
+
+  it('T-1.4: a repeated unmatched delivery for the same payment_id does not duplicate the unmatched_payments row', async () => {
+    const payload = { eventType: 'payment.succeeded', paymentId: 'pay_retry', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'h@example.com', currency: 'USD', amountMinor: 500_00 };
+    await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
+    await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
+    expect(pool.state.unmatchedPayments).to.have.length(1);
+  });
+
+  it('a bare test-webhook payload with no amount fields is declined (200), not a 500 CHECK-constraint crash', async () => {
+    seedAccount(pool, 'sk_dodo_i');
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({ eventType: 'payment.succeeded', paymentId: 'pay_bare_test', apiKeyHint: 'sk_dodo_i', planProductId: CREDIT_PACK_PRODUCT_ID, customerEmail: 'i@example.com' });
+    expect(res.status).to.equal(200);
+    expect(res.body.ok).to.equal(true);
+    expect(res.body.entitled).to.equal(false);
+    expect(res.body.reason).to.equal('non_positive_amount');
+    expect(pool.state.paymentSources.size).to.equal(0);
+    expect(pool.state.revenueEvents).to.have.length(0);
   });
 });
 
@@ -287,9 +408,10 @@ describe('POST /internal/dodo/credit — product allowlist (money-leak fix)', ()
 
   it('allowlisted product credits normally', async () => {
     process.env.DODO_CREDIT_PACK_PRODUCT_IDS = CREDIT_PACK_PRODUCT_ID;
+    seedAccount(pool, 'sk_dodo_allow1', { email: 'allow@example.com' });
     const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
       .send({
-        eventType: 'payment.succeeded', paymentId: 'pay_allow_1', planProductId: CREDIT_PACK_PRODUCT_ID,
+        eventType: 'payment.succeeded', paymentId: 'pay_allow_1', apiKeyHint: 'sk_dodo_allow1', planProductId: CREDIT_PACK_PRODUCT_ID,
         customerEmail: 'allow@example.com', currency: 'USD', amountMinor: 499_00,
       });
     expect(res.status).to.equal(200);
@@ -346,5 +468,58 @@ describe('POST /internal/dodo/credit — product allowlist (money-leak fix)', ()
     expect(res.status).to.equal(200);
     expect(res.body.entitled).to.equal(false);
     expect(pool.state.apiCredits.size).to.equal(0);
+  });
+});
+
+describe('POST /internal/dodo/resolve-account (T-1.4: pre-payment account provisioning)', () => {
+  let pool, app;
+  const prevSecret = process.env.DODO_INTERNAL_SECRET;
+  before(() => { process.env.DODO_INTERNAL_SECRET = SECRET; });
+  after(() => { process.env.DODO_INTERNAL_SECRET = prevSecret; });
+
+  beforeEach(() => {
+    pool = makePool();
+    app = buildApp(pool);
+  });
+
+  it('missing secret → 401', async () => {
+    const res = await request(app).post('/internal/dodo/resolve-account').send({ email: 'x@example.com' });
+    expect(res.status).to.equal(401);
+  });
+
+  it('missing email and apiKeyHint → 400', async () => {
+    const res = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET).send({});
+    expect(res.status).to.equal(400);
+  });
+
+  it('invalid email → 400', async () => {
+    const res = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET).send({ email: 'not-an-email' });
+    expect(res.status).to.equal(400);
+  });
+
+  it('new email provisions a fresh account', async () => {
+    const res = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET).send({ email: 'new@example.com' });
+    expect(res.status).to.equal(200);
+    expect(res.body.ok).to.equal(true);
+    expect(res.body.created).to.equal(true);
+    expect(res.body.apiKey).to.match(/^sk_dodo_/);
+    expect(pool.state.apiCredits.get(res.body.apiKey).email).to.equal('new@example.com');
+  });
+
+  it('same email twice resolves the SAME account, does not create a second one', async () => {
+    const first = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET).send({ email: 'repeat@example.com' });
+    const second = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET).send({ email: 'repeat@example.com' });
+    expect(second.body.apiKey).to.equal(first.body.apiKey);
+    expect(second.body.created).to.equal(false);
+    expect(pool.state.apiCredits.size).to.equal(1);
+  });
+
+  it('an existing apiKeyHint resolves that exact account, ignoring email', async () => {
+    seedAccount(pool, 'sk_dodo_existing', { email: 'old@example.com' });
+    const res = await request(app).post('/internal/dodo/resolve-account').set('x-dodo-internal-secret', SECRET)
+      .send({ email: 'different@example.com', apiKeyHint: 'sk_dodo_existing' });
+    expect(res.body.apiKey).to.equal('sk_dodo_existing');
+    expect(res.body.created).to.equal(false);
+    expect(pool.state.apiCredits.size).to.equal(1); // no new account for the "different" email
   });
 });

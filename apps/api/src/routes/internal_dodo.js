@@ -89,32 +89,73 @@ function planFromProductId(productId) {
   return 'starter';
 }
 
-// ── Credit-pack product allowlist (money-leak fix) ───────────────────────────
+// ── Credit-pack product allowlist + USD value map (money-leak fix, T-1.3/1.4) ─
 //
 // apps/web's dodo-webhook handles TWO surfaces on one Dodo account/webhook:
-// task-commerce one-shot purchases and /intelligence subscriptions. It
-// discriminates them by metadata.order_ref — a soft signal that file's own
+// task-commerce one-shot purchases and /intelligence one-time credit packs.
+// It discriminates them by metadata.order_ref — a soft signal that file's own
 // comments flag as unconfirmed against a live account ("static-link metadata
 // pass-through may not be reaching webhooks as documented"). If that metadata
 // is ever dropped, a task-commerce payment.succeeded would fall through to
 // this router's entitling path with no product check and get credited as if
-// it were a subscription payment.
+// it were a credit-pack payment.
 //
-// This allowlist is the authoritative, server-side gate for ONE-TIME
-// payment.succeeded credit grants: a payment whose product is not explicitly
+// DODO_CREDIT_PACK_USD_VALUES is the authoritative, server-side source for
+// BOTH the allowlist gate AND the USD amount credited — "productId:usdValue"
+// pairs, comma-separated (e.g. "pdt_abc:9.99,pdt_def:49.99"). A product not
 // listed here is NEVER credited, no matter what apps/web believed it was.
-// Fail CLOSED — unset or empty allowlist credits NOTHING, it never falls back
-// to "credit everything" the way planFromProductId's tier lookup does. Read
-// live (not cached at module load) — same pattern as DODO_PRODUCT_PRO_ID /
-// DODO_PRODUCT_STARTER_ID above, and required for the env var to be testable.
-function isAllowlistedCreditPackProduct(productId) {
-  const ids = new Set(
+// Fail CLOSED — unset/empty credits NOTHING; it never falls back to "credit
+// everything". Read live (not cached at module load), same pattern as
+// DODO_PRODUCT_PRO_ID/STARTER_ID above, and required for the env var to be
+// testable.
+//
+// DODO_CREDIT_PACK_PRODUCT_IDS (the older, value-less allowlist) is still
+// honored for backward compatibility: a product listed there but NOT in
+// DODO_CREDIT_PACK_USD_VALUES is still allowlisted, but its credited amount
+// falls back to toUsdApprox(settlement_amount) with a loud warning — the
+// product's configured USD value is always preferred when available (Phase
+// 1.3: never derive credits from total_amount, and prefer the product's own
+// configured value over the FX-approximated settlement amount).
+function parseCreditPackUsdValues() {
+  const map = new Map();
+  for (const entry of (process.env.DODO_CREDIT_PACK_USD_VALUES || '').split(',')) {
+    const [productId, usdRaw] = entry.split(':').map((s) => (s || '').trim());
+    const usd = Number(usdRaw);
+    if (productId && Number.isFinite(usd) && usd > 0) map.set(productId, usd);
+  }
+  return map;
+}
+
+function legacyAllowlistedIds() {
+  return new Set(
     (process.env.DODO_CREDIT_PACK_PRODUCT_IDS || '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
   );
-  return ids.size > 0 && !!productId && ids.has(productId);
+}
+
+function isAllowlistedCreditPackProduct(productId) {
+  if (!productId) return false;
+  return parseCreditPackUsdValues().has(productId) || legacyAllowlistedIds().has(productId);
+}
+
+/**
+ * The USD amount to credit for an allowlisted credit-pack product.
+ * Preferred: the product's own configured value (DODO_CREDIT_PACK_USD_VALUES)
+ * — a fixed dashboard price, immune to FX drift and to which amount field
+ * Dodo happened to populate. Falls back to toUsdApprox(settlement/total
+ * amount) ONLY for a product allowlisted the old (value-less) way.
+ * @returns {{usd: number, source: 'product_config'|'settlement_fallback'}}
+ */
+function resolveCreditPackUsd(productId, amountMinor, currency) {
+  const configured = parseCreditPackUsdValues().get(productId);
+  if (configured !== undefined) return { usd: configured, source: 'product_config' };
+  console.error(
+    `[internal/dodo] product "${productId}" allowlisted via legacy DODO_CREDIT_PACK_PRODUCT_IDS ` +
+    `with no configured USD value in DODO_CREDIT_PACK_USD_VALUES — falling back to settlement-amount approximation`
+  );
+  return { usd: toUsdApprox(amountMinor, currency), source: 'settlement_fallback' };
 }
 
 function requireInternalSecret(req, res, next) {
@@ -153,36 +194,85 @@ async function upsertSubscriptionStatus(pool, { subscriptionId, apiKey, plan, st
   );
 }
 
-/** Resolve the api_key to credit, creating a fresh account only as a last resort. */
-async function resolveOrCreateApiKey(client, { apiKeyHint, subscriptionId, customerEmail, plan }) {
+// ── Identity mapping (T-1.4) ─────────────────────────────────────────────────
+//
+// The MONEY-CREDITING path (payment.succeeded / subscription.renewed) must
+// NEVER guess which account to fund. It used to: fall back to matching by
+// raw customer email, or silently provision a brand-new account if nothing
+// matched. Both are money-safety bugs — an email typo, a shared email, or a
+// payment made before this existed could credit the wrong account or create
+// an orphan one nobody can reach. The only accepted identity signal now is
+// apiKeyHint (metadata.satelink_account_id, set by /api/dodo-checkout at
+// session-creation time — see apps/web's dodo-checkout route) resolving to
+// an account that ALREADY exists. Anything else is unmatched, not guessed.
+//
+// Account PROVISIONING (creating a brand-new account for a first-time buyer)
+// is a SEPARATE, pre-payment concern — see resolveOrCreateAccountForCheckout
+// below, called by /internal/dodo/resolve-account at checkout-session
+// creation time, before any money has moved. That's the "email sign-up"
+// half of "Buy credits requires an account/API key first."
+
+/** Strict resolution for the payment.succeeded entitling path: apiKeyHint must already exist. No fallback, no creation. */
+async function resolveAccountForOneTimePayment(client, { apiKeyHint }) {
+  if (!apiKeyHint) return null;
+  const account = await resolveAccount(client, { apiKey: apiKeyHint });
+  return account ? account.api_key : null;
+}
+
+/** Strict resolution for subscription.renewed: the api_key linked at subscription.active time. No email fallback, no creation. */
+async function resolveAccountForSubscriptionRenewal(client, { subscriptionId }) {
+  if (!subscriptionId) return null;
+  const r = await client.query(
+    `SELECT api_key FROM subscriptions WHERE provider = 'dodo' AND provider_subscription_id = $1`,
+    [subscriptionId]
+  );
+  return r.rows[0]?.api_key || null;
+}
+
+/**
+ * Pre-payment account resolution for the checkout-session route — the ONLY
+ * place in this file allowed to create a brand-new account, because no money
+ * has moved yet (a checkout session can be abandoned with zero consequence).
+ * Resolves an existing key/email if given, otherwise provisions a fresh
+ * account (same shape x402's bundle path uses for a first-time payer,
+ * settlement.js) so /api/dodo-checkout has an api_key to embed as
+ * metadata.satelink_account_id before redirecting to Dodo.
+ */
+async function resolveOrCreateAccountForCheckout(client, { apiKeyHint, customerEmail }) {
   if (apiKeyHint) {
     const account = await resolveAccount(client, { apiKey: apiKeyHint });
-    if (account) return account.api_key;
-  }
-  if (subscriptionId) {
-    const r = await client.query(
-      `SELECT api_key FROM subscriptions WHERE provider = 'dodo' AND provider_subscription_id = $1`,
-      [subscriptionId]
-    );
-    if (r.rows[0]?.api_key) return r.rows[0].api_key;
+    if (account) return { apiKey: account.api_key, created: false };
   }
   if (customerEmail) {
     const r = await client.query(
       `SELECT api_key FROM api_credits WHERE lower(email) = lower($1) ORDER BY created_at ASC LIMIT 1`,
       [customerEmail]
     );
-    if (r.rows[0]?.api_key) return r.rows[0].api_key;
+    if (r.rows[0]?.api_key) return { apiKey: r.rows[0].api_key, created: false };
   }
-  // No existing account anywhere — this is a brand-new Dodo customer. Provision
-  // one, same shape x402's bundle path uses for a first-time payer (settlement.js).
   const apiKey = `sk_dodo_${crypto.randomBytes(24).toString('hex')}`;
   await client.query(
     `INSERT INTO api_credits (api_key, tier, daily_limit, demand_source, email)
      VALUES ($1, $2, $3, 'dodo', $4)
      ON CONFLICT (api_key) DO NOTHING`,
-    [apiKey, plan, PLAN_DAILY_LIMIT[plan] || PLAN_DAILY_LIMIT.starter, customerEmail || null]
+    [apiKey, 'free', TIER_DAILY_LIMIT.free, customerEmail || null]
   );
-  return apiKey;
+  return { apiKey, created: true };
+}
+
+/** Additive, idempotent (payment_id) record of a payment that could not be matched to an account. Never throws. */
+async function insertUnmatchedPayment(client, {
+  eventType, paymentId, subscriptionId, productId, customerEmail, currency, amountMinor, metadata, reason, rawPayload, isTest,
+}) {
+  await client.query(
+    `INSERT INTO unmatched_payments
+       (provider, event_type, payment_id, subscription_id, product_id, customer_email, currency, amount_minor, metadata, reason, raw_payload, is_test_data, created_at)
+     VALUES ('dodo', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     ON CONFLICT (provider, payment_id) WHERE payment_id IS NOT NULL DO NOTHING`,
+    [eventType, paymentId || null, subscriptionId || null, productId || null, customerEmail || null, currency || null,
+     amountMinor ?? null, metadata ? JSON.stringify(metadata) : null, reason,
+     rawPayload ? JSON.stringify(rawPayload) : null, !!isTest, Date.now()]
+  );
 }
 
 // ── Refund & dispute reversal (M5 follow-up) ─────────────────────────────────
@@ -336,6 +426,38 @@ export function createDodoInternalRouter(pool) {
   const router = express.Router();
   router.use(express.json({ limit: '64kb' }));
   router.use(requireInternalSecret);
+
+  // POST /internal/dodo/resolve-account — pre-payment account resolution for
+  // apps/web's checkout-session route. Registered BEFORE the isDodoSchemaReady
+  // gate below: it only touches api_credits (a core table that always
+  // exists), not the Dodo-rail-specific columns/tables that gate guards, so a
+  // buyer can still get an api_key to embed in checkout metadata even if the
+  // boot DDL for refunds/disputes/unmatched_payments hasn't caught up yet.
+  router.post('/resolve-account', async (req, res) => {
+    const { email, apiKeyHint } = req.body || {};
+    const customerEmail = typeof email === 'string' ? email.trim() : '';
+    const hint = typeof apiKeyHint === 'string' ? apiKeyHint.trim() : '';
+    if (!customerEmail && !hint) {
+      return res.status(400).json({ ok: false, error: 'email or apiKeyHint required' });
+    }
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return res.status(400).json({ ok: false, error: 'invalid email' });
+    }
+    const client = await pool.connect();
+    try {
+      const { apiKey, created } = await resolveOrCreateAccountForCheckout(client, {
+        apiKeyHint: hint || undefined,
+        customerEmail: customerEmail || undefined,
+      });
+      return res.json({ ok: true, apiKey, created });
+    } catch (err) {
+      console.error('[internal/dodo] resolve-account failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    } finally {
+      client.release();
+    }
+  });
+
   // Fail closed if the Dodo-rail boot DDL failed (schema not ready): never write
   // credits/reversals against a half-migrated schema. 503 → apps/web throws →
   // Dodo retries later, by which time a fixed deploy has made the schema ready.
@@ -351,7 +473,7 @@ export function createDodoInternalRouter(pool) {
     const {
       eventType, paymentId, subscriptionId, planProductId, customerEmail,
       apiKeyHint, currency, amountMinor, isTestMode, currentPeriodStart,
-      currentPeriodEnd, previousBillingDate,
+      currentPeriodEnd, previousBillingDate, metadata,
     } = body;
 
     if (!eventType) return res.status(400).json({ ok: false, error: 'eventType required' });
@@ -382,6 +504,7 @@ export function createDodoInternalRouter(pool) {
 
     // ── Entitling events: payment.succeeded / subscription.renewed.
     let idKey;
+    let amountUsd;
     if (eventType === 'payment.succeeded') {
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId required' });
       // Money-leak gate: never credit a one-time payment whose product isn't
@@ -392,19 +515,30 @@ export function createDodoInternalRouter(pool) {
       if (!isAllowlistedCreditPackProduct(planProductId)) {
         console.error(
           `[internal/dodo] payment.succeeded product "${planProductId || '(none)'}" not in ` +
-          `DODO_CREDIT_PACK_PRODUCT_IDS allowlist — not crediting (payment ${paymentId})`
+          `DODO_CREDIT_PACK_PRODUCT_IDS/DODO_CREDIT_PACK_USD_VALUES allowlist — not crediting (payment ${paymentId})`
         );
         return res.json({ ok: true, entitled: false, eventType, reason: 'product_not_allowlisted' });
       }
       idKey = `dodo:${paymentId}`;
+      amountUsd = resolveCreditPackUsd(planProductId, amountMinor, currency).usd;
     } else {
       if (!subscriptionId || !previousBillingDate) {
         return res.status(400).json({ ok: false, error: 'subscriptionId and previousBillingDate required for subscription.renewed' });
       }
       idKey = `dodo:sub:${subscriptionId}:${previousBillingDate}`;
+      amountUsd = toUsdApprox(amountMinor, currency);
     }
 
-    const amountUsd = toUsdApprox(amountMinor, currency);
+    // Never let a zero/negative amount reach the revenue_events_v2 INSERT —
+    // migration 015's CHECK (is_billable=false OR amount_usdt>0) rejects it,
+    // which used to surface as an opaque 500 (Postgres 23514) for a bare test
+    // payload with no settlement_amount/total_amount. A legitimate non-credit
+    // outcome, same as product_not_allowlisted — 200, not 5xx.
+    if (!(amountUsd > 0)) {
+      console.error(`[internal/dodo] ${eventType} resolved to a non-positive amount (${amountUsd}) — not crediting (payment ${paymentId || subscriptionId})`);
+      return res.json({ ok: true, entitled: false, eventType, reason: 'non_positive_amount' });
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -416,7 +550,38 @@ export function createDodoInternalRouter(pool) {
         return res.status(409).json({ ok: false, code: 'duplicate', message: 'already credited' });
       }
 
-      const apiKey = await resolveOrCreateApiKey(client, { apiKeyHint, subscriptionId, customerEmail, plan });
+      // Strict identity mapping (T-1.4): the ONLY accepted signal is a
+      // pre-existing account, resolved via metadata.satelink_account_id
+      // (apiKeyHint) for one-time payments, or the subscription's own linked
+      // api_key for renewals. No email fallback, no silent account creation
+      // on the money-crediting path — see resolveOrCreateAccountForCheckout
+      // for where accounts actually get provisioned (pre-payment).
+      const apiKey = eventType === 'payment.succeeded'
+        ? await resolveAccountForOneTimePayment(client, { apiKeyHint })
+        : await resolveAccountForSubscriptionRenewal(client, { subscriptionId });
+
+      if (!apiKey) {
+        await client.query('ROLLBACK');
+        const reason = apiKeyHint || subscriptionId ? 'account_not_found' : 'no_account_metadata';
+        console.error(
+          `[internal/dodo] ${eventType} has no resolvable account (${reason}) — recording in unmatched_payments, not crediting ` +
+          `(payment ${paymentId || '(none)'}, subscription ${subscriptionId || '(none)'})`
+        );
+        // Own connection: this insert must survive even though the main tx
+        // above was just rolled back (it was never committed to anything).
+        const uClient = await pool.connect();
+        try {
+          await insertUnmatchedPayment(uClient, {
+            eventType, paymentId, subscriptionId, productId: planProductId, customerEmail, currency, amountMinor,
+            metadata, reason, rawPayload: body, isTest,
+          });
+        } catch (uErr) {
+          console.error('[internal/dodo] insertUnmatchedPayment failed:', uErr.message);
+        } finally {
+          uClient.release();
+        }
+        return res.json({ ok: true, entitled: false, matched: false, eventType, reason });
+      }
 
       await client.query(
         `INSERT INTO payment_sources (source, amount_usd, token, network, tx_hash, payer, credited_api_key, is_test_data)
