@@ -179,3 +179,7 @@ install-m0.sh
 
 # Transient fixture written by tools/architecture-tests/forbid-database-url.test.ts
 __dburl_fixture__/
+
+# m5-gate.sh state carried between `purchase` and `refund` runs — amounts/ids
+# only, no secrets, but it's per-operator ephemeral state, not repo content.
+scripts/ops/.m5-gate-state.json
