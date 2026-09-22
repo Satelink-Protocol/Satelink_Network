@@ -11,8 +11,10 @@ const API_BASE =
     : "http://localhost:8080");
 
 const nextConfig: NextConfig = {
-  // Transpile the @satelink/ui design-system package (ships raw TSX from src).
-  transpilePackages: ["@satelink/ui"],
+  // Transpile the design-system packages (both ship raw TSX from src):
+  // @satelink/ui (OS/admin dashboards) and @satelink/web-ui (Satelink Signal —
+  // the public-website system, shared with apps/corporate).
+  transpilePackages: ["@satelink/ui", "@satelink/web-ui"],
 
   typescript: {
     ignoreBuildErrors: true,

@@ -24,6 +24,18 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "@/components/ui": [
+        "../../packages/web-ui/src/components/ui/index.ts"
+      ],
+      "@/components/ui/*": [
+        "../../packages/web-ui/src/components/ui/*"
+      ],
+      "@/components/site/*": [
+        "../../packages/web-ui/src/components/site/*"
+      ],
+      "@/styles/tokens.css": [
+        "../../packages/web-ui/src/styles/tokens.css"
+      ],
       "@/*": [
         "./src/*"
       ]

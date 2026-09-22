@@ -1,0 +1,27 @@
+{
+  "name": "@satelink/seo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SEO + GEO helpers: Next Metadata builders, typed JSON-LD (schema-dts) builders, llms.txt / llms-full.txt generators, and CI validators (missing/duplicate title-description-canonical, invalid JSON-LD, orphan/broken links, sitemap drift).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsonld": "./src/jsonld.ts",
+    "./metadata": "./src/metadata.ts",
+    "./llms": "./src/llms.ts",
+    "./validators": "./src/validators.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@satelink/content": "*"
+  },
+  "devDependencies": {
+    "schema-dts": "^1.1.5",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "next": "^15"
+  }
+}

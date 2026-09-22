@@ -79,6 +79,16 @@ export default defineConfig({
         },
       },
       {
+        // Public-website shared packages (@satelink/content, @satelink/seo,
+        // @satelink/web-ui). apps/web keeps its own vitest.config.ts.
+        test: {
+          name: 'packages',
+          include: ['packages/{content,seo,web-ui}/**/*.{test,spec}.{ts,tsx}'],
+          exclude: ['**/node_modules/**', '**/dist/**', '.claude/worktrees/**', ...INTEGRATION_PATTERNS],
+          environment: 'node',
+        },
+      },
+      {
         extends: true,
         plugins: [workspaceResolver],
         test: {

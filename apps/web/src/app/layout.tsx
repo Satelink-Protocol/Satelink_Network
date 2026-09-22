@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "../../../../packages/ui/src/styles/theme.css";
 import "./globals.css";
-import "../styles/tokens.css";
+import "../../../../packages/web-ui/src/styles/tokens.css";
 
 // Self-hosted (next/font) Inter + JetBrains Mono, exposed as the CSS variables
 // tokens.css (--sl-font-sans / --sl-font-mono) references. display:swap.
