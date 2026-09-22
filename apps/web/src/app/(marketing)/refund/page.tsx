@@ -6,7 +6,6 @@
 // dispute handling (POST /internal/dodo/reversal) exactly — nothing here is
 // aspirational or invented.
 import Link from "next/link";
-import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export const metadata = {
   title: "Refund & Cancellation Policy",
@@ -116,8 +115,6 @@ export default function RefundPage() {
           </p>
         </section>
       </div>
-
-      <LegalFooterLinks />
     </div>
   );
 }

@@ -4,21 +4,31 @@
 # metered spend -> refund -> clawback/hold. Companion to m2-gate.sh (x402).
 #
 # Usage:
-#   API_KEY=sk_dodo_... SATELINK_ACCOUNT_ID=sk_dodo_... scripts/ops/m5-gate.sh          # purchase mode (default)
-#   API_KEY=sk_dodo_... SATELINK_ACCOUNT_ID=sk_dodo_... scripts/ops/m5-gate.sh refund   # refund mode
+#   API_KEY=sk_dodo_... scripts/ops/m5-gate.sh          # purchase mode (default)
+#   API_KEY=sk_dodo_... scripts/ops/m5-gate.sh refund   # refund mode
 #
-# In this codebase API_KEY and SATELINK_ACCOUNT_ID are normally the SAME
-# string (the api_key IS metadata.satelink_account_id — see
-# apps/web/src/app/api/dodo-checkout/route.ts). Two separate env vars are
-# still required, never collapsed to one, so the DB-lookup identity
-# (SATELINK_ACCOUNT_ID) and the HTTP auth credential (API_KEY) stay
-# independently swappable if that ever changes.
+# API_KEY is the only credential the founder ever actually has — it's the
+# one thing /intelligence/success shows as "Your API key" (see
+# apps/web/src/app/(marketing)/intelligence/success/page.tsx: the page reads
+# a one-time `?claim=` token from the checkout redirect, exchanges it
+# server-side via /api/dodo-claim, and displays the api_key that comes back
+# — the raw key itself never appears in a URL). There is no separate
+# "account id" anywhere in the product UI.
+#
+# Internally this script also does DB-lookups by SATELINK_ACCOUNT_ID
+# (api_credits.api_key, revenue_events_v2.client_id, ...). Confirmed against
+# apps/web/src/app/api/dodo-checkout/route.ts:137 — the checkout route sets
+# `metadata: { satelink_account_id: apiKey }`, i.e. the DB identity IS the
+# api_key, not a distinct value. So SATELINK_ACCOUNT_ID is derived from
+# API_KEY below rather than asked for separately; if that 1:1 relationship
+# ever changes, reintroduce a distinct input here rather than assuming it
+# silently still holds.
 #
 # All DB reads go through the sanctioned runner (scripts/ops/sat-db.ts via
 # `railway run --service Postgres-iQeW`) — SELECT only, nothing here ever
 # writes to prod. Every DB call and every HTTP response is quoted with its
-# ACTUAL value in the PASS/FAIL line; API_KEY/SATELINK_ACCOUNT_ID themselves
-# are never echoed in full, only masked (first 10 + last 4 chars).
+# ACTUAL value in the PASS/FAIL line; API_KEY is never echoed in full, only
+# masked (first 10 + last 4 chars).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -30,10 +40,10 @@ FAIL=0
 SKIP=0
 
 : "${API_KEY:?set API_KEY as an env var (never a CLI arg)}"
-: "${SATELINK_ACCOUNT_ID:?set SATELINK_ACCOUNT_ID as an env var (never a CLI arg)}"
+SATELINK_ACCOUNT_ID="$API_KEY"
 
 mask() { local s="$1"; [[ ${#s} -le 14 ]] && { echo "***"; return; }; echo "${s:0:10}...${s: -4}"; }
-echo "API_KEY=$(mask "$API_KEY")  SATELINK_ACCOUNT_ID=$(mask "$SATELINK_ACCOUNT_ID")  mode=$MODE"
+echo "API_KEY=$(mask "$API_KEY")  mode=$MODE"
 echo
 
 q() { railway run --service Postgres-iQeW npx tsx scripts/ops/sat-db.ts "$1" 2>/dev/null; }

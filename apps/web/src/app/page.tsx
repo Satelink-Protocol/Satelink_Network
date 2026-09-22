@@ -682,6 +682,13 @@ export default function Home() {
                 infrastructure it runs on. Transparent pricing, on-chain
                 settlement.
               </p>
+              <p className="section-subtitle" style={{ marginTop: 8, fontSize: 13 }}>
+                Card/UPI checkout (Dodo Payments) is for Trading Intelligence
+                only — a SaaS analytics subscription, not investment advice,
+                no custody of funds. RPC Gateway access and any
+                crypto-denominated payment (x402, on-chain USDT) are a
+                separate machine rail that Dodo does not process.
+              </p>
             </div>
 
             <div className="products-grid">
@@ -692,7 +699,8 @@ export default function Home() {
                   Funding-rate heatmaps, open-interest shifts, liquidation
                   clusters, and market microstructure — derived statistics
                   computed from public market data. We never redistribute a
-                  raw exchange feed.
+                  raw exchange feed. Not investment advice; no custody of
+                  funds. Card/UPI via Dodo Payments.
                 </p>
                 <a href="/intelligence" className="product-link">
                   View Intelligence
@@ -707,7 +715,9 @@ export default function Home() {
                   Multi-chain RPC across Polygon, Ethereum, Base, and Arbitrum
                   with provider health monitoring, circuit breakers, and
                   automatic failover — the infrastructure the intelligence
-                  product runs on, also sold directly.
+                  product runs on, also sold directly. A separate
+                  machine-to-machine product paid via x402 or on-chain USDT —
+                  not billed through Dodo.
                 </p>
                 <a href="/docs/api-reference" className="product-link">
                   API Reference

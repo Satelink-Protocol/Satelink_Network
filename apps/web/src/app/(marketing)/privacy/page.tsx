@@ -5,7 +5,6 @@
 // instead of unverified @satelink.network addresses. public/privacy.html
 // itself is removed; /privacy.html redirects here (next.config.ts).
 import Link from "next/link";
-import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -165,8 +164,6 @@ export default function PrivacyPage() {
           </p>
         </section>
       </div>
-
-      <LegalFooterLinks />
     </div>
   );
 }

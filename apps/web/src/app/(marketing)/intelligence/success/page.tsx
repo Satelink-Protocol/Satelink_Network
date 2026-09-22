@@ -163,6 +163,13 @@ function SuccessContent() {
             </a>{" "}
             for the full reference.
           </p>
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Not investment advice — /v1/intelligence/* returns derived
+            statistics computed from public market data, not trade
+            recommendations. Satelink never takes custody of any money or
+            crypto asset.
+          </p>
         </>
       )}
     </div>
