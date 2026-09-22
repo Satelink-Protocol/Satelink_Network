@@ -84,6 +84,31 @@ E2E 99/99.
 - **Motion in production:** the product tiles use Stagger/StaggerItem and the plans block a
   ScrollReveal; the hero uses MachinePaysDemo. Above-the-fold hero copy is not motion-wrapped (LCP).
 
+## P3 — Pricing (page + plan model, Track W UI)
+- **`/pricing` rebuilt to the claude.com/pricing pattern:** hero → audience toggle
+  (Individuals · Agents & API · Enterprise·later, `PricingAudienceTabs`) → [Individuals:
+  ExplorePlans + PAYG packs + PlanCalculator] [Agents & API: rate card + x402, `id="agents"`]
+  [Enterprise: "Coming later — contact sales"] → "How payments work" (the P1 TwoRailsDiagram) →
+  Compare features (`CompareMatrix`, `#compare`) → balance/refunds (`#platform`, kept for the
+  /platform/pricing redirect) → grouped FAQ (+ FAQPage JSON-LD).
+- **All figures are config-driven** in `lib/plans.ts` (`PLANS`, `CREDIT_PACKS`, `AGENT_RATE_CARD`,
+  `COMPARE_GROUPS`, `FIXED_MONTHLY_INFRA_USD`); no numbers in JSX. Economics recorded in
+  `docs/web/PRICING_MODEL.md` (Dodo fee schedule, $80 fixed-infra constant, RPC upstream-cost
+  gating, per-plan margin check).
+- **No dead buy buttons.** With `PLANS_ENABLED` off, Pro/Max cards and the bonus packs render
+  "notify me" / "Available soon" → `/contact-sales`; only Free, the live $9.99 Starter Pack, and
+  the Agents rate card are actionable. The `#agents` hash activates the Agents tab on load.
+- **PlanCalculator** maps calls/month → cheapest of Free / pay-as-you-go / Pro / Max from the
+  config (PAYG at the $0.01 list rate; note that bonus packs lower the effective rate).
+- **Plan-parity test** (`apps/web/test/plan-parity.test.ts`) locks the config to the live catalog
+  (rate-card RPC = FLAT_RATE, TI = catalog price; overage < list; Max < Pro; non-live packs ≥ $10;
+  compare rows have one value per plan). Full page↔backend parity (`GET /v1/plans`) is deferred to
+  **Track B (P3.B)** on `feat/api-auth-and-plans`.
+- **P3.B backend is NOT in this PR** — plans table/seed, `GET /v1/plans`, Dodo subscription
+  products + webhooks, entitlement buckets (Dodo bucket = Trading Intelligence only), monthly
+  reset, and bonus-pack mapping are additive backend work behind `PLANS_ENABLED`, delivered on the
+  separate `feat/api-auth-and-plans` branch per §9.
+
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.

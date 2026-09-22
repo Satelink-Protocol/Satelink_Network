@@ -100,6 +100,59 @@ export const AGENT_RATE_CARD: RateCardRow[] = [
   { product: "Polygon RPC", unit: "call", price: 0.00003, rail: "credits or x402 / USDT" },
 ];
 
+/** Fixed monthly infrastructure assumption (USD) — the single constant the
+ *  founder edits. See docs/web/PRICING_MODEL.md. */
+export const FIXED_MONTHLY_INFRA_USD = 80;
+
+/** Full feature-comparison matrix (§4.2), grouped (§4.6). Values are per plan
+ *  in PLANS order [Free, Pro, Max]. Config only — no numbers in JSX. */
+export type CompareValue = string | boolean;
+export interface CompareRow {
+  label: string;
+  values: [CompareValue, CompareValue, CompareValue];
+}
+export interface CompareGroup {
+  group: string;
+  rows: CompareRow[];
+}
+export const COMPARE_GROUPS: CompareGroup[] = [
+  {
+    group: "Usage",
+    rows: [
+      { label: "Included Trading-Intelligence calls / month", values: ["300", "2,500", "12,000"] },
+      { label: "Effective per-call", values: ["—", "~$0.0076", "~$0.0066"] },
+      { label: "Overage", values: ["Upgrade or top up", "$0.008 / call", "$0.007 / call"] },
+      { label: "Catalog + discovery", values: [true, true, true] },
+      { label: "Metrics", values: ["All 4", "All 4", "All 4"] },
+    ],
+  },
+  {
+    group: "API & limits",
+    rows: [
+      { label: "Rate limit", values: ["Low", "Standard", "High"] },
+      { label: "API keys", values: ["1", "5", "20"] },
+    ],
+  },
+  {
+    group: "Payments",
+    rows: [{ label: "Pay-as-you-go packs", values: [true, true, true] }],
+  },
+  {
+    group: "Support",
+    rows: [
+      { label: "Usage alerts & spend caps", values: [false, true, true] },
+      { label: "Priority email support", values: [false, false, true] },
+    ],
+  },
+  {
+    group: "Security",
+    rows: [
+      { label: "TLS in transit", values: [true, true, true] },
+      { label: "Server-side hashed API keys", values: [true, true, true] },
+    ],
+  },
+];
+
 /** Whether recurring plans are live (backend PLANS_ENABLED). Build-time inlined;
  *  unset today → false, so Pro/Max render "Available soon — notify me". */
 export function plansEnabled(): boolean {
