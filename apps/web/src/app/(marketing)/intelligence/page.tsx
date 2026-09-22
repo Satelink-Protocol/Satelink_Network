@@ -20,9 +20,15 @@
 // account can actually CALL what it's billed for. The curl example below
 // hits the real, live discovery route (GET /v1/intelligence, no auth, no
 // cost), verified against the route's own free-discovery handler.
+//
+// DODO COMPLIANCE (2026-09-22): this is the primary page Dodo reviews for
+// the product it's underwriting — a SaaS market-analytics API, derived
+// statistics only, not investment advice, no custody. The Free/Starter/Pro
+// tiers are the Dodo-billed SaaS tiers; the x402 tier is a separate
+// crypto-native machine rail Dodo never processes, and is labeled as such
+// below rather than presented as an equivalent Dodo payment option.
 
 import Link from "next/link";
-import { LegalFooterLinks } from "@/components/legal-footer-links";
 import { getCreditPacks } from "@/lib/dodo/credit-packs";
 import { CreditPackCard } from "./CreditPackCard";
 
@@ -66,7 +72,8 @@ const TIERS: Tier[] = [
     name: "x402 (pay-per-call)",
     price: "$0.01",
     period: "/call",
-    blurb: "No account, no subscription — machine-to-machine, USDC on Base.",
+    blurb:
+      "No account, no subscription — machine-to-machine, USDC on Base. A separate crypto rail; not processed by Dodo.",
     features: ["Zero-commitment", "Agent-native (HTTP 402)", "No human checkout"],
     cta: { label: "See x402 docs", href: "https://docs.satelink.network" },
   },
@@ -138,10 +145,16 @@ export default function IntelligencePage() {
         Funding rate heatmaps, open interest shifts, liquidation clusters, and
         market microstructure — derived analytics computed from public market
         data, not raw exchange feeds. We never redistribute a raw feed; every
-        response is a statistic we compute. Pay once for a USD credit pack,
-        or pay per call as an agent with x402
-        {SUBSCRIPTIONS_ENABLED ? ", or subscribe monthly" : ""}. Same
-        underlying account either way.
+        response is a statistic we compute. Pay once for a USD credit pack
+        via card or UPI (Dodo Payments), or pay per call as an agent with
+        x402 — a separate crypto rail Dodo does not process
+        {SUBSCRIPTIONS_ENABLED ? ", or subscribe monthly" : ""}.
+      </p>
+      <p className="mt-3 max-w-2xl text-xs text-muted-foreground">
+        Not investment advice. Satelink computes and sells statistics derived
+        from public market data — it does not recommend trades, manage
+        funds, or provide financial advice, and never takes custody of any
+        money or crypto asset.
       </p>
 
       <div className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -194,8 +207,6 @@ export default function IntelligencePage() {
           .
         </p>
       </div>
-
-      <LegalFooterLinks />
     </div>
   );
 }

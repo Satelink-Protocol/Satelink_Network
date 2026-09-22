@@ -8,7 +8,6 @@
 // public/terms.html itself is removed; /terms.html redirects here
 // (next.config.ts) so the old URL still resolves.
 import Link from "next/link";
-import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export const metadata = {
   title: "Terms of Service",
@@ -197,8 +196,6 @@ export default function TermsPage() {
           </p>
         </section>
       </div>
-
-      <LegalFooterLinks />
     </div>
   );
 }

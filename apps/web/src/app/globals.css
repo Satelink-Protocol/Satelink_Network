@@ -10,6 +10,21 @@
    approved apps/web/public/index.html
    ============================================================ */
 
+/* Everything below (through the closing `@layer components` brace
+   near the shadcn section) is wrapped in Tailwind's own cascade
+   layers. Tailwind v4 puts its own preflight/utilities in
+   `@layer base`/`@layer components`/`@layer utilities`; CSS Cascade
+   Layers give UNLAYERED rules top priority regardless of specificity
+   or source order. This block used to be unlayered, so the plain
+   `*, *::before, *::after { margin: 0; padding: 0 }` reset and the
+   `a { color: inherit; text-decoration: none }` rule below silently
+   beat every Tailwind spacing/color utility (mx-auto, px-*, py-*,
+   underline, text-foreground, ...) on any page that relied on bare
+   Tailwind classes instead of the hand-rolled .header/.hero/etc
+   classes — the root cause of "unstyled" pages like /contact,
+   /pricing, /intelligence/success, /login (2026-09-22 audit). */
+@layer base {
+
 :root {
   /* Satelink const C Unified Palette */
   --primary: #5EEAD4;
@@ -42,6 +57,32 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   --header-height: 64px;
+
+  /* Bare shadcn/ui token names (--background, --foreground, ...) that
+     Tailwind's `bg-*`/`text-*` utilities compile to, mapped onto the
+     Satelink palette above. Previously these were defined ONLY inside
+     the `.theme-shadcn`/`.satelink-os` scope (see bottom of this
+     file), so any page using shadcn-style Tailwind classes without
+     that wrapper (e.g. /contact, /pricing, /intelligence, /login) got
+     `var(--background)` etc. with nothing to resolve to. Declaring
+     them here gives every page a correct default theme; the
+     `.theme-shadcn`/`.satelink-os` scope still overrides them locally
+     for the dashboard's dedicated slate palette. */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--bg-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary-foreground: var(--bg-base);
+  --secondary: var(--bg-muted);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-muted);
+  --muted-foreground: var(--text-secondary);
+  --accent-foreground: var(--bg-base);
+  --destructive: var(--error);
+  --input: var(--border);
+  --ring: var(--accent);
 }
 
 [data-theme="light"] {
@@ -76,6 +117,15 @@ body {
 ::selection { background: rgba(92, 184, 154, 0.25); }
 
 a { color: inherit; text-decoration: none; }
+
+} /* end @layer base */
+
+/* Named component classes below are lower-priority than Tailwind's
+   `@layer utilities` (so a page can still override them with a plain
+   Tailwind class) but higher than `@layer base` above (so they keep
+   beating the reset, exactly as before this file used cascade
+   layers). */
+@layer components {
 
 .container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
@@ -1416,6 +1466,8 @@ input[type="range"]::-webkit-slider-thumb {
 .os-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
 .os-dot.ok { background: var(--success); }
 .os-dot.bad { background: var(--error); }
+
+} /* end @layer components */
 
 /* ============================================================
    shadcn/ui theme — SCOPED to `.theme-shadcn`.

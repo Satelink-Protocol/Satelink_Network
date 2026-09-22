@@ -3,7 +3,6 @@
 // New route — no dedicated contact page existed (only a footer mailto:).
 // Support email, registered address, and response-time commitment are
 // founder-provided facts (2026-09-18).
-import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export const metadata = {
   title: "Contact",
@@ -55,8 +54,6 @@ export default function ContactPage() {
         </a>
         .
       </p>
-
-      <LegalFooterLinks />
     </div>
   );
 }
