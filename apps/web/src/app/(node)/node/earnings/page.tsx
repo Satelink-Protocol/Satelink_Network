@@ -49,7 +49,7 @@ export default function NodeEarningsPage() {
     setClaiming(epochId);
     try {
       const ethers = await import('ethers');
-      const provider = new ethers.providers.Web3Provider(eth);
+      const provider = new ethers.BrowserProvider(eth);
       const signer = await provider.getSigner();
       const wallet = await signer.getAddress();
       const message = `CLAIM_REWARDS:${wallet.toLowerCase()}`;
