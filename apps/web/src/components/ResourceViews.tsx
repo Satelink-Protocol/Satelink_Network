@@ -5,6 +5,8 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ArticleTemplate, type Block } from "@satelink/web-ui";
+import { articleLd, breadcrumbLd, jsonLdScript } from "@satelink/seo";
+import { SITES } from "@satelink/content";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card, CardTitle } from "@/components/ui/Card";
 import type { ResourcePost, ResourceSection } from "@/lib/resources";
@@ -53,7 +55,18 @@ export function ArticleView({ post, basePath }: { post: ResourcePost; basePath: 
   if (post.links?.length) {
     blocks.push({ blockType: "relatedContent", heading: "Related", items: post.links.map((l) => ({ label: l.label, href: l.href })) });
   }
+  const url = `${SITES.satelink.origin}${basePath}/${post.slug}`;
+  const ldType = post.section === "news" ? "NewsArticle" : post.section === "changelog" ? "TechArticle" : "Article";
+  const ld = [
+    articleLd({ headline: post.title, url, datePublished: post.date, author: post.author, type: ldType }),
+    breadcrumbLd([
+      { name: SECTION_LABEL[post.section], url: `${SITES.satelink.origin}${basePath}` },
+      { name: post.title, url },
+    ]),
+  ];
   return (
+    <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(ld) }} />
     <ArticleTemplate
       breadcrumbs={[
         { name: SECTION_LABEL[post.section], href: basePath },
@@ -66,6 +79,7 @@ export function ArticleView({ post, basePath }: { post: ResourcePost; basePath: 
       publishedAt={post.date}
       blocks={blocks}
     />
+    </>
   );
 }
 

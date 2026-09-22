@@ -67,6 +67,13 @@ const OK_ROUTES = [
   "/checkout?plan=starter",
   "/checkout/cancel",
   "/styleguide",
+  // Machine-readable endpoints (§12).
+  "/pricing.json",
+  "/products/trading-intelligence.json",
+  "/products/rpc.json",
+  "/.well-known/satelink.json",
+  "/llms.txt",
+  "/llms-full.txt",
 ];
 
 for (const path of OK_ROUTES) {
@@ -121,4 +128,26 @@ test("interactive selector on the overview resolves a product + live price", asy
   await page.goto("/product/overview");
   // Default selection resolves to a product with a request and a docs link.
   await expect(page.getByRole("heading", { name: "Trading Intelligence" })).toBeVisible();
+});
+
+test("/products/{slug}.json returns the machine-readable product contract", async ({ request }) => {
+  const res = await request.get("/products/trading-intelligence.json");
+  expect(res.status()).toBe(200);
+  const json = await res.json();
+  expect(json.product).toBe("trading-intelligence");
+  expect(Array.isArray(json.pricing)).toBe(true);
+  expect(json.auth).toContain("x402");
+});
+
+test("/pricing.json lists every product with prices", async ({ request }) => {
+  const res = await request.get("/pricing.json");
+  expect(res.status()).toBe(200);
+  const json = await res.json();
+  expect(json.products.length).toBeGreaterThanOrEqual(5);
+});
+
+test("/llms.txt is generated and mentions machine commerce", async ({ request }) => {
+  const res = await request.get("/llms.txt");
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain("Machine Commerce");
 });

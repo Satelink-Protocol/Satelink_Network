@@ -7,6 +7,8 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Breadcrumbs } from "@satelink/web-ui";
+import { productLd, breadcrumbLd, faqLd, jsonLdScript } from "@satelink/seo";
+import { SITES } from "@satelink/content";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -29,9 +31,22 @@ export function ProductPageView({
   primaryCta?: { label: string; href: string };
 }) {
   const price = priceLine ?? product.priceLine;
+  const url = `${SITES.satelink.origin}${product.href}`;
+  const faqItems = product.faq.flatMap((g) => g.items.map((it) => ({ question: it.q, answer: it.a })));
+  const ld = [
+    productLd({ name: product.name, description: product.definition, url }),
+    breadcrumbLd([
+      { name: "Products", url: `${SITES.satelink.origin}/product/overview` },
+      { name: product.name, url },
+    ]),
+    ...(faqItems.length ? [faqLd(faqItems)] : []),
+  ];
 
   return (
     <>
+      {/* Machine-readable alternate + JSON-LD (§12). Next hoists these to <head>. */}
+      <link rel="alternate" type="application/json" href={`/products/${product.slug}.json`} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(ld) }} />
       <Breadcrumbs items={[{ name: "Products", href: "/product/overview" }, { name: product.name, href: product.href }]} />
 
       {/* Hero */}
