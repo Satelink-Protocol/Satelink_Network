@@ -1,106 +1,92 @@
-// apps/web/src/components/site/SiteHeader.tsx
-//
-// Shared header for the standalone marketing/product/legal pages under
-// app/(marketing)/ — extracted from the homepage's own <header> (app/page.tsx)
-// so every public page uses the same nav, logo, and theme toggle instead of
-// each shipping its own ad-hoc chrome (or none at all).
 "use client";
-
+// Shared site header — machine-commerce nav (§4). Consumes Satelink Signal
+// tokens. Primary CTA drives the styled checkout (/checkout?plan=starter).
 import { useState } from "react";
+import Link from "next/link";
+import { Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/intelligence", label: "Intelligence" },
+  { href: "/corporate", label: "Corporate" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/node", label: "Node Operators" },
-  { href: "/docs", label: "Docs" },
-  { href: "/status", label: "Status" },
+  { href: "/machine", label: "For Agents" },
+  { href: "https://docs.satelink.network", label: "Docs" },
 ];
 
-function toggleTheme() {
-  const next =
-    document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  try {
-    localStorage.setItem("satelink-theme", next);
-  } catch {
-    // private browsing / blocked storage — theme just won't persist
-  }
-}
-
 export function SiteHeader() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
-    <header className="header">
-      <div className="header-inner">
-        <a href="/" className="logo">
-          <div className="logo-icon">S</div>
-          <span>Satelink</span>
-        </a>
+    <header className="fixed inset-x-0 top-0 z-50 h-[var(--header-height)] border-b border-sl-border bg-[color-mix(in_srgb,var(--sl-bg)_82%,transparent)] backdrop-blur-md backdrop-saturate-150">
+      <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6">
+        <Link href="/" className="flex items-center gap-2.5 font-bold text-sl-text">
+          <span
+            aria-hidden
+            className="flex size-8 items-center justify-center rounded-[var(--sl-radius-sm)] bg-sl-accent font-sl-mono text-base text-sl-accent-ink"
+          >
+            S
+          </span>
+          <span className="text-[17px]">Satelink</span>
+        </Link>
 
-        <nav className="nav">
-          <ul className="nav-links">
-            {NAV_LINKS.map((l) => (
-              <li key={l.href}>
-                <a href={l.href} className="nav-link">
-                  {l.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+        <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary">
+          {NAV_LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="text-sm font-medium text-sl-text-muted transition-colors hover:text-sl-text"
+            >
+              {l.label}
+            </Link>
+          ))}
         </nav>
 
-        <div className="nav-actions">
-          <button className="theme-btn" onClick={toggleTheme} aria-label="Toggle theme">
-            <svg className="sun" viewBox="0 0 24 24" fill="none" strokeWidth="2">
-              <circle cx="12" cy="12" r="5" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
-            <svg className="moon" viewBox="0 0 24 24" fill="none" strokeWidth="2">
-              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-            </svg>
-          </button>
-          <a href="/satelink/os/mission-control" className="btn btn-ghost">
-            Login
-          </a>
-          <a href="/satelink/os/keys" className="btn btn-primary">
-            Get API Key
-          </a>
+        <div className="hidden items-center gap-2.5 lg:flex">
+          <ThemeToggle />
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/satelink/os/mission-control">Log in</Link>
+          </Button>
+          <Button asChild variant="primary" size="sm">
+            <Link href="/checkout?plan=starter">Get started</Link>
+          </Button>
         </div>
 
         <button
-          className="mobile-menu-btn"
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          aria-controls="mobileNav"
-          onClick={() => setMenuOpen((o) => !o)}
+          className="inline-flex size-10 items-center justify-center rounded-[var(--sl-radius-sm)] border border-sl-border text-sl-text-muted lg:hidden"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
         >
-          {menuOpen ? (
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
-              <path d="M3 6h18M3 12h18M3 18h18" />
-            </svg>
-          )}
+          {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
       </div>
 
-      {menuOpen && (
-        <nav id="mobileNav" className="mobile-nav" aria-label="Mobile">
-          {[...NAV_LINKS, { href: "/satelink/os/mission-control", label: "Login" }, { href: "/satelink/os/keys", label: "Get API Key" }].map(
-            (l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                className="mobile-nav-link"
-                onClick={() => setMenuOpen(false)}
-              >
-                {l.label}
-              </a>
-            )
-          )}
+      {open && (
+        <nav
+          className="flex flex-col gap-1 border-b border-sl-border bg-sl-bg px-4 py-3 lg:hidden"
+          aria-label="Mobile"
+        >
+          {NAV_LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="min-h-11 border-b border-sl-border py-2.5 text-base text-sl-text last:border-0"
+              onClick={() => setOpen(false)}
+            >
+              {l.label}
+            </Link>
+          ))}
+          <div className="mt-3 flex items-center gap-2.5">
+            <ThemeToggle />
+            <Button asChild variant="secondary" size="sm" className="flex-1">
+              <Link href="/satelink/os/mission-control">Log in</Link>
+            </Button>
+            <Button asChild variant="primary" size="sm" className="flex-1">
+              <Link href="/checkout?plan=starter">Get started</Link>
+            </Button>
+          </div>
         </nav>
       )}
     </header>

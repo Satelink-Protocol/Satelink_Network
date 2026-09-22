@@ -1,132 +1,134 @@
-// apps/web/src/components/site/SiteFooter.tsx
-//
-// Shared footer for the standalone marketing/product/legal pages under
-// app/(marketing)/ — extracted from the homepage's own <footer>
-// (app/page.tsx) so Terms/Privacy/Refund/Contact and the rest of the site
-// map are one click away from any public page, not just the homepage.
+// Shared site footer. Legal pages (Terms, Privacy, Refund, Contact) plus the
+// legal entity name + registered address are reachable from every page (§2.8).
+// The crypto rail (x402/USDT/RPC) is kept visually separate from the Dodo
+// product surfaces (§2.2).
+import Link from "next/link";
+import { Github, Mail } from "lucide-react";
+
+const COLUMNS: { heading: string; links: { href: string; label: string; external?: boolean }[] }[] = [
+  {
+    heading: "Products",
+    links: [
+      { href: "/intelligence", label: "Trading Intelligence" },
+      { href: "/corporate", label: "Corporate Services" },
+      { href: "/pricing", label: "Pricing" },
+    ],
+  },
+  {
+    heading: "Machine rail",
+    links: [
+      { href: "/machine", label: "For Agents (x402)" },
+      { href: "/network", label: "Network" },
+      { href: "/rpc", label: "RPC Gateway" },
+      {
+        href: "https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF",
+        label: "Vault on Polygonscan",
+        external: true,
+      },
+    ],
+  },
+  {
+    heading: "Developers",
+    links: [
+      { href: "https://docs.satelink.network", label: "Documentation", external: true },
+      { href: "/status", label: "Status" },
+      { href: "https://github.com/Satelink-Protocol/x402-kit", label: "x402-kit (GitHub)", external: true },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { href: "/terms", label: "Terms of Service" },
+      { href: "/privacy", label: "Privacy Policy" },
+      { href: "/refund", label: "Refund & Cancellation" },
+      { href: "/contact", label: "Contact" },
+    ],
+  },
+];
+
 export function SiteFooter() {
   return (
-    <footer className="footer">
-      <div className="container">
-        <div className="footer-grid">
-          <div className="footer-brand">
-            <div className="footer-logo">
-              <div className="logo-icon">S</div>
-              <span>Satelink</span>
-            </div>
-            <p className="footer-tagline">
-              Decentralized infrastructure for the next generation of
-              applications. Real workloads. Real revenue.
+    <footer className="border-t border-sl-border bg-sl-bg">
+      <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <div className="grid gap-10 md:grid-cols-[1.6fr_repeat(4,1fr)]">
+          <div className="max-w-xs">
+            <Link href="/" className="flex items-center gap-2.5 font-bold text-sl-text">
+              <span
+                aria-hidden
+                className="flex size-8 items-center justify-center rounded-[var(--sl-radius-sm)] bg-sl-accent font-sl-mono text-base text-sl-accent-ink"
+              >
+                S
+              </span>
+              <span className="text-[17px]">Satelink</span>
+            </Link>
+            <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
+              Machine commerce infrastructure — derived market intelligence and metered data services
+              that software agents and companies can buy, call, and settle automatically.
             </p>
-            <div className="footer-social">
+            <div className="mt-5 flex gap-2.5">
               <a
                 href="https://github.com/Satelink-Protocol/x402-kit"
-                className="social-icon"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="GitHub"
+                className="inline-flex size-9 items-center justify-center rounded-[var(--sl-radius-sm)] border border-sl-border text-sl-text-muted transition-colors hover:border-sl-border-strong hover:text-sl-text"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                </svg>
+                <Github className="size-[18px]" />
               </a>
-              <a href="mailto:satelinknetwork@gmail.com" className="social-icon" aria-label="Email">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <path d="M22 7l-10 6L2 7" />
-                </svg>
+              <a
+                href="mailto:satelinknetwork@gmail.com"
+                aria-label="Email"
+                className="inline-flex size-9 items-center justify-center rounded-[var(--sl-radius-sm)] border border-sl-border text-sl-text-muted transition-colors hover:border-sl-border-strong hover:text-sl-text"
+              >
+                <Mail className="size-[18px]" />
               </a>
             </div>
           </div>
 
-          <div className="footer-column">
-            <h3 className="footer-heading">Product</h3>
-            <ul className="footer-links">
-              <li>
-                <a href="/intelligence">Trading Intelligence</a>
-              </li>
-              <li>
-                <a href="/pricing">Pricing</a>
-              </li>
-              <li>
-                <a href="/status">Status Page</a>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-column">
-            <h3 className="footer-heading">Developers</h3>
-            <ul className="footer-links">
-              <li>
-                <a href="/docs">Documentation</a>
-              </li>
-              <li>
-                <a href="/docs/api-reference">API Reference</a>
-              </li>
-              <li>
-                <a href="/docs/quick-start">Quick Start</a>
-              </li>
-              <li>
-                <a href="https://github.com/Satelink-Protocol/x402-kit">GitHub (x402-kit)</a>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-column">
-            <h3 className="footer-heading">Network</h3>
-            <ul className="footer-links">
-              <li>
-                <a href="/node">Node Operators</a>
-              </li>
-              <li>
-                <a href="/machine">Machine Economy</a>
-              </li>
-              <li>
-                <a href="/docs/revenue-model">Revenue Model</a>
-              </li>
-              <li>
-                <a href="https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF">
-                  Vault on Polygonscan
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-column">
-            <h3 className="footer-heading">Resources</h3>
-            <ul className="footer-links">
-              <li>
-                <a href="/docs/faq">FAQ</a>
-              </li>
-              <li>
-                <a href="/docs/changelog">Changelog</a>
-              </li>
-              <li>
-                <a href="/docs/security">Security</a>
-              </li>
-              <li>
-                <a href="/terms">Terms of Service</a>
-              </li>
-              <li>
-                <a href="/privacy">Privacy Policy</a>
-              </li>
-              <li>
-                <a href="/refund">Refund &amp; Cancellation</a>
-              </li>
-              <li>
-                <a href="/contact">Contact</a>
-              </li>
-            </ul>
-          </div>
+          {COLUMNS.map((col) => (
+            <div key={col.heading}>
+              <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.08em] text-sl-text-subtle">
+                {col.heading}
+              </h3>
+              <ul className="space-y-3">
+                {col.links.map((l) => (
+                  <li key={l.href + l.label}>
+                    {l.external ? (
+                      <a
+                        href={l.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-sl-text-muted transition-colors hover:text-sl-accent"
+                      >
+                        {l.label}
+                      </a>
+                    ) : (
+                      <Link href={l.href} className="text-sm text-sl-text-muted transition-colors hover:text-sl-accent">
+                        {l.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        <div className="footer-bottom">
-          <p className="footer-copyright">&copy; 2026 Satelink Network. All rights reserved.</p>
-          <div className="footer-legal">
-            <a href="/privacy">Privacy Policy</a>
-            <a href="/terms">Terms of Service</a>
-            <a href="/refund">Refund &amp; Cancellation</a>
-            <a href="/contact">Contact</a>
+        <div className="mt-12 flex flex-col gap-3 border-t border-sl-border pt-6 text-sm text-sl-text-muted sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p>&copy; 2026 Jakuraa Commercial Pvt Ltd. All rights reserved.</p>
+            <p className="mt-1 text-sl-text-subtle">
+              38/39 Malaviya Street, Ram Nagar, Coimbatore 641009, Tamil Nadu, India ·{" "}
+              <a href="mailto:satelinknetwork@gmail.com" className="hover:text-sl-accent">
+                satelinknetwork@gmail.com
+              </a>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link href="/terms" className="hover:text-sl-accent">Terms</Link>
+            <Link href="/privacy" className="hover:text-sl-accent">Privacy</Link>
+            <Link href="/refund" className="hover:text-sl-accent">Refund &amp; Cancellation</Link>
+            <Link href="/contact" className="hover:text-sl-accent">Contact</Link>
           </div>
         </div>
       </div>

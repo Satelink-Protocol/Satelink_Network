@@ -46,3 +46,23 @@ export function getCreditPacks(): CreditPack[] {
 export function findCreditPack(productId: string): CreditPack | undefined {
   return getCreditPacks().find((p) => p.productId === productId);
 }
+
+// Map a human `plan` slug from /checkout?plan=<slug> to a configured pack.
+// "starter" → the $9.99 pack (matched by label containing "starter", else the
+// $9.99 value, else the first configured pack). Returns undefined only when no
+// packs are configured at all (env unset) — the checkout page renders an
+// "unavailable" state in that case rather than guessing a price.
+export function findPackByPlan(plan: string): CreditPack | undefined {
+  const packs = getCreditPacks();
+  if (!packs.length) return undefined;
+  const p = (plan || "").trim().toLowerCase();
+  if (p === "starter" || p === "") {
+    return (
+      packs.find((x) => x.label.toLowerCase().includes("starter")) ??
+      packs.find((x) => x.usdValue === 9.99) ??
+      packs[0]
+    );
+  }
+  // Other plans: match by label slug.
+  return packs.find((x) => x.label.toLowerCase().includes(p)) ?? undefined;
+}

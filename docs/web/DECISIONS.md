@@ -17,3 +17,9 @@ Every judgment call made without asking, per the reposition mandate (§0). Newes
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.
+
+## Checkout (Phase 7)
+- **No analytics events added.** §8 says add `checkout_start`/`checkout_redirect`/etc "if an analytics lib already exists". None does in `apps/web` (no Segment/Plausible/GA). Per the same rule, nothing new added. `TODO(analytics)` if a lib is later adopted.
+- **Checkout-scoped CSP only.** A site-wide strict CSP would risk breaking Next's inline bootstrap + the pre-paint theme script + framer-motion. Added a CSP on `/checkout/:path*` allowing the Dodo origins; site-wide strict CSP deferred (`TODO(csp)`).
+- **`/checkout/success` forwards `?claim` to `/intelligence/success`** (the canonical #398 page) rather than duplicating the claim→key exchange, so #398 is not weakened.
+- **`/checkout` reuses `/api/dodo-checkout` verbatim** (email + productId). No new Dodo product/session shape.

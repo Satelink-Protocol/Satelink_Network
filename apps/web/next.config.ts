@@ -109,6 +109,29 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Methods', value: 'GET,POST,OPTIONS' },
         ],
       },
+      {
+        // Checkout flow: allow navigation/connections to the Dodo Payments
+        // checkout + API origins used by the existing integration. Kept
+        // permissive for scripts/styles (the app relies on Next's inline
+        // bootstrap + the pre-paint theme script) — a site-wide strict CSP is
+        // a separate follow-up (see docs/web/DECISIONS.md).
+        source: '/checkout/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://api.dodopayments.com https://test.dodopayments.com https://rpc.satelink.network https://api.satelink.network",
+              "form-action 'self' https://checkout.dodopayments.com https://test.checkout.dodopayments.com",
+              "frame-src https://checkout.dodopayments.com https://test.checkout.dodopayments.com",
+            ].join('; '),
+          },
+        ],
+      },
     ];
   },
 
