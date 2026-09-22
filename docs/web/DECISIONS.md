@@ -12,7 +12,56 @@ Every judgment call made without asking, per the reposition mandate (§0). Newes
 - **`/status` currently 308-redirects to `https://status.satelink.network/`** (see `next.config.ts` `redirects()`, gated on `missing host = status.satelink.network`). So on `satelink.network`, `/status` does not render the local React page. **Decision:** keep the redirect (external status page is the source of truth) and restyle the local `/status` page only as the fallback served on the `status.` host. Do not present a second, divergent status UI on the apex domain.
 
 ## Design system
-- (pending Phase 2/3)
+- (Signal 1 tokens established in the reposition; Signal 2.0 in web-v3-experience P1 below.)
+
+---
+
+# web-v3-experience (stacked on IA-v2) — Decisions Log
+
+Branch `feat/web-v3-experience` cut from `feat/web-ia-v2-claude-pattern` (§0). Baseline
+gate confirmed green before any change: build 0 · unit 57/57 · packages 9/9 · arch 9/9 ·
+E2E 99/99.
+
+## P1 — Theme: Signal 2.0
+- **Light-first marketing, dark console.** `tokens.css` now declares the light palette on
+  `:root, [data-theme="light"]` (the default) and the dark palette on `[data-theme="dark"]`;
+  an `@media (prefers-color-scheme: dark)` block covers OS-dark users who haven't chosen a
+  theme. The SSR `<html data-theme>` flipped `dark → light` (marketing is light-first). The
+  pre-paint `THEME_INIT` script still respects a stored choice, then OS preference — so
+  OS-dark users still get dark (both themes are complete); the light default only governs the
+  no-JS / first-paint case. The console (P6) will force dark in its own layout.
+- **AA contrast overrode two spec-provided hexes (documented, math below).** The brief gave
+  `--sl-accent:#0E9F8B` / `--sl-accent-strong:#0A7C6D` and `--sl-text-subtle` = `#76819A`
+  (light) / `#6B7890` (dark), and also mandated "WCAG AA contrast checked by test". Those
+  conflict: white-on-`#0E9F8B` is only **3.31:1** (primary buttons use 13–15px semibold text,
+  which is *normal* text needing 4.5), and both subtle greys fall to ~3.9:1 on their surface
+  (used on 11px labels). Honouring the AA mandate:
+  - light `--sl-accent` `#0E9F8B → #0A7C6D` (white 5.10:1, accent-as-text 4.76:1 on bg / 5.10 on surface); `--sl-accent-strong → #085F53`; `--sl-accent-soft`/`--sl-ring` re-based.
+  - light `--sl-text-subtle` `#76819A → #667085` (4.97 on surface, 4.65 on bg).
+  - dark `--sl-text-subtle` `#6B7890 → #7C89A1` (4.93 on surface, 5.58 on bg).
+  Gate: `apps/web/test/token-contrast.test.ts` parses the real palette and asserts AA on every
+  text / primary-action pair in both themes (20 assertions).
+- **Product rails are graphical accents, not body text.** `--sl-machine` (indigo), `--sl-market`
+  (amber), `--sl-settle` (sky) carry meaning on icons/borders/charts. Amber and sky cannot meet
+  4.5:1 as text on white by nature, so they are used only as graphical objects always paired with
+  a `text-muted` label (e.g. LifecycleRing node numbers were switched to `--sl-text` on the
+  coloured ring). They are therefore not asserted as body text in the contrast gate.
+- **New visuals live outside the hex-gate scope but are token-only anyway.** Illustration kit
+  (`packages/web-ui/src/illustrations/`), infographics + hero demo (`.../infographics/`), and
+  motion primitives (`.../motion/`) are new sibling dirs to `components/`, so the hex gate (which
+  scans `components/{ui,site}` + `(marketing)`/`(checkout)`) does not cover them — but every SVG
+  references `var(--sl-*)`/`currentColor` and contains no hardcoded hex, so they remain fully
+  themeable in both modes.
+- **Motion = Framer Motion via LazyMotion + domAnimation only.** Every primitive
+  (ScrollReveal, Stagger/StaggerItem, CountUp, HoverLift) checks `useReducedMotion()` and renders
+  the final static state under reduced motion. CountUp only animates real/live values and renders
+  the final value on SSR + reduced motion (no flash of zero). MachinePaysDemo pauses offscreen via
+  IntersectionObserver and shows the complete final frame under reduced motion.
+- **Typography:** Manrope added via `next/font` as the display face (`--sl-font-display`, H1–H2),
+  Inter body, JetBrains Mono numbers/code; display scale `--sl-display-1/2` (clamp).
+- **Lighthouse deferred to the Vercel preview** (per the repo's standing convention in
+  VERIFICATION.md — Lighthouse-CI/axe run against the preview URL at §8/delivery). AA contrast is
+  now enforced locally by the unit test above regardless.
 
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.

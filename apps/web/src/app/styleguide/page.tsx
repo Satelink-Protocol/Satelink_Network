@@ -3,6 +3,7 @@
 // re-scopes the --sl-* tokens locally (see tokens.css), so dark and light
 // render side by side on one page regardless of the global theme.
 import type { Metadata } from "next";
+import type { ComponentType } from "react";
 import { Activity, Cpu, Zap } from "lucide-react";
 import {
   Badge,
@@ -27,7 +28,31 @@ import {
   TerminalWindow,
   ThemeToggle,
 } from "@/components/ui";
-import { BlockRenderer, type Block } from "@satelink/web-ui";
+import {
+  BlockRenderer,
+  type Block,
+  // Signal 2.0 illustration kit
+  MachineNodeGlyph,
+  AgentGlyph,
+  PriceTag402Glyph,
+  CreditCoinGlyph,
+  ReceiptGlyph,
+  SettlementBlockGlyph,
+  MarketCandleGlyph,
+  // Infographics + hero demo
+  LifecycleRing,
+  PaymentSequence402,
+  TwoRailsDiagram,
+  MeteringWaterfall,
+  SettlementFlow,
+  MachinePaysDemo,
+  // Motion primitives
+  ScrollReveal,
+  Stagger,
+  StaggerItem,
+  CountUp,
+  HoverLift,
+} from "@satelink/web-ui";
 
 export const metadata: Metadata = {
   title: "Style guide",
@@ -157,6 +182,111 @@ function Gallery() {
         <Icon as={Cpu} className="size-6 text-sl-info" />
         <Icon as={Zap} className="size-6 text-sl-warn" />
       </div>
+
+      {/* ── Signal 2.0 (P1) ──────────────────────────────────────── */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Colour tokens</h3>
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <Swatch name="accent" varName="--sl-accent" role="platform" />
+          <Swatch name="machine" varName="--sl-machine" role="agents / x402" />
+          <Swatch name="market" varName="--sl-market" role="market data" />
+          <Swatch name="settle" varName="--sl-settle" role="settlement" />
+          <Swatch name="up" varName="--sl-up" role="delta +" />
+          <Swatch name="down" varName="--sl-down" role="delta −" />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Gradients</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="sl-grad-hero flex h-24 items-end rounded-[var(--sl-radius)] border border-sl-border p-3">
+            <span className="font-sl-mono text-xs text-sl-text-muted">--sl-grad-hero</span>
+          </div>
+          <div className="sl-grad-brand flex h-24 items-end rounded-[var(--sl-radius)] p-3">
+            <span className="font-sl-mono text-xs text-sl-accent-ink">--sl-grad-brand</span>
+          </div>
+          <div className="flex h-24 items-center justify-center rounded-[var(--sl-radius)] border border-sl-border">
+            <span className="sl-text-grad font-sl-display text-2xl font-extrabold">Signal 2.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Display type (Manrope)</h3>
+        <p className="font-sl-display font-extrabold tracking-tight text-sl-text" style={{ fontSize: "var(--sl-display-2)" }}>
+          Commerce for software that pays software.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Illustration kit</h3>
+        <div className="grid grid-cols-4 gap-4 sm:grid-cols-7" data-illustrations>
+          {[
+            [MachineNodeGlyph, "machine-node"],
+            [AgentGlyph, "agent"],
+            [PriceTag402Glyph, "price-tag-402"],
+            [CreditCoinGlyph, "credit-coin"],
+            [ReceiptGlyph, "receipt"],
+            [SettlementBlockGlyph, "settlement-block"],
+            [MarketCandleGlyph, "market-candle"],
+          ].map(([G, label]) => {
+            const Glyph = G as ComponentType<{ title?: string; size?: number }>;
+            return (
+              <figure key={label as string} className="flex flex-col items-center gap-2 rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-3">
+                <Glyph title={label as string} size={40} />
+                <figcaption className="text-center font-sl-mono text-[10px] text-sl-text-subtle">{label as string}</figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Infographics</h3>
+        <div className="grid gap-6" data-infographics>
+          <div className="flex justify-center rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4"><LifecycleRing size={340} /></div>
+          <div className="rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4"><PaymentSequence402 /></div>
+          <div className="rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4"><TwoRailsDiagram /></div>
+          <div className="rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4"><MeteringWaterfall /></div>
+          <div className="rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4"><SettlementFlow /></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Hero demo — MachinePaysDemo</h3>
+        <div className="max-w-lg"><MachinePaysDemo /></div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Motion primitives</h3>
+        <div className="space-y-4" data-motion>
+          <ScrollReveal>
+            <Card><CardTitle>ScrollReveal</CardTitle><CardDescription>Fades + lifts into view once.</CardDescription></Card>
+          </ScrollReveal>
+          <Stagger className="grid gap-3 sm:grid-cols-3">
+            {["One", "Two", "Three"].map((t) => (
+              <StaggerItem key={t}><Card><CardTitle>{t}</CardTitle></Card></StaggerItem>
+            ))}
+          </Stagger>
+          <div className="flex items-baseline gap-2">
+            <CountUp value={496273} className="font-sl-mono text-2xl font-bold text-sl-accent" />
+            <span className="text-sm text-sl-text-muted">calls (count-up, live values only)</span>
+          </div>
+          <HoverLift className="max-w-xs">
+            <Card interactive><CardTitle>HoverLift</CardTitle><CardDescription>Lifts on hover.</CardDescription></Card>
+          </HoverLift>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Swatch({ name, varName, role }: { name: string; varName: string; role: string }) {
+  return (
+    <div className="rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-2">
+      <div className="h-10 w-full rounded-[var(--sl-radius-sm)]" style={{ background: `var(${varName})` }} />
+      <p className="mt-1.5 font-sl-mono text-[11px] font-semibold text-sl-text">{name}</p>
+      <p className="font-sl-mono text-[10px] text-sl-text-subtle">{role}</p>
     </div>
   );
 }
