@@ -15,12 +15,14 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(__dirname, "..", "src", "app");
 const SCOPED = [join(ROOT, "(marketing)"), join(ROOT, "(checkout)")];
 
+// Note: we ban the PROMISSORY sense of "guaranteed" (guaranteed returns /
+// profit / …), not the bare word — "not guaranteed" / "no guarantee" are
+// legitimate, encouraged disclaimers (see docs/web/DECISIONS.md).
 const BANNED: RegExp[] = [
   /signals to profit/i,
   /beat the market/i,
   /\bwin rate\b/i,
-  /\bguaranteed\b/i,
-  /guaranteed returns/i,
+  /guaranteed\s+(returns?|profits?|income|earnings|results|roi|gains?)/i,
   /buy\s*\/?\s*sell recommendation/i,
   /\bbuy recommendation\b/i,
   /\bsell recommendation\b/i,

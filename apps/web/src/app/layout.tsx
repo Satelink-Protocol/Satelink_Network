@@ -46,7 +46,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Satelink Network" }],
   robots: "index, follow",
-  alternates: { canonical: "https://satelink.network" },
+  // No blanket canonical here — a root-level canonical makes EVERY page
+  // canonical to "/" (the bug called out in the reposition audit). Each page
+  // sets its own via `alternates.canonical` in its metadata.
   icons: { icon: FAVICON },
   openGraph: {
     type: "website",

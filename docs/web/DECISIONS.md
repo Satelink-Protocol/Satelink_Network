@@ -27,3 +27,10 @@ Every judgment call made without asking, per the reposition mandate (§0). Newes
 ## Home / live data (Phase 4)
 - **Homepage live strip uses `/health` only** (public: `{server, db, uptime}`). The spec's "calls today / p50" tiles have **no public endpoint** (`/metrics/json` 404s; `/admin/observability/metrics` is admin-auth). Rather than fabricate or show two permanently-"unavailable" tiles, the strip shows Gateway / Database / Uptime from the real `/health` payload, each with StatTile's loading + error states, and links to `/status` for full metrics. `TODO(public-metrics)` to expose a public calls/p50 endpoint if those tiles are wanted.
 - **Home moved into the `(marketing)` route group** (`src/app/(marketing)/page.tsx`, old top-level `src/app/page.tsx` removed) so `/` uses the shared `SiteHeader`/`SiteFooter` chrome, matching the §4 IA.
+
+## SEO / IA / network+rpc (Phase 4/8)
+- **Root blanket canonical removed.** The root layout set `alternates.canonical` = `/`, which made every page canonical to `/` (the audited bug). Removed; each page sets its own canonical.
+- **`/network` and `/rpc` created** as the "infrastructure underneath" (§3 demote) so the footer links resolve; node/RPC/settlement/50-30-20/vault content moved off the homepage. Node operator flows kept at `/node` (app logic lives there). The earnings estimator is present but every output is labelled an "illustrative estimate".
+- **No competitor comparison table** on `/rpc` (Infura/Alchemy/QuickNode) — competitor cells can't be independently verified here, so per §3 it's omitted rather than shipped unverifiable.
+- **Truth-lint bans the promissory "guaranteed returns/profit/…"**, not the bare word — "not guaranteed" / "no guarantee" are encouraged disclaimers. `alpha` is word-boundary banned; bare `returns` is not banned ("returns derived statistics" is the approved phrasing).
+- **Contact**: standardized on `satelinknetwork@gmail.com`, added the legal entity name and the corporate-enquiry routing pointer.
