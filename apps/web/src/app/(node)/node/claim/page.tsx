@@ -42,7 +42,7 @@ export default function NodeClaimPage() {
 
   // Connected EVM state
   const [walletAddress, setWalletAddress] = useState<string>('');
-  const [provider, setProvider] = useState<ethers.providers.Web3Provider | null>(null);
+  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
 
   useEffect(() => {
     initWallet();
@@ -51,7 +51,7 @@ export default function NodeClaimPage() {
   const initWallet = async () => {
     if (typeof window !== 'undefined' && (window as any).ethereum) {
       try {
-        const browserProvider = new ethers.providers.Web3Provider((window as any).ethereum);
+        const browserProvider = new ethers.BrowserProvider((window as any).ethereum);
         setProvider(browserProvider);
         const accounts = await browserProvider.send("eth_requestAccounts", []);
         if (accounts.length > 0) {
@@ -65,11 +65,11 @@ export default function NodeClaimPage() {
     setFetching(false);
   };
 
-  const fetchAvailableBalance = async (address: string, prov: ethers.providers.Web3Provider) => {
+  const fetchAvailableBalance = async (address: string, prov: ethers.BrowserProvider) => {
     try {
       const contract = new ethers.Contract(CLAIMS_CONTRACT_ADDRESS, CLAIMS_ABI, prov);
       const bal = await contract.availableBalances(address);
-      setAvailableBalance(ethers.utils.formatUnits(bal, 6)); // USDT is 6 decimals
+      setAvailableBalance(ethers.formatUnits(bal, 6)); // USDT is 6 decimals
     } catch (e) {
       console.error("Error fetching balance from SC", e);
     }
