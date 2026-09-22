@@ -194,7 +194,7 @@ const nextConfig: NextConfig = {
       // task-commerce order-start route). Without the exclusion the
       // afterFiles rewrite shadows those local route handlers.
       {
-        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)|dodo-webhook(?:/|$)|tasks(?:/|$)).*)",
+        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)|dodo-webhook(?:/|$)|tasks(?:/|$)|contact-sales(?:/|$)|support-feedback(?:/|$)).*)",
         destination: `${API_BASE}/api/:path`,
       },
 
