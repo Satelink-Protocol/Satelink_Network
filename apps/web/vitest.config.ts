@@ -12,5 +12,8 @@ export default defineConfig({
     test: {
         environment: 'node',
         globals: true,
+        // Playwright specs under e2e/ use their own runner (`npm run e2e`).
+        // Keep vitest from collecting them — they call Playwright's test().
+        exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     },
 })

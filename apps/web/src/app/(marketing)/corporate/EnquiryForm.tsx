@@ -126,7 +126,7 @@ export function EnquiryForm() {
   return (
     <form onSubmit={submit} className="grid gap-4" noValidate>
       {/* honeypot — visually hidden, off the a11y tree */}
-      <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+      <div aria-hidden className="invisible absolute left-[-9999px] h-0 w-0 overflow-hidden">
         <label htmlFor="website">Leave this field empty</label>
         <input
           id="website"
