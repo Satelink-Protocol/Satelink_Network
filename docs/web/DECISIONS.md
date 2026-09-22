@@ -63,6 +63,27 @@ E2E 99/99.
   VERIFICATION.md — Lighthouse-CI/axe run against the preview URL at §8/delivery). AA contrast is
   now enforced locally by the unit test above regardless.
 
+## P2 — Landing page (claude.com pattern)
+- **Home is now short and plan-led.** The old long platform stack (lifecycle stepper, 5-product
+  grid, developer/agent/enterprise audiences, on-chain proof) moved into `/product/overview`; the
+  home is hero (+ MachinePaysDemo) → live proof strip → three product tiles → Explore plans →
+  FAQ → CTA. Body copy is ~314 words (gate: ≤450). The H1 keeps the phrase "software that pays
+  software" (existing E2E asserts it) as "Commerce for software that pays software."
+- **`/product/overview#lifecycle`** is the target of the home "See how machines pay" CTA; the
+  moved LifecycleStepper sits in a `scroll-mt-24` section with `id="lifecycle"`.
+- **Plan catalogue is config-driven in `apps/web/src/lib/plans.ts`** (Free/Pro/Max + PAYG packs +
+  the Agents & API rate card) — the single source the home Explore-plans section and the P3 pricing
+  page share via `apps/web/src/components/ExplorePlans.tsx`. P3.B will add `GET /v1/plans` and a
+  pricing-parity test; this file becomes the web mirror. Chose an app-level lib over
+  `packages/content` for P2 to avoid a premature package API; promotable in P3.
+- **No dead buy buttons (§4.4).** `plansEnabled()` reads `NEXT_PUBLIC_PLANS_ENABLED` (unset today
+  → false), so Pro/Max render "Available soon — notify me" linking to the `/contact-sales?topic=plans`
+  enquiry form (captures interest), and only Free (→ /signup) + the Agents rate card are actionable.
+- **FAQPage JSON-LD** added to the home via `faqLd()` + `jsonLdScript()` (the existing repo pattern),
+  with the six brief-specified questions incl. "Is this investment advice? → No, analytics only."
+- **Motion in production:** the product tiles use Stagger/StaggerItem and the plans block a
+  ScrollReveal; the hero uses MachinePaysDemo. Above-the-fold hero copy is not motion-wrapped (LCP).
+
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.

@@ -92,6 +92,26 @@ test("home renders machine-commerce H1 and shared footer legal links", async ({ 
   await expect(page.getByRole("link", { name: /Refund & Cancellation/ }).first()).toBeVisible();
 });
 
+test("home (v3): claude-pattern — hero CTAs, product tiles, and plan cards", async ({ page }) => {
+  await page.goto("/");
+  // Hero CTAs: Start free (→ signup) and See how machines pay (→ overview#lifecycle).
+  await expect(page.getByRole("link", { name: /Start free/ }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /See how machines pay/ })).toHaveAttribute("href", /overview#lifecycle/);
+  // Three product tiles.
+  await expect(page.getByRole("heading", { name: "Trading Intelligence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Machine Payments/ })).toBeVisible();
+  // Explore plans: Free is purchasable; Pro is not yet ("notify me"), never a dead buy button.
+  await expect(page.getByRole("heading", { name: "Explore plans" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Available soon — notify me/ }).first()).toBeVisible();
+});
+
+test("overview (v3): #lifecycle section anchors the SSR stepper", async ({ page }) => {
+  await page.goto("/product/overview#lifecycle");
+  const section = page.locator("#lifecycle");
+  await expect(section).toHaveCount(1);
+  await expect(section.getByRole("tablist", { name: "How a machine pays" })).toBeVisible();
+});
+
 test("checkout routes are noindex", async ({ page }) => {
   await page.goto("/checkout?plan=starter");
   const robots = page.locator('meta[name="robots"]');
@@ -126,8 +146,10 @@ test("/intelligence/success is NOT redirected (checkout claim page survives)", a
 
 test("interactive selector on the overview resolves a product + live price", async ({ page }) => {
   await page.goto("/product/overview");
-  // Default selection resolves to a product with a request and a docs link.
-  await expect(page.getByRole("heading", { name: "Trading Intelligence" })).toBeVisible();
+  // Default selection resolves to a product; assert the selector-unique result
+  // link (the page also lists "Trading Intelligence" in the products grid, so a
+  // bare heading match would be ambiguous).
+  await expect(page.getByRole("link", { name: /Trading Intelligence product page/ })).toBeVisible();
 });
 
 test("/products/{slug}.json returns the machine-readable product contract", async ({ request }) => {
