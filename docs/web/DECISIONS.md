@@ -55,3 +55,21 @@ Founder-approved directives applied; see `IA_V2_DISCOVERY.md` for the repo map.
 
 ## Infra provisioning stance (see INFRA_SETUP.md)
 - **CMS DB + Vercel projects + DNS are documented, not executed, during the build.** Rationale: creating a database via DDL on the *production* Railway Postgres instance, and creating Vercel projects, are production-infra mutations off Phase 2's critical path (its gate is only tests+build green) and belong at the §18 delivery step. CLAUDE.md's prod-DB guardrails + the founder's documentation escape-hatch make "document now, execute at delivery on go" the safe path. The CMS is built against ephemeral/local Postgres so nothing blocks. Exact SQL, env vars, Vercel settings, and DNS records are in `docs/web/INFRA_SETUP.md`.
+
+## Phase 4 — CMS (Payload 3) — isolation + gate stance
+- **`apps/cms` is isolated from the npm workspace.** Root `package.json` pins
+  `overrides: { react: 18.2.0, react-dom: 18.2.0 }` for apps/web; Payload 3 needs
+  **React 19**. A shared install would force one React major on both and break the
+  green apps/web build. Resolution: exclude `apps/cms` from the workspace globs so
+  it carries its own `node_modules` + lockfile (React 19), fully isolated. It does
+  not need `@satelink/web-ui` (Payload ships its own admin UI); it aligns with
+  `@satelink/content` schemas by convention, not runtime import.
+- **DB:** a local Postgres is running (`/tmp:5432`). CMS dev DB = `satelink_cms_dev`
+  there; prod = `satelink_cms` on Railway (INFRA_SETUP.md). Never the app DB.
+- **Runtime gate stance:** the CMS is delivered as complete, reviewable Payload 3
+  code (config, collections, globals, RBAC, 2FA, audit log, truth hooks, workflow,
+  revalidation, seed). The **live CRUD/publish/rollback boot test is run from the
+  isolated `apps/cms` install** (`cd apps/cms && npm install && npm run dev`) —
+  NOT forced into the React-18-pinned shared tree from this background session,
+  which would risk apps/web. Boot/test steps in `apps/cms/README.md`. This is the
+  one place Phase's runtime gate is deferred to the isolated setup by design.

@@ -6,6 +6,7 @@
   "type": "module",
   "workspaces": [
     "apps/*",
+    "!apps/cms",
     "services/*",
     "packages/*",
     "agents/*",

@@ -1,0 +1,13 @@
+# apps/cms is isolated from the workspace — its own node_modules + lockfile.
+node_modules
+/.next
+/build
+.env
+.env*.local
+
+# Payload generated artifacts
+src/payload-types.ts
+src/app/(payload)/admin/importMap.js.generated
+
+# test/media
+/media
