@@ -87,6 +87,38 @@ Judgment calls (no founder needed):
   `/rpc → /products/rpc` canonicalization (not in the audited facts).
 - Console screens are linked, not screenshotted — no invented image assets.
 
+## Phases 8–14 — the rest of the IA-v2 surface
+Built on top of Phase 7, each phase gated + committed:
+- **8 Solutions** — hub + 10 solutions (company-size + use-case) + 7 industries
+  (`lib/solutions.ts` + `SolutionPageView`). Proof section auto-hidden; no certs.
+- **9 Developers** — hub, quickstart (live-endpoint steps + one Illustrative x402
+  step), API surface, SDKs (x402-kit live; SDK/MCP Planned).
+- **10 Resources** — blog/news/changelog seeded from real shipped milestones
+  only (`lib/resources.ts`); customer-stories empty + noindex + nav-hidden.
+- **11 Academy + Support** — academy hub/tutorials(live)/use-cases/courses(empty)
+  + support home/[category]/[slug]/search (`lib/academy.ts`, `lib/support.ts`).
+  Fixed: removed the dead `support` afterFiles rewrite prefix that shadowed
+  `/support/[category]`.
+- **12 Entry + legal + APIs** — /signup (left /login = console auth alone),
+  /contact-sales + POST /api/contact-sales, /network/run-a-node, five Review
+  policy pages, POST /api/support-feedback.
+- **13 Machine/GEO + SEO** — /products/{slug}.json, /pricing.json,
+  /.well-known/satelink.json, /llms.txt + /llms-full.txt (replacing the static
+  one), sitemap rewrite, robots, and Product/Breadcrumb/FAQ + Article JSON-LD.
+- **14 Validation suite** — `apps/web/test/{pricing-parity,sitemap-coverage,
+  llms-freshness}.test.ts` run the @satelink/seo validators against the REAL
+  route inventory + catalog (not fixtures): pricing parity vs the live catalog,
+  full sitemap coverage / no-drift / no dupes, llms.txt freshness.
+
+**Final cumulative gate (all phases): build EXIT=0 · unit 57/57 · packages 9/9 ·
+arch 9/9 · E2E 99/99.** Truth-lint + hex-gate hold across all new pages (Dodo
+appears only on `/products/trading-intelligence` and `/pricing`, both with a
+`<Disclosure>`; every marketing page is token-only).
+
+Deferred to §18 / founder (unchanged): Lighthouse-CI + axe against a Vercel
+preview URL, CMS wiring (`CMS_API_URL`), and the CI workflow jobs. Contact-sales
+and support-feedback log today and persist to CMS Enquiries/Feedback once wired.
+
 ## Not yet run in this session (require the Vercel preview / founder — §10)
 - Lighthouse CI against the preview URL (perf/a11y/best-practices/SEO budgets, LCP/CLS).
 - Cross-viewport visual screenshots (375/768/1280, dark+light) → `docs/web/screenshots/`.
