@@ -12,6 +12,22 @@ updates:
   # a major bump still needs a human to act on it out-of-band (as this session
   # did for the Next.js RCE, PR #375, which was fortunately a same-major patch)
   # — Dependabot will not silently open one.
+  #
+  # INCIDENT (2026-09-21, #394): the wildcard `update-types: semver-major`
+  # rule below did NOT stop eslint 9->10 from reopening. Root cause traced:
+  # the FIRST eslint-major PR (#381) predated this policy, then got manually
+  # merged by an admin a day AFTER the policy landed (merge is a human action
+  # `ignore` cannot block — it only suppresses Dependabot from OPENING a new
+  # PR) and was reverted for an unrelated lockfile-desync reason (#383, same
+  # incident as #379). Because it was closed via merge+revert rather than an
+  # explicit `@dependabot ignore this major version` comment, Dependabot's
+  # own per-dependency ignore-condition bookkeeping never recorded a
+  # rejection for 10.x, and its next weekly scan re-proposed the identical
+  # bump as #394 — the wildcard config rule evidently did not re-suppress it.
+  # Fix: an explicit, dependency-scoped `versions` ignore below is a second,
+  # independent mechanism (not update-type classification) as a backstop for
+  # every dependency this has actually happened to. Extend this list any time
+  # a major reopens despite the wildcard rule.
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
@@ -24,6 +40,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Explicit backstop (see INCIDENT note above) — belt-and-suspenders
+      # beyond the wildcard rule, which alone did not prevent #394.
+      - dependency-name: "eslint"
+        versions: [">=10.0.0"]
     open-pull-requests-limit: 3
 
   # Backend dependencies - weekly, grouped. x402/@coinbase packages are the
