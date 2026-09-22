@@ -275,6 +275,38 @@ async function insertUnmatchedPayment(client, {
   );
 }
 
+// ── One-time checkout claim tokens (T-1.4 security fix) ──────────────────────
+//
+// Replaces embedding the raw api_key in the Dodo checkout return_url.
+// 10-minute TTL: long enough to cover a slow card-entry + redirect, short
+// enough that a leaked token (browser history, a proxy log somewhere
+// upstream of this fix) is worthless soon after checkout. crypto.randomBytes
+// (not a sequential id) so a token can't be guessed or enumerated.
+const CLAIM_TTL_MS = 10 * 60 * 1000;
+
+async function createCheckoutClaim(client, apiKey) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const now = Date.now();
+  await client.query(
+    `INSERT INTO dodo_checkout_claims (token, api_key, created_at, expires_at) VALUES ($1, $2, $3, $4)`,
+    [token, apiKey, now, now + CLAIM_TTL_MS]
+  );
+  return token;
+}
+
+/** Single-use: UPDATE ... WHERE claimed_at IS NULL AND not expired, RETURNING — atomic claim-and-consume, no separate read-then-write race. */
+async function exchangeCheckoutClaim(client, token) {
+  const now = Date.now();
+  const r = await client.query(
+    `UPDATE dodo_checkout_claims
+        SET claimed_at = $1
+      WHERE token = $2 AND claimed_at IS NULL AND expires_at > $1
+      RETURNING api_key`,
+    [now, token]
+  );
+  return r.rows[0]?.api_key || null;
+}
+
 // ── Refund & dispute reversal (M5 follow-up) ─────────────────────────────────
 //
 // Event names & payload fields are SDK-verified against the INSTALLED
@@ -466,6 +498,48 @@ export function createDodoInternalRouter(pool) {
       return res.status(503).json({ ok: false, error: 'dodo_schema_not_ready' });
     }
     return next();
+  });
+
+  // POST /internal/dodo/create-claim — T-1.4 security fix: the checkout
+  // route calls this AFTER resolve-account to mint a one-time, short-lived,
+  // opaque token standing in for the api_key in the Dodo return_url. The key
+  // itself never reaches the browser's address bar, history, or any Referer
+  // header this way — only the token does, and the token is useless on its
+  // own (it must be exchanged server-side, exactly once, before it expires).
+  router.post('/create-claim', async (req, res) => {
+    const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'apiKey required' });
+    const client = await pool.connect();
+    try {
+      const token = await createCheckoutClaim(client, apiKey);
+      return res.json({ ok: true, claimToken: token });
+    } catch (err) {
+      console.error('[internal/dodo] create-claim failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /internal/dodo/exchange-claim — the success page's ONE allowed
+  // read of the api_key, via a POST body, never a URL. Single-use: the row
+  // is marked claimed_at in the same statement that reads it, so a replayed
+  // or leaked token (e.g. from a proxy log) is worthless after the first
+  // legitimate exchange.
+  router.post('/exchange-claim', async (req, res) => {
+    const token = typeof req.body?.claimToken === 'string' ? req.body.claimToken.trim() : '';
+    if (!token) return res.status(400).json({ ok: false, error: 'claimToken required' });
+    const client = await pool.connect();
+    try {
+      const apiKey = await exchangeCheckoutClaim(client, token);
+      if (!apiKey) return res.status(410).json({ ok: false, error: 'claim_invalid_expired_or_used' });
+      return res.json({ ok: true, apiKey });
+    } catch (err) {
+      console.error('[internal/dodo] exchange-claim failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    } finally {
+      client.release();
+    }
   });
 
   router.post('/credit', async (req, res) => {

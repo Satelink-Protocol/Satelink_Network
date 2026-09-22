@@ -153,6 +153,20 @@ export async function ensureDodoRailSchema(pool, deps = {}) {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_unmatched_payments_resolved ON unmatched_payments(resolved)`);
 
+    // 037: one-time checkout claim tokens (T-1.4 security fix) — the success
+    // redirect carries an opaque token instead of the raw api_key. See
+    // migrations/037_dodo_checkout_claims.sql.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dodo_checkout_claims (
+        token       TEXT PRIMARY KEY,
+        api_key     TEXT NOT NULL,
+        created_at  BIGINT NOT NULL,
+        expires_at  BIGINT NOT NULL,
+        claimed_at  BIGINT
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_dodo_checkout_claims_expires ON dodo_checkout_claims(expires_at)`);
+
     await client.query('COMMIT');
     setDodoSchemaReady(true);
     logger.log?.('[dodo-schema] ✅ Dodo-rail schema ensured');
