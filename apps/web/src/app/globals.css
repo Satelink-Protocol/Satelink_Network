@@ -25,79 +25,15 @@
    /pricing, /intelligence/success, /login (2026-09-22 audit). */
 @layer base {
 
-:root {
-  /* Satelink const C Unified Palette */
-  --primary: #5EEAD4;
-  --primary-hover: rgba(94, 234, 212, 0.8);
-  --accent: #5EEAD4;
-  --accent-glow: rgba(94, 234, 212, 0.25);
-
-  --bg-base: #050816;
-  --bg-subtle: #0E1628;
-  --bg-muted: #121C33;
-  --bg-elevated: #121C33;
-  --bg-card: #121C33;
-  --bg-glass: rgba(14, 22, 40, 0.8);
-
-  --text-primary: #E5EEF8;
-  --text-secondary: #94A3B8;
-  --text-muted: rgba(148, 163, 184, 0.7);
-
-  --border: #1A2F50;
-  --border-subtle: rgba(26, 47, 80, 0.5);
-
-  --success: #34D399;
-  --warning: #F59E0B;
-  --error: #EF4444;
-
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-
-  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-
-  --header-height: 64px;
-
-  /* Bare shadcn/ui token names (--background, --foreground, ...) that
-     Tailwind's `bg-*`/`text-*` utilities compile to, mapped onto the
-     Satelink palette above. Previously these were defined ONLY inside
-     the `.theme-shadcn`/`.satelink-os` scope (see bottom of this
-     file), so any page using shadcn-style Tailwind classes without
-     that wrapper (e.g. /contact, /pricing, /intelligence, /login) got
-     `var(--background)` etc. with nothing to resolve to. Declaring
-     them here gives every page a correct default theme; the
-     `.theme-shadcn`/`.satelink-os` scope still overrides them locally
-     for the dashboard's dedicated slate palette. */
-  --background: var(--bg-base);
-  --foreground: var(--text-primary);
-  --card: var(--bg-card);
-  --card-foreground: var(--text-primary);
-  --popover: var(--bg-elevated);
-  --popover-foreground: var(--text-primary);
-  --primary-foreground: var(--bg-base);
-  --secondary: var(--bg-muted);
-  --secondary-foreground: var(--text-primary);
-  --muted: var(--bg-muted);
-  --muted-foreground: var(--text-secondary);
-  --accent-foreground: var(--bg-base);
-  --destructive: var(--error);
-  --input: var(--border);
-  --ring: var(--accent);
-}
-
-[data-theme="light"] {
-  --bg-base: #FFFFFF;
-  --bg-subtle: #FAFAFA;
-  --bg-muted: #F4F4F5;
-  --bg-elevated: #FFFFFF;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-glass: rgba(255, 255, 255, 0.7);
-  --text-primary: #18181B;
-  --text-secondary: #52525B;
-  --text-muted: #71717A;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-subtle: rgba(0, 0, 0, 0.04);
-}
+/* ------------------------------------------------------------------
+   The color palette, the legacy bg / text / accent aliases, bare
+   shadcn token names (--background, --card, --border, …) AND the
+   [data-theme="light"] overrides now live in ONE place:
+   src/styles/tokens.css (the "Satelink Signal" system, imported after
+   this file in app/layout.tsx). This block used to define three
+   competing systems here; that fragmentation is resolved.
+   Only structural, non-color rules remain in this file below.
+   ------------------------------------------------------------------ */
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
