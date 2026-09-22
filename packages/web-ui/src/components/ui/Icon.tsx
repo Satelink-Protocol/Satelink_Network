@@ -3,7 +3,7 @@
 // scales with surrounding text; override with className.
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface IconProps extends React.SVGAttributes<SVGElement> {
   as: LucideIcon;

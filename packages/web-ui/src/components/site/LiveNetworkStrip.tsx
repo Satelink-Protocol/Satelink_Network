@@ -6,7 +6,7 @@
 // no public endpoint for them (see docs/web/DECISIONS.md); full metrics live
 // on the status page.
 import * as React from "react";
-import { StatTile } from "@/components/ui/StatTile";
+import { StatTile } from "../ui/StatTile";
 
 const HEALTH_URL = "https://rpc.satelink.network/health";
 

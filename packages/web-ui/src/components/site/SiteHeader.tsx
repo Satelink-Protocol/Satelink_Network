@@ -4,8 +4,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Button } from "../ui/Button";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/intelligence", label: "Intelligence" },

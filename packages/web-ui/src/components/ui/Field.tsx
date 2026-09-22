@@ -2,7 +2,7 @@
 // Select, Checkbox. All keyboard-accessible, labelled, with a visible
 // focus-visible ring and an aria-invalid error style.
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 const controlBase =
   "w-full rounded-[var(--sl-radius-sm)] border border-sl-border bg-sl-bg-raised px-3 py-2.5 text-sm text-sl-text " +

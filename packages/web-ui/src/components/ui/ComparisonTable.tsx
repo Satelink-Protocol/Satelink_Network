@@ -3,7 +3,7 @@
 // The "own" column (highlightColumn index) gets an accent-tinted background.
 import * as React from "react";
 import { Check, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export type Cell = string | boolean;
 

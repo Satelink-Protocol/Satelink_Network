@@ -1,6 +1,6 @@
 // Card — elevated surface container. Optional `interactive` adds hover lift.
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   interactive?: boolean;

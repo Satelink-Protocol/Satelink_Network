@@ -4,7 +4,7 @@
 // multi-language variant. Copy is clipboard-guarded (try/catch).
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface CodeTab {
   label: string;

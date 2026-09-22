@@ -1,25 +1,27 @@
 // apps/web/src/app/(marketing)/layout.tsx
 //
-// Shared chrome for every standalone public product/legal page (pricing,
-// intelligence, intelligence/success, contact, privacy, refund, terms).
-// A Next.js route group — the "(marketing)" segment is not part of the URL,
-// so /pricing etc. are unchanged. Fixes the pages rendering with no header/
-// footer/nav (2026-09-22 audit) by reusing the same SiteHeader/SiteFooter
-// as the homepage instead of each page shipping (or omitting) its own.
-import { SiteHeader } from "@/components/site/SiteHeader";
-import { SiteFooter } from "@/components/site/SiteFooter";
+// Shared chrome for every public page. Data-driven (§6/§7): the mega-menu header
+// and footer read the CMS Navigation/Footer globals via @satelink/content, which
+// falls back to bundled fixtures when the CMS is unset/down — so the site always
+// renders its full IA. The "(marketing)" route group is not part of the URL.
+import { MegaMenuHeader, DataFooter } from "@satelink/web-ui";
+import { getNavigation, getFooter, LEGAL_ENTITY } from "@satelink/content";
 import { Toaster } from "@/components/ui/Toast";
+import { SiteSearch } from "@/components/SiteSearch";
 
-export default function MarketingLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const [nav, footer] = await Promise.all([getNavigation("satelink"), getFooter("satelink")]);
+
   return (
     <>
-      <SiteHeader />
+      <MegaMenuHeader nav={nav} search={<SiteSearch />} />
       <main style={{ paddingTop: "var(--header-height)" }}>{children}</main>
-      <SiteFooter />
+      <DataFooter
+        footer={footer}
+        entity={{ name: LEGAL_ENTITY.name, addressOneLine: LEGAL_ENTITY.addressOneLine }}
+        // Customer stories hidden until ≥1 published (§7).
+        emptyCollections={["customer-stories"]}
+      />
       <Toaster />
     </>
   );

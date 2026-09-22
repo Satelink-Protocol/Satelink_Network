@@ -5,7 +5,7 @@
 //   empty   → same treatment as error (no value to show)
 //   ok      → the value (tabular-nums, mono)
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface StatTileProps {
   label: string;

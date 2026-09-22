@@ -3,7 +3,7 @@
 // Dodo surface (§2.2) and wherever a truth-rule statement must be visible.
 import * as React from "react";
 import { Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface DisclosureProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: string;

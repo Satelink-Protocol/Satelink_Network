@@ -25,6 +25,16 @@ const SUBDOMAIN_MAP: Record<string, string> = {
   'docs': '/docs',
 }
 
+// Permanent (308) redirects (§4). CMS-driven Redirect rows are layered on top in
+// a later phase; this static map is the edge-cached baseline. Only redirects
+// whose targets already exist are enabled — product-move redirects
+// (/intelligence → /products/trading-intelligence, /rpc → /products/rpc) are
+// added in Phase 6 once those targets ship. `to` may include a hash.
+const REDIRECTS: Record<string, string> = {
+  '/platform/pricing': '/pricing#platform',
+  '/dashboard': '/satelink/os/mission-control',
+}
+
 export function middleware(req: NextRequest) {
   const host = req.headers.get('host') || ''
   const url = req.nextUrl.clone()
@@ -32,6 +42,19 @@ export function middleware(req: NextRequest) {
   // Extract subdomain. Strip the port first so localhost:3000 -> "localhost"
   // and works for *.satelink.network in production.
   const subdomain = host.split(':')[0].split('.')[0]
+
+  // Redirects apply on the main site host only (not app subdomains), before any
+  // subdomain rewrite, so /platform/pricing and /dashboard resolve everywhere.
+  const isAppSubdomain = subdomain in SUBDOMAIN_MAP || subdomain === 'ops'
+  if (!isAppSubdomain) {
+    const target = REDIRECTS[url.pathname]
+    if (target) {
+      const [path, hash] = target.split('#')
+      url.pathname = path
+      url.hash = hash ?? ''
+      return NextResponse.redirect(url, 308)
+    }
+  }
 
   // Preserve prior behavior: admin subdomain root lands on the command center.
   if (subdomain === 'admin' && url.pathname === '/') {

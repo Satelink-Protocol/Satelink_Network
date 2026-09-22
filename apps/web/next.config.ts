@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   // Transpile the design-system packages (both ship raw TSX from src):
   // @satelink/ui (OS/admin dashboards) and @satelink/web-ui (Satelink Signal —
   // the public-website system, shared with apps/corporate).
-  transpilePackages: ["@satelink/ui", "@satelink/web-ui"],
+  transpilePackages: ["@satelink/ui", "@satelink/web-ui", "@satelink/content", "@satelink/seo"],
 
   typescript: {
     ignoreBuildErrors: true,

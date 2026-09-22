@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { Button } from "./Button";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface PriceCardProps {
   tier: string;

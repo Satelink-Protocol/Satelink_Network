@@ -1,6 +1,6 @@
 // SectionHeader — eyebrow, title, lede. Centered by default; `align="left"`.
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 export interface SectionHeaderProps {
   eyebrow?: string;
