@@ -23,3 +23,7 @@ Every judgment call made without asking, per the reposition mandate (§0). Newes
 - **Checkout-scoped CSP only.** A site-wide strict CSP would risk breaking Next's inline bootstrap + the pre-paint theme script + framer-motion. Added a CSP on `/checkout/:path*` allowing the Dodo origins; site-wide strict CSP deferred (`TODO(csp)`).
 - **`/checkout/success` forwards `?claim` to `/intelligence/success`** (the canonical #398 page) rather than duplicating the claim→key exchange, so #398 is not weakened.
 - **`/checkout` reuses `/api/dodo-checkout` verbatim** (email + productId). No new Dodo product/session shape.
+
+## Home / live data (Phase 4)
+- **Homepage live strip uses `/health` only** (public: `{server, db, uptime}`). The spec's "calls today / p50" tiles have **no public endpoint** (`/metrics/json` 404s; `/admin/observability/metrics` is admin-auth). Rather than fabricate or show two permanently-"unavailable" tiles, the strip shows Gateway / Database / Uptime from the real `/health` payload, each with StatTile's loading + error states, and links to `/status` for full metrics. `TODO(public-metrics)` to expose a public calls/p50 endpoint if those tiles are wanted.
+- **Home moved into the `(marketing)` route group** (`src/app/(marketing)/page.tsx`, old top-level `src/app/page.tsx` removed) so `/` uses the shared `SiteHeader`/`SiteFooter` chrome, matching the §4 IA.

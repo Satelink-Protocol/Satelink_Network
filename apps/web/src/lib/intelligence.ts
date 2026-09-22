@@ -43,6 +43,12 @@ export function getFallbackCatalog(): Catalog {
   return CatalogSchema.parse(fallback);
 }
 
+/** "funding-rate-heatmap" -> "Funding rate heatmap" for names the live feed omits. */
+function prettyName(slug: string): string {
+  const s = slug.replace(/[-_]+/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /**
  * Normalize the live GET /v1/intelligence response into our Catalog shape.
  * The live route returns its own field names; we map defensively and fill any
@@ -67,10 +73,11 @@ function mapLive(raw: unknown): Catalog | null {
     const kind = String(m.kind ?? seed?.kind ?? "derived");
     metrics.push({
       slug,
-      name: String(m.name ?? seed?.name ?? slug),
+      name: String(m.name ?? seed?.name ?? prettyName(slug)),
       kind,
       isModel: Boolean(m.isModel ?? seed?.isModel ?? /model|proxy/i.test(kind)),
-      priceUsd: Number(m.priceUsd ?? m.price ?? seed?.priceUsd ?? fb.priceModel.amount),
+      // Live route uses `price_usdt`; keep priceUsd/price as fallbacks.
+      priceUsd: Number(m.price_usdt ?? m.priceUsd ?? m.price ?? seed?.priceUsd ?? fb.priceModel.amount),
       measures: String(m.measures ?? seed?.measures ?? ""),
       description: String(m.description ?? seed?.description ?? ""),
     });
