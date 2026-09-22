@@ -15,4 +15,10 @@ export { Breadcrumbs } from "./components/site/Breadcrumbs";
 export type { Crumb } from "./components/site/Breadcrumbs";
 export { SearchPalette } from "./components/site/SearchPalette";
 export type { SearchHit, SearchFn } from "./components/site/SearchPalette";
+// Blocks + templates (§8) — CMS-composed page bodies + template chrome.
+export { BlockRenderer } from "./blocks/BlockRenderer";
+export type { Block } from "./blocks/BlockRenderer";
+export { LifecycleStepper, DEFAULT_LIFECYCLE } from "./blocks/LifecycleStepper";
+export type { LifecycleStep } from "./blocks/LifecycleStepper";
+export { PageTemplate, ArticleTemplate, TutorialTemplate, SupportArticleTemplate, HelpfulVotes } from "./templates";
 export { cn } from "./lib/utils";
