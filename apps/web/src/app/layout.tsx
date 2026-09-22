@@ -86,7 +86,7 @@ const INTELLIGENCE_PRODUCT_JSON_LD = {
   name: "Satelink Trading Intelligence",
   description:
     "Derived trading intelligence — funding-rate heatmaps, open-interest shifts, liquidation clusters, market microstructure — computed from public market data. Raw exchange feeds are never redistributed.",
-  url: "https://satelink.network/intelligence",
+  url: "https://satelink.network/products/trading-intelligence",
   offers: {
     "@type": "Offer",
     price: "0.01",

@@ -161,7 +161,7 @@ export default function MachinePage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button asChild><Link href="/pricing">See pricing</Link></Button>
-              <Button asChild variant="secondary"><Link href="/intelligence">Browse the catalog</Link></Button>
+              <Button asChild variant="secondary"><Link href="/products/trading-intelligence">Browse the catalog</Link></Button>
             </div>
           </div>
         </div>

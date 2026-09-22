@@ -51,7 +51,7 @@ export default async function CheckoutSuccessPage({
           <a href="https://docs.satelink.network">Read the docs</a>
         </Button>
         <Button asChild variant="ghost">
-          <Link href="/intelligence">Back to Intelligence</Link>
+          <Link href="/products/trading-intelligence">Back to Intelligence</Link>
         </Button>
       </div>
     </div>

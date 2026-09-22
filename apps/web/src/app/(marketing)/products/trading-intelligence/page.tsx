@@ -1,11 +1,15 @@
-// /intelligence — Trading Intelligence product page. Catalog rendered from the
-// live GET /v1/intelligence (ISR + static fallback). Dodo compliance: SaaS
-// analytics, derived statistics from public data, not investment advice, no
-// custody; x402/USDT is a separate crypto rail Dodo never processes.
+// /products/trading-intelligence — the ONLY Dodo checkout surface (§9). Catalog
+// rendered from the live GET /v1/intelligence (ISR + static fallback). Dodo
+// compliance: SaaS analytics, derived statistics from public data, not
+// investment advice, no custody; x402/USDT is a SEPARATE crypto rail Dodo never
+// processes. Card/UPI (Dodo) funds a one-time Starter Pack only.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { buildMetadata } from "@satelink/seo";
+import { Breadcrumbs } from "@satelink/web-ui";
 import { getCatalog } from "@/lib/intelligence";
+import { STARTER_PACK_USD } from "@/lib/products";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Badge } from "@/components/ui/Badge";
@@ -13,42 +17,46 @@ import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Trading Intelligence",
   description:
-    "Derived market analytics for machine-commerce agents: funding-rate heatmaps, open-interest shifts, liquidation clusters (modelled), and market microstructure. Free discovery, $9.99 Starter Pack, or $0.01/call via x402.",
-  alternates: { canonical: "https://satelink.network/intelligence" },
-};
+    "Derived market analytics for machine-commerce agents: funding-rate heatmaps, open-interest shifts, liquidation clusters (modelled), and market microstructure. Free discovery, a $9.99 Starter Pack, or pay per call on the crypto rail.",
+  path: "/products/trading-intelligence",
+});
 
 export const revalidate = 300;
 
-const FAQ: [string, string][] = [
-  ["Is this investment advice?", "No. Every endpoint returns derived statistics computed from public market data. It is not a recommendation to trade, and Satelink never takes custody of funds."],
-  ["Do you redistribute raw exchange feeds?", "No. We never redistribute a raw feed — every response is a statistic we compute from public data."],
-  ["What's the difference between 'derived' and 'model'?", "Derived metrics are computed directly from public data. A model/proxy metric (liquidation clusters) estimates something not directly observable; it is labelled as a model, not a measurement."],
-  ["How do I pay?", "Buy a $9.99 Starter Pack with card or UPI, or pay per call as an agent with x402 (USDC on Base) or an on-chain USDT deposit."],
-  ["Is there a subscription?", "No. Purchases are one-time credit; credits never expire."],
-  ["Where are the full docs?", "At docs.satelink.network — request signing, the x402 client, and the full API reference."],
+const FAQ: { group: string; items: [string, string][] }[] = [
+  { group: "About the offering", items: [
+    ["Is this investment advice?", "No. Every endpoint returns derived statistics computed from public market data. It is not a recommendation to trade, and Satelink never takes custody of funds."],
+    ["Do you redistribute raw exchange feeds?", "No. We never redistribute a raw feed — every response is a statistic we compute from public data."],
+    ["What's the difference between 'derived' and 'model'?", "Derived metrics are computed directly from public data. A model/proxy metric (liquidation clusters) estimates something not directly observable; it is labelled as a model, not a measurement."],
+  ] },
+  { group: "Billing and payments", items: [
+    ["How do I pay?", `Buy a $${STARTER_PACK_USD} Starter Pack with card or UPI (processed by Dodo), or pay per call as an agent with x402 (USDC on Base) or an on-chain USDT deposit.`],
+    ["Is there a subscription?", "No. Purchases are one-time credit; there is no recurring plan."],
+    ["Where are the full docs?", "At docs.satelink.network — request signing, the x402 client, and the full API reference."],
+  ] },
 ];
 
-export default async function IntelligencePage() {
+export default async function TradingIntelligencePage() {
   const { catalog } = await getCatalog();
 
   return (
     <>
+      <Breadcrumbs items={[{ name: "Products", href: "/product/overview" }, { name: "Trading Intelligence", href: "/products/trading-intelligence" }]} />
+
       {/* Hero */}
-      <section className="border-b border-sl-border">
-        <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-24">
-          <SectionHeader
-            eyebrow="Trading Intelligence"
-            title="Derived market analytics, priced per call"
-            lede="Funding-rate heatmaps, open-interest shifts, liquidation clusters, and market microstructure — computed from public market data, never raw feeds redistributed."
-            align="left"
-          />
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg"><Link href="/checkout?plan=starter">Start with $9.99 <ArrowRight className="size-4" /></Link></Button>
-            <Button asChild variant="secondary" size="lg"><a href="#try">Try free</a></Button>
-          </div>
+      <section className="mx-auto max-w-[1200px] px-4 pt-6 sm:px-6">
+        <SectionHeader
+          eyebrow="Trading Intelligence"
+          title="Derived market analytics, priced per call"
+          lede="Funding-rate heatmaps, open-interest shifts, liquidation clusters, and market microstructure — computed from public market data, never raw feeds redistributed."
+          align="left"
+        />
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Button asChild size="lg"><Link href="/checkout?plan=starter">Start with ${STARTER_PACK_USD} <ArrowRight className="size-4" /></Link></Button>
+          <Button asChild variant="secondary" size="lg"><a href="#try">Try free</a></Button>
         </div>
       </section>
 
@@ -101,7 +109,7 @@ export default async function IntelligencePage() {
         </div>
       </section>
 
-      {/* Pricing summary + API access */}
+      {/* Pricing summary */}
       <section className="border-y border-sl-border bg-sl-bg-raised">
         <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
           <SectionHeader eyebrow="Pricing" title="Free · Starter Pack · pay-per-call" align="left" />
@@ -111,8 +119,8 @@ export default async function IntelligencePage() {
               <p className="mt-1 text-sm text-sl-text-muted">Catalog + response shapes, rate-limited, no card.</p>
             </div>
             <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
-              <p className="font-semibold text-sl-text">Starter Pack — $9.99</p>
-              <p className="mt-1 text-sm text-sl-text-muted">1:1 USD credit, no expiry. Card/UPI via Dodo.</p>
+              <p className="font-semibold text-sl-text">Starter Pack — ${STARTER_PACK_USD}</p>
+              <p className="mt-1 text-sm text-sl-text-muted">One-time credit. Card/UPI via Dodo.</p>
             </div>
             <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
               <p className="font-semibold text-sl-text">x402 — $0.01/call</p>
@@ -120,10 +128,8 @@ export default async function IntelligencePage() {
             </div>
           </div>
           <p className="mt-5 text-sm text-sl-text-muted">
-            Full rate card at <Link href="/pricing" className="text-sl-accent underline">/pricing</Link>. A
-            credit pack funds your API key the same way an on-chain deposit or x402 payment does — spent
-            per call, same billing path as the RPC gateway. Full reference at{" "}
-            <a href="https://docs.satelink.network" className="text-sl-accent underline">docs.satelink.network</a>.
+            Full rate card at <Link href="/pricing" className="text-sl-accent underline">/pricing</Link>. Full
+            reference at <a href="https://docs.satelink.network" className="text-sl-accent underline">docs.satelink.network</a>.
           </p>
         </div>
       </section>
@@ -132,19 +138,24 @@ export default async function IntelligencePage() {
       <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
         <Disclosure title="What this is">
           SaaS analytics — derived statistics from public market data. Not investment advice. Satelink
-          never takes custody of funds or crypto. Payments are processed by Dodo (card/UPI); x402 and
-          USDT are a separate crypto rail Dodo never processes.
+          never takes custody of funds or crypto. The Starter Pack is processed by Dodo (card/UPI); x402
+          and USDT are a separate crypto rail Dodo never processes.
         </Disclosure>
         <div className="mt-10">
           <h2 className="text-lg font-semibold text-sl-text">FAQ</h2>
-          <dl className="mt-4 grid gap-5 sm:grid-cols-2">
-            {FAQ.map(([q, a]) => (
-              <div key={q}>
-                <dt className="font-medium text-sl-text">{q}</dt>
-                <dd className="mt-1 text-sm text-sl-text-muted">{a}</dd>
-              </div>
-            ))}
-          </dl>
+          {FAQ.map((g) => (
+            <div key={g.group} className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">{g.group}</p>
+              <dl className="mt-3 grid gap-5 sm:grid-cols-2">
+                {g.items.map(([q, a]) => (
+                  <div key={q}>
+                    <dt className="font-medium text-sl-text">{q}</dt>
+                    <dd className="mt-1 text-sm text-sl-text-muted">{a}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
         </div>
       </section>
     </>

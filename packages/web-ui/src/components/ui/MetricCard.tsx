@@ -16,10 +16,12 @@ export interface MetricCardProps {
   description: string;
   /** true when the metric is a modelled/proxy statistic (e.g. liquidation-clusters) */
   isModel?: boolean;
+  /** Base path the "View sample" link points at; slug is appended. */
+  basePath?: string;
   className?: string;
 }
 
-export function MetricCard({ name, slug, kind, price, description, isModel, className }: MetricCardProps) {
+export function MetricCard({ name, slug, kind, price, description, isModel, basePath = "/products/trading-intelligence", className }: MetricCardProps) {
   return (
     <Card interactive className={cn("flex flex-col", className)}>
       <div className="flex items-start justify-between gap-3">
@@ -34,7 +36,7 @@ export function MetricCard({ name, slug, kind, price, description, isModel, clas
       </div>
       <p className="mt-3 flex-1 text-sm leading-relaxed text-sl-text-muted">{description}</p>
       <Link
-        href={`/intelligence/${slug}`}
+        href={`${basePath}/${slug}`}
         className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong"
       >
         View sample <ArrowRight className="size-3.5" />

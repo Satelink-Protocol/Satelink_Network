@@ -61,6 +61,9 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
+      // IA-v2 §3 product-move redirects (/intelligence → /products/*, /rpc →
+      // /products/rpc) live in src/middleware.ts REDIRECTS — edge-cached, one
+      // place, and where that file's own comment says they belong.
       // Migrated to real routes (src/app/terms, src/app/privacy) — the old
       // static public/terms.html and public/privacy.html files are removed,
       // so these paths must redirect rather than 404.

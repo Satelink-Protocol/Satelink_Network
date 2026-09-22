@@ -33,6 +33,15 @@ const SUBDOMAIN_MAP: Record<string, string> = {
 const REDIRECTS: Record<string, string> = {
   '/platform/pricing': '/pricing#platform',
   '/dashboard': '/satelink/os/mission-control',
+  // IA-v2 §3 product-move canonicalization — targets shipped in Phase 7.
+  // /intelligence/success is a REAL page (the #398 checkout claim) and is
+  // intentionally absent here, so it is never redirected.
+  '/intelligence': '/products/trading-intelligence',
+  '/intelligence/funding-rate-heatmap': '/products/trading-intelligence/funding-rate-heatmap',
+  '/intelligence/open-interest-shifts': '/products/trading-intelligence/open-interest-shifts',
+  '/intelligence/liquidation-clusters': '/products/trading-intelligence/liquidation-clusters',
+  '/intelligence/market-microstructure': '/products/trading-intelligence/market-microstructure',
+  '/rpc': '/products/rpc',
 }
 
 export function middleware(req: NextRequest) {
