@@ -151,7 +151,9 @@ const nextConfig: NextConfig = {
       "ent-api",
       "pair",
       "stream",
-      "support",
+      // "support" removed: the public IA-v2 site now owns /support/* (support
+      // center). No backend /support API is mounted or called, and the
+      // afterFiles proxy was shadowing the /support/[category] pages.
       "beta",
       "webhooks",
       "network-stats",
