@@ -135,6 +135,27 @@ E2E 99/99.
 - **Node Operator Terms** page created at `/network/operator-terms` with the moved obligations
   (rewards follow the 50/30/20 split; earnings are not guaranteed).
 
+## P5 — Auth (web UI; backend is Track B)
+- **Shared `AuthPanel`** powers /login and /signup: Google/Apple provider buttons, a divider, an
+  email form, a magic-link toggle, and a DPDP-style consent notice (signup) with itemized purposes
+  and Terms/Privacy links. States: loading, error, verify-email-sent, magic-link-sent,
+  account-exists, rate-limited, and "rolling out".
+- **/login is non-breaking.** It was the "Satelink admin access" page and is the redirect target of
+  the (admin)/(builder)/(distributor) console layouts. The redesign **keeps** the working
+  email/password → `/auth/login` flow (role decode + token storage), so those consoles are
+  unaffected; it only restyles it, removes the "admin access" copy, adds provider buttons, and
+  points operators to `/ops/login` (the existing ops-token login — staff login already lives there).
+  Default post-login redirect is `/console` (P6), overridable with `?next=`.
+- **No dead controls.** `authEnabled()` reads `NEXT_PUBLIC_AUTH_ENABLED` (unset today → false).
+  With it off, Google/Apple/magic-link and new-account signup show a "rolling out — notify me / use
+  keyless x402" state instead of failing; the /login email/password sign-in keeps working because it
+  uses the existing endpoint. When Track B ships Better Auth and the flag flips, the same UI calls
+  `/api/auth/sign-in/social` and the email verify/magic-link endpoints.
+- **P5 backend is Track B** (feat/api-auth-and-plans): Better Auth in apps/api (email+password with
+  verification, magic link, Google, Apple with runtime ES256 client secret, sessions + 2FA), account
+  linking by verified email, and the founder setup (Google Cloud OAuth, Apple Services ID + key,
+  Resend DNS) — see INFRA_SETUP.md.
+
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.

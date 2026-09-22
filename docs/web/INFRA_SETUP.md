@@ -123,3 +123,42 @@ Then add `jakuraa.com` and `www.jakuraa.com` as domains on the
 - **Railway (authenticated):** the §1 SQL against `Postgres-iQeW`. I've held off because it's DDL on the production instance; say "run the CMS DB SQL" and I will.
 - **Vercel (authenticated as `satelink`):** create the two projects + set env. Held off until the apps exist (Phase 4/11) so the projects link to real dirs.
 - **DNS:** registrar/Cloudflare access needed — these stay founder actions.
+
+---
+
+# web-v3-experience — founder checklist (auth, plans, env)
+
+These are the founder actions to light up P3.B (plans) and P5 (auth). Nothing here
+is executed during the build; the web ships behind flags so it is safe to defer.
+Flip `NEXT_PUBLIC_PLANS_ENABLED` / `NEXT_PUBLIC_AUTH_ENABLED` only after the
+matching Track B backend (`feat/api-auth-and-plans`) is deployed.
+
+## A. Google — Sign in with Google (OAuth 2.0)
+1. Google Cloud Console → create/select a project → **APIs & Services → OAuth consent screen**: External; app name "Satelink"; support email; app logo; **Privacy policy URL** `https://satelink.network/privacy`, **Terms URL** `https://satelink.network/terms`; **Authorised domain** `satelink.network`.
+2. **Credentials → Create credentials → OAuth client ID → Web application.**
+   - Authorised redirect URIs (derive host from env; Better Auth callback path):
+     - Production: `https://api.satelink.network/api/auth/callback/google`
+     - Preview: `https://<preview-host>/api/auth/callback/google`
+3. Copy **Client ID** and **Client secret** → env `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (apps/api).
+
+## B. Apple — Sign in with Apple
+1. Apple Developer Program → **Identifiers**: create an **App ID** with the "Sign in with Apple" capability.
+2. Create a **Services ID** (this is the web `clientId`, e.g. `network.satelink.web`): configure the domain `satelink.network` and the **Return URL** `https://api.satelink.network/api/auth/callback/apple` (add the preview host too). Register the private-email relay source.
+3. Create a **Key** with "Sign in with Apple", download the `.p8`. Record **Team ID**, **Key ID**, and the key file.
+4. Env (apps/api): `APPLE_CLIENT_ID` (Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 contents). The client secret is an ES256 JWT generated at runtime with `jose` (Apple rejects secrets valid > 6 months). The callback must accept a cross-site `POST` (`response_mode=form_post`), so the state cookie is `SameSite=None; Secure`. Handle private-relay emails and the first-login-only name.
+
+## C. Resend — transactional email
+1. Add and verify the sending domain in Resend; add the **SPF, DKIM, and DMARC** DNS records it provides.
+2. Sender: `no-reply@satelink.network`. Env: `RESEND_API_KEY` (apps/api). If unset, email auth is **disabled with a clear message** — never silently log-only.
+
+## D. Dodo — subscription products (TEST MODE only)
+Create Pro ($19/mo, $190/yr) and Max ($79/mo, $790/yr) subscription products plus the
+$50/$200 credit packs in **Dodo test mode**. Do **not** create live-mode products until
+after founder approval (§9). Wire the webhook to the Track B handler.
+
+## E. Vercel
+- Ensure **Vercel Pro** (for Web Analytics + preview budgets). Web Analytics is cookieless.
+
+## F. Environment variables (per app, preview + production)
+- apps/api (Track B): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `RESEND_API_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `DODO_API_KEY` (test), `DODO_WEBHOOK_SECRET`, `PLANS_ENABLED`.
+- apps/web: `NEXT_PUBLIC_AUTH_ENABLED`, `NEXT_PUBLIC_PLANS_ENABLED` (both `false` until the backend is live), and the existing `NEXT_PUBLIC_DODO_CREDIT_PACKS`.
