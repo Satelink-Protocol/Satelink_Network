@@ -66,7 +66,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const useCases = USE_CASES.map((u) => e(`/academy/use-cases/${u.slug}`, 0.6));
   const supportCollections = nonEmptyCollections().map((c) => e(`/support/${c.slug}`, 0.6));
   const supportArticles = ARTICLES.map((a) => e(`/support/${a.collection}/${a.slug}`, 0.5));
-  const legal = LEGAL_ORDER.map((s) => e(`/${s}`, 0.4)).concat([e("/terms", 0.5), e("/privacy", 0.5), e("/refund", 0.5)]);
+  // LEGAL_ORDER now includes terms/privacy/refund (P4), so no manual concat.
+  // operator-terms is network-scoped (not in LEGAL_ORDER) but listed for SEO.
+  const legal = LEGAL_ORDER.map((s) => e(`/${s}`, 0.5)).concat([e("/network/operator-terms", 0.4)]);
   const docs = DOCS.map((d) => e(`/docs/${d.slug}`, 0.7, "weekly"));
 
   return [

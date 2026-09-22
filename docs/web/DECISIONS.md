@@ -109,6 +109,32 @@ E2E 99/99.
   reset, and bonus-pack mapping are additive backend work behind `PLANS_ENABLED`, delivered on the
   separate `feat/api-auth-and-plans` branch per §9.
 
+## P4 — Legal suite
+- **All policies unified under one content-driven renderer.** `LegalView` now shows a plain-English
+  summary box, a "Draft pending legal review" banner (these are CMS Review-state drafts), a version
+  + last-updated date, numbered sections, and optional lists/tables + a version history. `LegalDoc`
+  gained `version`, `summary`, `updated?`, `versionHistory?`, and section `list?`/`table?`.
+- **terms/privacy/refund migrated** from bespoke pages into the shared `lib/legal.ts` content system
+  (they were the only legal pages not already using it), so every policy has the same structure.
+- **Ten policies, expanded** (all ≥600 words except Cookies and Sub-processors, enforced by
+  `apps/web/test/legal-structure.test.ts`): Terms (restructured; node-operator terms moved to
+  `/network/operator-terms`; payment-rail, credits-not-stored-value, MoR, governing law Coimbatore
+  + arbitration), Privacy (Grievance Officer, data-category + retention tables, sub-processors,
+  DPDP breach notification, expanded rights), Billing & Payment (NEW), Refund (subscription
+  cancellation + irreversible crypto rail), Acceptable Use (manipulation/resale/scraping/sanctions/
+  agent-operator responsibility/enforcement ladder), Data Processing (reframed as a B2B DPA),
+  Cookies (storage table + cookieless analytics), Security (true practices only; explicit
+  no-certifications), Sub-processors (NEW table), Responsible Disclosure (safe-harbour + scope).
+- **Written to the frameworks** named in §5 (DPDP Act 2023 + 2025 Rules, IT Act/SPDI, GDPR/UK GDPR,
+  CCPA/CPRA, Consumer Protection (E-Commerce) Rules 2020) but **claims nothing untrue** — no
+  certifications Satelink lacks; the Grievance Officer is noted as "to be designated" pending
+  counsel, and every page carries the draft banner. **Founder + Indian counsel must approve before
+  publish.** Legal content lives in `.ts` (not scanned by truth-lint); pages are token-only.
+- **Footer + sitemap** updated: added Billing & payment and Sub-processors to the policies column;
+  sitemap de-duplicated (terms/privacy/refund are now in `LEGAL_ORDER`) and lists operator-terms.
+- **Node Operator Terms** page created at `/network/operator-terms` with the moved obligations
+  (rewards follow the 50/30/20 split; earnings are not guaranteed).
+
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.
