@@ -48,7 +48,7 @@ function MachineShell({ children }: { children: React.ReactNode }) {
   const view = params.get('view') || 'mission-control';
 
   const go = (id: string) =>
-    router.push(id === 'mission-control' ? '/machine' : `/machine?view=${id}`);
+    router.push(id === 'mission-control' ? '/machine-console' : `/machine-console?view=${id}`);
 
   const activeLabel =
     MACHINE_NAV[0].items.find((i) => i.id === view)?.label ?? 'Mission Control';
