@@ -1,16 +1,21 @@
 // apps/web/src/app/intelligence/success/page.tsx
 //
 // T-1.4: Dodo redirects here after checkout (return_url set by
-// /api/dodo-checkout, `?account=<api_key>`). The webhook that actually
-// credits the account is a separate, asynchronous delivery from Dodo — it
-// can land a few seconds after this redirect — so this page polls balance
-// instead of assuming the credit already landed.
+// /api/dodo-checkout, `?claim=<one-time token>` — NEVER the api_key itself,
+// see /api/dodo-claim's header comment for why). This page exchanges that
+// token exactly once for the key, holds it only in React state, and never
+// places it in a URL, browser history, or a cross-origin request — balance
+// polling goes through /api/dodo-balance (a same-origin server-side proxy)
+// with the key in a POST body, not a query string.
+//
+// The webhook that actually credits the account is a separate, asynchronous
+// delivery from Dodo — it can land a few seconds after this redirect — so
+// this page polls balance instead of assuming the credit already landed.
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.satelink.network";
 const POLL_MS = 3000;
 const MAX_POLLS = 20; // ~1 minute
 
@@ -19,37 +24,63 @@ type Balance = {
   status: "funded" | "empty";
 };
 
-function maskKey(key: string): string {
-  if (key.length <= 12) return key;
-  return `${key.slice(0, 10)}${"•".repeat(8)}${key.slice(-4)}`;
+async function exchangeClaim(claimToken: string): Promise<string> {
+  const res = await fetch("/api/dodo-claim", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ claimToken }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; apiKey?: string };
+  if (!res.ok || !data.apiKey) {
+    throw new Error(res.status === 410 ? "expired" : "failed");
+  }
+  return data.apiKey;
+}
+
+async function fetchBalance(apiKey: string): Promise<Balance | null> {
+  const res = await fetch("/api/dodo-balance", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ apiKey }),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as Balance & { ok?: boolean };
+  return data;
 }
 
 function SuccessContent() {
   const params = useSearchParams();
-  const apiKey = params.get("account") || "";
+  const claimToken = params.get("claim") || "";
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [copied, setCopied] = useState(false);
   const [polls, setPolls] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const exchangedRef = useRef(false);
 
+  // Exchange the claim token exactly once — StrictMode/fast-refresh can
+  // mount this effect twice in dev, so a ref guards against a double POST
+  // (the token is single-use server-side too, but this avoids a spurious
+  // "expired" error on the second call in dev).
   useEffect(() => {
-    if (!apiKey) {
-      setError("Missing account reference — check your email for the receipt, or contact support.");
+    if (!claimToken) {
+      setError("Missing claim reference — check your email for the receipt, or contact support.");
       return;
     }
+    if (exchangedRef.current) return;
+    exchangedRef.current = true;
+    exchangeClaim(claimToken)
+      .then(setApiKey)
+      .catch(() => setError("This claim link is invalid or has expired — contact support with your payment receipt."));
+  }, [claimToken]);
+
+  useEffect(() => {
+    if (!apiKey) return;
     let cancelled = false;
     async function poll() {
-      try {
-        const res = await fetch(`${API_BASE}/credits/balance?apiKey=${encodeURIComponent(apiKey)}`);
-        if (res.ok) {
-          const data = (await res.json()) as Balance;
-          if (!cancelled) setBalance(data);
-        }
-      } catch {
-        // network hiccup — the interval will retry
-      } finally {
-        if (!cancelled) setPolls((p) => p + 1);
-      }
+      const data = await fetchBalance(apiKey!);
+      if (!cancelled && data) setBalance(data);
+      if (!cancelled) setPolls((p) => p + 1);
     }
     poll();
     const id = setInterval(() => {
@@ -71,6 +102,7 @@ function SuccessContent() {
   const timedOut = !!apiKey && !funded && polls >= MAX_POLLS;
 
   function copy() {
+    if (!apiKey) return;
     navigator.clipboard.writeText(apiKey).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

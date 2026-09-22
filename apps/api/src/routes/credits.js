@@ -12,15 +12,18 @@ export function createCreditsRouter(db, logger) {
   const router = express.Router();
   const log = logger || console;
 
-  // GET /credits/balance?wallet=0x...  OR  GET /credits/balance?apiKey=sk_...
+  // GET /credits/balance?wallet=0x...  OR  GET /credits/balance with X-Api-Key header
   //
   // apiKey lookup added for T-1.4 (Dodo checkout success page): a
   // Dodo-funded account (api_credits row keyed by api_key, e.g. "sk_dodo_...")
   // has no wallet_address at all, so the wallet-only lookup below can never
-  // find it. Exactly one of wallet/apiKey is required.
+  // find it. Deliberately a HEADER, not a query param — a wallet address is
+  // public info either way, but an api_key is a bearer credential, and a
+  // query param would land it in access logs and any Referer this page's
+  // outbound requests send. Exactly one of wallet/X-Api-Key is required.
   router.get('/balance', async (req, res) => {
     const wallet = req.query.wallet?.toLowerCase();
-    const apiKey = typeof req.query.apiKey === 'string' ? req.query.apiKey.trim() : '';
+    const apiKey = typeof req.header('x-api-key') === 'string' ? req.header('x-api-key').trim() : '';
 
     if (apiKey) {
       if (!apiKey.startsWith('sk_')) {
@@ -53,7 +56,7 @@ export function createCreditsRouter(db, logger) {
     }
 
     if (!wallet || !wallet.match(/^0x[0-9a-f]{40}$/)) {
-      return res.status(400).json({ error: 'Invalid or missing wallet parameter (or pass apiKey instead)' });
+      return res.status(400).json({ error: 'Invalid or missing wallet parameter (or pass an X-Api-Key header instead)' });
     }
 
     try {

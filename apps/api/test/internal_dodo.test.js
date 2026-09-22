@@ -16,6 +16,7 @@ function makePool() {
     subscriptions: new Map(),   // `${provider}:${provider_subscription_id}` -> row
     usageDaily: new Map(),
     unmatchedPayments: [],      // rows, in insertion order
+    checkoutClaims: new Map(),  // token -> {api_key, created_at, expires_at, claimed_at}
   };
 
   function client() {
@@ -125,6 +126,20 @@ function makePool() {
             recurring_amount_minor: amountMinor, current_period_start: periodStart, current_period_end: periodEnd,
           });
           return { rowCount: 1, rows: [] };
+        }
+
+        // ── dodo_checkout_claims (T-1.4 security fix)
+        if (s.startsWith('INSERT INTO dodo_checkout_claims')) {
+          const [token, apiKey, createdAt, expiresAt] = params;
+          state.checkoutClaims.set(token, { api_key: apiKey, created_at: createdAt, expires_at: expiresAt, claimed_at: null });
+          return { rowCount: 1, rows: [] };
+        }
+        if (s.startsWith('UPDATE dodo_checkout_claims')) {
+          const [now, token] = params;
+          const row = state.checkoutClaims.get(token);
+          if (!row || row.claimed_at !== null || row.expires_at <= now) return { rows: [] };
+          row.claimed_at = now;
+          return { rows: [{ api_key: row.api_key }] };
         }
 
         throw new Error('unexpected SQL: ' + s);
@@ -521,5 +536,73 @@ describe('POST /internal/dodo/resolve-account (T-1.4: pre-payment account provis
     expect(res.body.apiKey).to.equal('sk_dodo_existing');
     expect(res.body.created).to.equal(false);
     expect(pool.state.apiCredits.size).to.equal(1); // no new account for the "different" email
+  });
+});
+
+describe('POST /internal/dodo/create-claim + exchange-claim (T-1.4: api_key never in a URL)', () => {
+  let pool, app;
+  const prevSecret = process.env.DODO_INTERNAL_SECRET;
+  before(() => { process.env.DODO_INTERNAL_SECRET = SECRET; });
+  after(() => { process.env.DODO_INTERNAL_SECRET = prevSecret; });
+
+  beforeEach(() => {
+    pool = makePool();
+    app = buildApp(pool);
+  });
+
+  it('create-claim requires the secret and an apiKey', async () => {
+    const noSecret = await request(app).post('/internal/dodo/create-claim').send({ apiKey: 'sk_dodo_x' });
+    expect(noSecret.status).to.equal(401);
+
+    const noKey = await request(app).post('/internal/dodo/create-claim').set('x-dodo-internal-secret', SECRET).send({});
+    expect(noKey.status).to.equal(400);
+  });
+
+  it('create-claim mints a token, exchange-claim resolves it to the same apiKey exactly once', async () => {
+    const created = await request(app).post('/internal/dodo/create-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ apiKey: 'sk_dodo_buyer' });
+    expect(created.status).to.equal(200);
+    expect(created.body.claimToken).to.be.a('string').with.length.greaterThan(20);
+
+    const exchanged = await request(app).post('/internal/dodo/exchange-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ claimToken: created.body.claimToken });
+    expect(exchanged.status).to.equal(200);
+    expect(exchanged.body.apiKey).to.equal('sk_dodo_buyer');
+  });
+
+  it('a token can only be exchanged ONCE — the second attempt is 410', async () => {
+    const created = await request(app).post('/internal/dodo/create-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ apiKey: 'sk_dodo_once' });
+    const first = await request(app).post('/internal/dodo/exchange-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ claimToken: created.body.claimToken });
+    expect(first.status).to.equal(200);
+
+    const second = await request(app).post('/internal/dodo/exchange-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ claimToken: created.body.claimToken });
+    expect(second.status).to.equal(410);
+    expect(second.body.ok).to.equal(false);
+  });
+
+  it('an unknown/garbage token is 410, not a 500', async () => {
+    const res = await request(app).post('/internal/dodo/exchange-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ claimToken: 'not-a-real-token' });
+    expect(res.status).to.equal(410);
+  });
+
+  it('an expired token cannot be exchanged', async () => {
+    const created = await request(app).post('/internal/dodo/create-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ apiKey: 'sk_dodo_expired' });
+    // Force expiry directly in the mock store (same effect as the 10-minute TTL elapsing).
+    const row = pool.state.checkoutClaims.get(created.body.claimToken);
+    row.expires_at = Date.now() - 1000;
+
+    const res = await request(app).post('/internal/dodo/exchange-claim').set('x-dodo-internal-secret', SECRET)
+      .send({ claimToken: created.body.claimToken });
+    expect(res.status).to.equal(410);
+  });
+
+  it('exchange-claim requires the secret', async () => {
+    const res = await request(app).post('/internal/dodo/exchange-claim').send({ claimToken: 'whatever' });
+    expect(res.status).to.equal(401);
   });
 });

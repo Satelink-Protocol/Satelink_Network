@@ -54,11 +54,10 @@ describe("POST /api/dodo-checkout", () => {
     expect(res.body.error).toBe("unknown_or_unconfigured_product");
   });
 
-  it("resolves an account, embeds satelink_account_id in metadata, and returns the checkout URL", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ok: true, apiKey: "sk_dodo_new123", created: true }),
-    });
+  it("resolves an account, creates a claim token, embeds satelink_account_id in metadata, and puts ONLY the token (never the api_key) in return_url", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, apiKey: "sk_dodo_new123", created: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, claimToken: "claim_abc123" }) });
     createCheckoutSessionMock.mockResolvedValueOnce({
       session_id: "cks_1",
       checkout_url: "https://checkout.dodopayments.com/cks_1",
@@ -75,30 +74,48 @@ describe("POST /api/dodo-checkout", () => {
     expect(resolveUrl).toBe("http://localhost:8080/internal/dodo/resolve-account");
     expect(JSON.parse(resolveOpts.body)).toEqual({ email: "buyer@example.com" });
 
-    // checkout session was created with the resolved api_key as satelink_account_id
+    // create-claim was called with the resolved api_key
+    const [claimUrl, claimOpts] = fetchMock.mock.calls[1];
+    expect(claimUrl).toBe("http://localhost:8080/internal/dodo/create-claim");
+    expect(JSON.parse(claimOpts.body)).toEqual({ apiKey: "sk_dodo_new123" });
+
+    // checkout session was created with the resolved api_key as satelink_account_id,
+    // but the return_url carries ONLY the opaque claim token — never the key itself.
     const [payload, config] = createCheckoutSessionMock.mock.calls[0];
     expect(payload.metadata).toEqual({ satelink_account_id: "sk_dodo_new123" });
     expect(payload.customer).toEqual({ email: "buyer@example.com" });
     expect(payload.product_cart).toEqual([{ product_id: "pdt_pack", quantity: 1 }]);
-    expect(payload.return_url).toBe("https://satelink.network/intelligence/success?account=sk_dodo_new123");
+    expect(payload.return_url).toBe("https://satelink.network/intelligence/success?claim=claim_abc123");
+    expect(payload.return_url).not.toContain("sk_dodo_new123");
     expect(config).toEqual({ bearerToken: "key_test", environment: "test_mode" });
   });
 
-  it("returns 502 when account resolution fails, and never calls createCheckoutSession", async () => {
+  it("returns 502 when account resolution fails, and never calls create-claim or createCheckoutSession", async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500, text: async () => "boom" });
     const { POST } = await import("./route");
     const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));
     expect(res.status).toBe(502);
     expect(res.body.error).toBe("account_resolution_failed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 502 when claim token creation fails, and never calls createCheckoutSession", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, apiKey: "sk_dodo_z", created: false }) })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => "boom" });
+    const { POST } = await import("./route");
+    const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe("claim_token_failed");
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
   it("returns 503 when Dodo environment/API key is not configured", async () => {
     delete process.env.DODO_PAYMENTS_API_KEY;
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ok: true, apiKey: "sk_dodo_x", created: false }),
-    });
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, apiKey: "sk_dodo_x", created: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, claimToken: "claim_x" }) });
     const { POST } = await import("./route");
     const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));
     expect(res.status).toBe(503);
@@ -106,10 +123,9 @@ describe("POST /api/dodo-checkout", () => {
   });
 
   it("returns 502 when Dodo's createCheckoutSession itself fails", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ok: true, apiKey: "sk_dodo_y", created: false }),
-    });
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, apiKey: "sk_dodo_y", created: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, claimToken: "claim_y" }) });
     createCheckoutSessionMock.mockRejectedValueOnce(new Error("dodo api down"));
     const { POST } = await import("./route");
     const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));

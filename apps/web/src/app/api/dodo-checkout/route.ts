@@ -54,6 +54,32 @@ async function resolveAccount(email: string): Promise<string> {
   return data.apiKey;
 }
 
+// T-1.4 security fix: the success redirect must never carry the raw
+// api_key in its query string (browser history, server access logs, any
+// Referer header the success page's own outbound requests send). This
+// mints a one-time, 10-minute claim token instead — see
+// apps/api/src/routes/internal_dodo.js's createCheckoutClaim/exchangeCheckoutClaim.
+async function createClaimToken(apiKey: string): Promise<string> {
+  const secret = process.env.DODO_INTERNAL_SECRET;
+  if (!secret) {
+    throw new Error("[dodo-checkout] DODO_INTERNAL_SECRET is not set — cannot create a claim token");
+  }
+  const res = await fetch(`${INTERNAL_API_URL}/internal/dodo/create-claim`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-dodo-internal-secret": secret },
+    body: JSON.stringify({ apiKey }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`[dodo-checkout] create-claim failed: ${res.status} ${text}`.slice(0, 500));
+  }
+  const data = (await res.json()) as { ok?: boolean; claimToken?: string };
+  if (!data?.claimToken) {
+    throw new Error("[dodo-checkout] create-claim returned no claimToken");
+  }
+  return data.claimToken;
+}
+
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
@@ -85,6 +111,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "account_resolution_failed" }, { status: 502 });
   }
 
+  let claimToken: string;
+  try {
+    claimToken = await createClaimToken(apiKey);
+  } catch (err) {
+    console.error("[dodo-checkout] claim token creation failed:", (err as Error).message);
+    return NextResponse.json({ ok: false, error: "claim_token_failed" }, { status: 502 });
+  }
+
   let dodoConfig: ReturnType<typeof getDodoClientConfig>;
   try {
     dodoConfig = getDodoClientConfig();
@@ -101,7 +135,7 @@ export async function POST(req: NextRequest) {
         product_cart: [{ product_id: pack.productId, quantity: 1 }],
         customer: { email },
         metadata: { satelink_account_id: apiKey },
-        return_url: `${siteUrl}/intelligence/success?account=${encodeURIComponent(apiKey)}`,
+        return_url: `${siteUrl}/intelligence/success?claim=${encodeURIComponent(claimToken)}`,
       },
       dodoConfig
     );
