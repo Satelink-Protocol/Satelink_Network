@@ -156,6 +156,29 @@ E2E 99/99.
   linking by verified email, and the founder setup (Google Cloud OAuth, Apple Services ID + key,
   Resend DNS) — see INFRA_SETUP.md.
 
+## P6 — Unified console (UI shell)
+- **New customer console at `/console`** (dark by default per §7.2 — the layout sets
+  `data-theme="dark"` on a wrapper so the tokens re-scope). IA: Home, Products (Trading
+  Intelligence / x402 / RPC), Agents & keys, Usage, Billing, Docs & SDKs, Settings — via
+  `ConsoleShell` (left nav with product colours + responsive mobile drawer + top bar).
+- **Truth rule enforced (§7.3):** every widget without a live endpoint renders a designed empty
+  state (`ConsoleEmpty` / `KpiTile` "No activity yet") — never "—". truth-lint and the hex gate now
+  scan `/console` too; console E2E asserts no bare em-dash anywhere.
+- **No dead controls:** key creation, CSV export, notifications carry a Planned badge or a
+  "rolling out" state; Delete account shows the DPDP 48-hour notice and records intent; Download my
+  data records the request. Real data + session-gating are Track B.
+- **`/dashboard` → `/console`** (was → mission-control); nav E2E updated. The larger OS→`/ops`
+  physical relocation (§7.1) is **deferred**: the operator dashboard lives at `/satelink/os/*` and
+  moving it wholesale is an operator-side migration out of the Track W console-UI scope. `/ops`
+  already enforces a staff gate (redirects to `/ops/login` without an ops session) — console E2E
+  asserts it is unreachable without staff.
+- **a11y:** added `@axe-core/playwright`; console E2E runs axe on every console page and asserts no
+  critical/serious violations (dark tokens meet AA via the P1 contrast test). Broader Lighthouse/axe
+  budgets across all routes stay deferred to the Vercel preview per the repo convention.
+- **Note:** the `/ops` staff guard redirect-loops on the localhost apex (the ops-pathname header is
+  only set for the ops subdomain); this is a test-env artifact — in production `/ops` is served on
+  the ops subdomain where the header is present and it redirects cleanly to `/ops/login`.
+
 ## Follow-ups (web needs a new API — logged, not built)
 - `TODO(email-provider)`: corporate enquiry delivery has no transactional email backend. Needs Resend or apps/api contact endpoint.
 - `TODO(catalog-endpoint)`: `GET https://rpc.satelink.network/v1/intelligence` is the live catalog source; if unreachable at build/ISR time, pages fall back to `data/catalog.fallback.json`.

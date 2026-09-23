@@ -17,6 +17,7 @@ const SCOPED = [
   join(WEBUI, "site"),
   join(ROOT, "app", "(marketing)"),
   join(ROOT, "app", "(checkout)"),
+  join(ROOT, "app", "console"), // web-v3 P6 — console is token-only
 ];
 const ALLOWLIST = ["terminalwindow", "chart", "palette", "og", "opengraph", "icon"];
 

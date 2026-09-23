@@ -13,7 +13,9 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(__dirname, "..", "src", "app");
-const SCOPED = [join(ROOT, "(marketing)"), join(ROOT, "(checkout)")];
+// Console (web-v3 P6) is included: no "—" as a stat value, banned marketing
+// phrases, and Dodo surfaces must carry a compliance <Disclosure> (§7.3).
+const SCOPED = [join(ROOT, "(marketing)"), join(ROOT, "(checkout)"), join(ROOT, "console")];
 
 // Note: we ban the PROMISSORY sense of "guaranteed" (guaranteed returns /
 // profit / …), not the bare word — "not guaranteed" / "no guarantee" are

@@ -32,7 +32,7 @@ const SUBDOMAIN_MAP: Record<string, string> = {
 // added in Phase 6 once those targets ship. `to` may include a hash.
 const REDIRECTS: Record<string, string> = {
   '/platform/pricing': '/pricing#platform',
-  '/dashboard': '/satelink/os/mission-control',
+  '/dashboard': '/console',
   // IA-v2 §3 product-move canonicalization — targets shipped in Phase 7.
   // /intelligence/success is a REAL page (the #398 checkout claim) and is
   // intentionally absent here, so it is never redirected.
