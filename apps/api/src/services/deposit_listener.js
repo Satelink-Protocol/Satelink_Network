@@ -32,14 +32,26 @@ const REVENUE_VAULT_ABI = [
 const USDT_DECIMALS = 6;
 const LOG_PREFIX = '[DepositListener]';
 
+// BUG FIX (2026-09-23, fix/deposit-listener-cursor-resume): maxLookbackBlocks
+// and initialLookbackBlocks were silently dropped from 50_000/10_000 to
+// 2_000/2_000 in ab02dd2 (#227, 2026-07-04) — a PR whose commit message says
+// only chunkBlocks (the per-eth_getLogs-call range, correctly kept small for
+// free RPC providers) was meant to change ("confirmations... unchanged",
+// "pollIntervalMs... unchanged"; maxLookbackBlocks/initialLookbackBlocks
+// weren't mentioned at all). 2_000 blocks is ~1 hour on Polygon, not the "~1
+// day" the comment (unchanged since before the regression) still claims.
+// Restored to the original, comment-matching values. See
+// docs/api/DEPOSIT_LISTENER_INCIDENT.md for the full analysis and the
+// read-only query to check whether any deposit was actually missed in
+// production during the ~11-week window this was wrong.
 const DEFAULTS = {
   pollIntervalMs: parseInt(process.env.DEPOSIT_POLL_INTERVAL_MS || '60000'),
   confirmations: parseInt(process.env.DEPOSIT_CONFIRMATIONS || String(MIN_CONFIRMATIONS)), // single source of truth with the claim route
   // Max block span per eth_getLogs call. Free RPC providers reject ranges
   // larger than 10–500 blocks, so 5_000 made every poll fail.
   chunkBlocks: parseInt(process.env.DEPOSIT_CHUNK_BLOCKS || '500'),
-  maxLookbackBlocks: parseInt(process.env.DEPOSIT_MAX_LOOKBACK_BLOCKS || '2000'),            // ~1 day on Polygon; caps a cold-start scan
-  initialLookbackBlocks: parseInt(process.env.DEPOSIT_INITIAL_LOOKBACK_BLOCKS || '2000'),        // first-run window when no cursor exists
+  maxLookbackBlocks: parseInt(process.env.DEPOSIT_MAX_LOOKBACK_BLOCKS || '50000'),           // ~1 day on Polygon; caps a cold-start OR long-gap scan
+  initialLookbackBlocks: parseInt(process.env.DEPOSIT_INITIAL_LOOKBACK_BLOCKS || '10000'),   // first-run window when no cursor exists
 };
 
 export class DepositListener {
@@ -139,9 +151,25 @@ export class DepositListener {
     if (toBlock <= 0) return;
 
     const cursor = Math.max(await this._dbCursor(), this._lastScanned);
-    let fromBlock = cursor > 0 ? cursor + 1 : toBlock - this.opts.initialLookbackBlocks;
-    // Bound a cold or long-idle start so we never scan an unbounded range.
-    fromBlock = Math.max(fromBlock, toBlock - this.opts.maxLookbackBlocks, 0);
+    const cursorFrom = cursor > 0 ? cursor + 1 : toBlock - this.opts.initialLookbackBlocks;
+    // Bound a cold or long-idle start so a single poll never tries to scan an
+    // unbounded range (rate-limit politeness toward the RPC provider) — but if
+    // that bound actually forces us PAST a real, trustworthy DB cursor, blocks
+    // in between are never going to be scanned by anyone. That must never be
+    // silent: log it loudly (audit trail) so it's operationally recoverable
+    // (Polygonscan + POST /api/keys/deposit for a registered wallet — see the
+    // module header) instead of a deposit quietly vanishing.
+    const boundedFrom = Math.max(cursorFrom, toBlock - this.opts.maxLookbackBlocks, 0);
+    if (cursor > 0 && boundedFrom > cursorFrom) {
+      this.log.error(
+        `${LOG_PREFIX} GAP SKIPPED: cursor=${cursor} but the poll gap exceeds ` +
+        `maxLookbackBlocks=${this.opts.maxLookbackBlocks} — blocks ${cursorFrom}..${boundedFrom - 1} ` +
+        `will NOT be scanned by this listener. If a deposit landed in that range, it will not be ` +
+        `auto-credited; verify on Polygonscan (vault ${this.vaultAddress || '(unset)'}) and use ` +
+        `POST /api/keys/deposit to claim it manually.`
+      );
+    }
+    const fromBlock = boundedFrom;
     if (fromBlock > toBlock) return; // fully caught up
 
     let credited = 0;
