@@ -358,6 +358,31 @@ describe('DepositListener — canonical crediting + hardening', () => {
     expect(cursorOf(pool)).to.equal(102_000);
   });
 
+  it('boot guard — a maxBlocksPerPoll below the catch-up floor is clamped UP (never permanently behind)', () => {
+    const errors = [];
+    const loud = { info() {}, warn() {}, error: (m) => errors.push(m), debug() {} };
+    const pool = makePool();
+    // 300s poll → Polygon produces ~150 blocks/poll → floor = 2×150 = 300.
+    // A config of 100 (e.g. a leftover DEPOSIT_MAX_LOOKBACK_BLOCKS=100 misread)
+    // would fall behind ~50 blocks every poll, forever.
+    const listener = new DepositListener(pool, loud, {
+      chainId: 137, pollIntervalMs: 300_000, maxBlocksPerPoll: 100,
+    });
+    expect(listener.opts.maxBlocksPerPoll).to.equal(300);
+    expect(errors.some((m) => /catch-up floor/.test(m)), 'an ERROR naming the catch-up floor must be logged').to.equal(true);
+  });
+
+  it('boot guard — a healthy maxBlocksPerPoll is left untouched', () => {
+    const errors = [];
+    const loud = { info() {}, warn() {}, error: (m) => errors.push(m), debug() {} };
+    const pool = makePool();
+    const listener = new DepositListener(pool, loud, {
+      chainId: 137, pollIntervalMs: 300_000, maxBlocksPerPoll: 50_000,
+    });
+    expect(listener.opts.maxBlocksPerPoll).to.equal(50_000);
+    expect(errors).to.have.length(0);
+  });
+
   it('RPC error mid-chunk — the cursor does NOT advance past the failed chunk; the next poll re-scans it', async () => {
     const pool = makePool({ account: FREE_ACCOUNT });
     pool.state.scanCursor.set(137, 200_000);

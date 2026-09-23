@@ -82,6 +82,25 @@ export class DepositListener {
     this.db = db;
     this.log = logger || console;
     this.opts = { ...DEFAULTS, ...opts };
+    // Boot guard: a single poll MUST be able to scan more blocks than the chain
+    // produces between polls, or the listener falls PERMANENTLY behind — lag
+    // grows every cycle and can never reach head, even though bounded catch-up
+    // guarantees nothing is skipped. Polygon block time is ~2s, so the chain
+    // grows ~pollIntervalMs/2000 blocks per poll; require at least 2× that
+    // headroom. Never silently accept a self-defeating config: log ERROR and
+    // clamp UP to the floor. (This is exactly the failure mode a leftover
+    // DEPOSIT_MAX_LOOKBACK_BLOCKS=100 would have caused if it still fed this.)
+    const blocksPerPoll = this.opts.pollIntervalMs / 2000; // ~Polygon blocks per poll (2s/block)
+    const catchUpFloor = Math.ceil(2 * blocksPerPoll);
+    if (this.opts.maxBlocksPerPoll < catchUpFloor) {
+      this.log.error(
+        `${LOG_PREFIX} maxBlocksPerPoll=${this.opts.maxBlocksPerPoll} is below the catch-up floor ` +
+        `${catchUpFloor} (2× the ~${Math.ceil(blocksPerPoll)} blocks Polygon produces per ` +
+        `${this.opts.pollIntervalMs}ms poll) — at this size the listener would fall permanently ` +
+        `behind head. Clamping maxBlocksPerPoll up to ${catchUpFloor}.`
+      );
+      this.opts.maxBlocksPerPoll = catchUpFloor;
+    }
     this.provider = opts.provider || null; // injectable for tests
     this.contract = null;
     this.running = false;
