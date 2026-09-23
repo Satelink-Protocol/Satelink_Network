@@ -1,10 +1,14 @@
 "use client";
 // AuthPanel (web-v3 P5) — the shared, Signal-styled auth surface for /login
-// (sign in) and /signup (sign up). Provider buttons (Google/Apple), a divider,
-// an email form, a magic-link option, and — on signup — a DPDP-style consent
+// (sign in) and /signup (sign up). A Google provider button, a divider, an
+// email form, a magic-link option, and — on signup — a DPDP-style consent
 // notice with itemized purposes and links to Terms/Privacy.
 //
-// The Better Auth backend (email verification, Google, Apple, magic link) is
+// Supported sign-in (A6, 2026-09-23): Google + email (password with
+// verification, magic link). Apple is out for now — removed from UI, config,
+// and docs; see docs/web/DECISIONS.md.
+//
+// The Better Auth backend (email verification, Google, magic link) is
 // Track B (feat/api-auth-and-plans). Until NEXT_PUBLIC_AUTH_ENABLED is true,
 // social/magic-link/new-account signup shows a clear "rolling out" state and a
 // notify link — never a control that can't complete. Sign-in with an existing
@@ -36,14 +40,6 @@ function GoogleMark() {
     </svg>
   );
 }
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden focusable="false" fill="currentColor">
-      <path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85s-1.8-.83-3-.8c-1.5.02-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.6 2.3 2.8 2.25 1.1-.05 1.6-.72 2.9-.72s1.8.72 3 .7c1.2-.02 2-1.1 2.7-2.2.85-1.25 1.2-2.46 1.2-2.5-.03-.02-2.3-.9-2.3-3.5zM14.2 5.4c.6-.75 1-1.8.9-2.9-.9.04-2 .6-2.6 1.36-.55.65-1 1.7-.9 2.7 1 .08 2-.5 2.6-1.16z" />
-    </svg>
-  );
-}
-
 export function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -58,9 +54,9 @@ export function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
 
   const notifyHref = "/contact-sales?topic=account";
 
-  async function onProvider(provider: "google" | "apple") {
+  async function onProvider(provider: "google") {
     if (!enabled) {
-      setStatus({ k: "rolling-out", what: provider === "google" ? "Google sign-in" : "Apple sign-in" });
+      setStatus({ k: "rolling-out", what: "Google sign-in" });
       return;
     }
     // Better Auth social sign-in (Track B). Namespace is /api/identity, never
@@ -120,13 +116,10 @@ export function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
         {isSignup ? "Start free — 300 Trading-Intelligence calls a month." : "Welcome back to Satelink."}
       </p>
 
-      {/* Provider buttons */}
+      {/* Provider button */}
       <div className="mt-6 grid gap-2">
         <Button variant="secondary" className="w-full justify-center" onClick={() => onProvider("google")} type="button">
           <GoogleMark /> Continue with Google
-        </Button>
-        <Button variant="secondary" className="w-full justify-center" onClick={() => onProvider("apple")} type="button">
-          <AppleMark /> Continue with Apple
         </Button>
       </div>
 

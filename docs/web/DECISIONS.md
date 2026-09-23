@@ -146,18 +146,25 @@ E2E 99/99.
   (rewards follow the 50/30/20 split; earnings are not guaranteed).
 
 ## P5 — Auth (web UI; backend is Track B)
-- **Shared `AuthPanel`** powers /login and /signup: Google/Apple provider buttons, a divider, an
+- **Apple is out for now — founder decision (A6, 2026-09-23).** Removed from `AuthPanel.tsx` (the
+  button, its SVG mark, the `onProvider` union type), `console/settings`, legal copy (Terms
+  eligibility, Privacy auth-provider-profile row, Privacy/Sub-processors sub-processor tables),
+  `INFRA_SETUP.md` (whole Apple provisioning section + its env vars), and E2E (`auth.spec.ts` now
+  asserts zero Apple buttons). Not flag-gated — the removal was small and contained enough not to
+  warrant `AUTH_APPLE_ENABLED=false` scaffolding. Supported sign-in: **Google + email** (password
+  with verification, magic link). Track B's `better_auth.mjs` mirrors this removal.
+- **Shared `AuthPanel`** powers /login and /signup: a Google provider button, a divider, an
   email form, a magic-link toggle, and a DPDP-style consent notice (signup) with itemized purposes
   and Terms/Privacy links. States: loading, error, verify-email-sent, magic-link-sent,
   account-exists, rate-limited, and "rolling out".
 - **/login is non-breaking.** It was the "Satelink admin access" page and is the redirect target of
   the (admin)/(builder)/(distributor) console layouts. The redesign **keeps** the working
   email/password → `/auth/login` flow (role decode + token storage), so those consoles are
-  unaffected; it only restyles it, removes the "admin access" copy, adds provider buttons, and
+  unaffected; it only restyles it, removes the "admin access" copy, adds the provider button, and
   points operators to `/ops/login` (the existing ops-token login — staff login already lives there).
   Default post-login redirect is `/console` (P6), overridable with `?next=`.
 - **No dead controls.** `authEnabled()` reads `NEXT_PUBLIC_AUTH_ENABLED` (unset today → false).
-  With it off, Google/Apple/magic-link and new-account signup show a "rolling out — notify me / use
+  With it off, Google/magic-link and new-account signup show a "rolling out — notify me / use
   keyless x402" state instead of failing; the /login email/password sign-in keeps working because it
   uses the existing endpoint. When Track B ships Better Auth and the flag flips, the same UI calls
   `/api/identity/sign-in/social` and the email verify/magic-link endpoints.
@@ -166,12 +173,11 @@ E2E 99/99.
   `/api/auth`; giving Better Auth its own namespace removes any risk of the new customer-auth
   surface shadowing, or being shadowed by, that existing router, now or as either evolves. Every
   reference across the web (`AuthPanel.tsx`) and the API (`better_auth.mjs`'s default `basePath` +
-  `baseURL`, `BETTER_AUTH.md`) uses `/api/identity`; `INFRA_SETUP.md`'s OAuth redirect URIs are
-  `/api/identity/callback/{google,apple}`, not `/api/auth/callback/...`.
+  `baseURL`, `BETTER_AUTH.md`) uses `/api/identity`; `INFRA_SETUP.md`'s OAuth redirect URI is
+  `/api/identity/callback/google`, not `/api/auth/callback/...`.
 - **P5 backend is Track B** (feat/api-auth-and-plans): Better Auth in apps/api (email+password with
-  verification, magic link, Google, Apple with runtime ES256 client secret, sessions + 2FA), account
-  linking by verified email, and the founder setup (Google Cloud OAuth, Apple Services ID + key,
-  Resend DNS) — see INFRA_SETUP.md.
+  verification, magic link, Google, sessions + 2FA), account linking by verified email, and the
+  founder setup (Google Cloud OAuth, Resend DNS) — see INFRA_SETUP.md.
 
 ## P6 — Unified console (UI shell)
 - **New customer console at `/console`** (dark by default per §7.2 — the layout sets

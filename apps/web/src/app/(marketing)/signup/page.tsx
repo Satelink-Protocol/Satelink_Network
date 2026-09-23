@@ -1,4 +1,4 @@
-// /signup — customer sign-up (web-v3 P5). Google/Apple/email sign-up with a
+// /signup — customer sign-up (web-v3 P5). Google/email sign-up with a
 // DPDP-style consent notice via the shared AuthPanel. New-account creation
 // requires the Better Auth backend (Track B); until NEXT_PUBLIC_AUTH_ENABLED is
 // on, the form shows a "rolling out — notify me" state and the other real ways

@@ -9,7 +9,7 @@ import { DownloadData, DeleteAccount } from "./AccountActions";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const SIGN_IN_METHODS = ["Email & password", "Google", "Apple"];
+const SIGN_IN_METHODS = ["Email & password", "Google"]; // Apple is out for now (A6)
 
 export default function SettingsPage() {
   return (
@@ -25,14 +25,14 @@ export default function SettingsPage() {
         </Panel>
 
         <Panel title="Sign-in methods" action={<PlannedBadge>Manage in Track B</PlannedBadge>}>
-          <ul className="grid gap-2 sm:grid-cols-3">
+          <ul className="grid gap-2 sm:grid-cols-2">
             {SIGN_IN_METHODS.map((m) => (
               <li key={m} className="flex items-center justify-between rounded-[var(--sl-radius)] border border-sl-border px-3 py-2 text-sm text-sl-text-muted">
                 {m} <span className="text-xs text-sl-text-subtle">Link</span>
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-sl-text-subtle">Link Google/Apple/email to one account by verified email. Two-factor authentication (TOTP) is available for extra security.</p>
+          <p className="mt-3 text-xs text-sl-text-subtle">Link Google/email to one account by verified email. Two-factor authentication (TOTP) is available for extra security.</p>
         </Panel>
 
         <Panel title="Active sessions">

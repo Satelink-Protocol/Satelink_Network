@@ -1,6 +1,6 @@
 // /login — customer sign-in (web-v3 P5). Signal-styled, standalone (no marketing
 // chrome). Redesigned from the old "admin access" page: it now presents Google/
-// Apple/email sign-in via the shared AuthPanel while preserving the working
+// email sign-in via the shared AuthPanel while preserving the working
 // email/password → /auth/login flow, so the operator/builder/distributor
 // consoles are unaffected. Operators sign in at /ops/login.
 import type { Metadata } from "next";

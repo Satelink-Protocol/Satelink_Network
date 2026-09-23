@@ -53,7 +53,7 @@ export const LEGAL: Record<string, LegalDoc> = {
     sections: [
       { heading: "Eligibility and accounts", body: [
         "You must be at least 18 years old and able to form a binding contract. The Services are intended for business and developer use; they are not directed to children.",
-        "You may sign in with email and password, or with Google or Apple. You are responsible for keeping your credentials and API keys secure, and for all activity under your account or keys — including the activity of any autonomous agent you deploy with them.",
+        "You may sign in with email and password, or with Google. You are responsible for keeping your credentials and API keys secure, and for all activity under your account or keys — including the activity of any autonomous agent you deploy with them.",
       ] },
       { heading: "The Services", body: [
         "Satelink provides (a) derived Trading Intelligence — statistics computed from public market data; (b) a metered blockchain RPC gateway; and (c) machine-payment rails (x402, USDT, and prepaid credits). Discovery and pricing are published as public machine-readable JSON.",
@@ -117,7 +117,7 @@ export const LEGAL: Record<string, LegalDoc> = {
         headers: ["Category", "Examples"],
         rows: [
           ["Account", "Name, email, password hash, organization"],
-          ["Auth provider profile", "Basic profile from Google or Apple sign-in (email, name; Apple may relay a private email)"],
+          ["Auth provider profile", "Basic profile from Google sign-in (email, name)"],
           ["API usage", "Requests, endpoints, keys used, call counts, timestamps"],
           ["Device / network", "IP address, user agent, coarse location derived from IP"],
           ["Wallet", "Public wallet addresses used on the x402/USDT rail"],
@@ -143,7 +143,7 @@ export const LEGAL: Record<string, LegalDoc> = {
         ],
       } },
       { heading: "Sub-processors", body: [
-        "We use a small set of processors to run the Services. On-chain data is public and permanent and is not controlled by any processor. The current list is maintained at /sub-processors and includes Vercel, Railway, Dodo Payments, Google, Apple, our email provider, the x402 facilitator, and the blockchain networks we settle on.",
+        "We use a small set of processors to run the Services. On-chain data is public and permanent and is not controlled by any processor. The current list is maintained at /sub-processors and includes Vercel, Railway, Dodo Payments, Google, our email provider, the x402 facilitator, and the blockchain networks we settle on.",
       ] },
       { heading: "Cross-border transfers", body: [
         "Some processors are located outside India. Where personal data is transferred internationally, we rely on the transfer mechanisms permitted by applicable law and take steps to ensure an adequate level of protection.",
@@ -506,7 +506,6 @@ export const LEGAL: Record<string, LegalDoc> = {
           ["Railway", "API and database hosting", "Global (US)"],
           ["Dodo Payments", "Card/UPI payments (Merchant of Record)", "Global"],
           ["Google", "Sign in with Google", "Global"],
-          ["Apple", "Sign in with Apple", "Global"],
           ["Email provider", "Transactional email (verification, receipts)", "Global"],
           ["x402 facilitator", "x402 payment settlement", "Global"],
           ["Blockchain networks (Polygon, Base)", "On-chain settlement — public and permanent", "Public networks"],

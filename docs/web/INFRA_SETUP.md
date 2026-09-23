@@ -146,11 +146,11 @@ below uses `/api/identity/callback/...`, not `/api/auth/callback/...`.
      - Preview: `https://<preview-host>/api/identity/callback/google`
 3. Copy **Client ID** and **Client secret** → env `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (apps/api).
 
-## B. Apple — Sign in with Apple
-1. Apple Developer Program → **Identifiers**: create an **App ID** with the "Sign in with Apple" capability.
-2. Create a **Services ID** (this is the web `clientId`, e.g. `network.satelink.web`): configure the domain `satelink.network` and the **Return URL** `https://api.satelink.network/api/identity/callback/apple` (add the preview host too). Register the private-email relay source.
-3. Create a **Key** with "Sign in with Apple", download the `.p8`. Record **Team ID**, **Key ID**, and the key file.
-4. Env (apps/api): `APPLE_CLIENT_ID` (Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 contents). The client secret is an ES256 JWT generated at runtime with `jose` (Apple rejects secrets valid > 6 months). The callback must accept a cross-site `POST` (`response_mode=form_post`), so the state cookie is `SameSite=None; Secure`. Handle private-relay emails and the first-login-only name.
+## B. Apple — out for now (A6, 2026-09-23)
+Sign in with Apple was removed from the UI, config, and tests. Supported
+sign-in is Google + email (password with verification, magic link). If Apple
+is revisited later, treat it as new scope, not a resurrection of dead code —
+none was kept behind a flag (removal was small enough not to warrant one).
 
 ## C. Resend — transactional email
 1. Add and verify the sending domain in Resend; add the **SPF, DKIM, and DMARC** DNS records it provides.
@@ -165,5 +165,5 @@ after founder approval (§9). Wire the webhook to the Track B handler.
 - Ensure **Vercel Pro** (for Web Analytics + preview budgets). Web Analytics is cookieless.
 
 ## F. Environment variables (per app, preview + production)
-- apps/api (Track B): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `RESEND_API_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `DODO_API_KEY` (test), `DODO_WEBHOOK_SECRET`, `PLANS_ENABLED`.
+- apps/api (Track B): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `DODO_API_KEY` (test), `DODO_WEBHOOK_SECRET`, `PLANS_ENABLED`.
 - apps/web: `NEXT_PUBLIC_AUTH_ENABLED`, `NEXT_PUBLIC_PLANS_ENABLED` (both `false` until the backend is live), and the existing `NEXT_PUBLIC_DODO_CREDIT_PACKS`.
