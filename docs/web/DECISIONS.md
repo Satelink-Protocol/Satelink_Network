@@ -108,6 +108,16 @@ E2E 99/99.
   products + webhooks, entitlement buckets (Dodo bucket = Trading Intelligence only), monthly
   reset, and bonus-pack mapping are additive backend work behind `PLANS_ENABLED`, delivered on the
   separate `feat/api-auth-and-plans` branch per §9.
+- **Entitlement model — founder decision (2026-09-23): confirmed.** A Dodo subscription grants the
+  monthly included-call **entitlement bucket** (Trading Intelligence only, resets monthly, consumed
+  before credits) — **not** fungible USD credits. Track B's `entitlement_service.mjs` already
+  implements this structurally (`SUB_PLAN_MAP`, `grantPlanAllowance`, `reconcileEntitlements` reads
+  the existing `subscriptions` table additively). This does not change what the existing Dodo
+  webhook (`internal_dodo.js`) does today — it still credits fungible USD on a subscription payment,
+  unmodified — migrating that webhook to grant the entitlement bucket instead is real money-path
+  surgery and stays a separate, later, founder-approved PR. `consumeEntitlement` remains
+  deliberately unwired from the live billing path for the same reason. See
+  `apps/api/src/plans/README.md`.
 
 ## P4 — Legal suite
 - **All policies unified under one content-driven renderer.** `LegalView` now shows a plain-English
@@ -150,7 +160,14 @@ E2E 99/99.
   With it off, Google/Apple/magic-link and new-account signup show a "rolling out — notify me / use
   keyless x402" state instead of failing; the /login email/password sign-in keeps working because it
   uses the existing endpoint. When Track B ships Better Auth and the flag flips, the same UI calls
-  `/api/auth/sign-in/social` and the email verify/magic-link endpoints.
+  `/api/identity/sign-in/social` and the email verify/magic-link endpoints.
+- **Better Auth namespace — founder decision (2026-09-23): `/api/identity/*`, never `/api/auth`.**
+  `app_factory.mjs` already mounts `createUnifiedAuthRouter()` (the node/operator auth router) at
+  `/api/auth`; giving Better Auth its own namespace removes any risk of the new customer-auth
+  surface shadowing, or being shadowed by, that existing router, now or as either evolves. Every
+  reference across the web (`AuthPanel.tsx`) and the API (`better_auth.mjs`'s default `basePath` +
+  `baseURL`, `BETTER_AUTH.md`) uses `/api/identity`; `INFRA_SETUP.md`'s OAuth redirect URIs are
+  `/api/identity/callback/{google,apple}`, not `/api/auth/callback/...`.
 - **P5 backend is Track B** (feat/api-auth-and-plans): Better Auth in apps/api (email+password with
   verification, magic link, Google, Apple with runtime ES256 client secret, sessions + 2FA), account
   linking by verified email, and the founder setup (Google Cloud OAuth, Apple Services ID + key,

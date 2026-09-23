@@ -63,8 +63,10 @@ export function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
       setStatus({ k: "rolling-out", what: provider === "google" ? "Google sign-in" : "Apple sign-in" });
       return;
     }
-    // Better Auth social sign-in (Track B).
-    window.location.href = `/api/auth/sign-in/social?provider=${provider}`;
+    // Better Auth social sign-in (Track B). Namespace is /api/identity, never
+    // /api/auth — founder-confirmed 2026-09-23, so this never collides with
+    // the existing node/operator auth router at /api/auth.
+    window.location.href = `/api/identity/sign-in/social?provider=${provider}`;
   }
 
   async function onSubmit(e: React.FormEvent) {

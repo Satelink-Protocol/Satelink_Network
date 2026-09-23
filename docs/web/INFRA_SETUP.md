@@ -133,17 +133,22 @@ is executed during the build; the web ships behind flags so it is safe to defer.
 Flip `NEXT_PUBLIC_PLANS_ENABLED` / `NEXT_PUBLIC_AUTH_ENABLED` only after the
 matching Track B backend (`feat/api-auth-and-plans`) is deployed.
 
+Namespace (founder-confirmed 2026-09-23): Better Auth mounts at **`/api/identity/*`**,
+never `/api/auth` — that path is already owned by the existing node/operator auth
+router (`createUnifiedAuthRouter`), so this avoids any collision. Every callback URL
+below uses `/api/identity/callback/...`, not `/api/auth/callback/...`.
+
 ## A. Google — Sign in with Google (OAuth 2.0)
 1. Google Cloud Console → create/select a project → **APIs & Services → OAuth consent screen**: External; app name "Satelink"; support email; app logo; **Privacy policy URL** `https://satelink.network/privacy`, **Terms URL** `https://satelink.network/terms`; **Authorised domain** `satelink.network`.
 2. **Credentials → Create credentials → OAuth client ID → Web application.**
    - Authorised redirect URIs (derive host from env; Better Auth callback path):
-     - Production: `https://api.satelink.network/api/auth/callback/google`
-     - Preview: `https://<preview-host>/api/auth/callback/google`
+     - Production: `https://api.satelink.network/api/identity/callback/google`
+     - Preview: `https://<preview-host>/api/identity/callback/google`
 3. Copy **Client ID** and **Client secret** → env `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (apps/api).
 
 ## B. Apple — Sign in with Apple
 1. Apple Developer Program → **Identifiers**: create an **App ID** with the "Sign in with Apple" capability.
-2. Create a **Services ID** (this is the web `clientId`, e.g. `network.satelink.web`): configure the domain `satelink.network` and the **Return URL** `https://api.satelink.network/api/auth/callback/apple` (add the preview host too). Register the private-email relay source.
+2. Create a **Services ID** (this is the web `clientId`, e.g. `network.satelink.web`): configure the domain `satelink.network` and the **Return URL** `https://api.satelink.network/api/identity/callback/apple` (add the preview host too). Register the private-email relay source.
 3. Create a **Key** with "Sign in with Apple", download the `.p8`. Record **Team ID**, **Key ID**, and the key file.
 4. Env (apps/api): `APPLE_CLIENT_ID` (Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 contents). The client secret is an ES256 JWT generated at runtime with `jose` (Apple rejects secrets valid > 6 months). The callback must accept a cross-site `POST` (`response_mode=form_post`), so the state cookie is `SameSite=None; Secure`. Handle private-relay emails and the first-login-only name.
 
