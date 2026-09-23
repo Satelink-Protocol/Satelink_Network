@@ -1,7 +1,9 @@
 # Better Auth (Track B — P5 backend)
 
 Customer authentication (email+password with verification, magic link, Google,
-Apple, sessions, 2FA) via Better Auth, in `src/auth/better_auth.mjs`.
+sessions, 2FA) via Better Auth, in `src/auth/better_auth.mjs`. Apple is out for
+now (A6, 2026-09-23) — removed cleanly from this integration, not flag-gated;
+revisiting it later is new scope, not a resurrection of dead code.
 
 **Status: written, unit-tested (config gating), and INERT.** It is not mounted in
 `app_factory` and does not run until the founder enables it (below). With the flag
@@ -19,16 +21,16 @@ node/operator auth router, now or as either evolves. `mountBetterAuth()`'s
 default `basePath` and its `baseURL` config both already reflect this — no code
 change needed to act on this decision, only the founder steps below.
 
-The web P5 UI calls `/api/identity/sign-in/social?provider=...` and expects
-OAuth callbacks at `/api/identity/callback/{google,apple}`. Register **these**
-redirect URIs with Google Cloud Console and the Apple Services ID — see
-`docs/web/INFRA_SETUP.md` for the exact preview + production values.
+The web P5 UI calls `/api/identity/sign-in/social?provider=google` and expects
+the OAuth callback at `/api/identity/callback/google`. Register **this**
+redirect URI with Google Cloud Console — see `docs/web/INFRA_SETUP.md` for the
+exact preview + production values.
 
 ## Enabling (founder steps)
 1. **Provision secrets** (see `docs/web/INFRA_SETUP.md` for exact values): Google
-   OAuth, Apple Services ID + `.p8` key, Resend domain + DNS, and set the env vars
-   in `apps/api` (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_*`, `APPLE_*`,
-   `RESEND_API_KEY`, `AUTH_EMAIL_FROM`).
+   OAuth, Resend domain + DNS, and set the env vars in `apps/api`
+   (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_*`, `RESEND_API_KEY`,
+   `AUTH_EMAIL_FROM`).
 2. **Create the schema.** Better Auth owns its schema; generate/apply it with its
    CLI against the auth database (a new `auth_*`-namespaced set is recommended,
    kept separate from the money-path tables):
@@ -50,14 +52,6 @@ after-hook that links/creates the `api_credits` row (mirroring
 NOT wired here because it writes to a money-adjacent table and must be validated
 against the live schema first. Existing API keys and wallet-linked accounts keep
 working unchanged.
-
-## Apple secret
-Apple rejects client secrets valid > 6 months, so `appleClientSecret()` generates
-an ES256 JWT at runtime with `jose` (~5-month expiry) from
-`APPLE_TEAM_ID`/`APPLE_KEY_ID`/`APPLE_PRIVATE_KEY`/`APPLE_CLIENT_ID`. The Apple
-callback is `response_mode=form_post` (cross-site POST) — Better Auth sets the
-state cookie `SameSite=None; Secure`; the session cookie stays `Lax` and is shared
-across `.satelink.network`.
 
 ## Email
 Email flows use Resend. If `RESEND_API_KEY` is absent, `emailAndPassword` is

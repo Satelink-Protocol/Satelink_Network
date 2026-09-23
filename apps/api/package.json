@@ -28,7 +28,6 @@
         "express-rate-limit": "^8.2.1",
         "helmet": "^8.1.0",
         "ioredis": "^5.10.0",
-        "jose": "^6.2.12",
         "jsonwebtoken": "^9.0.3",
         "node-cron": "^4.6.0",
         "node-fetch": "^3.3.2",

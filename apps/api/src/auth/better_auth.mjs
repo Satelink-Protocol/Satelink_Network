@@ -10,14 +10,15 @@
 // /api/auth — the existing createUnifiedAuthRouter already owns /api/auth, so
 // there is no collision and no shared-namespace ambiguity to resolve. The web
 // P5 UI calls /api/identity/sign-in/social and expects callbacks at
-// /api/identity/callback/{google,apple}; see docs/web/INFRA_SETUP.md for the
-// exact OAuth redirect URIs to register with each provider. The Better Auth
-// schema migration (`npx @better-auth/cli migrate`) still has to run before
-// enabling — see BETTER_AUTH.md.
+// /api/identity/callback/google; see docs/web/INFRA_SETUP.md for the exact
+// OAuth redirect URI to register. The Better Auth schema migration
+// (`npx @better-auth/cli migrate`) still has to run before enabling — see
+// BETTER_AUTH.md.
 //
 // Providers/plugins configured (per the confirmed better-auth API):
-//   email + password (verification required, min 10), magic link, Google, Apple
-//   (runtime ES256 client secret via jose — Apple rejects secrets valid > 6mo),
+//   email + password (verification required, min 10), magic link, Google.
+//   Apple is out for now (A6, 2026-09-23) — not flag-gated, removed cleanly;
+//   revisiting it later is new scope, not a resurrection.
 //   sessions (cross-subdomain cookie on .satelink.network), 2FA (TOTP), JWT,
 //   rate limiting. Email is sent via Resend; if RESEND_API_KEY is absent, email
 //   flows are disabled with a clear error (never silently log-only, §6.2).
@@ -35,27 +36,6 @@ export function emailEnabled() {
 
 function googleConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-}
-
-function appleConfigured() {
-  return !!(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
-}
-
-/** Generate Apple's ES256 client-secret JWT at runtime (max ~6 months, Apple
- *  rejects longer). Built lazily with jose so it never runs unless Apple is
- *  configured and auth is enabled. */
-async function appleClientSecret() {
-  const { SignJWT, importPKCS8 } = await import('jose');
-  const now = Math.floor(Date.now() / 1000);
-  const key = await importPKCS8(process.env.APPLE_PRIVATE_KEY, 'ES256');
-  return new SignJWT({})
-    .setProtectedHeader({ alg: 'ES256', kid: process.env.APPLE_KEY_ID })
-    .setIssuer(process.env.APPLE_TEAM_ID)
-    .setIssuedAt(now)
-    .setExpirationTime(now + 60 * 60 * 24 * 150) // ~5 months
-    .setAudience('https://appleid.apple.com')
-    .setSubject(process.env.APPLE_CLIENT_ID)
-    .sign(key);
 }
 
 async function sendEmailViaResend(to, subject, html) {
@@ -80,13 +60,7 @@ export async function getBetterAuth(pool) {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     };
   }
-  if (appleConfigured()) {
-    socialProviders.apple = {
-      clientId: process.env.APPLE_CLIENT_ID,
-      // Function form so the ES256 JWT is regenerated (never a stale > 6mo secret).
-      clientSecret: await appleClientSecret(),
-    };
-  }
+  // Apple is out for now (A6, 2026-09-23) — see module header.
 
   _authInstance = betterAuth({
     database: pool,
@@ -127,9 +101,7 @@ export async function getBetterAuth(pool) {
     },
     advanced: {
       cookiePrefix: 'satelink',
-      // Sessions shared across *.satelink.network; Apple form_post needs the
-      // state cookie to be SameSite=None on the callback (handled by Better Auth
-      // per-provider); the session cookie stays Lax.
+      // Sessions shared across *.satelink.network.
       crossSubDomainCookies: { enabled: true, domain: '.satelink.network' },
       defaultCookieAttributes: { sameSite: 'lax', secure: true },
     },
