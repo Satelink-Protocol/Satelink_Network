@@ -1,0 +1,92 @@
+name: deposit-reconciliation-manual
+
+# ============================================================
+# MANUAL / READ-ONLY / NO WRITES
+# ============================================================
+# One-off diagnostic for the PR #406 incident (see
+# docs/api/DEPOSIT_LISTENER_INCIDENT.md). Runs the EXISTING
+# apps/api/scripts/verify_deposit_backfill.mjs — no second
+# reconciliation implementation lives here.
+#
+# This workflow:
+#   - Only runs when a human clicks "Run workflow" (workflow_dispatch).
+#   - Never runs on a schedule, push, or pull_request.
+#   - Issues ONLY SELECT queries against Postgres and read-only
+#     eth_getLogs/eth_blockNumber calls against Polygon — no INSERT,
+#     UPDATE, DELETE, or on-chain transaction, ever.
+#   - Uses no wallet and no private key.
+#   - Never calls POST /api/keys/deposit or performs any recovery —
+#     if it reports a missing deposit, a human decides the next step,
+#     per docs/api/DEPOSIT_LISTENER_INCIDENT.md.
+#
+# Secrets required (must already exist in repo settings — see the
+# PR/README for why these aren't provisioned automatically):
+#   DEPOSIT_RECONCILE_DB_URL   read-only Postgres connection string
+#   DEPOSIT_RECONCILE_RPC_URL  Polygon mainnet RPC URL (read-only by nature)
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_block:
+        description: "First block to scan (default 87391218 = earliest recorded deposit block 87441218 minus 50,000)"
+        required: false
+        default: "87391218"
+        type: string
+      to_block:
+        description: "Last block to scan (leave empty to let the script use current block - 25 confirmations)"
+        required: false
+        default: ""
+        type: string
+      chunk_size:
+        description: "eth_getLogs chunk size (leave empty for the script's default, 500 — matches production)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deposit-reconciliation-manual
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Read-only on-chain deposit reconciliation (NO WRITES)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Print safety banner
+        run: |
+          echo "=================================================="
+          echo " MANUAL / READ-ONLY / NO WRITES"
+          echo " Running apps/api/scripts/verify_deposit_backfill.mjs"
+          echo " No DB writes. No on-chain transactions. No wallet."
+          echo " No automatic recovery — this is a diagnostic only."
+          echo "=================================================="
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Run verify_deposit_backfill.mjs (read-only)
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DEPOSIT_RECONCILE_DB_URL }}
+          POLYGON_RPC_URL: ${{ secrets.DEPOSIT_RECONCILE_RPC_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$POLYGON_RPC_URL" ]; then
+            echo "::error::DEPOSIT_RECONCILE_DB_URL and/or DEPOSIT_RECONCILE_RPC_URL are not set as repo secrets. See docs/api/DEPOSIT_LISTENER_INCIDENT.md."
+            exit 1
+          fi
+          ARGS="--from ${{ inputs.from_block }}"
+          if [ -n "${{ inputs.to_block }}" ]; then ARGS="$ARGS --to ${{ inputs.to_block }}"; fi
+          if [ -n "${{ inputs.chunk_size }}" ]; then ARGS="$ARGS --chunk ${{ inputs.chunk_size }}"; fi
+          echo "Running: node scripts/verify_deposit_backfill.mjs $ARGS"
+          node scripts/verify_deposit_backfill.mjs $ARGS
