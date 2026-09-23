@@ -15,6 +15,24 @@ import { createClaimsRouter } from '../src/routes/claims_route.mjs';
 //   - ADMIN_BACKFILL_SECRET set, body matches it            -> guard passes
 //     (proven by reaching the next check downstream of the secret gate)
 
+// Test-harness note: this spec signs its own bearer token, and the route it
+// hits (via verifyJWT in src/gateway/routes/auth_v2.js) verifies with the SAME
+// process.env.JWT_SECRET — if it's unset in the sandbox, BOTH sides throw
+// "secretOrPrivateKey must have a value" before the admin-secret gate under
+// test is ever reached. Fall back to a fixed test-only value when unset
+// (restored below); never overrides a real JWT_SECRET the environment already
+// provides. See docs/api/TEST_TRIAGE.md root cause B.
+//
+// Length: some modules imported later in the same mocha process (e.g.
+// src/auth/jwt_service.js, src/security/auth_middleware.js) call
+// validateEnv() at import time, which — under NODE_ENV=production — hard-
+// exits the ENTIRE process if JWT_SECRET is under 64 chars. The fallback
+// must satisfy that unrelated check too, or a later file's import crashes
+// every test in the run, not just this file's.
+const ORIGINAL_JWT_SECRET = process.env.JWT_SECRET;
+if (!process.env.JWT_SECRET) {
+    process.env.JWT_SECRET = 'test-only-claims-admin-secret-spec-'.padEnd(64, '0');
+}
 const JWT_SECRET = process.env.JWT_SECRET;
 const OLD_LITERAL = 'satelink-first-claim-2026';
 
@@ -48,6 +66,10 @@ describe('claims_route — T-02 admin secret (no hard-coded fallback)', () => {
     afterEach(() => {
         if (originalSecret === undefined) delete process.env.ADMIN_BACKFILL_SECRET;
         else process.env.ADMIN_BACKFILL_SECRET = originalSecret;
+    });
+    after(() => {
+        if (ORIGINAL_JWT_SECRET === undefined) delete process.env.JWT_SECRET;
+        else process.env.JWT_SECRET = ORIGINAL_JWT_SECRET;
     });
 
     describe('POST /admin/backfill-revenue', () => {

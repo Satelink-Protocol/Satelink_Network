@@ -20,8 +20,28 @@ function makePool() {
                 return { rows: [{ id: 7 }], rowCount: 1 };
             }
 
+            // Orphan-event assignment (CRITICAL FIX in epoch_scheduler.js): claims
+            // any untagged revenue_events_v2 rows for the epoch being closed, before
+            // aggregation. This test's fixture has none pending — real code only
+            // reads .rowCount, asserted nowhere else in this test — so 0 is a safe,
+            // neutral fixture value (test-harness only; see docs/api/TEST_TRIAGE.md
+            // root cause D; the real, unmodified epoch_scheduler.js is what defines
+            // this query).
+            if (/UPDATE revenue_events_v2\s+SET epoch_id = \$1/.test(sql)) {
+                return { rows: [], rowCount: 0 };
+            }
+
             if (/COUNT\(\*\)::integer AS event_count/.test(sql)) {
                 return { rows: [{ event_count: 2, total_revenue_usdt: '10' }], rowCount: 1 };
+            }
+
+            // epochs/epoch_ledger sync (CRITICAL in epoch_scheduler.js: "the epochs
+            // table and epoch_ledger table must be kept in sync" — truth.js reads
+            // epoch_ledger). Downstream code doesn't read this INSERT's return value
+            // (test-harness only; see docs/api/TEST_TRIAGE.md root cause D; the real,
+            // unmodified epoch_scheduler.js defines this query).
+            if (/INSERT INTO epoch_ledger/.test(sql)) {
+                return { rows: [], rowCount: 1 };
             }
 
             if (/UPDATE epochs/.test(sql)) {

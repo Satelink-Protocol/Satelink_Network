@@ -147,14 +147,24 @@ describe('api_keys security hardening', () => {
   // ---------------------------------------------------------------- P0-2
   describe('P0-2 — rate limiting', () => {
     it('apiKeyCreateLimiter caps key creation per IP (30/window)', async () => {
+      // apiKeyCreateLimiter is a module-level singleton (rate_limits.js),
+      // keyed by req.ip and shared with EVERY route that creates keys —
+      // including machine_onboarding.js's /machine/register?mode=instant,
+      // exercised by test/instant_key.test.js. Deliberately exhausting it
+      // here (by design, to test the real limiter) would otherwise poison
+      // that shared state for every later file in the same mocha process.
+      // Capture the exact key so it can be reset below (test-harness only;
+      // see docs/api/TEST_TRIAGE.md root cause C).
+      let capturedIp;
       const app = express();
-      app.post('/api/keys', apiKeyCreateLimiter, (_req, res) => res.json({ ok: true }));
+      app.post('/api/keys', (req, _res, next) => { capturedIp = req.ip; next(); }, apiKeyCreateLimiter, (_req, res) => res.json({ ok: true }));
       for (let i = 0; i < 30; i++) {
         const r = await request(app).post('/api/keys').send({});
         expect(r.status, `request ${i + 1} should pass`).to.equal(200);
       }
       const blocked = await request(app).post('/api/keys').send({});
       expect(blocked.status).to.equal(429);
+      if (capturedIp) apiKeyCreateLimiter.resetKey(capturedIp);
     });
 
     it('apiKeyDepositLimiter caps deposits at 10/min and buckets per X-API-Key', async () => {
