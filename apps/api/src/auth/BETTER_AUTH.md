@@ -9,6 +9,21 @@ off it imports nothing from `better-auth` and changes no existing auth or
 money-path behaviour. Full provider flows are validated on the preview with real
 secrets (§9), because they need OAuth credentials and the Better Auth schema.
 
+## Namespace (founder decision, 2026-09-23)
+Better Auth mounts at **`/api/identity/*`** — never `/api/auth`, which
+`app_factory.mjs` already mounts `createUnifiedAuthRouter()` on. This was a
+choice, not a technical necessity: the two could theoretically share `/api/auth`
+with careful ordering, but a distinct namespace means zero risk of the new
+customer-auth surface ever shadowing or being shadowed by the existing
+node/operator auth router, now or as either evolves. `mountBetterAuth()`'s
+default `basePath` and its `baseURL` config both already reflect this — no code
+change needed to act on this decision, only the founder steps below.
+
+The web P5 UI calls `/api/identity/sign-in/social?provider=...` and expects
+OAuth callbacks at `/api/identity/callback/{google,apple}`. Register **these**
+redirect URIs with Google Cloud Console and the Apple Services ID — see
+`docs/web/INFRA_SETUP.md` for the exact preview + production values.
+
 ## Enabling (founder steps)
 1. **Provision secrets** (see `docs/web/INFRA_SETUP.md` for exact values): Google
    OAuth, Apple Services ID + `.p8` key, Resend domain + DNS, and set the env vars
@@ -20,12 +35,10 @@ secrets (§9), because they need OAuth credentials and the Better Auth schema.
    `npx @better-auth/cli generate` then `npx @better-auth/cli migrate`
    (point it at this config). Do **not** hand-write the schema — it is
    version/plugin-specific.
-3. **Choose the `/api/auth` namespace.** `app_factory.mjs` already mounts
-   `createUnifiedAuthRouter()` at `/api/auth`. Decide whether Better Auth owns
-   `/api/auth` (mount `mountBetterAuth(app, pool)` BEFORE that router) or a
-   sub-namespace, and update the web's `NEXT_PUBLIC_AUTH_ENABLED` + the OAuth
-   redirect URIs accordingly. The web P5 UI expects `/api/auth/sign-in/social` and
-   `/api/auth/callback/{google,apple}`.
+3. **Add the mount call.** In `app_factory.mjs`, call
+   `mountBetterAuth(app, pool)` — it defaults to `/api/identity` and is a no-op
+   until `AUTH_ENABLED=true`, so adding the call is safe even before secrets are
+   provisioned.
 4. **Set `AUTH_ENABLED=true`** in `apps/api` (and `NEXT_PUBLIC_AUTH_ENABLED=true`
    in `apps/web`).
 

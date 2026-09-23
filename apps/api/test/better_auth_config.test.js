@@ -38,12 +38,12 @@ describe('better_auth config gating (Track B P5)', () => {
     expect(emailEnabled()).to.equal(true);
   });
 
-  it('mounts a lazy /api/auth/* handler only when enabled', () => {
+  it('mounts a lazy /api/identity/* handler only when enabled (founder-confirmed namespace, 2026-09-23 — never /api/auth)', () => {
     process.env.AUTH_ENABLED = 'true';
     process.env.BETTER_AUTH_SECRET = 's3cret';
     const routes = [];
     const app = { all: (path) => routes.push(path) };
     expect(mountBetterAuth(app, {})).to.equal(true);
-    expect(routes).to.deep.equal(['/api/auth/*']);
+    expect(routes).to.deep.equal(['/api/identity/*']);
   });
 });

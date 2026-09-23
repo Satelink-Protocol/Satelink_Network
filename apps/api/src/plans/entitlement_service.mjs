@@ -14,7 +14,11 @@ export const FREE_INCLUDED_CALLS = 300;
 
 /** Maps the existing subscriptions.plan tiers → plans catalogue ids.
  *  The existing webhook records 'starter'/'pro'; the catalogue is free/pro/max.
- *  Founder to confirm the intended mapping (see DECISIONS.md). */
+ *  Founder-confirmed 2026-09-23: a Dodo subscription grants the monthly
+ *  included-call ENTITLEMENT bucket (Trading Intelligence only, resets
+ *  monthly, consumed before credits) — never fungible USD credits. Both
+ *  existing subscription tiers map to the 'pro' entitlement bucket until a
+ *  dedicated 'max' Dodo product exists. See docs/web/DECISIONS.md. */
 export const SUB_PLAN_MAP = { pro: "pro", starter: "pro" };
 
 /** One month after `from`. */
