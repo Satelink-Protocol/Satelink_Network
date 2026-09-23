@@ -206,4 +206,86 @@ describe('DepositListener — canonical crediting + hardening', () => {
     expect(hashes).to.deep.equal(['0x' + '8'.repeat(64), '0x' + '9'.repeat(64)]);
     expect(pool.state.account.credits_usdt).to.equal(3); // 1 + 2, nothing double-credited
   });
+
+  it('duplicate block processing stays idempotent — an overlapping re-scan never double-credits', async () => {
+    const head = 100_000;
+    const ev1 = { args: [WALLET, usdt(4)], transactionHash: '0x' + 'a'.repeat(64), blockNumber: 99_000 };
+    const pool = makePool({ account: FREE_ACCOUNT });
+    const listener = makeListener(pool, { currentBlock: head, events: [ev1] });
+
+    // First poll scans and credits ev1; the cursor now covers its block.
+    await listener._pollOnce();
+    expect(pool.state.creditDeposits).to.have.length(1);
+    expect(pool.state.account.credits_usdt).to.equal(4);
+
+    // Force an OVERLAPPING re-scan of the same range (simulates two chunks —
+    // or two poll cycles — whose windows legitimately overlap at the edges).
+    // The DB cursor still reflects ev1's block, so a real listener would never
+    // naturally rewind like this; this directly proves the per-event
+    // tx_hash idempotency (credit_deposits UNIQUE + api_deposits UNIQUE) is
+    // what actually prevents a double credit, independent of cursor math.
+    listener._lastScanned = 0;
+    const dbCursorSpy = listener._dbCursor.bind(listener);
+    listener._dbCursor = async () => 0; // pretend we have no cursor at all
+    await listener._pollOnce();
+    listener._dbCursor = dbCursorSpy;
+
+    expect(pool.state.creditDeposits).to.have.length(1); // still exactly one row
+    expect(pool.state.account.credits_usdt).to.equal(4); // NOT double-credited to 8
+  });
+
+  it('reorg-safe confirmation depth — a shallow event is deferred, then credited exactly once at depth', async () => {
+    const ev = { args: [WALLET, usdt(3)], transactionHash: '0x' + 'b'.repeat(64), blockNumber: 99_990 };
+    const pool = makePool({ account: FREE_ACCOUNT });
+
+    // Poll while the event is still shallower than MIN_CONFIRMATIONS — a reorg
+    // could still drop it, so it must NOT be credited yet.
+    const shallowHead = 99_990 + MIN_CONFIRMATIONS - 1; // one block short of confirmed
+    const shallowListener = makeListener(pool, { currentBlock: shallowHead, events: [ev] });
+    await shallowListener._pollOnce();
+    expect(pool.state.creditDeposits).to.have.length(0);
+    expect(pool.state.account.credits_usdt).to.equal(0);
+
+    // Chain advances past confirmation depth (the tx survived — no reorg
+    // dropped it): a fresh listener instance (simulating the next poll cycle,
+    // or a restart) now credits it, exactly once.
+    const confirmedHead = 99_990 + MIN_CONFIRMATIONS;
+    const confirmedListener = makeListener(pool, { currentBlock: confirmedHead, events: [ev] });
+    await confirmedListener._pollOnce();
+    expect(pool.state.creditDeposits.map((d) => d.tx_hash)).to.deep.equal(['0x' + 'b'.repeat(64)]);
+    expect(pool.state.account.credits_usdt).to.equal(3);
+
+    // One more poll (e.g. the process never restarted) must not re-credit it.
+    await confirmedListener._pollOnce();
+    expect(pool.state.creditDeposits).to.have.length(1);
+    expect(pool.state.account.credits_usdt).to.equal(3);
+  });
+
+  it('missed-block backfill — a gap beyond maxLookbackBlocks is logged loudly, never silently dropped', async () => {
+    const errors = [];
+    const loudLog = { info() {}, warn() {}, error: (msg) => errors.push(msg), debug() {} };
+    const ev1 = { args: [WALLET, usdt(1)], transactionHash: '0x' + 'c'.repeat(64), blockNumber: 50_000 };
+    const pool = makePool({ account: FREE_ACCOUNT });
+
+    // Establish a real DB cursor at block 50,000.
+    const run1 = makeListener(pool, { currentBlock: 50_025 + MIN_CONFIRMATIONS, events: [ev1] });
+    run1.log = loudLog;
+    await run1._pollOnce();
+    expect(pool.state.creditDeposits).to.have.length(1);
+
+    // "Restart" after being down far longer than maxLookbackBlocks worth of
+    // blocks (default 50_000) — an extreme, deliberately-out-of-band gap.
+    const ev2 = { args: [WALLET, usdt(2)], transactionHash: '0x' + 'd'.repeat(64), blockNumber: 50_100 };
+    const run2 = makeListener(pool, { currentBlock: 50_025 + MIN_CONFIRMATIONS + 200_000, events: [ev1, ev2] });
+    run2.log = loudLog;
+    await run2._pollOnce();
+
+    // ev2 sits inside the skipped gap — NOT auto-credited (the safety cap is
+    // still real and still bounds a single poll's range) — but the skip must
+    // be loudly, specifically logged, not silent.
+    const gapLog = errors.find((m) => m.includes('GAP SKIPPED'));
+    expect(gapLog, 'a GAP SKIPPED error must be logged').to.exist;
+    expect(gapLog).to.include('50001'); // first skipped block
+    expect(pool.state.account.credits_usdt).to.equal(1); // ev2 not credited (recoverable via manual claim)
+  });
 });
