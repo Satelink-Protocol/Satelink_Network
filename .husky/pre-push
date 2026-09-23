@@ -1,2 +1,7 @@
-# Husky pre-push hook — run full agent-check
+# Husky pre-push hook.
+# secret-scan.sh is a HARD gate (A7) — unlike agent-check.sh below (deliberately
+# non-blocking), a real-looking leaked token blocks the push outright.
+bash scripts/secret-scan.sh <&0 || exit 1
+
+# Full agent-check (env/lint/tests/audit) — non-blocking summary.
 bash scripts/agent-check.sh
