@@ -24,6 +24,8 @@ import { createDrawParityRouter } from "./src/ledger/draw_parity.js";
 import { createCapacityParityRouter } from "./src/internal/capacity_parity.js";
 import { createDodoInternalRouter } from "./src/routes/internal_dodo.js";
 import { createCreditsRouter } from "./src/routes/credits.js";
+import { createPlansRouter } from "./src/routes/plans.js";
+import { createConsoleRouter } from "./src/routes/console.js";
 import { createDepositNotifyRouter } from "./src/routes/deposit_notify_api.js";
 import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/routes/machine_onboarding.js";
 import { createWellKnownX402Router } from "./src/routes/well_known_x402.js";
@@ -410,6 +412,12 @@ app.get("/api/mode", (req, res) => {
   // is running — serving returns an honest 503 warming_up until then.
   app.use("/v1", express.json({ limit: '16kb' }), createIntelligenceRouter(pool));
   startIntelRefresh(pool, { logger: console });
+
+  // Track B (P3.B / P6) — read-only plan catalogue (/v1/plans) + customer
+  // console summary (/v1/console/summary). Mounted BEFORE the "/v1" ai-gateway
+  // so their paths are not shadowed. Additive; no money-path coupling.
+  app.use("/v1", createPlansRouter(pool));
+  app.use("/v1", createConsoleRouter(pool));
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
