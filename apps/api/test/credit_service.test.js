@@ -81,14 +81,41 @@ describe('creditService — canonical api_credits source of truth', () => {
     });
   });
 
-  describe('VERIFY: usage recorded per request', () => {
-    it('free tier within limit → ok, usage incremented, no deduction', async () => {
+  describe('VERIFY: no free RPC — every tier is charged (Phase 2, 2026-09)', () => {
+    it('free tier with zero balance → 402 insufficient_credits, no usage recorded', async () => {
       const pool = makePool(FREE, { dailyCount: 10 });
       const v = await authorizeAndMeter(pool, { apiKey: FREE.api_key });
+      expect(v.ok).to.equal(false);
+      expect(v.http).to.equal(402);
+      expect(v.code).to.equal('insufficient_credits');
+      expect(pool.state.dailyCount).to.equal(10);               // NOT metered (no free ride)
+      expect(pool.state.account.credits_usdt).to.equal(0);
+    });
+
+    it('funded free-tier key → ok, charged one call cost and metered', async () => {
+      const FUNDED_FREE = { ...FREE, credits_usdt: 1.0 };
+      const pool = makePool(FUNDED_FREE, { dailyCount: 10 });
+      const v = await authorizeAndMeter(pool, { apiKey: FUNDED_FREE.api_key });
       expect(v.ok).to.equal(true);
-      expect(v.cost).to.equal(0);
+      expect(v.cost).to.equal(PRICE_PER_CALL_USDT);
       expect(pool.state.dailyCount).to.equal(11);               // metered
-      expect(pool.state.account.credits_usdt).to.equal(0);       // free not charged
+      expect(pool.state.account.credits_usdt).to.equal(+(1.0 - PRICE_PER_CALL_USDT).toFixed(6));
+    });
+
+    it('FREE_TIER_COST_ZERO=1 rollback lever restores cost-0 free serving', async () => {
+      const prev = process.env.FREE_TIER_COST_ZERO;
+      process.env.FREE_TIER_COST_ZERO = '1';
+      try {
+        const pool = makePool(FREE, { dailyCount: 10 });
+        const v = await authorizeAndMeter(pool, { apiKey: FREE.api_key });
+        expect(v.ok).to.equal(true);
+        expect(v.cost).to.equal(0);
+        expect(pool.state.dailyCount).to.equal(11);
+        expect(pool.state.account.credits_usdt).to.equal(0);
+      } finally {
+        if (prev === undefined) delete process.env.FREE_TIER_COST_ZERO;
+        else process.env.FREE_TIER_COST_ZERO = prev;
+      }
     });
   });
 
@@ -201,7 +228,14 @@ describe('creditService — canonical api_credits source of truth', () => {
   });
 
   describe('costFor', () => {
-    it('free tier always costs 0', () => expect(costFor(FREE)).to.equal(0));
+    it('free tier is charged per call (no free RPC)', () => expect(costFor(FREE)).to.equal(PRICE_PER_CALL_USDT));
+    it('free tier costs 0 only under the FREE_TIER_COST_ZERO rollback lever', () => {
+      const prev = process.env.FREE_TIER_COST_ZERO;
+      process.env.FREE_TIER_COST_ZERO = '1';
+      try { expect(costFor(FREE)).to.equal(0); }
+      finally { if (prev === undefined) delete process.env.FREE_TIER_COST_ZERO; else process.env.FREE_TIER_COST_ZERO = prev; }
+    });
+    it('null account costs 0 (caller rejects it as account_not_found)', () => expect(costFor(null)).to.equal(0));
     it('paid tier uses flat price by default', () => expect(costFor(PRO)).to.equal(PRICE_PER_CALL_USDT));
     it('paid tier honors a method override', () => expect(costFor(PRO, 0.001)).to.equal(0.001));
   });
