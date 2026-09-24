@@ -38,9 +38,14 @@ on:
         default: ""
         type: string
       chunk_size:
-        description: "eth_getLogs chunk size (leave empty for the script's default, 500 — matches production)"
+        description: "eth_getLogs chunk size (leave empty for the script's default, 500 — matches production). The script bisects automatically on provider range limits, so a large value (e.g. 45000) is safe and much faster on a wide-range RPC."
         required: false
         default: ""
+        type: string
+      snapshot_label:
+        description: "Label for the uploaded artifact, e.g. 'before' or 'after' (produces reconciliation-<label>.txt)"
+        required: false
+        default: "run"
         type: string
 
 permissions:
@@ -89,4 +94,18 @@ jobs:
           if [ -n "${{ inputs.to_block }}" ]; then ARGS="$ARGS --to ${{ inputs.to_block }}"; fi
           if [ -n "${{ inputs.chunk_size }}" ]; then ARGS="$ARGS --chunk ${{ inputs.chunk_size }}"; fi
           echo "Running: node scripts/verify_deposit_backfill.mjs $ARGS"
-          node scripts/verify_deposit_backfill.mjs $ARGS
+          REPORT="${{ runner.temp }}/reconciliation-${{ inputs.snapshot_label }}.txt"
+          echo "REPORT_PATH=$REPORT" >> "$GITHUB_ENV"
+          # Capture stdout+stderr to the artifact while still streaming to the log;
+          # preserve the script's exit code (pipefail) so a failure still fails the job.
+          set -o pipefail
+          node scripts/verify_deposit_backfill.mjs $ARGS 2>&1 | tee "$REPORT"
+
+      - name: Upload reconciliation report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconciliation-${{ inputs.snapshot_label }}
+          path: ${{ env.REPORT_PATH }}
+          if-no-files-found: warn
+          retention-days: 90
