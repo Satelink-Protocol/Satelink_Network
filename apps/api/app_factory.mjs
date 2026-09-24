@@ -41,6 +41,7 @@ import { createFunnelHandler } from "./src/payments/x402/funnel.js";
 import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/routes/auth_v2.js";
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
+import { mountBetterAuth } from './src/auth/better_auth.mjs';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 import { createVnextKernelRouter } from './src/vnext/http/kernel_router.js';
@@ -369,6 +370,13 @@ app.get("/api/mode", (req, res) => {
 
   // Email/password auth — /auth/login, /auth/register, /auth/me
   app.use("/auth", createUserAuthRouter({ db: pgDbAdapter }));
+
+  // Better Auth customer identity (P5) — mounts /api/identity/* (Google + email
+  // + magic link). INERT unless AUTH_ENABLED==='true' && BETTER_AUTH_SECRET set
+  // (mountBetterAuth returns false and registers nothing otherwise), so this
+  // call is safe with the flag off and does not touch existing /auth or the
+  // money path. Namespace /api/identity never collides with /api/auth.
+  mountBetterAuth(app, pool);
 
   // Free tier monitoring endpoint (outside /api to avoid router conflicts)
   app.get("/stats/free-tier", async (req, res) => res.json(await getFreeTierStats()));
