@@ -33,7 +33,12 @@ beforeAll(async () => {
   // testcontainer stops in afterAll) so they never surface as unhandled
   // rejections. Query errors still reject their own promises.
   pool.on('error', () => {});
-  // Minimal legacy source tables the backfill reads from.
+  // Minimal legacy source tables the backfill reads from. applyMigrationsForTest
+  // seeds a full revenue_events_v2 (so ledger migrations 014/015 can apply), but
+  // this test only reads DISTINCT client_id and inserts client_id-only rows —
+  // which the migrated table's is_billable/amount_usdt CHECK (015) would reject.
+  // Replace it with the loose shape this test actually needs.
+  await pool.query('DROP TABLE IF EXISTS revenue_events_v2 CASCADE');
   await pool.query('CREATE TABLE IF NOT EXISTS revenue_events_v2 (client_id TEXT)');
   await pool.query('CREATE TABLE IF NOT EXISTS api_deposits (from_address TEXT)');
 }, 120_000);
