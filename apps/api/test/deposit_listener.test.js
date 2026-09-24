@@ -3,9 +3,10 @@ import { ethers } from 'ethers';
 import { DepositListener } from '../src/services/deposit_listener.js';
 import { MIN_CONFIRMATIONS } from '../src/billing/deposit_validation.mjs';
 
-// ── In-memory mock of the pg pool covering BOTH the listener's legacy-ledger
-// SQL and creditService's canonical SQL. SQL is matched by substring so the
-// tests pin behavior, not text (same pattern as credit_service.test.js).
+// ── In-memory mock of the pg pool covering the listener's legacy-ledger SQL,
+// creditService's canonical SQL, AND the persisted scan cursor (A2.9). SQL is
+// matched by substring so the tests pin behavior, not text (same pattern as
+// credit_service.test.js).
 function makePool({ account = null } = {}) {
   const state = {
     account: account ? { ...account } : null,
@@ -14,6 +15,7 @@ function makePool({ account = null } = {}) {
     apiDeposits: new Set(),       // canonical tx_hash idempotency
     canonicalCredits: [],         // {wallet, amount}
     failCanonicalWith: null,      // simulate unique-violation race
+    scanCursor: new Map(),        // chain_id → last_scanned_block (persisted cursor)
   };
 
   async function query(sql, params = []) {
@@ -21,6 +23,19 @@ function makePool({ account = null } = {}) {
 
     // transaction control on the mock is a no-op
     if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return { rows: [] };
+
+    // ── persisted scan cursor (deposit_scan_cursor)
+    if (s.startsWith('CREATE TABLE IF NOT EXISTS deposit_scan_cursor')) return { rows: [] };
+    if (s.includes('SELECT last_scanned_block FROM deposit_scan_cursor')) {
+      const b = state.scanCursor.get(params[0]);
+      return { rows: b != null ? [{ last_scanned_block: b }] : [] };
+    }
+    if (s.includes('INSERT INTO deposit_scan_cursor')) {
+      const [chainId, block] = params;
+      const prev = state.scanCursor.get(chainId) ?? 0;
+      state.scanCursor.set(chainId, Math.max(prev, block)); // GREATEST semantics
+      return { rowCount: 1, rows: [] };
+    }
 
     if (s.includes('SELECT COALESCE(MAX(block_number), 0)')) {
       const max = Math.max(0, ...state.creditDeposits.map((d) => d.block_number));
@@ -87,15 +102,19 @@ const FREE_ACCOUNT = {
 };
 
 const usdt = (n) => ethers.parseUnits(String(n), 6);
+const cursorOf = (pool, chainId = 137) => pool.state.scanCursor.get(chainId) ?? 0;
 
-function makeListener(pool, { events = [], currentBlock = 100_000 } = {}) {
-  const listener = new DepositListener(pool, silentLog, { chainId: 137 });
-  listener.provider = { getBlockNumber: async () => currentBlock };
-  listener.contract = {
+function makeListener(pool, { events = [], currentBlock = 100_000, opts = {}, contract = null } = {}) {
+  const listener = new DepositListener(pool, silentLog, { chainId: 137, ...opts });
+  listener.provider = { getBlockNumber: async () => (typeof currentBlock === 'function' ? currentBlock() : currentBlock) };
+  listener.contract = contract || {
     async queryFilter(_name, from, to) {
       return events.filter((e) => e.blockNumber >= from && e.blockNumber <= to);
     },
   };
+  // start() ensures the cursor table in production; simulate that here so the
+  // persisted-cursor path (not just the in-memory fallback) is exercised.
+  listener._cursorTableReady = true;
   listener.running = true;
   return listener;
 }
@@ -183,55 +202,8 @@ describe('DepositListener — canonical crediting + hardening', () => {
 
     expect(pool.state.creditDeposits.map((d) => d.tx_hash)).to.deep.equal(['0x' + '6'.repeat(64)]);
     expect(pool.state.account.credits_usdt).to.equal(1);
-  });
-
-  it('restart mid-block-range resumes from the DB cursor (no gap, no rescan-credit)', async () => {
-    const head = 100_000;
-    // Blocks must sit inside the initial-lookback window (head - conf - 10k).
-    const ev1 = { args: [WALLET, usdt(1)], transactionHash: '0x' + '8'.repeat(64), blockNumber: 95_000 };
-    const ev2 = { args: [WALLET, usdt(2)], transactionHash: '0x' + '9'.repeat(64), blockNumber: 95_500 };
-
-    // First run credits ev1 then "crashes" before seeing ev2.
-    const pool = makePool({ account: FREE_ACCOUNT });
-    const run1 = makeListener(pool, { currentBlock: head, events: [ev1] });
-    await run1._pollOnce();
-    expect(pool.state.creditDeposits).to.have.length(1);
-
-    // Fresh listener instance (restart) with the SAME pool: cursor = 60,000 →
-    // scan resumes at 60,001 and picks up ev2 exactly once.
-    const run2 = makeListener(pool, { currentBlock: head + 10, events: [ev1, ev2] });
-    await run2._pollOnce();
-
-    const hashes = pool.state.creditDeposits.map((d) => d.tx_hash);
-    expect(hashes).to.deep.equal(['0x' + '8'.repeat(64), '0x' + '9'.repeat(64)]);
-    expect(pool.state.account.credits_usdt).to.equal(3); // 1 + 2, nothing double-credited
-  });
-
-  it('duplicate block processing stays idempotent — an overlapping re-scan never double-credits', async () => {
-    const head = 100_000;
-    const ev1 = { args: [WALLET, usdt(4)], transactionHash: '0x' + 'a'.repeat(64), blockNumber: 99_000 };
-    const pool = makePool({ account: FREE_ACCOUNT });
-    const listener = makeListener(pool, { currentBlock: head, events: [ev1] });
-
-    // First poll scans and credits ev1; the cursor now covers its block.
-    await listener._pollOnce();
-    expect(pool.state.creditDeposits).to.have.length(1);
-    expect(pool.state.account.credits_usdt).to.equal(4);
-
-    // Force an OVERLAPPING re-scan of the same range (simulates two chunks —
-    // or two poll cycles — whose windows legitimately overlap at the edges).
-    // The DB cursor still reflects ev1's block, so a real listener would never
-    // naturally rewind like this; this directly proves the per-event
-    // tx_hash idempotency (credit_deposits UNIQUE + api_deposits UNIQUE) is
-    // what actually prevents a double credit, independent of cursor math.
-    listener._lastScanned = 0;
-    const dbCursorSpy = listener._dbCursor.bind(listener);
-    listener._dbCursor = async () => 0; // pretend we have no cursor at all
-    await listener._pollOnce();
-    listener._dbCursor = dbCursorSpy;
-
-    expect(pool.state.creditDeposits).to.have.length(1); // still exactly one row
-    expect(pool.state.account.credits_usdt).to.equal(4); // NOT double-credited to 8
+    // Cursor advanced exactly to the last confirmed block, never past it.
+    expect(cursorOf(pool)).to.equal(head - MIN_CONFIRMATIONS);
   });
 
   it('reorg-safe confirmation depth — a shallow event is deferred, then credited exactly once at depth', async () => {
@@ -261,31 +233,188 @@ describe('DepositListener — canonical crediting + hardening', () => {
     expect(pool.state.account.credits_usdt).to.equal(3);
   });
 
-  it('missed-block backfill — a gap beyond maxLookbackBlocks is logged loudly, never silently dropped', async () => {
-    const errors = [];
-    const loudLog = { info() {}, warn() {}, error: (msg) => errors.push(msg), debug() {} };
-    const ev1 = { args: [WALLET, usdt(1)], transactionHash: '0x' + 'c'.repeat(64), blockNumber: 50_000 };
+  it('idempotent on replay — an overlapping re-scan of already-scanned blocks never double-credits', async () => {
+    const head = 100_000;
+    const ev1 = { args: [WALLET, usdt(4)], transactionHash: '0x' + 'a'.repeat(64), blockNumber: 99_000 };
     const pool = makePool({ account: FREE_ACCOUNT });
+    const listener = makeListener(pool, { currentBlock: head, events: [ev1] });
 
-    // Establish a real DB cursor at block 50,000.
-    const run1 = makeListener(pool, { currentBlock: 50_025 + MIN_CONFIRMATIONS, events: [ev1] });
-    run1.log = loudLog;
-    await run1._pollOnce();
+    // First poll scans and credits ev1; the cursor now covers its block.
+    await listener._pollOnce();
     expect(pool.state.creditDeposits).to.have.length(1);
+    expect(pool.state.account.credits_usdt).to.equal(4);
 
-    // "Restart" after being down far longer than maxLookbackBlocks worth of
-    // blocks (default 50_000) — an extreme, deliberately-out-of-band gap.
-    const ev2 = { args: [WALLET, usdt(2)], transactionHash: '0x' + 'd'.repeat(64), blockNumber: 50_100 };
-    const run2 = makeListener(pool, { currentBlock: 50_025 + MIN_CONFIRMATIONS + 200_000, events: [ev1, ev2] });
-    run2.log = loudLog;
+    // Force an OVERLAPPING re-scan of the same range by rewinding BOTH the
+    // persisted cursor and the in-memory mirror (a real listener never rewinds
+    // like this; this directly proves per-event tx_hash idempotency —
+    // credit_deposits UNIQUE + api_deposits UNIQUE — is what prevents a double
+    // credit, independent of cursor math).
+    pool.state.scanCursor.set(137, 0);
+    listener._lastScanned = 0;
+    const dbCursorSpy = listener._dbCursor.bind(listener);
+    listener._dbCursor = async () => 0; // pretend we have no cursor at all
+    await listener._pollOnce();
+    listener._dbCursor = dbCursorSpy;
+
+    expect(pool.state.creditDeposits).to.have.length(1); // still exactly one row
+    expect(pool.state.account.credits_usdt).to.equal(4); // NOT double-credited to 8
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // A2.9 — bounded catch-up: the cursor NEVER advances past an unscanned block
+  // ────────────────────────────────────────────────────────────────────────
+
+  it('bounded catch-up over a MULTI-MILLION-block gap — never skips, credits the deep deposit', async () => {
+    const pool = makePool({ account: FREE_ACCOUNT });
+    // Deliberately behind by ~5M blocks. A per-poll ceiling means many polls,
+    // never a single jump that skips the gap.
+    pool.state.scanCursor.set(137, 1);
+    const head = 5_000_000 + MIN_CONFIRMATIONS;
+    const toBlock = head - MIN_CONFIRMATIONS; // 5_000_000
+    const deepDeposit = {
+      args: [WALLET, usdt(7)], transactionHash: '0x' + 'e'.repeat(64), blockNumber: 2_500_000,
+    };
+    const listener = makeListener(pool, {
+      currentBlock: head,
+      events: [deepDeposit],
+      opts: { maxBlocksPerPoll: 500_000, logChunk: 500_000 },
+    });
+
+    const cursors = [];
+    let polls = 0;
+    while (cursorOf(pool) < toBlock && polls < 50) {
+      const before = cursorOf(pool);
+      await listener._pollOnce();
+      const after = cursorOf(pool);
+      cursors.push(after);
+      // Each poll advances by AT MOST the per-poll ceiling — never a skip.
+      expect(after - before).to.be.at.most(500_000);
+      expect(after).to.be.greaterThan(before); // always makes forward progress
+      polls += 1;
+    }
+
+    expect(polls).to.be.greaterThan(1);               // proves it was bounded, not one jump
+    expect(cursorOf(pool)).to.equal(toBlock);         // fully caught up
+    expect(pool.state.creditDeposits).to.have.length(1);
+    expect(pool.state.account.credits_usdt).to.equal(7); // deep deposit credited exactly once
+  });
+
+  it('env ceiling SMALLER than per-poll chain growth — falls behind but never skips a block', async () => {
+    const pool = makePool({ account: FREE_ACCOUNT });
+    // The chain grows 300 blocks between polls while we can only scan 100 —
+    // lag grows, but the cursor still advances contiguously and nothing is lost.
+    let head = 1_000_000;
+    pool.state.scanCursor.set(137, 999_000);
+    const dep = { args: [WALLET, usdt(2)], transactionHash: '0x' + 'f'.repeat(64), blockNumber: 999_150 };
+    const listener = makeListener(pool, {
+      currentBlock: () => head,
+      events: [dep],
+      opts: { maxBlocksPerPoll: 100, logChunk: 100 },
+    });
+
+    const deltas = [];
+    for (let i = 0; i < 3; i++) {
+      const before = cursorOf(pool);
+      await listener._pollOnce();
+      deltas.push(cursorOf(pool) - before);
+      head += 300; // chain outruns the scanner
+    }
+
+    // Every poll advanced by exactly the ceiling — bounded, contiguous, no skip.
+    expect(deltas).to.deep.equal([100, 100, 100]);
+    // The deposit at 999_150 entered a scanned window on poll 2 and was credited.
+    expect(pool.state.account.credits_usdt).to.equal(2);
+    expect(pool.state.creditDeposits).to.have.length(1);
+  });
+
+  it('restart mid-catch-up — a fresh instance resumes from the persisted cursor, no re-skip, no re-scan-below', async () => {
+    const pool = makePool({ account: FREE_ACCOUNT });
+    pool.state.scanCursor.set(137, 100_000);
+    const head = 103_000 + MIN_CONFIRMATIONS;
+
+    // Run 1 does ONE bounded poll and "crashes" partway through catch-up.
+    const run1 = makeListener(pool, {
+      currentBlock: head, events: [],
+      opts: { maxBlocksPerPoll: 1000, logChunk: 1000 },
+    });
+    await run1._pollOnce();
+    const afterRun1 = cursorOf(pool);
+    expect(afterRun1).to.equal(101_000); // scanned 100_001..101_000 only
+
+    // Run 2 is a fresh instance on the SAME pool (restart). Its events include a
+    // deposit BELOW the persisted cursor (already-scanned) and one ABOVE it.
+    const below = { args: [WALLET, usdt(9)], transactionHash: '0x' + '1'.repeat(63) + '2', blockNumber: 100_500 };
+    const above = { args: [WALLET, usdt(3)], transactionHash: '0x' + '3'.repeat(63) + '4', blockNumber: 101_500 };
+    const run2 = makeListener(pool, {
+      currentBlock: head, events: [below, above],
+      opts: { maxBlocksPerPoll: 1000, logChunk: 1000 },
+    });
     await run2._pollOnce();
 
-    // ev2 sits inside the skipped gap — NOT auto-credited (the safety cap is
-    // still real and still bounds a single poll's range) — but the skip must
-    // be loudly, specifically logged, not silent.
-    const gapLog = errors.find((m) => m.includes('GAP SKIPPED'));
-    expect(gapLog, 'a GAP SKIPPED error must be logged').to.exist;
-    expect(gapLog).to.include('50001'); // first skipped block
-    expect(pool.state.account.credits_usdt).to.equal(1); // ev2 not credited (recoverable via manual claim)
+    // Resumed at 101_001: the below-cursor deposit is NOT re-scanned (trusted
+    // scanned), the above-cursor deposit IS credited. Nothing skipped.
+    expect(pool.state.creditDeposits.map((d) => d.block_number)).to.deep.equal([101_500]);
+    expect(pool.state.account.credits_usdt).to.equal(3);
+    expect(cursorOf(pool)).to.equal(102_000);
+  });
+
+  it('boot guard — a maxBlocksPerPoll below the catch-up floor is clamped UP (never permanently behind)', () => {
+    const errors = [];
+    const loud = { info() {}, warn() {}, error: (m) => errors.push(m), debug() {} };
+    const pool = makePool();
+    // 300s poll → Polygon produces ~150 blocks/poll → floor = 2×150 = 300.
+    // A config of 100 (e.g. a leftover DEPOSIT_MAX_LOOKBACK_BLOCKS=100 misread)
+    // would fall behind ~50 blocks every poll, forever.
+    const listener = new DepositListener(pool, loud, {
+      chainId: 137, pollIntervalMs: 300_000, maxBlocksPerPoll: 100,
+    });
+    expect(listener.opts.maxBlocksPerPoll).to.equal(300);
+    expect(errors.some((m) => /catch-up floor/.test(m)), 'an ERROR naming the catch-up floor must be logged').to.equal(true);
+  });
+
+  it('boot guard — a healthy maxBlocksPerPoll is left untouched', () => {
+    const errors = [];
+    const loud = { info() {}, warn() {}, error: (m) => errors.push(m), debug() {} };
+    const pool = makePool();
+    const listener = new DepositListener(pool, loud, {
+      chainId: 137, pollIntervalMs: 300_000, maxBlocksPerPoll: 50_000,
+    });
+    expect(listener.opts.maxBlocksPerPoll).to.equal(50_000);
+    expect(errors).to.have.length(0);
+  });
+
+  it('RPC error mid-chunk — the cursor does NOT advance past the failed chunk; the next poll re-scans it', async () => {
+    const pool = makePool({ account: FREE_ACCOUNT });
+    pool.state.scanCursor.set(137, 200_000);
+    const head = 201_000 + MIN_CONFIRMATIONS;
+
+    let failNextChunk = true;
+    const dep = { args: [WALLET, usdt(6)], transactionHash: '0x' + '9'.repeat(64), blockNumber: 200_750 };
+    const contract = {
+      async queryFilter(_name, from, to) {
+        // Fail on the SECOND chunk (200_501..201_000) on the first poll only.
+        if (failNextChunk && from >= 200_501) {
+          throw new Error('RPC 429: rate limited mid-chunk');
+        }
+        return [dep].filter((e) => e.blockNumber >= from && e.blockNumber <= to);
+      },
+    };
+    const listener = makeListener(pool, {
+      currentBlock: head, contract,
+      opts: { maxBlocksPerPoll: 5000, logChunk: 500 },
+    });
+
+    // _pollSafe swallows the throw (retries next interval). Chunk 1 scanned and
+    // committed the cursor; chunk 2 threw BEFORE advancing the cursor.
+    await listener._pollSafe();
+    expect(cursorOf(pool)).to.equal(200_500);          // did NOT jump to 201_000
+    expect(pool.state.creditDeposits).to.have.length(0); // deposit was in the failed chunk
+
+    // RPC recovers; the next poll re-scans exactly the un-advanced range.
+    failNextChunk = false;
+    await listener._pollSafe();
+    expect(cursorOf(pool)).to.equal(201_000);
+    expect(pool.state.creditDeposits.map((d) => d.block_number)).to.deep.equal([200_750]);
+    expect(pool.state.account.credits_usdt).to.equal(6); // credited exactly once, never lost
   });
 });

@@ -1,5 +1,17 @@
 # DepositListener cursor-resume bug — incident report
 
+> **SUPERSEDED (2026-09-24, A2.9):** the "safety cap that logs `GAP SKIPPED` and
+> jumps the cursor over the gap" described below has been **removed**. The
+> listener now does **bounded catch-up**: a persisted scan cursor
+> (`deposit_scan_cursor`, migration `038`) that advances only to the last
+> FULLY-scanned block, at most `DEPOSIT_MAX_BLOCKS_PER_POLL` per poll, chunked by
+> `DEPOSIT_LOG_CHUNK`. The cursor can never move past an unscanned block under
+> any config value, so **no gap is ever skipped** — a large lag is logged loudly
+> and exported as the `satelink_deposit_listener_lag_blocks` metric, and the
+> listener simply takes more polls to catch up. The manual-claim recovery path
+> below is therefore no longer needed to cover skipped ranges (it remains valid
+> for unregistered-wallet deposits). See `fix/deposit-listener-bounded-catchup`.
+
 **Branch:** `fix/deposit-listener-cursor-resume` (off `main`, own PR, founder approval required before merge).
 **Status:** root cause found, fixed, tested. Whether any deposit was actually
 missed in production is **not yet confirmed** — see "What the founder should

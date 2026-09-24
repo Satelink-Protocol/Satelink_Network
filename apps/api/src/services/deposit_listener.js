@@ -8,10 +8,20 @@
 // Hardening (machine revenue activation):
 //   - Poll-based with a confirmation threshold: an event is only processed once
 //     it is >= MIN_CONFIRMATIONS blocks deep (no reorg-refundable credits).
-//   - Restart-safe: scan cursor is derived from MAX(block_number) in
-//     credit_deposits, so a restart mid-block-range resumes where it left off
-//     (bounded by MAX_LOOKBACK_BLOCKS). Processing is idempotent on tx_hash,
-//     so overlap re-scans are harmless.
+//   - BOUNDED CATCH-UP, never skip-and-jump (A2.9): each poll scans a bounded,
+//     CONTIGUOUS window [cursor+1 .. cursor+maxBlocksPerPoll] chunked by
+//     logChunk, and advances a PERSISTED cursor only to the last FULLY-scanned
+//     block. If the listener is behind head (restart gap, long downtime, a
+//     multi-million-block backlog), it simply takes more polls to catch up — the
+//     cursor NEVER advances past an unscanned block, under any config value. A
+//     large lag is logged loudly + exported as a metric; it is never silently
+//     skipped. (Prior behavior clamped fromBlock to `toBlock - maxLookback` and
+//     jumped the cursor over the gap, silently dropping any deposit in it.)
+//   - Restart-safe: the scan cursor is persisted in `deposit_scan_cursor` and
+//     advances every fully-scanned chunk (deposit or not), so a restart resumes
+//     exactly where it left off. If that table is unavailable it degrades to the
+//     last credited block in credit_deposits (never skips within a run).
+//     Processing is idempotent on tx_hash, so overlap re-scans are harmless.
 //   - Real transactions: the credit_deposits write uses a single dedicated
 //     client (pool.connect) — BEGIN/COMMIT on a pg Pool is NOT transactional.
 //   - Unregistered wallets are NOT credited (no account to credit); the
@@ -21,6 +31,7 @@
 // Chain: Polygon Mainnet (137)
 
 import { ethers } from 'ethers';
+import client from 'prom-client';
 import { resolveAccount, creditAccount, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
 import { MIN_CONFIRMATIONS } from '../billing/deposit_validation.mjs';
 
@@ -32,26 +43,38 @@ const REVENUE_VAULT_ABI = [
 const USDT_DECIMALS = 6;
 const LOG_PREFIX = '[DepositListener]';
 
-// BUG FIX (2026-09-23, fix/deposit-listener-cursor-resume): maxLookbackBlocks
-// and initialLookbackBlocks were silently dropped from 50_000/10_000 to
-// 2_000/2_000 in ab02dd2 (#227, 2026-07-04) — a PR whose commit message says
-// only chunkBlocks (the per-eth_getLogs-call range, correctly kept small for
-// free RPC providers) was meant to change ("confirmations... unchanged",
-// "pollIntervalMs... unchanged"; maxLookbackBlocks/initialLookbackBlocks
-// weren't mentioned at all). 2_000 blocks is ~1 hour on Polygon, not the "~1
-// day" the comment (unchanged since before the regression) still claims.
-// Restored to the original, comment-matching values. See
-// docs/api/DEPOSIT_LISTENER_INCIDENT.md for the full analysis and the
-// read-only query to check whether any deposit was actually missed in
-// production during the ~11-week window this was wrong.
+// prom-client Gauge for how far behind head the listener is. Registered
+// defensively so re-imports (and tests) never throw on duplicate registration.
+const LAG_METRIC_NAME = 'satelink_deposit_listener_lag_blocks';
+function lagGauge() {
+  try {
+    return (
+      client.register.getSingleMetric(LAG_METRIC_NAME) ||
+      new client.Gauge({
+        name: LAG_METRIC_NAME,
+        help: 'DepositListener blocks behind chain head (minus confirmations). 0 = caught up.',
+        labelNames: ['chain_id'],
+      })
+    );
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULTS = {
   pollIntervalMs: parseInt(process.env.DEPOSIT_POLL_INTERVAL_MS || '60000'),
   confirmations: parseInt(process.env.DEPOSIT_CONFIRMATIONS || String(MIN_CONFIRMATIONS)), // single source of truth with the claim route
   // Max block span per eth_getLogs call. Free RPC providers reject ranges
-  // larger than 10–500 blocks, so 5_000 made every poll fail.
-  chunkBlocks: parseInt(process.env.DEPOSIT_CHUNK_BLOCKS || '500'),
-  maxLookbackBlocks: parseInt(process.env.DEPOSIT_MAX_LOOKBACK_BLOCKS || '50000'),           // ~1 day on Polygon; caps a cold-start OR long-gap scan
-  initialLookbackBlocks: parseInt(process.env.DEPOSIT_INITIAL_LOOKBACK_BLOCKS || '10000'),   // first-run window when no cursor exists
+  // larger than 10–500 blocks, so keep this small. (DEPOSIT_CHUNK_BLOCKS is the
+  // legacy name for the same knob and is still honored.)
+  logChunk: parseInt(process.env.DEPOSIT_LOG_CHUNK || process.env.DEPOSIT_CHUNK_BLOCKS || '500'),
+  // Bounded catch-up ceiling: the most blocks a SINGLE poll will scan. Being
+  // behind by more than this never skips anything — it just costs more polls.
+  maxBlocksPerPoll: parseInt(process.env.DEPOSIT_MAX_BLOCKS_PER_POLL || '50000'),
+  // First-run window when no cursor exists (cold start with an empty DB).
+  initialLookbackBlocks: parseInt(process.env.DEPOSIT_INITIAL_LOOKBACK_BLOCKS || '10000'),
+  // Lag (blocks behind head-conf) above which we log loudly + spike the metric.
+  lagAlertBlocks: parseInt(process.env.DEPOSIT_LAG_ALERT_BLOCKS || '10000'),
 };
 
 export class DepositListener {
@@ -59,13 +82,33 @@ export class DepositListener {
     this.db = db;
     this.log = logger || console;
     this.opts = { ...DEFAULTS, ...opts };
+    // Boot guard: a single poll MUST be able to scan more blocks than the chain
+    // produces between polls, or the listener falls PERMANENTLY behind — lag
+    // grows every cycle and can never reach head, even though bounded catch-up
+    // guarantees nothing is skipped. Polygon block time is ~2s, so the chain
+    // grows ~pollIntervalMs/2000 blocks per poll; require at least 2× that
+    // headroom. Never silently accept a self-defeating config: log ERROR and
+    // clamp UP to the floor. (This is exactly the failure mode a leftover
+    // DEPOSIT_MAX_LOOKBACK_BLOCKS=100 would have caused if it still fed this.)
+    const blocksPerPoll = this.opts.pollIntervalMs / 2000; // ~Polygon blocks per poll (2s/block)
+    const catchUpFloor = Math.ceil(2 * blocksPerPoll);
+    if (this.opts.maxBlocksPerPoll < catchUpFloor) {
+      this.log.error(
+        `${LOG_PREFIX} maxBlocksPerPoll=${this.opts.maxBlocksPerPoll} is below the catch-up floor ` +
+        `${catchUpFloor} (2× the ~${Math.ceil(blocksPerPoll)} blocks Polygon produces per ` +
+        `${this.opts.pollIntervalMs}ms poll) — at this size the listener would fall permanently ` +
+        `behind head. Clamping maxBlocksPerPoll up to ${catchUpFloor}.`
+      );
+      this.opts.maxBlocksPerPoll = catchUpFloor;
+    }
     this.provider = opts.provider || null; // injectable for tests
     this.contract = null;
     this.running = false;
     this.chainId = opts.chainId || 137;
     this._timer = null;
     this._polling = false;
-    this._lastScanned = 0; // in-memory high-water mark (DB cursor only moves on deposits)
+    this._lastScanned = 0; // in-memory mirror of the persisted cursor
+    this._cursorTableReady = false;
   }
 
   async start() {
@@ -99,14 +142,22 @@ export class DepositListener {
       this.log.warn(`${LOG_PREFIX} getNetwork failed (${err.message}) — assuming chain=${this.chainId}`);
     }
 
+    // Persisted scan cursor. No SQL migration auto-runner exists in prod
+    // (see server.js), so ensure the table here — idempotent boot DDL, the same
+    // pattern billing/Dodo schema use.
+    await this._ensureCursorTable();
+
     this.contract = new ethers.Contract(this.vaultAddress, REVENUE_VAULT_ABI, this.provider);
     this.running = true;
     this.log.info(
       `${LOG_PREFIX} started chain=${this.chainId} vault=${this.vaultAddress} ` +
       `confirmations=${this.opts.confirmations} poll=${this.opts.pollIntervalMs}ms`
     );
-    const { chunkBlocks, confirmations, pollIntervalMs } = this.opts;
-    this.log.info(`${LOG_PREFIX} config: chunk=${chunkBlocks} confirms=${confirmations} poll=${pollIntervalMs}ms`);
+    const { logChunk, maxBlocksPerPoll, confirmations, pollIntervalMs } = this.opts;
+    this.log.info(
+      `${LOG_PREFIX} config: logChunk=${logChunk} maxBlocksPerPoll=${maxBlocksPerPoll} ` +
+      `confirms=${confirmations} poll=${pollIntervalMs}ms`
+    );
 
     // Immediate first scan, then steady polling.
     await this._pollSafe();
@@ -128,13 +179,36 @@ export class DepositListener {
     try {
       await this._pollOnce();
     } catch (err) {
+      // A throw here (e.g. RPC error mid-chunk) means the cursor was only
+      // advanced through the last FULLY-scanned chunk — never past the failed
+      // range — so the next poll safely resumes and re-scans it.
       this.log.error(`${LOG_PREFIX} poll failed: ${err.message} — retrying next interval`);
     } finally {
       this._polling = false;
     }
   }
 
-  /** Where to resume: last credited block from the DB (restart-safe cursor). */
+  /** Idempotent boot DDL for the persisted scan cursor. Non-fatal on failure. */
+  async _ensureCursorTable() {
+    try {
+      await this.db.query(`
+        CREATE TABLE IF NOT EXISTS deposit_scan_cursor (
+          chain_id           INTEGER PRIMARY KEY,
+          last_scanned_block BIGINT      NOT NULL,
+          updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this._cursorTableReady = true;
+    } catch (err) {
+      this._cursorTableReady = false;
+      this.log.warn(
+        `${LOG_PREFIX} could not ensure deposit_scan_cursor (${err.message}) — ` +
+        `falling back to the credit_deposits high-water mark (still never skips within a run)`
+      );
+    }
+  }
+
+  /** Last credited block from credit_deposits (fallback / cold-start seed). */
   async _dbCursor() {
     const r = await this.db.query(
       `SELECT COALESCE(MAX(block_number), 0) AS cursor
@@ -145,36 +219,85 @@ export class DepositListener {
     return parseInt(r.rows?.[0]?.cursor, 10) || 0;
   }
 
+  /**
+   * Where to resume: the persisted scan cursor. Advances every fully-scanned
+   * chunk, so it reflects real scan progress even across long gaps with no
+   * deposits. Falls back to the credit_deposits high-water mark when no cursor
+   * row exists yet (first boot on this deploy) or the table is unavailable —
+   * never skipping and never re-scanning from genesis.
+   */
+  async _scanCursor() {
+    try {
+      const r = await this.db.query(
+        `SELECT last_scanned_block FROM deposit_scan_cursor WHERE chain_id = $1`,
+        [this.chainId]
+      );
+      const persisted = parseInt(r.rows?.[0]?.last_scanned_block, 10);
+      if (Number.isFinite(persisted) && persisted > 0) return persisted;
+    } catch (err) {
+      this.log.warn(`${LOG_PREFIX} scan-cursor read failed (${err.message}) — using credit_deposits high-water mark`);
+    }
+    return await this._dbCursor();
+  }
+
+  /**
+   * Advance the persisted cursor to `block` (the last block of a FULLY-scanned
+   * chunk). GREATEST guards against any out-of-order write. Best-effort: a
+   * write failure keeps the in-memory mirror so the current run still never
+   * re-skips, and the next restart re-derives from credit_deposits.
+   */
+  async _advanceCursor(block) {
+    this._lastScanned = Math.max(this._lastScanned, block);
+    if (!this._cursorTableReady) return;
+    try {
+      await this.db.query(
+        `INSERT INTO deposit_scan_cursor (chain_id, last_scanned_block, updated_at)
+              VALUES ($1, $2, now())
+         ON CONFLICT (chain_id) DO UPDATE
+              SET last_scanned_block = GREATEST(deposit_scan_cursor.last_scanned_block, EXCLUDED.last_scanned_block),
+                  updated_at = now()`,
+        [this.chainId, block]
+      );
+    } catch (err) {
+      this.log.warn(`${LOG_PREFIX} scan-cursor write failed at block ${block} (${err.message})`);
+    }
+  }
+
   async _pollOnce() {
     const current = await this.provider.getBlockNumber();
     const toBlock = current - this.opts.confirmations;
     if (toBlock <= 0) return;
 
-    const cursor = Math.max(await this._dbCursor(), this._lastScanned);
-    const cursorFrom = cursor > 0 ? cursor + 1 : toBlock - this.opts.initialLookbackBlocks;
-    // Bound a cold or long-idle start so a single poll never tries to scan an
-    // unbounded range (rate-limit politeness toward the RPC provider) — but if
-    // that bound actually forces us PAST a real, trustworthy DB cursor, blocks
-    // in between are never going to be scanned by anyone. That must never be
-    // silent: log it loudly (audit trail) so it's operationally recoverable
-    // (Polygonscan + POST /api/keys/deposit for a registered wallet — see the
-    // module header) instead of a deposit quietly vanishing.
-    const boundedFrom = Math.max(cursorFrom, toBlock - this.opts.maxLookbackBlocks, 0);
-    if (cursor > 0 && boundedFrom > cursorFrom) {
-      this.log.error(
-        `${LOG_PREFIX} GAP SKIPPED: cursor=${cursor} but the poll gap exceeds ` +
-        `maxLookbackBlocks=${this.opts.maxLookbackBlocks} — blocks ${cursorFrom}..${boundedFrom - 1} ` +
-        `will NOT be scanned by this listener. If a deposit landed in that range, it will not be ` +
-        `auto-credited; verify on Polygonscan (vault ${this.vaultAddress || '(unset)'}) and use ` +
-        `POST /api/keys/deposit to claim it manually.`
-      );
-    }
-    const fromBlock = boundedFrom;
+    const cursor = Math.max(await this._scanCursor(), this._lastScanned);
+    // Cold start (no cursor, no deposits): open the initial-lookback window.
+    // Otherwise resume strictly at cursor+1 — contiguous, never a jump.
+    const fromBlock = cursor > 0
+      ? cursor + 1
+      : Math.max(toBlock - this.opts.initialLookbackBlocks, 0);
     if (fromBlock > toBlock) return; // fully caught up
 
+    // Bounded catch-up: this poll scans at most maxBlocksPerPoll blocks, always
+    // contiguous from the cursor. Being further behind never skips — it only
+    // means more polls. The cursor cannot move past `scanTo`, and only moves
+    // chunk-by-chunk as each chunk is fully scanned below.
+    const scanTo = Math.min(toBlock, fromBlock + this.opts.maxBlocksPerPoll - 1);
+
+    const lag = toBlock - cursor;
+    try { lagGauge()?.set({ chain_id: String(this.chainId) }, Math.max(lag, 0)); } catch {}
+    if (lag > this.opts.lagAlertBlocks) {
+      this.log.error(
+        `${LOG_PREFIX} LAG ${lag} blocks behind head-conf (cursor=${cursor}, toBlock=${toBlock}) — ` +
+        `bounded catch-up scanning ${fromBlock}..${scanTo} (<= ${this.opts.maxBlocksPerPoll}/poll); ` +
+        `will keep catching up each poll until lag reaches 0. NOTHING is skipped.`
+      );
+    }
+
     let credited = 0;
-    for (let start = fromBlock; start <= toBlock; start += this.opts.chunkBlocks) {
-      const end = Math.min(start + this.opts.chunkBlocks - 1, toBlock);
+    for (let start = fromBlock; start <= scanTo; start += this.opts.logChunk) {
+      const end = Math.min(start + this.opts.logChunk - 1, scanTo);
+      // If this throws (RPC error), it propagates out BEFORE _advanceCursor —
+      // the cursor stays at the previous chunk's end and the range is re-scanned
+      // next poll. That is the core "never skip a block" guarantee.
       const events = await this.contract.queryFilter('Deposited', start, end);
       for (const ev of events) {
         const [from, amount] = ev.args;
@@ -183,11 +306,11 @@ export class DepositListener {
         );
         if (ok) credited += 1;
       }
-      this._lastScanned = end;
+      await this._advanceCursor(end);
     }
 
     if (credited > 0) {
-      this.log.info(`${LOG_PREFIX} scan ${fromBlock}..${toBlock}: credited ${credited} deposit(s)`);
+      this.log.info(`${LOG_PREFIX} scan ${fromBlock}..${scanTo}: credited ${credited} deposit(s)`);
     }
   }
 
