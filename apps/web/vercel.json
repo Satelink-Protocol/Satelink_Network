@@ -5,6 +5,10 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/identity/:path*",
+      "destination": "https://api.satelink.network/api/identity/:path*"
+    },
+    {
       "source": "/:path*",
       "has": [
         {
