@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { resolve } from 'node:path';
-import { migrate } from '../../../../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../../../../database/__tests__/apply-migrations.js';
 import { PostgresLedgerRepository } from './postgres-ledger-repository.js';
 import { runLedgerRepositoryContract } from '../ledger-repository.contract.js';
 import {
@@ -35,7 +35,7 @@ let pool: Pool;
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
   const connectionString = container.getConnectionUri();
-  const result = await migrate(connectionString, MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(connectionString, MIGRATIONS_DIR);
   if (result.errors.length > 0) {
     throw new Error(`migration failed: ${result.errors.join('; ')}`);
   }

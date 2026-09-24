@@ -7,7 +7,7 @@ import { beforeAll, afterAll } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { resolve } from 'node:path';
-import { migrate } from '../../../../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../../../../database/__tests__/apply-migrations.js';
 import { PostgresPrincipalRepository } from './postgres-principal-repository.js';
 import { PostgresAccountRepository } from './postgres-account-repository.js';
 import { runPrincipalRepositoryContract } from '../principal-repository.contract.js';
@@ -23,7 +23,7 @@ let pool: Pool;
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
-  const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString: container.getConnectionUri() });
   // Swallow idle-client connection errors (e.g. a socket reset when the

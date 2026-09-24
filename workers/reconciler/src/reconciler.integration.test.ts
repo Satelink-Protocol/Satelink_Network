@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import pg from 'pg';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { resolve } from 'node:path';
-import { migrate } from '../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../database/__tests__/apply-migrations.js';
 import { runCycle } from './cycle.js';
 import { reconcileOnce } from './reconciler/reconcile.js';
 import { pollOnce } from './settlement-poller/poll.js';
@@ -117,7 +117,7 @@ async function seedSettlingDraw(opts: {
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
-  const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new pg.Pool({ connectionString: container.getConnectionUri() });
 }, 120_000);
