@@ -119,7 +119,10 @@ export async function getBetterAuth(pool) {
  *  initializes on first request. */
 export function mountBetterAuth(app, pool, basePath = '/api/identity') {
   if (!isBetterAuthEnabled()) return false;
-  app.all(`${basePath}/*`, async (req, res, next) => {
+  // Express 5 (path-to-regexp v8) requires a NAMED wildcard — a bare `/*`
+  // throws "Missing parameter name" and crashes createApp. `/*splat` matches
+  // every sub-path under basePath, which is what Better Auth's node handler needs.
+  app.all(`${basePath}/*splat`, async (req, res, next) => {
     try {
       if (!_nodeHandler) {
         const [{ toNodeHandler }, auth] = await Promise.all([
