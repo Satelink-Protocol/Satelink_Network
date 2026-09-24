@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "rewrites": [
+    { "source": "/api/identity/:path*", "destination": "https://api.satelink.network/api/identity/:path*" }
+  ]
+}
