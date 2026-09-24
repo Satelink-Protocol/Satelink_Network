@@ -1,0 +1,27 @@
+@import "tailwindcss";
+/* Signal tokens (+ their @theme mapping) must go through Tailwind so the
+   sl-* utilities are generated. */
+@import "../../../../packages/web-ui/src/styles/tokens.css";
+
+@source "../**/*.{ts,tsx}";
+@source "../../../../packages/web-ui/src/**/*.{ts,tsx}";
+
+@layer base {
+  html,
+  body {
+    background: var(--sl-bg);
+    color: var(--sl-text);
+    font-family: var(--sl-font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--sl-accent);
+    outline-offset: 2px;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
