@@ -33,6 +33,36 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start();
     connectionString = container.getConnectionUri();
+
+    // Cross-schema prerequisite. Migrations 014/015 AMEND `revenue_events_v2`,
+    // a table owned by the legacy apps/api schema (apps/api/src/core/db/sql/
+    // 007_day1_revenue.sql), NOT by this ledger migration set. In every real
+    // deployment both schemas share one Postgres and the api table has existed
+    // since day 1, long before 014 (2026-08-27) was added — so 014/015 apply
+    // cleanly in prod. A fresh ledger-only test DB lacks it, so we provide the
+    // minimal shape those two migrations touch. We do NOT edit 014/015 to guard
+    // this: they are already applied in production and the runner rejects any
+    // checksum change to an applied migration (runner.ts checksum guard).
+    const seed = new Client({ connectionString });
+    await seed.connect();
+    try {
+      // 014/015 amend revenue_events_v2; 018 FKs api_credits(api_key). Both
+      // tables are owned by the legacy apps/api schema, present in every real
+      // deployment. Provide their minimal shape so the ledger migrations apply.
+      await seed.query(`
+        CREATE TABLE IF NOT EXISTS revenue_events_v2 (
+          id           BIGSERIAL PRIMARY KEY,
+          amount_usdt  NUMERIC(20, 6),
+          is_test_data BOOLEAN NOT NULL DEFAULT false,
+          created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE TABLE IF NOT EXISTS api_credits (
+          api_key TEXT PRIMARY KEY
+        );
+      `);
+    } finally {
+      await seed.end();
+    }
   });
 
   afterAll(async () => {
@@ -58,11 +88,19 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // production must reach (dedicated non-superuser role + repointed DATABASE_URL);
   // it is a test fixture only and must never be run against production.
   async function ensureAppRole(client: Client): Promise<void> {
+    // Migration 017 now creates satelink_app deliberately WITHOUT a password
+    // (it documents setting one out-of-band via ALTER ROLE). So we can't rely
+    // on CREATE ROLE to set the login password — the role already exists by the
+    // time this runs. Set LOGIN + password unconditionally, which is exactly the
+    // out-of-band step 017's header prescribes, and also covers the pre-017 path
+    // where the role doesn't exist yet.
     await client.query(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'satelink_app') THEN
           CREATE ROLE satelink_app LOGIN PASSWORD '${APP_ROLE_PASSWORD}';
+        ELSE
+          ALTER ROLE satelink_app WITH LOGIN PASSWORD '${APP_ROLE_PASSWORD}';
         END IF;
       END
       $$;
@@ -76,11 +114,10 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // Migration runner
   // -----------------------------------------------------------------------
 
-  it('applies all 13 migrations to a fresh database', async () => {
+  it('applies all migrations to a fresh database', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.applied).toHaveLength(13);
     expect(result.applied).toEqual([
       '001_principals.sql',
       '002_accounts.sql',
@@ -95,22 +132,31 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '011_reconciliation.sql',
       '012_nonce_schedule.sql',
       '013_platform_flags.sql',
+      '014_revenue_is_billable.sql',
+      '015_revenue_billable_amount_check.sql',
+      '016_guardrails.sql',
+      '017_satelink_app_role.sql',
+      '018_subscriptions.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
+
+  // The exact count is derived from the applied list above so adding a
+  // migration only requires updating that one list.
+  const MIGRATION_COUNT = 18;
 
   it('re-running applies nothing (idempotent)', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
 
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(13);
+    expect(result.skipped).toHaveLength(MIGRATION_COUNT);
   });
 
   it('status correctly reports all as applied', async () => {
     const statuses = await status(connectionString, MIGRATIONS_DIR);
 
-    expect(statuses).toHaveLength(13);
+    expect(statuses).toHaveLength(MIGRATION_COUNT);
     for (const s of statuses) {
       expect(s.status).toBe('applied');
       expect(s.applied_at).toBeInstanceOf(Date);

@@ -16,7 +16,7 @@ import { beforeAll, afterAll, beforeEach, describe, it, expect } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { resolve } from 'node:path';
-import { migrate } from '../../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../../database/__tests__/apply-migrations.js';
 // @ts-expect-error — importing the shipped JS enforcement module (no d.ts).
 import { __internal, enforcementPath, enforceCapacity } from './capacity_enforcement.js';
 // @ts-expect-error — shipped JS flag reader (no d.ts).
@@ -39,7 +39,7 @@ let pool: Pool;
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
-  const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString: container.getConnectionUri() });
   pool.on('error', () => {});
@@ -369,7 +369,10 @@ describe('capacity enforcement — new-mode T-23 waterfall (integration)', () =>
 
   beforeEach(async () => {
     // top-level beforeEach already truncated principals (→ no authorizations).
-    await pool.query('TRUNCATE api_credits');
+    // CASCADE: migration 018 (subscriptions) now FKs api_credits(api_key), so a
+    // plain TRUNCATE is refused ("cannot truncate a table referenced in a
+    // foreign key constraint"). subscriptions is unused here and stays empty.
+    await pool.query('TRUNCATE api_credits CASCADE');
     await pool.query('TRUNCATE api_usage_daily');
     await pool.query(`UPDATE platform_flags SET value='new' WHERE key='capacity_enforcement_path'`);
     bustCapacityPathCache(); // 10s TTL — force enforceCapacity to observe 'new'

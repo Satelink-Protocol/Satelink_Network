@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { resolve } from 'node:path';
-import { migrate } from '../runner.js';
+import { applyMigrationsForTest } from './apply-migrations.js';
 import { computeDrawParity } from '../../apps/api/src/ledger/draw_parity.js';
 import { shadowWriteDraw } from '../../apps/api/src/ledger/shadow_draw_write.js';
 
@@ -18,7 +18,7 @@ let pool: Pool;
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
   const connectionString = container.getConnectionUri();
-  const result = await migrate(connectionString, MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(connectionString, MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString });
   // Swallow idle-client connection errors (e.g. a socket reset when the

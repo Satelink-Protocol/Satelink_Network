@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { resolve } from 'node:path';
-import { migrate } from '../../../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../../../database/__tests__/apply-migrations.js';
 import { runBackfill } from './backfill-principals.js';
 
 const MIGRATIONS_DIR = resolve(
@@ -26,14 +26,19 @@ let pool: Pool;
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
-  const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString: container.getConnectionUri() });
   // Swallow idle-client connection errors (e.g. a socket reset when the
   // testcontainer stops in afterAll) so they never surface as unhandled
   // rejections. Query errors still reject their own promises.
   pool.on('error', () => {});
-  // Minimal legacy source tables the backfill reads from.
+  // Minimal legacy source tables the backfill reads from. applyMigrationsForTest
+  // seeds a full revenue_events_v2 (so ledger migrations 014/015 can apply), but
+  // this test only reads DISTINCT client_id and inserts client_id-only rows —
+  // which the migrated table's is_billable/amount_usdt CHECK (015) would reject.
+  // Replace it with the loose shape this test actually needs.
+  await pool.query('DROP TABLE IF EXISTS revenue_events_v2 CASCADE');
   await pool.query('CREATE TABLE IF NOT EXISTS revenue_events_v2 (client_id TEXT)');
   await pool.query('CREATE TABLE IF NOT EXISTS api_deposits (from_address TEXT)');
 }, 120_000);

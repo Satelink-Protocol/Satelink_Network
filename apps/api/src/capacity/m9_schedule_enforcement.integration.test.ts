@@ -18,7 +18,7 @@ import { resolve } from 'node:path';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { getAddress, toHex, type Hex } from 'viem';
 import { randomBytes } from 'node:crypto';
-import { migrate } from '../../../../database/runner.js';
+import { applyMigrationsForTest } from '../../../../database/__tests__/apply-migrations.js';
 import { ViemEip3009Verifier } from '../../../../services/financial/src/infrastructure/adapters/viem-eip3009-verifier.js';
 import { PostgresPrincipalRepository } from '../../../../services/financial/src/infrastructure/repositories/postgres/postgres-principal-repository.js';
 import { PostgresAuthorizationCreationUnitOfWork } from '../../../../services/financial/src/infrastructure/repositories/postgres/postgres-authorization-creation-unit-of-work.js';
@@ -132,7 +132,7 @@ async function enforceNewDirect(
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start();
-  const result = await migrate(container.getConnectionUri(), MIGRATIONS_DIR);
+  const result = await applyMigrationsForTest(container.getConnectionUri(), MIGRATIONS_DIR);
   if (result.errors.length > 0) throw new Error(`migration failed: ${result.errors.join('; ')}`);
   pool = new Pool({ connectionString: container.getConnectionUri() });
   pool.on('error', () => {});
