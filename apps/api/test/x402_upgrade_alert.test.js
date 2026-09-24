@@ -6,19 +6,11 @@ describe('x402_upgrade_alert (T-29: Discord alert, rate-limited 1/hour)', () => 
   let originalFetch;
   let originalWebhook;
 
-  // alertX402UpgradeFailure fires the fetch and returns immediately (fire-and-
-  // forget). A fixed `setTimeout(10)` was long enough in isolation but flaky in
-  // the full suite: under load the microtask that pushes to `calls` hadn't run
-  // in 10ms, so `calls` was empty and this file showed up as a NEW baseline
-  // failure. Poll for the expected count instead — deterministic regardless of
-  // how busy the event loop is.
-  async function waitForCalls(n, timeoutMs = 1000) {
-    const start = Date.now();
-    while (calls.length < n && Date.now() - start < timeoutMs) {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    return calls.length;
-  }
+  // alertX402UpgradeFailure fires the send and returns immediately (fire-and-
+  // forget). A fixed setTimeout to observe it was flaky in the full suite (the
+  // send hadn't run yet under load). Await the module's in-flight send promise
+  // instead — fully deterministic, no timing race.
+  const settle = () => __internal.lastSend();
 
   beforeEach(() => {
     __internal.reset();
@@ -40,7 +32,7 @@ describe('x402_upgrade_alert (T-29: Discord alert, rate-limited 1/hour)', () => 
 
   it('sends a Discord alert on the first failure', async () => {
     alertX402UpgradeFailure('facilitator unreachable');
-    await waitForCalls(1);
+    await settle();
     expect(calls).to.have.length(1);
     expect(calls[0].url).to.equal('https://discord.example/webhook');
     expect(calls[0].body.embeds[0].description).to.include('facilitator unreachable');
@@ -48,11 +40,9 @@ describe('x402_upgrade_alert (T-29: Discord alert, rate-limited 1/hour)', () => 
 
   it('suppresses a second alert within the 1-hour cooldown, but does not throw', async () => {
     alertX402UpgradeFailure('first failure');
-    await waitForCalls(1);
-    alertX402UpgradeFailure('second failure, same hour');
-    // The second is cooldown-suppressed, so no call to wait for — give the
-    // event loop a couple of ticks to prove nothing else fired, then assert.
-    await new Promise((r) => setTimeout(r, 30));
+    await settle();
+    alertX402UpgradeFailure('second failure, same hour'); // cooldown-suppressed: no send
+    await settle();
     expect(calls).to.have.length(1); // only the first sent
   });
 
@@ -64,6 +54,6 @@ describe('x402_upgrade_alert (T-29: Discord alert, rate-limited 1/hour)', () => 
   it('never throws when fetch itself rejects', async () => {
     globalThis.fetch = async () => { throw new Error('network down'); };
     expect(() => alertX402UpgradeFailure('will fail to send')).to.not.throw();
-    await new Promise((r) => setTimeout(r, 10));
+    await settle();
   });
 });
