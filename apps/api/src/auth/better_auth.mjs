@@ -38,6 +38,19 @@ function googleConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
+const DEFAULT_TRUSTED_ORIGINS = [
+  'https://satelink.network',
+  'https://www.satelink.network',
+  'https://console.satelink.network',
+];
+
+/** Comma-separated BETTER_AUTH_TRUSTED_ORIGINS overrides the default list. */
+export function trustedOrigins() {
+  const raw = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+  if (!raw) return DEFAULT_TRUSTED_ORIGINS;
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 async function sendEmailViaResend(to, subject, html) {
   if (!emailEnabled()) throw new Error('email_disabled: RESEND_API_KEY not set');
   const { Resend } = await import('resend');
@@ -69,6 +82,10 @@ export async function getBetterAuth(pool) {
     // callback URLs as `${baseURL}/callback/{provider}`. Default matches the
     // fixed /api/identity namespace (founder-confirmed 2026-09-23).
     baseURL: process.env.BETTER_AUTH_URL || 'https://api.satelink.network/api/identity',
+    // Sign-in starts on the web hosts (proxied via /api/identity) and the
+    // console subdomain; Better Auth rejects Origin/callbackURL values outside
+    // baseURL's origin unless they are listed here.
+    trustedOrigins: trustedOrigins(),
     emailAndPassword: {
       enabled: emailEnabled(),
       requireEmailVerification: true,
