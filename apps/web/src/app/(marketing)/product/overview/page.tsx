@@ -4,10 +4,25 @@
 // price comes from the catalog; every other number is a documented constant.
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Radar, CreditCard, ReceiptText } from "lucide-react";
+import {
+  Radar,
+  CreditCard,
+  ReceiptText,
+  ArrowRight,
+  Boxes,
+  LineChart,
+  Server,
+  Gauge,
+  Code2,
+  Bot,
+  Building2,
+  ShieldCheck,
+  FileCode2,
+} from "lucide-react";
 import { buildMetadata } from "@satelink/seo";
+import { LifecycleStepper } from "@satelink/web-ui";
 import { getCatalog } from "@/lib/intelligence";
-import { PRODUCTS, FLAT_RATE_USD, X402_BUNDLE } from "@/lib/products";
+import { PRODUCTS, PRODUCT_ORDER, FLAT_RATE_USD, X402_BUNDLE, type ProductSlug } from "@/lib/products";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -51,6 +66,26 @@ const CAPABILITIES = [
   { title: "Prepaid credits", body: "USDT deposit drawn down per call." },
   { title: "Per-call metering", body: "Flat-rate accounting attributed per key." },
   { title: "On-chain settlement", body: "Per-epoch aggregation to RevenueVaultV2 on Polygon." },
+];
+
+const PRODUCT_ICONS: Record<ProductSlug, typeof Boxes> = {
+  "machine-commerce": Boxes,
+  "trading-intelligence": LineChart,
+  rpc: Server,
+  x402: CreditCard,
+  metering: Gauge,
+};
+
+const AUDIENCES = [
+  { icon: Code2, title: "For developers", body: "A REST API, keyless x402, and the MIT x402-kit. Pay per call, no seat licence, no commitment.", href: "/developers/quickstart", cta: "Start building" },
+  { icon: Bot, title: "For AI agents", body: "Public discovery, machine-readable pricing, and a 402 flow an autonomous buyer can complete on its own.", href: "/products/machine-commerce", cta: "How a machine pays" },
+  { icon: Building2, title: "For enterprise", body: "Dedicated keys, spend controls, usage attribution, and transparent on-chain settlement.", href: "/solutions/enterprise", cta: "Talk to Satelink" },
+];
+
+const PROOF = [
+  { icon: ShieldCheck, title: "RevenueVaultV2", body: "Settlement vault on Polygon (chain 137).", href: "https://polygonscan.com/address/0x577D3716d6Ad5b676d230f5409deF9838FABaCEF", cta: "View on Polygonscan" },
+  { icon: Boxes, title: "First on-chain claim", body: "A settled claim transaction, verifiable on-chain.", href: "https://polygonscan.com/tx/0x814d348d3f6cb4164d2aadf99b574d4ca65221d2155a76b0e99a4e8641a1726b", cta: "View transaction" },
+  { icon: FileCode2, title: "x402-kit", body: "Open-source x402 payment toolkit (MIT).", href: "https://github.com/Satelink-Protocol/x402-kit", cta: "View on GitHub" },
 ];
 
 const ROLES: SelectorRole[] = [
@@ -148,6 +183,14 @@ export default async function OverviewPage() {
         </div>
       </section>
 
+      {/* Lifecycle stepper (SSR) — target of the home "See how machines pay" link */}
+      <section id="lifecycle" className="scroll-mt-24 border-b border-sl-border">
+        <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-6">
+          <SectionHeader eyebrow="How a machine pays" title="One request, end to end" align="left" />
+          <LifecycleStepper id="lifecycle-flow" />
+        </div>
+      </section>
+
       {/* Principles */}
       <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
         <SectionHeader eyebrow="Principles" title="The rules the rail runs on" align="left" />
@@ -173,6 +216,67 @@ export default async function OverviewPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Products grid (5) */}
+      <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
+        <SectionHeader eyebrow="Products" title="Five ways to build on the rail" />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {PRODUCT_ORDER.map((slug) => {
+            const p = PRODUCTS[slug];
+            const Icon = PRODUCT_ICONS[slug];
+            return (
+              <Card key={slug} interactive className="flex flex-col">
+                <span className="mb-4 inline-flex size-11 items-center justify-center rounded-[var(--sl-radius)] bg-sl-accent-soft text-sl-accent">
+                  <Icon className="size-5" />
+                </span>
+                <CardTitle>{p.name}</CardTitle>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-sl-text-muted">{p.tagline}</p>
+                <Link href={p.href} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong">
+                  Learn more <ArrowRight className="size-3.5" />
+                </Link>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Audiences */}
+      <section className="border-y border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
+          <SectionHeader eyebrow="Built for" title="Developers, agents, and enterprises" />
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {AUDIENCES.map((a) => (
+              <Card key={a.title} className="flex flex-col">
+                <span className="mb-4 inline-flex size-11 items-center justify-center rounded-[var(--sl-radius)] bg-sl-accent-soft text-sl-accent">
+                  <a.icon className="size-5" />
+                </span>
+                <CardTitle>{a.title}</CardTitle>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-sl-text-muted">{a.body}</p>
+                <Link href={a.href} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong">
+                  {a.cta} <ArrowRight className="size-3.5" />
+                </Link>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* On-chain proof */}
+      <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
+        <SectionHeader eyebrow="Proof" title="On-chain and open source" align="left" />
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {PROOF.map((c) => (
+            <Card key={c.title}>
+              <c.icon className="size-5 text-sl-accent" />
+              <CardTitle className="mt-4 text-base">{c.title}</CardTitle>
+              <p className="mt-2 text-sm text-sl-text-muted">{c.body}</p>
+              <a href={c.href} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong">
+                {c.cta} <ArrowRight className="size-3.5" />
+              </a>
+            </Card>
+          ))}
         </div>
       </section>
 

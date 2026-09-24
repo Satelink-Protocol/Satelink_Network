@@ -22,3 +22,8 @@ export { LifecycleStepper, DEFAULT_LIFECYCLE } from "./blocks/LifecycleStepper";
 export type { LifecycleStep } from "./blocks/LifecycleStepper";
 export { PageTemplate, ArticleTemplate, TutorialTemplate, SupportArticleTemplate, HelpfulVotes } from "./templates";
 export { cn } from "./lib/utils";
+
+// Signal 2.0 (P1) — illustration kit, infographics, and motion primitives.
+export * from "./illustrations";
+export * from "./infographics";
+export * from "./motion";

@@ -1,23 +1,26 @@
-// /signup — entry page (§8). Auth lives in the existing console (do not rebuild
-// it): this page routes people to the right starting point. Cards: create a
-// console account, keyless API/machine access (x402, no account), docs, pricing.
+// /signup — customer sign-up (web-v3 P5). Google/email sign-up with a
+// DPDP-style consent notice via the shared AuthPanel. New-account creation
+// requires the Better Auth backend (Track B); until NEXT_PUBLIC_AUTH_ENABLED is
+// on, the form shows a "rolling out — notify me" state and the other real ways
+// to start (keyless x402, the console, docs) remain actionable. No dead controls.
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { buildMetadata } from "@satelink/seo";
 import { SITES } from "@satelink/content";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { AuthPanel } from "@/components/AuthPanel";
 import { Card, CardTitle } from "@/components/ui/Card";
 
 export const metadata: Metadata = buildMetadata({
   title: "Get started",
-  description: "Start with Satelink: create a developer console account, or skip signup entirely and pay per call keylessly with x402.",
+  description:
+    "Create a Satelink account to start Free with 300 Trading-Intelligence calls a month — or skip signup and pay per call keylessly with x402.",
   path: "/signup",
 });
 
-const CARDS = [
-  { title: "Developer console", body: "Create an account, issue API keys, and fund a balance.", href: "/satelink/os/mission-control", cta: "Open the console" },
-  { title: "API / machine access", body: "No account needed — pay per call keylessly with x402.", href: "/products/x402", cta: "Use x402" },
+const OTHER_WAYS = [
+  { title: "Keyless x402", body: "No account needed — pay per call in USDC on Base.", href: "/products/x402", cta: "Use x402" },
   { title: "Quickstart", body: "From discovery to your first paid call in minutes.", href: "/developers/quickstart", cta: "Start building" },
   { title: "Docs", body: "The full API reference and guides.", href: SITES.docs.origin, cta: "Read the docs" },
 ];
@@ -25,24 +28,35 @@ const CARDS = [
 export default function SignupPage() {
   return (
     <>
-      <section className="mx-auto max-w-[1000px] px-4 pt-16 text-center sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">Get started</p>
-        <h1 className="mx-auto mt-3 max-w-[22ch] text-balance text-4xl font-bold tracking-tight text-sl-text sm:text-5xl">Pick how you want to start.</h1>
-        <p className="mx-auto mt-5 max-w-[56ch] text-lg text-sl-text-muted">
-          Create a console account to manage keys and balances, or skip signup entirely and pay per
-          call with x402.
-        </p>
-        <p className="mt-4 text-sm text-sl-text-muted">
-          Already have an account? <Link href="/login" className="text-sl-accent underline">Log in</Link>.
-        </p>
+      <section className="relative overflow-hidden border-b border-sl-border">
+        <div className="sl-grad-hero pointer-events-none absolute inset-0" aria-hidden />
+        <div className="relative mx-auto grid max-w-[1100px] items-center gap-12 px-4 py-16 sm:px-6 md:py-20 lg:grid-cols-[1fr_auto]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">Get started</p>
+            <h1 className="mt-3 max-w-[18ch] text-balance font-sl-display text-4xl font-extrabold tracking-tight text-sl-text sm:text-5xl">
+              Start free in a minute.
+            </h1>
+            <p className="mt-5 max-w-[52ch] text-lg text-sl-text-muted">
+              Create an account to get 300 Trading-Intelligence calls a month, issue an API key, and make
+              your first call. No card required.
+            </p>
+          </div>
+          <Suspense fallback={<div className="h-96 w-full max-w-md rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface" />}>
+            <AuthPanel mode="signup" />
+          </Suspense>
+        </div>
       </section>
-      <section className="mx-auto max-w-[1000px] px-4 py-14 sm:px-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {CARDS.map((c) => (
+
+      <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">Other ways to start</p>
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {OTHER_WAYS.map((c) => (
             <Card key={c.title} interactive className="flex flex-col">
-              <CardTitle>{c.title}</CardTitle>
+              <CardTitle className="text-base">{c.title}</CardTitle>
               <p className="mt-2 flex-1 text-sm text-sl-text-muted">{c.body}</p>
-              <Link href={c.href} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong">{c.cta} <ArrowRight className="size-3.5" /></Link>
+              <Link href={c.href} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sl-accent hover:text-sl-accent-strong">
+                {c.cta} <ArrowRight className="size-3.5" />
+              </Link>
             </Card>
           ))}
         </div>

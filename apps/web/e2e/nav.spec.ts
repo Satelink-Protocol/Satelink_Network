@@ -69,7 +69,7 @@ test("redirect: /platform/pricing → /pricing#platform", async ({ page }) => {
   await expect(page).toHaveURL(/\/pricing(#platform)?$/);
 });
 
-test("redirect: /dashboard → mission control", async ({ page }) => {
+test("redirect: /dashboard → /console", async ({ page }) => {
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/satelink\/os\/mission-control$/);
+  await expect(page).toHaveURL(/\/console$/);
 });

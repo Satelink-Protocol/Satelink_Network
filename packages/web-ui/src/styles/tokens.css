@@ -1,48 +1,72 @@
 /* ============================================================
-   SATELINK SIGNAL — design system tokens (single source of truth)
-   §5.3 of the machine-commerce reposition.
+   SATELINK SIGNAL 2.0 — design system tokens (single source of truth)
+   §2 of the web-v3-experience build (P1).
 
    Imported AFTER globals.css in app/layout.tsx, so these @layer base
    definitions win over the legacy palette on same-layer source order.
+
+   Signal 2.0 is LIGHT-FIRST for marketing (:root / [data-theme="light"])
+   and DARK for the console ([data-theme="dark"]). Colour carries meaning:
+     teal   (--sl-accent)  platform / primary actions
+     indigo (--sl-machine) machine / agent / x402 rail
+     amber  (--sl-market)  trading-intelligence market data
+     sky    (--sl-settle)  settlement / on-chain
+   Both themes are complete; AA contrast is checked by a unit test
+   (apps/web/test/token-contrast.test.ts).
+
    The legacy bg / text / accent names and the bare shadcn names
    (--background, --card, --border, …) are re-declared here as thin
-   ALIASES onto --sl-* — so every existing page keeps rendering with no
-   visual regression while new components/pages consume --sl-* directly.
-
-   The admin dashboard's scoped .theme-shadcn / .satelink-os slate
-   palette (globals.css) is intentionally left in place: it is scoped,
-   never leaks to public pages, and restyling the admin surface is out
-   of this reposition's public scope (see docs/web/DECISIONS.md).
+   ALIASES onto --sl-* — so every existing page keeps rendering while
+   new components consume --sl-* directly. The admin dashboard's scoped
+   .theme-shadcn / .satelink-os slate palette (globals.css) is left in
+   place: it is scoped and never leaks to public pages.
    ============================================================ */
 @layer base {
+  /* ---- LIGHT is the default (marketing) ---------------------------- */
   :root,
-  [data-theme="dark"] {
+  [data-theme="light"] {
     /* surfaces */
-    --sl-bg:            #070B14;
-    --sl-bg-raised:     #0C1220;
-    --sl-surface:       #111A2C;
-    --sl-surface-hover: #16213A;
-    --sl-border:        #1E2A42;
-    --sl-border-strong: #2B3A58;
+    --sl-bg:            #F6F7FB;
+    --sl-bg-raised:     #FFFFFF;
+    --sl-surface:       #FFFFFF;
+    --sl-surface-hover: #EEF1F7;
+    --sl-border:        #E1E6EF;
+    --sl-border-strong: #C9D1DF;
     /* text */
-    --sl-text:          #E6ECF5;
-    --sl-text-muted:    #9AA7BD;
-    --sl-text-subtle:   #66748C;
-    /* brand — keeps continuity with the prior #5eead4 */
-    --sl-accent:        #5EEAD4;
-    --sl-accent-strong: #2DD4BF;
-    --sl-accent-ink:    #04201C;
-    --sl-accent-soft:   rgb(94 234 212 / 0.12);
-    /* data semantics (charts, deltas) */
-    --sl-up:            #34D399;
-    --sl-down:          #F87171;
-    --sl-warn:          #F5B94A;
-    --sl-info:          #60A5FA;
-    --sl-model:         #C4B5FD; /* ONLY marks modelled/proxy data */
-    /* elevation */
-    --sl-shadow-1: 0 1px 2px rgb(0 0 0 / .4);
-    --sl-shadow-2: 0 8px 24px -8px rgb(0 0 0 / .55);
-    --sl-ring:     0 0 0 3px rgb(94 234 212 / .35);
+    --sl-text:          #0A1020;
+    --sl-text-muted:    #4B5566;
+    --sl-text-subtle:   #667085; /* deepened from #76819A for AA on 11px labels */
+    /* brand / platform (teal) — deepened for AA: white text on --sl-accent is
+       5.10:1 and accent-as-text on bg/surface is >=4.76:1 (see DECISIONS.md). */
+    --sl-accent:        #0A7C6D;
+    --sl-accent-strong: #085F53;
+    --sl-accent-ink:    #FFFFFF;
+    --sl-accent-soft:   #0A7C6D14;
+    /* product rails — colour carries meaning */
+    --sl-machine:       #5B5BF0; /* agents / x402 / machine rail (indigo) */
+    --sl-market:        #F29F38; /* trading intelligence data (amber)    */
+    --sl-settle:        #1FA8E0; /* settlement / on-chain (sky)          */
+    /* soft tints of the product rails (backgrounds, badges) */
+    --sl-machine-soft:  #5B5BF014;
+    --sl-market-soft:   #F29F3818;
+    --sl-settle-soft:   #1FA8E014;
+    /* gradients */
+    --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF026 0%, transparent 60%),
+                    radial-gradient(50% 70% at 85% 20%, #0E9F8B29 0%, transparent 60%),
+                    radial-gradient(40% 60% at 60% 90%, #F29F381F 0%, transparent 60%);
+    --sl-grad-brand: linear-gradient(120deg, #0E9F8B 0%, #1FA8E0 45%, #5B5BF0 100%);
+
+    /* data semantics (charts, deltas) — kept from Signal 1 */
+    --sl-up:            #059669;
+    --sl-down:          #DC2626;
+    --sl-warn:          #B7791F;
+    --sl-info:          #2563EB;
+    --sl-model:         #7C3AED; /* ONLY marks modelled/proxy data */
+    /* elevation (light) */
+    --sl-shadow-1: 0 1px 2px rgb(16 24 40 / .06);
+    --sl-shadow-2: 0 8px 24px -8px rgb(16 24 40 / .12);
+    --sl-ring:     0 0 0 3px rgb(10 124 109 / .30);
+
     /* shape */
     --sl-radius-sm: 6px;
     --sl-radius: 10px;
@@ -50,16 +74,21 @@
     --sl-radius-pill: 999px;
     /* type */
     --sl-font-sans: var(--font-inter, "Inter"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --sl-font-display: var(--font-manrope, "Manrope"), var(--font-inter, "Inter"), ui-sans-serif, system-ui, sans-serif;
     --sl-font-mono: var(--font-jetbrains-mono, "JetBrains Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* display type scale */
+    --sl-display-1: clamp(2.75rem, 6vw, 5rem);
+    --sl-display-2: clamp(2rem, 4vw, 3.25rem);
     /* motion */
     --sl-ease: cubic-bezier(.2,.8,.2,1);
+    --sl-ease-out: cubic-bezier(.16,1,.3,1);
     --sl-dur-1: 120ms;
     --sl-dur-2: 220ms;
 
     /* layout (carried over from globals.css) */
     --header-height: 64px;
     --ease: var(--sl-ease);
-    --ease-out: cubic-bezier(.16,1,.3,1);
+    --ease-out: var(--sl-ease-out);
 
     /* ---- legacy alias layer (keeps pre-migration pages rendering) ---- */
     --bg-base: var(--sl-bg);
@@ -101,65 +130,98 @@
     --ring: var(--sl-accent);
   }
 
-  [data-theme="light"] {
-    --sl-bg:            #FFFFFF;
-    --sl-bg-raised:     #F7F9FC;
-    --sl-surface:       #FFFFFF;
-    --sl-surface-hover: #F1F4F9;
-    --sl-border:        #E3E8F0;
-    --sl-border-strong: #CBD3E0;
-    --sl-text:          #0B1220;
-    --sl-text-muted:    #4A5568;
-    --sl-text-subtle:   #718096;
-    --sl-accent:        #0F9E8A;
-    --sl-accent-strong: #0B7F6F;
-    --sl-accent-ink:    #FFFFFF;
-    --sl-accent-soft:   rgb(15 158 138 / .10);
-    --sl-up:            #059669;
-    --sl-down:          #DC2626;
-    --sl-warn:          #B7791F;
-    --sl-info:          #2563EB;
-    --sl-model:         #7C3AED;
-    --sl-shadow-1: 0 1px 2px rgb(16 24 40 / .06);
-    --sl-shadow-2: 0 8px 24px -8px rgb(16 24 40 / .12);
-    --sl-ring:     0 0 0 3px rgb(15 158 138 / .30);
+  /* ---- DARK is the console default + optional marketing dark -------- */
+  [data-theme="dark"] {
+    --sl-bg:            #070B14;
+    --sl-bg-raised:     #0C1220;
+    --sl-surface:       #111A2C;
+    --sl-surface-hover: #16213A;
+    --sl-border:        #1E2A42;
+    --sl-border-strong: #2B3A58;
+    --sl-text:          #E8EDF6;
+    --sl-text-muted:    #A0ACC1;
+    --sl-text-subtle:   #7C89A1; /* lightened from #6B7890 for AA on 11px labels */
+    --sl-accent:        #5EEAD4;
+    --sl-accent-strong: #2DD4BF;
+    --sl-accent-ink:    #04201C;
+    --sl-accent-soft:   #5EEAD41F;
+    --sl-machine:       #8B8BFF;
+    --sl-market:        #FFB45C;
+    --sl-settle:        #4CC3F0;
+    --sl-machine-soft:  #8B8BFF1F;
+    --sl-market-soft:   #FFB45C1F;
+    --sl-settle-soft:   #4CC3F01F;
+    --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF040 0%, transparent 60%),
+                    radial-gradient(50% 70% at 85% 20%, #2DD4BF33 0%, transparent 60%);
+    --sl-grad-brand: linear-gradient(120deg, #2DD4BF 0%, #4CC3F0 45%, #8B8BFF 100%);
+    /* data semantics tuned for dark */
+    --sl-up:            #34D399;
+    --sl-down:          #F87171;
+    --sl-warn:          #F5B94A;
+    --sl-info:          #60A5FA;
+    --sl-model:         #C4B5FD;
+    /* elevation (dark) */
+    --sl-shadow-1: 0 1px 2px rgb(0 0 0 / .4);
+    --sl-shadow-2: 0 8px 24px -8px rgb(0 0 0 / .55);
+    --sl-ring:     0 0 0 3px rgb(94 234 212 / .35);
   }
 
-  /* OS/browser light preference when the user hasn't explicitly chosen dark. */
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-      --sl-bg:            #FFFFFF;
-      --sl-bg-raised:     #F7F9FC;
-      --sl-surface:       #FFFFFF;
-      --sl-surface-hover: #F1F4F9;
-      --sl-border:        #E3E8F0;
-      --sl-border-strong: #CBD3E0;
-      --sl-text:          #0B1220;
-      --sl-text-muted:    #4A5568;
-      --sl-text-subtle:   #718096;
-      --sl-accent:        #0F9E8A;
-      --sl-accent-strong: #0B7F6F;
-      --sl-accent-ink:    #FFFFFF;
-      --sl-accent-soft:   rgb(15 158 138 / .10);
-      --sl-up:            #059669;
-      --sl-down:          #DC2626;
-      --sl-warn:          #B7791F;
-      --sl-info:          #2563EB;
-      --sl-model:         #7C3AED;
-      --sl-shadow-1: 0 1px 2px rgb(16 24 40 / .06);
-      --sl-shadow-2: 0 8px 24px -8px rgb(16 24 40 / .12);
-      --sl-ring:     0 0 0 3px rgb(15 158 138 / .30);
+  /* OS/browser dark preference when the user hasn't explicitly chosen light. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sl-bg:            #070B14;
+      --sl-bg-raised:     #0C1220;
+      --sl-surface:       #111A2C;
+      --sl-surface-hover: #16213A;
+      --sl-border:        #1E2A42;
+      --sl-border-strong: #2B3A58;
+      --sl-text:          #E8EDF6;
+      --sl-text-muted:    #A0ACC1;
+      --sl-text-subtle:   #7C89A1;
+      --sl-accent:        #5EEAD4;
+      --sl-accent-strong: #2DD4BF;
+      --sl-accent-ink:    #04201C;
+      --sl-accent-soft:   #5EEAD41F;
+      --sl-machine:       #8B8BFF;
+      --sl-market:        #FFB45C;
+      --sl-settle:        #4CC3F0;
+      --sl-machine-soft:  #8B8BFF1F;
+      --sl-market-soft:   #FFB45C1F;
+      --sl-settle-soft:   #4CC3F01F;
+      --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF040 0%, transparent 60%),
+                      radial-gradient(50% 70% at 85% 20%, #2DD4BF33 0%, transparent 60%);
+      --sl-grad-brand: linear-gradient(120deg, #2DD4BF 0%, #4CC3F0 45%, #8B8BFF 100%);
+      --sl-up:            #34D399;
+      --sl-down:          #F87171;
+      --sl-warn:          #F5B94A;
+      --sl-info:          #60A5FA;
+      --sl-model:         #C4B5FD;
+      --sl-shadow-1: 0 1px 2px rgb(0 0 0 / .4);
+      --sl-shadow-2: 0 8px 24px -8px rgb(0 0 0 / .55);
+      --sl-ring:     0 0 0 3px rgb(94 234 212 / .35);
     }
   }
 
   /* Tabular numerals on all data. */
   .sl-tnum,
   [data-sl] { font-variant-numeric: tabular-nums; }
+
+  /* Gradient background utilities (referenced by hero/brand surfaces). */
+  .sl-grad-hero  { background-image: var(--sl-grad-hero); }
+  .sl-grad-brand { background-image: var(--sl-grad-brand); }
+  /* Brand gradient as text fill (H1 accents). */
+  .sl-text-grad {
+    background-image: var(--sl-grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
 /* Expose the Satelink Signal tokens as namespaced Tailwind v4 utilities:
-   bg-sl-surface, text-sl-text, border-sl-border, text-sl-accent, etc.
-   Namespaced (sl-) so nothing clobbers the existing --color-* mappings. */
+   bg-sl-surface, text-sl-text, border-sl-border, text-sl-accent,
+   text-sl-machine, bg-sl-market-soft, etc. Namespaced (sl-) so nothing
+   clobbers the existing --color-* mappings. */
 @theme inline {
   --color-sl-bg: var(--sl-bg);
   --color-sl-bg-raised: var(--sl-bg-raised);
@@ -174,6 +236,12 @@
   --color-sl-accent-strong: var(--sl-accent-strong);
   --color-sl-accent-ink: var(--sl-accent-ink);
   --color-sl-accent-soft: var(--sl-accent-soft);
+  --color-sl-machine: var(--sl-machine);
+  --color-sl-machine-soft: var(--sl-machine-soft);
+  --color-sl-market: var(--sl-market);
+  --color-sl-market-soft: var(--sl-market-soft);
+  --color-sl-settle: var(--sl-settle);
+  --color-sl-settle-soft: var(--sl-settle-soft);
   --color-sl-up: var(--sl-up);
   --color-sl-down: var(--sl-down);
   --color-sl-warn: var(--sl-warn);
@@ -181,6 +249,7 @@
   --color-sl-model: var(--sl-model);
 
   --font-sl-sans: var(--sl-font-sans);
+  --font-sl-display: var(--sl-font-display);
   --font-sl-mono: var(--sl-font-mono);
 
   --radius-sl-sm: var(--sl-radius-sm);

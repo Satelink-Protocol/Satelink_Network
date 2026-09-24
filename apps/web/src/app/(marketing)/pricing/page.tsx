@@ -1,243 +1,285 @@
-// /pricing (§8) — audience switch · product selector · price cards · usage
-// calculator (live) · compare table · live rate card · credits explainer
-// (shared-balance, disclosed) · x402 explainer · pricing.json · grouped FAQ.
-// The Dodo-billed Starter Pack (Trading Intelligence only) is kept explicitly
-// separate from the crypto rail (x402/USDT), which Dodo never processes (§2.2).
-// No recurring subscription while the backend is one-time only.
+// /pricing (web-v3 P3) — the claude.com/pricing pattern:
+// H1 → audience toggle (Individuals · Agents & API · Enterprise·later) →
+// [Individuals: plan cards (monthly/yearly) + PAYG packs + usage calculator]
+// [Agents & API: rate card + x402] [Enterprise: coming later] →
+// "How payments work" (two-rails infographic) → Compare features (full matrix,
+// §4.2) → balance/refund (#platform) → grouped FAQ. Every card/row is
+// config-driven (lib/plans.ts) — no hardcoded numbers in JSX. Dodo is kept
+// explicitly separate from the crypto rail (x402/USDT).
 import type { Metadata } from "next";
 import Link from "next/link";
-import { buildMetadata } from "@satelink/seo";
+import { buildMetadata, faqLd, jsonLdScript } from "@satelink/seo";
+import { TwoRailsDiagram } from "@satelink/web-ui";
 import { getCatalog } from "@/lib/intelligence";
 import { FLAT_RATE_USD, X402_BUNDLE, STARTER_PACK_USD } from "@/lib/products";
-import { PriceCard } from "@/components/ui/PriceCard";
+import { CREDIT_PACKS, AGENT_RATE_CARD, plansEnabled } from "@/lib/plans";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { ComparisonTable } from "@/components/ui/ComparisonTable";
-import { AudienceSwitch, UsageCalculator, type Audience } from "@/components/PricingTools";
+import { Button } from "@/components/ui/Button";
+import { ExplorePlans } from "@/components/ExplorePlans";
+import { PlanCalculator } from "@/components/PlanCalculator";
+import { PricingAudienceTabs } from "@/components/PricingAudienceTabs";
+import { CompareMatrix } from "@/components/CompareMatrix";
 
 export const metadata: Metadata = buildMetadata({
   title: "Pricing",
   description:
-    "Satelink pricing: free discovery, a $9.99 one-time Starter Pack (card/UPI via Dodo, Trading Intelligence only), pay-per-call via x402/USDT ($0.01 intelligence · $0.00003 RPC), and Enterprise. No subscription.",
+    "Satelink pricing: start Free (300 Trading-Intelligence calls/month), upgrade to Pro or Max, or pay per call as an agent — $0.01/intelligence call, $0.00003/RPC call. Card/UPI via Dodo; x402/USDT is a separate crypto rail, not billed through Dodo. No subscription required.",
   path: "/pricing",
 });
 
 export const revalidate = 300;
 
-const AUDIENCES: Audience[] = [
-  { id: "humans", label: "Humans", headline: "Buy a Starter Pack and start calling", body: `A one-time $${STARTER_PACK_USD} Starter Pack (card or UPI) funds a balance you spend per call on Trading Intelligence. No subscription, nothing to cancel.`, cta: { label: "Get the Starter Pack", href: "/checkout?plan=starter" } },
-  { id: "developers", label: "Developers", headline: "Pay per call, no seat licence", body: "Fund a balance with USDT or buy an x402 bundle, then call the API at a flat per-call rate. Test with free discovery first — no signup.", cta: { label: "Read the quickstart", href: "/developers/quickstart" } },
-  { id: "machines", label: "Machines & agents", headline: "Keyless x402 — pay in the request", body: `An agent reads the price from a 402 response and pays in USDC on Base with no account. One bundle is $${X402_BUNDLE.priceUsd} for ${X402_BUNDLE.calls.toLocaleString()} RPC calls.`, cta: { label: "How a machine pays", href: "/products/machine-commerce" } },
-  { id: "enterprise", label: "Enterprise", headline: "Dedicated keys and one invoice", body: "Higher limits, per-key attribution, spend controls, and consolidated invoicing through a corporate engagement.", cta: { label: "Talk to Satelink", href: "/contact-sales" } },
+const FAQ_GROUPS = [
+  {
+    group: "Plans and usage",
+    items: [
+      { question: "Do I need a plan?", answer: "No. Start Free with 300 Trading-Intelligence calls a month, buy a one-time credit pack, or pay per call as an agent. Plans (Pro/Max) add included calls, more keys, and support." },
+      { question: "What happens when I run out of included calls?", answer: "On Free you upgrade or top up. On Pro and Max, overage is drawn from credits at $0.008 and $0.007 per call respectively — below the $0.01 list rate." },
+    ],
+  },
+  {
+    group: "Billing and payments",
+    items: [
+      { question: "Who processes my payment?", answer: "Card and UPI payments are processed by Dodo Payments as the Merchant of Record — Dodo is the seller of record and handles tax. x402 and USDT are customer-initiated on-chain transfers that Dodo never touches." },
+      { question: "Is Trading Intelligence investment advice?", answer: "No. Every endpoint returns derived statistics from public market data. It is not investment advice, and Satelink never takes custody of funds." },
+    ],
+  },
+  {
+    group: "Refunds and cancellation",
+    items: [
+      { question: "How do refunds work?", answer: "Dodo-confirmed refunds automatically claw back unused credits; partial refunds reverse proportionally. Credits already spent on calls are non-refundable. Full terms are in the Refund & Cancellation Policy." },
+      { question: "How do I cancel a plan?", answer: "When plans are live, a subscription cancels at the end of the current period with no partial refund unless required by law. There is nothing to cancel on pay-as-you-go." },
+    ],
+  },
+  {
+    group: "Agents & x402",
+    items: [
+      { question: "Can an agent pay without an account?", answer: "Yes. x402 is keyless: the service answers an unpaid request with HTTP 402 and machine-readable requirements, and the agent pays in USDC on Base — no signup." },
+      { question: "Which rail funds which product?", answer: "Card/UPI credit (via Dodo) is spendable on Trading Intelligence; the crypto rail (x402/USDT) funds RPC and all machine endpoints. See the two rails diagram above." },
+    ],
+  },
 ];
 
 export default async function PricingPage() {
   const { catalog } = await getCatalog();
   const tiPrice = catalog.metrics[0]?.priceUsd ?? 0.01;
+  const enabled = plansEnabled();
+  const allFaq = FAQ_GROUPS.flatMap((g) => g.items);
 
-  const calcProducts = [
-    { id: "ti", label: "Trading Intelligence", unitPrice: tiPrice },
-    { id: "rpc", label: "RPC", unitPrice: FLAT_RATE_USD },
-  ];
+  // ── Individuals panel ────────────────────────────────────────────
+  const individuals = (
+    <div className="space-y-16">
+      <ExplorePlans compareHref="#compare" />
 
-  const compareColumns = ["", "Free", `Starter Pack`, "Pay-per-call", "Enterprise"];
-  const compareRows = [
-    { label: "Account required", cells: [false, true, false, true] },
-    { label: "Payment", cells: ["None", "Card / UPI (Dodo)", "x402 / USDT", "Invoice"] },
-    { label: "Commitment", cells: ["None", "One-time", "None", "Contract"] },
-    { label: "Best for", cells: ["Evaluating", "Getting started", "Agents & scale", "Teams"] },
-    { label: "Rate limits", cells: ["Daily cap", "Standard", "Standard", "Higher"] },
-  ];
+      {/* Pay-as-you-go packs strip */}
+      <div>
+        <h3 className="text-center text-sm font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">
+          Or pay as you go — credit packs
+        </h3>
+        <div className="mx-auto mt-6 grid max-w-3xl gap-4 sm:grid-cols-3">
+          {CREDIT_PACKS.map((pack) => {
+            const actionable = pack.live || enabled;
+            return (
+              <div key={pack.id} className="flex flex-col rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5 text-center">
+                <p className="font-sl-mono text-2xl font-bold tabular-nums text-sl-text">${pack.price}</p>
+                <p className="mt-1 text-sm text-sl-text-muted">{pack.label}</p>
+                {pack.bonusPct > 0 && (
+                  <p className="mt-1 text-xs font-semibold text-sl-market">+{pack.bonusPct}% bonus credit</p>
+                )}
+                <div className="mt-4">
+                  {actionable ? (
+                    <Button asChild variant="secondary" size="sm" className="w-full">
+                      <Link href={pack.live ? "/checkout?plan=starter" : `/checkout?plan=${pack.id}`}>Buy pack</Link>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="secondary" size="sm" className="w-full">
+                      <Link href="/contact-sales?topic=plans">Notify me</Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-center text-xs text-sl-text-subtle">
+          Card / UPI via Dodo Payments (Merchant of Record). Credit is spendable on Trading Intelligence.
+        </p>
+      </div>
+
+      {/* Usage calculator */}
+      <div>
+        <SectionHeader eyebrow="Estimate" title="Which option is cheapest?" align="left" />
+        <div className="mt-6">
+          <PlanCalculator />
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Agents & API panel ───────────────────────────────────────────
+  const agents = (
+    <div id="agents" className="scroll-mt-24 space-y-10">
+      <div>
+        <SectionHeader eyebrow="Rate card" title="Agents & API — pay per call" align="left"
+          lede="No plan, no commitment. Keyless x402 or prepaid credits." />
+        <div className="mt-6 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
+          <table className="w-full min-w-[520px] border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border-b border-sl-border px-4 py-3 text-left font-semibold text-sl-text">Product</th>
+                <th className="border-b border-sl-border px-4 py-3 text-left font-semibold text-sl-text">Unit</th>
+                <th className="border-b border-sl-border px-4 py-3 text-right font-semibold text-sl-text">Price</th>
+                <th className="border-b border-sl-border px-4 py-3 text-left font-semibold text-sl-text">Rail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {AGENT_RATE_CARD.map((r) => (
+                <tr key={r.product}>
+                  <td className="border-b border-sl-border px-4 py-3 text-sl-text-muted">{r.product}</td>
+                  <td className="border-b border-sl-border px-4 py-3 text-sl-text-subtle">{r.unit}</td>
+                  <td className="border-b border-sl-border px-4 py-3 text-right font-sl-mono tabular-nums text-sl-text">${r.price}</td>
+                  <td className="border-b border-sl-border px-4 py-3 text-sl-text-subtle">{r.rail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-sm text-sl-text-muted">
+          Machine-readable rates:{" "}
+          <a href="https://satelink.network/pricing.json" className="font-sl-mono text-sl-accent underline">pricing.json</a>
+          {"  ·  "}x402 stays list price (keyless, crypto-native) — not billed through Dodo.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+          <h3 className="font-semibold text-sl-text">The x402 rail</h3>
+          <p className="mt-2 text-sm leading-relaxed text-sl-text-muted">
+            A service answers an unpaid request with HTTP 402 and machine-readable requirements; the caller
+            pays in USDC on Base ({X402_BUNDLE.calls.toLocaleString()} RPC calls for ${X402_BUNDLE.priceUsd}).
+            A separate crypto rail Dodo never processes.{" "}
+            <Link href="/products/x402" className="text-sl-accent underline">More on x402 →</Link>
+          </p>
+        </div>
+        <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+          <h3 className="font-semibold text-sl-text">Prepaid credits</h3>
+          <p className="mt-2 text-sm leading-relaxed text-sl-text-muted">
+            Fund a balance with USDT and draw it down per call at the flat rate (${FLAT_RATE_USD}/RPC call).
+            No subscription; spend is bounded by the balance and per-key limits.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Enterprise panel ─────────────────────────────────────────────
+  const enterprise = (
+    <div className="mx-auto max-w-xl rounded-[var(--sl-radius-lg)] border border-dashed border-sl-border bg-sl-surface p-8 text-center">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">Enterprise</p>
+      <h3 className="mt-2 font-sl-display text-2xl font-extrabold text-sl-text">Coming later</h3>
+      <p className="mx-auto mt-3 max-w-md text-sm text-sl-text-muted">
+        Dedicated keys, spend controls, per-key attribution, and consolidated invoicing. Talk to us about
+        an early engagement.
+      </p>
+      <div className="mt-5">
+        <Button asChild size="md"><Link href="/contact-sales?topic=enterprise">Contact sales</Link></Button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <section className="border-b border-sl-border">
-        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6 md:py-20">
-          <SectionHeader
-            eyebrow="Pricing"
-            title="Pay for what a machine calls."
-            lede="Free discovery, a one-time Starter Pack, or pay per call on the crypto rail. No subscription while billing is one-time only."
-          />
-        </div>
-      </section>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faqLd(allFaq)) }} />
 
-      {/* Audience switch */}
-      <section className="mx-auto max-w-[1200px] px-4 py-14 sm:px-6">
-        <SectionHeader eyebrow="By audience" title="Find your path" align="left" />
-        <div className="mt-8">
-          <AudienceSwitch audiences={AUDIENCES} />
-        </div>
-      </section>
-
-      {/* Four tiers */}
-      <section className="mx-auto max-w-[1200px] px-4 pb-16 sm:px-6">
-        <div className="grid gap-4 lg:grid-cols-4 sm:grid-cols-2">
-          <PriceCard
-            tier="Free"
-            price="$0"
-            period="discovery"
-            blurb="Explore the catalog and response shapes. Rate-limited, no card."
-            features={["Full response schema", "Daily request cap", "No signup"]}
-            cta={{ label: "Try it", href: "/products/trading-intelligence#try" }}
-          />
-          <PriceCard
-            tier="Starter Pack"
-            price={`$${STARTER_PACK_USD}`}
-            period="one-time"
-            featured
-            blurb="A one-time credit for Trading Intelligence. No subscription."
-            features={[`$${STARTER_PACK_USD} API credit`, "Card or UPI", `Spend at $${tiPrice}/call`, "One-time — nothing recurs"]}
-            cta={{ label: "Get started", href: "/checkout?plan=starter" }}
-            note="Processed by Dodo Payments (card / UPI)"
-          />
-          <PriceCard
-            tier="Pay-per-call"
-            price={`$${tiPrice}`}
-            period="/ call"
-            blurb={`No account, machine-to-machine. Intelligence $${tiPrice} · RPC $${FLAT_RATE_USD}.`}
-            features={["x402 (USDC on Base)", "or on-chain USDT deposit", "Zero commitment"]}
-            cta={{ label: "For agents", href: "/products/x402" }}
-            note="Crypto rail — not processed by Dodo"
-          />
-          <PriceCard
-            tier="Enterprise"
-            price="Custom"
-            period=""
-            blurb="Dedicated keys, spend controls, consolidated invoicing."
-            features={["Higher rate limits", "Per-key attribution", "One invoice for the team"]}
-            cta={{ label: "Contact sales", href: "/contact-sales" }}
-          />
-        </div>
-      </section>
-
-      {/* Usage calculator */}
-      <section className="border-y border-sl-border bg-sl-bg-raised">
-        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
-          <SectionHeader eyebrow="Estimate" title="Usage calculator" align="left" lede="Prices are read live from the catalog." />
-          <div className="mt-8 max-w-2xl">
-            <UsageCalculator products={calcProducts} />
-          </div>
-        </div>
-      </section>
-
-      {/* Compare */}
-      <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
-        <SectionHeader eyebrow="Compare" title="Which plan fits" align="left" />
-        <div className="mt-8">
-          <ComparisonTable columns={compareColumns} rows={compareRows} highlightColumn={2} />
-        </div>
-      </section>
-
-      {/* Rate card (live) */}
-      <section className="border-y border-sl-border bg-sl-bg-raised">
-        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
-          <SectionHeader eyebrow="Rate card" title="What each call costs" align="left" />
-          <div className="mt-8 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border-b border-sl-border px-4 py-3 text-left font-semibold text-sl-text">Endpoint</th>
-                  <th className="border-b border-sl-border px-4 py-3 text-left font-semibold text-sl-text">Type</th>
-                  <th className="border-b border-sl-border px-4 py-3 text-right font-semibold text-sl-text">Price / call</th>
-                </tr>
-              </thead>
-              <tbody>
-                {catalog.metrics.map((m) => (
-                  <tr key={m.slug}>
-                    <td className="border-b border-sl-border px-4 py-3 text-sl-text-muted">
-                      <Link href={`/products/trading-intelligence/${m.slug}`} className="hover:text-sl-accent">
-                        /v1/intelligence/{m.slug}
-                      </Link>
-                    </td>
-                    <td className="border-b border-sl-border px-4 py-3 text-sl-text-subtle">
-                      {m.isModel ? "derived model / proxy" : "derived"}
-                    </td>
-                    <td className="border-b border-sl-border px-4 py-3 text-right font-sl-mono tabular-nums text-sl-text">
-                      ${m.priceUsd.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="px-4 py-3 text-sl-text-muted">
-                    <Link href="/products/rpc" className="hover:text-sl-accent">/rpc/polygon (JSON-RPC gateway)</Link>
-                  </td>
-                  <td className="px-4 py-3 text-sl-text-subtle">infrastructure</td>
-                  <td className="px-4 py-3 text-right font-sl-mono tabular-nums text-sl-text">${FLAT_RATE_USD}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-sm text-sl-text-muted">
-            Machine-readable rates:{" "}
-            <a href="https://satelink.network/pricing.json" className="font-sl-mono text-sl-accent underline">pricing.json</a>
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-sl-border">
+        <div className="sl-grad-hero pointer-events-none absolute inset-0" aria-hidden />
+        <div className="relative mx-auto max-w-[1200px] px-4 py-16 text-center sm:px-6 md:py-20">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">Pricing</p>
+          <h1 className="mx-auto mt-3 max-w-[20ch] text-balance font-sl-display text-4xl font-extrabold tracking-[-0.02em] text-sl-text sm:text-5xl">
+            Pay for what a machine calls.
+          </h1>
+          <p className="mx-auto mt-5 max-w-[62ch] text-lg text-sl-text-muted">
+            Start Free, upgrade to Pro or Max, or pay per call as an agent. Trading Intelligence from
+            ${tiPrice}/call · RPC ${FLAT_RATE_USD}/call. No subscription required.
           </p>
         </div>
       </section>
 
-      {/* Platform pricing anchor (target of /platform/pricing → /pricing#platform) */}
-      <section id="platform" className="scroll-mt-24 mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h2 className="text-lg font-semibold text-sl-text">How your balance works</h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-sl-text-muted">
-              <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />One payment, one credit pack — not a recurring subscription.</li>
-              <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />Credits are USD-denominated and spent per call.</li>
-              <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />Each call deducts its price from a single account balance.</li>
-            </ul>
-            <div className="mt-4">
-              <Disclosure title="Shared balance — disclosed, not walled off">
-                A Dodo-funded Starter Pack is sold as Trading Intelligence access, but the credit it adds
-                sits in the same account balance that an x402 or on-chain USDT payment funds — so it can
-                also be spent on RPC calls. We disclose this rather than claim the two rails are walled
-                off. Dodo only ever processes the Starter Pack itself; it never touches the crypto rail.
-              </Disclosure>
-            </div>
+      {/* Audience toggle + panels */}
+      <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <PricingAudienceTabs individuals={individuals} agents={agents} enterprise={enterprise} />
+      </section>
+
+      {/* How payments work — two rails */}
+      <section className="border-y border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+          <SectionHeader eyebrow="How payments work" title="Two rails, one boundary" align="left"
+            lede="Card/UPI (Dodo) funds Trading Intelligence; x402/USDT funds RPC and the machine rail. Balances never cross." />
+          <div className="mt-8 flex justify-center rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-4">
+            <TwoRailsDiagram />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-sl-text">The x402 rail</h2>
-            <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
-              x402 is keyless: a service answers an unpaid request with HTTP 402 and machine-readable
-              requirements, and the caller pays in USDC on Base ({X402_BUNDLE.calls.toLocaleString()} RPC
-              calls for ${X402_BUNDLE.priceUsd}). It is a separate crypto rail Dodo never processes.{" "}
-              <Link href="/products/x402" className="text-sl-accent underline">More on x402 →</Link>
-            </p>
-            <h2 className="mt-8 text-lg font-semibold text-sl-text">Refunds</h2>
-            <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
-              Dodo-confirmed refunds automatically claw back unused credits; partial refunds reverse
-              proportionally. Credits already spent on calls are non-refundable. Full terms are in the{" "}
-              <Link href="/refund" className="text-sl-accent underline">Refund &amp; Cancellation Policy</Link>.
-            </p>
+        </div>
+      </section>
+
+      {/* Compare features */}
+      <section id="compare" className="scroll-mt-24 mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <SectionHeader eyebrow="Compare" title="Compare features across plans" align="left" />
+        <div className="mt-8">
+          <CompareMatrix />
+        </div>
+      </section>
+
+      {/* Balance & refunds — target of /platform/pricing → /pricing#platform */}
+      <section id="platform" className="scroll-mt-24 border-y border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <h2 className="text-lg font-semibold text-sl-text">How your balance works</h2>
+              <ul className="mt-4 space-y-2.5 text-sm text-sl-text-muted">
+                <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />Credits are prepaid service usage — not stored value, not transferable, not redeemable for cash.</li>
+                <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />Card/UPI credit (Dodo) is spent on Trading Intelligence; the crypto rail funds RPC and all machine endpoints.</li>
+                <li className="flex gap-2.5"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-sl-accent" />Each call deducts its price from the balance; spend is bounded by per-key limits.</li>
+              </ul>
+              <div className="mt-4">
+                <Disclosure title="Merchant of Record — what Dodo sees vs what Satelink sees">
+                  Dodo Payments is the seller of record for card/UPI: it collects payment, handles tax, and
+                  remits net to Satelink. Satelink sees payment metadata (never card numbers). The crypto rail
+                  (x402/USDT) is customer-initiated and on-chain — Dodo never processes it.
+                </Disclosure>
+              </div>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-sl-text">Refunds & cancellation</h2>
+              <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
+                Dodo-confirmed refunds automatically claw back unused credits; partial refunds reverse
+                proportionally. Credits already spent on calls are non-refundable. x402/USDT are irreversible
+                on-chain transfers (no refund except a service failure). Full terms:{" "}
+                <Link href="/refund" className="text-sl-accent underline">Refund &amp; Cancellation Policy</Link>.
+              </p>
+              <h2 className="mt-8 text-lg font-semibold text-sl-text">The one-time Starter Pack</h2>
+              <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
+                A ${STARTER_PACK_USD} one-time pack funds a Trading-Intelligence balance you spend per call —
+                the only paid option live today alongside x402. No subscription, nothing to cancel.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Grouped FAQ */}
-      <section className="border-t border-sl-border bg-sl-bg-raised">
-        <div className="mx-auto max-w-[820px] px-4 py-16 sm:px-6">
-          <SectionHeader title="Frequently asked" align="left" />
-          {[
-            { group: "Plans & usage", items: [
-              ["Is this a subscription?", "No. The Starter Pack is a one-time purchase and there is no recurring plan. There's nothing to cancel."],
-              ["Do I need an account to call the API?", "Not on the x402 rail — it is keyless. Credits and the Starter Pack are account-based."],
-            ] },
-            { group: "Billing & payments", items: [
-              ["Does Dodo process crypto?", "No. Dodo processes only the card/UPI Starter Pack. x402 and USDT are a separate crypto rail."],
-              ["Is Trading Intelligence investment advice?", "No. Every endpoint returns derived statistics from public market data. Not advice, and Satelink never takes custody of funds."],
-            ] },
-            { group: "Refunds", items: [
-              ["How do refunds work?", "Dodo-confirmed refunds claw back unused credits; spent credits are non-refundable. See the Refund & Cancellation Policy at /refund."],
-            ] },
-          ].map((g) => (
-            <div key={g.group} className="mt-8 first:mt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">{g.group}</p>
-              <div className="mt-3 space-y-3">
-                {g.items.map(([q, a]) => (
-                  <Disclosure key={q} title={q}>{a}</Disclosure>
-                ))}
-              </div>
+      <section className="mx-auto max-w-[820px] px-4 py-16 sm:px-6">
+        <SectionHeader title="Frequently asked" align="left" />
+        {FAQ_GROUPS.map((g) => (
+          <div key={g.group} className="mt-8 first:mt-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">{g.group}</p>
+            <div className="mt-3 space-y-3">
+              {g.items.map((f) => (
+                <Disclosure key={f.question} title={f.question}>{f.answer}</Disclosure>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </section>
     </>
   );
