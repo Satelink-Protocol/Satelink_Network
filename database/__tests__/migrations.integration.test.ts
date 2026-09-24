@@ -88,11 +88,19 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
   // production must reach (dedicated non-superuser role + repointed DATABASE_URL);
   // it is a test fixture only and must never be run against production.
   async function ensureAppRole(client: Client): Promise<void> {
+    // Migration 017 now creates satelink_app deliberately WITHOUT a password
+    // (it documents setting one out-of-band via ALTER ROLE). So we can't rely
+    // on CREATE ROLE to set the login password — the role already exists by the
+    // time this runs. Set LOGIN + password unconditionally, which is exactly the
+    // out-of-band step 017's header prescribes, and also covers the pre-017 path
+    // where the role doesn't exist yet.
     await client.query(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'satelink_app') THEN
           CREATE ROLE satelink_app LOGIN PASSWORD '${APP_ROLE_PASSWORD}';
+        ELSE
+          ALTER ROLE satelink_app WITH LOGIN PASSWORD '${APP_ROLE_PASSWORD}';
         END IF;
       END
       $$;
