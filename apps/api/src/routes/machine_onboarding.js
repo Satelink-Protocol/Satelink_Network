@@ -55,7 +55,7 @@ function pricingBody() {
     currency: 'USDT',
     settlement_chain: { name: 'Polygon PoS Mainnet', chain_id: 137 },
     tiers: [
-      { tier: 'free', daily_limit: TIER_DAILY_LIMIT.free, cost_per_call_usdt: 0 },
+      { tier: 'free', daily_limit: TIER_DAILY_LIMIT.free, cost_per_call_usdt: PRICE_PER_CALL_USDT, note: 'No free RPC — a "free" account must deposit; every call is charged.' },
       { tier: 'basic', daily_limit: TIER_DAILY_LIMIT.basic, cost_per_call_usdt: PRICE_PER_CALL_USDT },
       { tier: 'pro', daily_limit: TIER_DAILY_LIMIT.pro, cost_per_call_usdt: PRICE_PER_CALL_USDT },
       { tier: 'enterprise', daily_limit: TIER_DAILY_LIMIT.enterprise, cost_per_call_usdt: PRICE_PER_CALL_USDT },
@@ -79,10 +79,11 @@ function pricingBody() {
       notify_endpoint: `${API_BASE()}/api/deposit/notify`,
     },
     credit_semantics:
-      'Prepaid, non-expiring USDT credits on the account (api_credits). Each paid-tier RPC call ' +
-      `atomically deducts ${PRICE_PER_CALL_USDT} USDT. Free tier bills 0 and is limited to ` +
-      `${TIER_DAILY_LIMIT.free} calls/day. HTTP 402 with a machine-readable payment block is ` +
-      'returned when credits are exhausted; HTTP 429 when the tier daily limit is reached.',
+      'Prepaid, non-expiring USDT credits on the account (api_credits). Every RPC call ' +
+      `atomically deducts ${PRICE_PER_CALL_USDT} USDT — there is no free tier (Phase 2, 2026-09): ` +
+      'a key serves only while it carries a funded balance. HTTP 402 with a machine-readable ' +
+      'payment block is returned when a key is unfunded or credits are exhausted; HTTP 429 when ' +
+      'the tier daily limit is reached.',
     // M3 — derived trading intelligence product, metered off the SAME credits.
     intelligence: {
       catalog: `${API_BASE()}/v1/intelligence`,
@@ -336,8 +337,8 @@ export function createMachineV1Router(pool, redis = null) {
         daily_limit: result.daily_limit,
         wallet_address: wallet_address.toLowerCase(),
         next_steps: [
-          `Free tier: ${result.daily_limit} calls/day with header X-API-Key.`,
-          `To buy paid capacity: GET ${base}/credits/deposit/initiate?amount=<usdt>, sign+send both transactions from ${wallet_address}.`,
+          `This key is unfunded — every /rpc call costs ${PRICE_PER_CALL_USDT} USDT and there is no free tier, so deposit first, then send header X-API-Key.`,
+          `Deposit: GET ${base}/credits/deposit/initiate?amount=<usdt>, sign+send both transactions from ${wallet_address}.`,
           `Deposits ≥ ${MIN_DEPOSIT_USDT()} USDT auto-credit this account after ${MIN_CONFIRMATIONS} confirmations.`,
         ],
         manifest_url: `${base}/.well-known/satelink.json`,

@@ -46,7 +46,10 @@ import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 import { createVnextKernelRouter } from './src/vnext/http/kernel_router.js';
 
 export function createApp(pool, redis) {
-  // Initialize free tier gate (Path C: 500 free calls/day per IP).
+  // Initialize the payment gate. Free RPC removed (Phase 2, 2026-09): with
+  // FREE_TIER_DAILY_LIMIT / FREE_TIER_ANON_CALLS at 0 (prod default) this gate
+  // 402s every unauthenticated /rpc request on the first call; only a funded
+  // API key or a settled x402 payment passes.
   // pool powers the personalized upgrade block on wall 402s (background-
   // filled cache — the gate never waits on Postgres; limits unchanged).
   const freeTierGate = createFreeTierGate(console, redis, pool);
@@ -134,7 +137,11 @@ app.get("/api/mode", (req, res) => {
       settlement_chain: "Polygon",
       deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x577D3716d6Ad5b676d230f5409deF9838FABaCEF",
       methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : DEFAULT_METHODS,
-      free_tier: { requests_per_day: 500, api_key_required: false },
+      // Free RPC removed (Phase 2, 2026-09): every /rpc call requires a funded
+      // API key or a settled x402 payment. There is no anonymous/free tier.
+      free_tier: null,
+      auth_required: true,
+      price_per_call_usdt: 0.00003,
       status_url: "https://rpc.satelink.network/api/status"
     });
   });

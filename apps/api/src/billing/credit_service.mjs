@@ -89,12 +89,21 @@ export async function getDailyCount(pool, apiKey) {
 }
 
 /**
- * Per-call cost for an account + method. Free tier is always 0 (gated by
- * daily_limit, not balance). Paid tiers use flat PRICE_PER_CALL_USDT unless a
- * method-specific override is supplied.
+ * Per-call cost for an account + method.
+ *
+ * Free RPC removed (Phase 2, 2026-09 — "nothing is free, every RPC call is
+ * paid"): EVERY tier is charged PRICE_PER_CALL_USDT per call (or a method
+ * override), so an unfunded key hits the balance gate in authorizeAndMeter and
+ * gets a 402 instead of a free ride. The "free" tier is now just a starter
+ * account that must deposit before it can serve — daily_limit still caps it.
+ *
+ * Rollback lever (matches the free_tier_gate.js env-lever pattern): set
+ * FREE_TIER_COST_ZERO=1 in Railway to restore cost-0 free-tier serving on the
+ * container restart it triggers — no code redeploy. Read at call time.
  */
 export function costFor(account, methodPrice) {
-  if (!account || account.tier === 'free') return 0;
+  if (!account) return 0;
+  if (account.tier === 'free' && process.env.FREE_TIER_COST_ZERO === '1') return 0;
   return typeof methodPrice === 'number' ? methodPrice : PRICE_PER_CALL_USDT;
 }
 
