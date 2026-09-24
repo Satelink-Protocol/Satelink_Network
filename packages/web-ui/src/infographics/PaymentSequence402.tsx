@@ -1,5 +1,6 @@
 // HTTP 402 payment sequence (P1 §2.3) — how an agent pays for a call with no
-// human: request → 402 price → pay → settle → verify → 200 + receipt.
+// human, mirroring the live RPC x402 v2 flow: request → 402 → retry with
+// PAYMENT-SIGNATURE → facilitator verifies + settles on Base → 200 + PAYMENT-RESPONSE.
 // SSR-complete, accessible SVG. Mechanism-accurate (x402 on Base via a
 // facilitator, settling on-chain).
 import * as React from "react";
@@ -13,13 +14,13 @@ const ACTORS = [
 
 type Msg = { from: number; to: number; y: number; label: string; dashed?: boolean };
 const MSGS: Msg[] = [
-  { from: 0, to: 1, y: 110, label: "GET /v1/intelligence" },
-  { from: 1, to: 0, y: 148, label: "402 Payment Required", dashed: true },
-  { from: 0, to: 2, y: 186, label: "X-Payment: x402 (USDC)" },
-  { from: 2, to: 3, y: 224, label: "settle transfer" },
-  { from: 3, to: 2, y: 262, label: "confirmed", dashed: true },
-  { from: 2, to: 1, y: 300, label: "payment verified", dashed: true },
-  { from: 1, to: 0, y: 338, label: "200 OK + data + receipt", dashed: true },
+  { from: 0, to: 1, y: 110, label: "POST /rpc/polygon" },
+  { from: 1, to: 0, y: 148, label: "402 · 0.10 USDC on Base", dashed: true },
+  { from: 0, to: 1, y: 186, label: "retry + PAYMENT-SIGNATURE" },
+  { from: 1, to: 2, y: 224, label: "verify + settle" },
+  { from: 2, to: 3, y: 262, label: "USDC transfer" },
+  { from: 2, to: 1, y: 300, label: "settled · tx hash", dashed: true },
+  { from: 1, to: 0, y: 338, label: "200 OK + result + PAYMENT-RESPONSE", dashed: true },
 ];
 
 export function PaymentSequence402({ className, size = 680 }: { className?: string; size?: number }) {
@@ -37,9 +38,9 @@ export function PaymentSequence402({ className, size = 680 }: { className?: stri
     >
       <title id="seq402-title">The HTTP 402 payment sequence</title>
       <desc id="seq402-desc">
-        An agent requests a service; the API answers 402 Payment Required with a machine-readable price;
-        the agent pays via an x402 facilitator that settles on the Base chain; the API verifies the payment
-        and returns the data with a receipt.
+        An agent sends a JSON-RPC request; the API answers 402 Payment Required asking for 0.10 USDC on Base;
+        the agent retries with a signed x402 payment; the API has the facilitator verify and settle it on Base,
+        then returns the result with the settlement reference in the PAYMENT-RESPONSE header.
       </desc>
       <defs>
         <marker id="seq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
