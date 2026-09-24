@@ -1,6 +1,7 @@
 // Home (web-v3 P2) — the claude.com pattern: short, confident, plan-led.
-// hero (+ MachinePaysDemo) → quick proof strip (live stats) → three product
-// tiles → Explore plans → FAQ (+ FAQPage JSON-LD) → footer (layout). The long
+// hero (+ MachinePaysDemo) → product video (only once a real recording exists)
+// → three product tiles → how a machine pays → live proof strip → infographics
+// → Explore plans → FAQ (+ FAQPage JSON-LD) → footer (layout). The long
 // platform stack moved to /product/overview. No invented numbers (§2.1): the
 // proof strip is real /health data; prices are the live catalog + constants.
 import type { Metadata } from "next";
@@ -17,6 +18,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { LiveNetworkStrip } from "@/components/site/LiveNetworkStrip";
 import { ExplorePlans } from "@/components/ExplorePlans";
+import { ProductVideo } from "@/components/landing/ProductVideo";
+import { HowMachinePays } from "@/components/landing/HowMachinePays";
+import { UnderTheHood } from "@/components/landing/UnderTheHood";
+import { productVideo } from "@/lib/media";
 
 export const metadata: Metadata = buildMetadata({
   title: "Commerce for software that pays software",
@@ -120,7 +125,7 @@ export default async function HomePage() {
                 <Link href="/signup">Start free <ArrowRight className="size-4" /></Link>
               </Button>
               <Button asChild variant="secondary" size="lg">
-                <Link href="/product/overview#lifecycle">See how machines pay</Link>
+                <Link href="/contact-sales">Talk to sales</Link>
               </Button>
             </div>
           </div>
@@ -128,21 +133,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Quick proof strip — live stats only */}
-      <section className="border-b border-sl-border bg-sl-bg-raised">
-        <div className="mx-auto max-w-[1200px] px-4 py-10 sm:px-6">
-          <LiveNetworkStrip />
-          <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-sl-text-muted">
-            <span>Signals from the public gateway health probe.</span>
-            <a href={VAULT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-settle hover:underline">
-              <ShieldCheck className="size-3.5" /> RevenueVault V2 on Polygon
-            </a>
-            <a href={X402_KIT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-machine hover:underline">
-              <FileCode2 className="size-3.5" /> x402-kit (open source)
-            </a>
-          </p>
-        </div>
-      </section>
+      <ProductVideo media={productVideo} />
 
       {/* Three product tiles */}
       <section className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-24">
@@ -167,6 +158,26 @@ export default async function HomePage() {
           })}
         </Stagger>
       </section>
+
+      <HowMachinePays />
+
+      {/* Quick proof strip — live stats only */}
+      <section className="border-b border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1200px] px-4 py-10 sm:px-6">
+          <LiveNetworkStrip />
+          <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-sl-text-muted">
+            <span>Signals from the public gateway health probe.</span>
+            <a href={VAULT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-settle hover:underline">
+              <ShieldCheck className="size-3.5" /> RevenueVault V2 on Polygon
+            </a>
+            <a href={X402_KIT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-machine hover:underline">
+              <FileCode2 className="size-3.5" /> x402-kit (open source)
+            </a>
+          </p>
+        </div>
+      </section>
+
+      <UnderTheHood />
 
       {/* Explore plans */}
       <section className="border-y border-sl-border bg-sl-bg-raised">
