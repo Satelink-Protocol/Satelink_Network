@@ -44,6 +44,6 @@ describe('better_auth config gating (Track B P5)', () => {
     const routes = [];
     const app = { all: (path) => routes.push(path) };
     expect(mountBetterAuth(app, {})).to.equal(true);
-    expect(routes).to.deep.equal(['/api/identity/*']);
+    expect(routes).to.deep.equal(['/api/identity/*splat']);
   });
 });
