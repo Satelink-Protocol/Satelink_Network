@@ -1,17 +1,65 @@
 import { test, expect } from "@playwright/test";
 
-// Route smoke (§9): every reposition route returns the expected status and the
-// shared chrome renders. Checkout routes are noindex.
+// Route smoke (§9): every IA-v2 route returns the expected status and the
+// shared chrome renders. Checkout routes are noindex. Product-move redirects
+// (/intelligence, /rpc) are asserted separately.
 const OK_ROUTES = [
   "/",
-  "/intelligence",
-  "/intelligence/funding-rate-heatmap",
-  "/intelligence/liquidation-clusters",
+  "/product/overview",
+  "/products/machine-commerce",
+  "/products/trading-intelligence",
+  "/products/trading-intelligence/funding-rate-heatmap",
+  "/products/trading-intelligence/liquidation-clusters",
+  "/products/rpc",
+  "/products/x402",
+  "/products/metering",
+  "/platform",
+  "/platform/api",
+  "/platform/x402",
+  "/platform/machine-identity",
+  "/platform/metering",
+  "/platform/payments",
+  "/platform/settlement",
+  "/platform/integrations",
+  "/solutions",
+  "/solutions/enterprise",
+  "/solutions/ai-agents",
+  "/solutions/commerce",
+  "/solutions/industries/financial-services",
+  "/developers",
+  "/developers/quickstart",
+  "/developers/api",
+  "/developers/sdks",
+  "/blog",
+  "/blog/x402-kit-open-source",
+  "/blog/category/x402",
+  "/news",
+  "/news/revenue-vault-v2-live",
+  "/changelog",
+  "/changelog/x402-rail-live",
+  "/customer-stories",
+  "/academy",
+  "/academy/tutorials",
+  "/academy/tutorials/discover-the-catalog",
+  "/academy/use-cases",
+  "/academy/use-cases/ai-agent-purchasing",
+  "/academy/courses",
+  "/support",
+  "/support/getting-started",
+  "/support/getting-started/do-i-need-an-account",
+  "/support/search?q=x402",
+  "/signup",
+  "/contact-sales",
+  "/network/run-a-node",
+  "/acceptable-use",
+  "/cookies",
+  "/security",
+  "/responsible-disclosure",
+  "/data-processing",
   "/corporate",
   "/pricing",
   "/machine",
   "/network",
-  "/rpc",
   "/contact",
   "/terms",
   "/privacy",
@@ -19,6 +67,13 @@ const OK_ROUTES = [
   "/checkout?plan=starter",
   "/checkout/cancel",
   "/styleguide",
+  // Machine-readable endpoints (§12).
+  "/pricing.json",
+  "/products/trading-intelligence.json",
+  "/products/rpc.json",
+  "/.well-known/satelink.json",
+  "/llms.txt",
+  "/llms-full.txt",
 ];
 
 for (const path of OK_ROUTES) {
@@ -31,7 +86,7 @@ for (const path of OK_ROUTES) {
 
 test("home renders machine-commerce H1 and shared footer legal links", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(/machines can buy/i);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/software that pays software/i);
   // Footer links to Refund & Cancellation appear in both the Legal column and
   // the bottom bar — assert at least one is present.
   await expect(page.getByRole("link", { name: /Refund & Cancellation/ }).first()).toBeVisible();
@@ -49,6 +104,50 @@ test("unknown checkout plan redirects to /pricing", async ({ page }) => {
 });
 
 test("liquidation-clusters page shows the mandatory model limitations", async ({ page }) => {
-  await page.goto("/intelligence/liquidation-clusters");
+  await page.goto("/products/trading-intelligence/liquidation-clusters");
   await expect(page.getByText(/model, not a measurement/i)).toBeVisible();
+});
+
+test("redirect: /intelligence → /products/trading-intelligence", async ({ page }) => {
+  await page.goto("/intelligence");
+  await expect(page).toHaveURL(/\/products\/trading-intelligence$/);
+});
+
+test("redirect: /rpc → /products/rpc", async ({ page }) => {
+  await page.goto("/rpc");
+  await expect(page).toHaveURL(/\/products\/rpc$/);
+});
+
+test("/intelligence/success is NOT redirected (checkout claim page survives)", async ({ page }) => {
+  const res = await page.goto("/intelligence/success", { waitUntil: "domcontentloaded" });
+  expect(res!.status()).toBeLessThan(400);
+  await expect(page).toHaveURL(/\/intelligence\/success/);
+});
+
+test("interactive selector on the overview resolves a product + live price", async ({ page }) => {
+  await page.goto("/product/overview");
+  // Default selection resolves to a product with a request and a docs link.
+  await expect(page.getByRole("heading", { name: "Trading Intelligence" })).toBeVisible();
+});
+
+test("/products/{slug}.json returns the machine-readable product contract", async ({ request }) => {
+  const res = await request.get("/products/trading-intelligence.json");
+  expect(res.status()).toBe(200);
+  const json = await res.json();
+  expect(json.product).toBe("trading-intelligence");
+  expect(Array.isArray(json.pricing)).toBe(true);
+  expect(json.auth).toContain("x402");
+});
+
+test("/pricing.json lists every product with prices", async ({ request }) => {
+  const res = await request.get("/pricing.json");
+  expect(res.status()).toBe(200);
+  const json = await res.json();
+  expect(json.products.length).toBeGreaterThanOrEqual(5);
+});
+
+test("/llms.txt is generated and mentions machine commerce", async ({ request }) => {
+  const res = await request.get("/llms.txt");
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain("Machine Commerce");
 });

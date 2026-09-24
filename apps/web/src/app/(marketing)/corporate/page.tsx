@@ -65,7 +65,7 @@ export default function CorporatePage() {
               <Link href="/corporate#enquire">Discuss your requirements <ArrowRight className="size-4" /></Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/intelligence">See the data catalog</Link>
+              <Link href="/products/trading-intelligence">See the data catalog</Link>
             </Button>
           </div>
         </div>

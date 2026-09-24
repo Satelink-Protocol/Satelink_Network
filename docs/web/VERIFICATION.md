@@ -45,6 +45,80 @@ Three harness bugs found & fixed to reach green:
 3. **Honeypot `#website` measured visible** — parent `overflow-hidden` doesn't clip the child's own bounding box, so Playwright saw it. Fixed: added `invisible` (visibility:hidden, inherited) to the honeypot wrapper in `EnquiryForm.tsx`; still submitted, still traps bots. Also hardened the redirect spec to stub the external `checkout.dodopayments.com` domain (was hitting the live site, which 302'd `/mock-session` → `/error/not-found`).
 <!-- E2E-RESULT -->
 
+## Phase 7 — Core pages (IA-v2)
+Built the machine-commerce core surface on `feat/web-ia-v2-claude-pattern`:
+- **7.1 Home rework** — §8 IA: hero ("software that pays software") → live network
+  strip → "what is machine commerce?" entity → lifecycle stepper (SSR) → products
+  grid (5) → how it works (6 steps) → audiences → on-chain proof → live pricing
+  summary → resources → CTA. Home no longer mentions Dodo (moved to TI/pricing).
+- **7.2 `/product/overview`** — value cards, put-to-work tasks, principles, capability
+  grid, and the interactive "I'm building X and I need Y" selector (role × need →
+  product, a real request, its live price, docs link).
+- **7.3 Products** — 5 product pages via a single-sourced `lib/products.ts` +
+  `ProductPageView` (machine-commerce, rpc, x402, metering) and a bespoke Dodo
+  surface for trading-intelligence; 4 metric pages under
+  `/products/trading-intelligence/[metric]`. `/intelligence`, `/rpc`, and the four
+  metric slugs 308 to their new homes via `middleware.ts` (edge-cached, per that
+  file's own comment); `/intelligence/success` is deliberately NOT redirected.
+- **7.4 `/platform`** — hub + 7 sub-pages (api, x402, machine-identity, metering,
+  payments, settlement, integrations) via `lib/platform.ts` + `PlatformPageView`
+  (PlatformTemplate order; console maps to real `/satelink/os` screens; "Draft"/
+  "Planned" pills on surfaces not live; changelog carousel auto-hidden).
+- **7.5 `/pricing` rework** — audience switch, usage calculator (live prices),
+  compare table, live rate card (canonical links), `#platform` anchor (target of
+  the `/platform/pricing` redirect), shared-balance disclosure (truthful), x402
+  explainer, `pricing.json` link, grouped FAQ. No recurring plan.
+
+**Gate (Phase 7): all green.**
+- `next build` **EXIT=0** (90 static pages; the 9 new product/metric routes +
+  8 platform routes + overview prerender).
+- Unit **43/43** (truth-lint + hex-gate hold — new pages are token-only, and the
+  only Dodo-mentioning marketing pages, `/products/trading-intelligence` and
+  `/pricing`, both render a `<Disclosure>`).
+- Packages **9/9** · arch (tools) **9/9**.
+- E2E **55/55** (up from 39): +17 new route smoke, both product-move redirects,
+  the `/intelligence/success` survival check, and the overview selector.
+
+Judgment calls (no founder needed):
+- Product/pricing/platform content is single-sourced in `apps/web/src/lib/{products,platform}.ts`
+  (facts from CLAUDE.md 2026-07-16 + apps/api). Live TI price comes from the catalog;
+  the flat $0.00003 rate and the $0.10=1,000-call x402 bundle are documented constants.
+- Dropped the old `/rpc` page's unverified "500-req/day free tier" claim during the
+  `/rpc → /products/rpc` canonicalization (not in the audited facts).
+- Console screens are linked, not screenshotted — no invented image assets.
+
+## Phases 8–14 — the rest of the IA-v2 surface
+Built on top of Phase 7, each phase gated + committed:
+- **8 Solutions** — hub + 10 solutions (company-size + use-case) + 7 industries
+  (`lib/solutions.ts` + `SolutionPageView`). Proof section auto-hidden; no certs.
+- **9 Developers** — hub, quickstart (live-endpoint steps + one Illustrative x402
+  step), API surface, SDKs (x402-kit live; SDK/MCP Planned).
+- **10 Resources** — blog/news/changelog seeded from real shipped milestones
+  only (`lib/resources.ts`); customer-stories empty + noindex + nav-hidden.
+- **11 Academy + Support** — academy hub/tutorials(live)/use-cases/courses(empty)
+  + support home/[category]/[slug]/search (`lib/academy.ts`, `lib/support.ts`).
+  Fixed: removed the dead `support` afterFiles rewrite prefix that shadowed
+  `/support/[category]`.
+- **12 Entry + legal + APIs** — /signup (left /login = console auth alone),
+  /contact-sales + POST /api/contact-sales, /network/run-a-node, five Review
+  policy pages, POST /api/support-feedback.
+- **13 Machine/GEO + SEO** — /products/{slug}.json, /pricing.json,
+  /.well-known/satelink.json, /llms.txt + /llms-full.txt (replacing the static
+  one), sitemap rewrite, robots, and Product/Breadcrumb/FAQ + Article JSON-LD.
+- **14 Validation suite** — `apps/web/test/{pricing-parity,sitemap-coverage,
+  llms-freshness}.test.ts` run the @satelink/seo validators against the REAL
+  route inventory + catalog (not fixtures): pricing parity vs the live catalog,
+  full sitemap coverage / no-drift / no dupes, llms.txt freshness.
+
+**Final cumulative gate (all phases): build EXIT=0 · unit 57/57 · packages 9/9 ·
+arch 9/9 · E2E 99/99.** Truth-lint + hex-gate hold across all new pages (Dodo
+appears only on `/products/trading-intelligence` and `/pricing`, both with a
+`<Disclosure>`; every marketing page is token-only).
+
+Deferred to §18 / founder (unchanged): Lighthouse-CI + axe against a Vercel
+preview URL, CMS wiring (`CMS_API_URL`), and the CI workflow jobs. Contact-sales
+and support-feedback log today and persist to CMS Enquiries/Feedback once wired.
+
 ## Not yet run in this session (require the Vercel preview / founder — §10)
 - Lighthouse CI against the preview URL (perf/a11y/best-practices/SEO budgets, LCP/CLS).
 - Cross-viewport visual screenshots (375/768/1280, dark+light) → `docs/web/screenshots/`.

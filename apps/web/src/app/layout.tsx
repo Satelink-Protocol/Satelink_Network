@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "../../../../packages/ui/src/styles/theme.css";
 import "./globals.css";
-import "../styles/tokens.css";
+import "../../../../packages/web-ui/src/styles/tokens.css";
 
 // Self-hosted (next/font) Inter + JetBrains Mono, exposed as the CSS variables
 // tokens.css (--sl-font-sans / --sl-font-mono) references. display:swap.
@@ -86,7 +86,7 @@ const INTELLIGENCE_PRODUCT_JSON_LD = {
   name: "Satelink Trading Intelligence",
   description:
     "Derived trading intelligence — funding-rate heatmaps, open-interest shifts, liquidation clusters, market microstructure — computed from public market data. Raw exchange feeds are never redistributed.",
-  url: "https://satelink.network/intelligence",
+  url: "https://satelink.network/products/trading-intelligence",
   offers: {
     "@type": "Offer",
     price: "0.01",

@@ -23,6 +23,9 @@ export default function robots(): MetadataRoute.Robots {
           "/styleguide",
           "/machine-console",
           "/design",
+          // Noindex utility surfaces (also carry robots noindex meta).
+          "/support/search",
+          "/customer-stories",
         ],
       },
     ],

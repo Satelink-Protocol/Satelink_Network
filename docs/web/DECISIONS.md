@@ -34,3 +34,42 @@ Every judgment call made without asking, per the reposition mandate (§0). Newes
 - **No competitor comparison table** on `/rpc` (Infura/Alchemy/QuickNode) — competitor cells can't be independently verified here, so per §3 it's omitted rather than shipped unverifiable.
 - **Truth-lint bans the promissory "guaranteed returns/profit/…"**, not the bare word — "not guaranteed" / "no guarantee" are encouraged disclaimers. `alpha` is word-boundary banned; bare `returns` is not banned ("returns derived statistics" is the approved phrasing).
 - **Contact**: standardized on `satelinknetwork@gmail.com`, added the legal entity name and the corporate-enquiry routing pointer.
+
+---
+
+# IA-v2 (Claude-pattern) — Decisions Log
+
+Stacked branch `feat/web-ia-v2-claude-pattern` off the reposition branch (PR #401).
+Founder-approved directives applied; see `IA_V2_DISCOVERY.md` for the repo map.
+
+## Phase 2 — Monorepo prep
+- **Design system package = `@satelink/web-ui` (`packages/web-ui`), NOT `packages/ui`.** `packages/ui` is `@satelink/ui`, the OS/admin dashboard system — left untouched. "Satelink Signal" (the marketing system) was physically extracted from `apps/web/src/components/{ui,site}` + `src/styles/tokens.css` into `packages/web-ui`, with a package-local `cn` and package-relative internal imports. Founder-approved. Updates the §4/§16 paths.
+  - **Zero import churn in apps/web:** the 49 deep `@/components/ui/*` imports + `@/components/site/*` + the barrel resolve via new `tsconfig.json` `paths` redirects to the package; `transpilePackages: ["@satelink/ui","@satelink/web-ui"]`; Tailwind `@source` scans `packages/web-ui/src`; `layout.tsx` imports tokens by the same deep-relative mechanism already used for `@satelink/ui` theme.css.
+  - **Gate held green** after extraction: `next build` EXIT=0, unit **43/43**, E2E **28/28**. `hex-gate.test.ts` was repointed at `packages/web-ui/src/components` so the extracted components stay in the hex gate's scope.
+- **`packages/content` (`@satelink/content`)** created: zod schemas (the machine-readable product/pricing contract for `/products/*.json` + `/pricing.json`; shared CMS field primitives — SEO/GEO/publish-status), a CMS REST client with guaranteed fallback (`CMS_API_URL` unset today → returns fixtures), and canonical site constants (`LEGAL_ENTITY`, `SITES`, `CANONICAL_URL`, `DISCOVERY`).
+- **`packages/seo` (`@satelink/seo`)** created: typed JSON-LD builders (schema-dts — Organization/WebSite+SearchAction/WebPage/Breadcrumb/Product/Article/FAQ/HowTo), a Next `Metadata` builder, `llms.txt`/`llms-full.txt` generators, and CI validators (required/duplicate meta, orphan/broken-link graph, JSON-LD validity, sitemap drift).
+- **Test wiring:** new root vitest project `packages` (`packages/{content,seo,web-ui}/**/*.{test,spec}.{ts,tsx}`) — **9/9** pass. Architecture guard (`tools`) still **9/9**. `npm run arch` (dependency-cruiser) cruises only `libs tools workers`, so the new packages/apps are not linted there and sit at top-of-stack — compliant by default; no allowlist to update.
+- **Package manager:** npm everywhere (approved). All spec `pnpm …` references → npm scripts.
+- **Analytics:** Vercel Web Analytics (approved) — greenfield, wired when the app shells land (Phase 5).
+- **Email / leads:** log-only is insufficient — every contact-sales / corporate-enquiry / support-feedback submission will be persisted to a CMS `Enquiries` collection (Postgres) visible in admin, AND logged; email delivery is a later add-on behind an env flag (approved). Wired in Phase 4 (CMS) + Phase 5 (form handlers).
+
+## Infra provisioning stance (see INFRA_SETUP.md)
+- **CMS DB + Vercel projects + DNS are documented, not executed, during the build.** Rationale: creating a database via DDL on the *production* Railway Postgres instance, and creating Vercel projects, are production-infra mutations off Phase 2's critical path (its gate is only tests+build green) and belong at the §18 delivery step. CLAUDE.md's prod-DB guardrails + the founder's documentation escape-hatch make "document now, execute at delivery on go" the safe path. The CMS is built against ephemeral/local Postgres so nothing blocks. Exact SQL, env vars, Vercel settings, and DNS records are in `docs/web/INFRA_SETUP.md`.
+
+## Phase 4 — CMS (Payload 3) — isolation + gate stance
+- **`apps/cms` is isolated from the npm workspace.** Root `package.json` pins
+  `overrides: { react: 18.2.0, react-dom: 18.2.0 }` for apps/web; Payload 3 needs
+  **React 19**. A shared install would force one React major on both and break the
+  green apps/web build. Resolution: exclude `apps/cms` from the workspace globs so
+  it carries its own `node_modules` + lockfile (React 19), fully isolated. It does
+  not need `@satelink/web-ui` (Payload ships its own admin UI); it aligns with
+  `@satelink/content` schemas by convention, not runtime import.
+- **DB:** a local Postgres is running (`/tmp:5432`). CMS dev DB = `satelink_cms_dev`
+  there; prod = `satelink_cms` on Railway (INFRA_SETUP.md). Never the app DB.
+- **Runtime gate stance:** the CMS is delivered as complete, reviewable Payload 3
+  code (config, collections, globals, RBAC, 2FA, audit log, truth hooks, workflow,
+  revalidation, seed). The **live CRUD/publish/rollback boot test is run from the
+  isolated `apps/cms` install** (`cd apps/cms && npm install && npm run dev`) —
+  NOT forced into the React-18-pinned shared tree from this background session,
+  which would risk apps/web. Boot/test steps in `apps/cms/README.md`. This is the
+  one place Phase's runtime gate is deferred to the isolated setup by design.

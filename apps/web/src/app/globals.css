@@ -1,9 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Tailwind must scan the entire web src and packages/ui src directories */
+/* Tailwind must scan the web src and both design-system package sources.
+   @satelink/web-ui (Satelink Signal) now houses the marketing components +
+   --sl-* tokens; @satelink/ui is the OS/admin system. */
 @source "../**/*.{js,ts,jsx,tsx}";
 @source "../../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
+@source "../../../../packages/web-ui/src/**/*.{js,ts,jsx,tsx}";
 
 /* ============================================================
    Satelink landing design system — copied verbatim from the

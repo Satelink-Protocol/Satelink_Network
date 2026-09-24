@@ -27,6 +27,7 @@ import {
   TerminalWindow,
   ThemeToggle,
 } from "@/components/ui";
+import { BlockRenderer, type Block } from "@satelink/web-ui";
 
 export const metadata: Metadata = {
   title: "Style guide",
@@ -171,6 +172,36 @@ function ThemePanel({ theme }: { theme: "dark" | "light" }) {
   );
 }
 
+// One instance of every CMS block (§8/§16) — the Phase 6 gate renders them all.
+const SAMPLE_BLOCKS: Block[] = [
+  { blockType: "hero", eyebrow: "Product", heading: "Machine Commerce Infrastructure", definition: "Infrastructure for software to discover, pay for, and settle machine-native services.", ctas: [{ label: "Start building", href: "/developers/quickstart" }, { label: "Explore", href: "/products/machine-commerce" }] },
+  { blockType: "richText", text: "Plain-English body copy renders here as prose." },
+  { blockType: "valueCards", cards: [{ title: "Discover services", body: "Machines find services via discovery + catalog." }, { title: "Pay per use", body: "Per-call pricing, no commitment." }, { title: "Settle transparently", body: "On-chain settlement per epoch." }] },
+  { blockType: "code", illustrative: true, tabs: [{ language: "curl", code: "curl https://rpc.satelink.network/v1/intelligence" }, { language: "typescript", code: "const r = await fetch(url)" }] },
+  { blockType: "apiExample", endpoint: "GET /v1/intelligence", request: "curl …", response: '{ "ok": true }' },
+  { blockType: "faq", group: "About the offering", items: [{ question: "What stops an agent from paying a price that isn't real?", answer: "Prices come from signed HTTP 402 requirements, with per-key limits and receipts." }] },
+  { blockType: "cta", heading: "Build for the machine economy.", label: "Start building", href: "/developers/quickstart" },
+  { blockType: "callout", tone: "info", body: "The crypto rail (x402/USDT) is separate — not billed through Dodo." },
+  { blockType: "pricingLive", productSlug: "trading-intelligence", prices: [{ metric: "funding-rate-heatmap", price: 0.01, unit: "call" }] },
+  { blockType: "lifecycleStepper" },
+  { blockType: "machineReadablePanel", productSlug: "trading-intelligence" },
+  { blockType: "comparisonTable", columns: ["Free", "Pay-per-call"], rows: [{ label: "Per-call price", values: ["$0", "$0.00003"] }, { label: "Commitment", values: [true, false] }] },
+  { blockType: "relatedContent", heading: "Related", items: [{ label: "x402", href: "/products/x402" }, { label: "API", href: "/platform/api" }] },
+];
+
+function BlocksGallery() {
+  return (
+    <div className="space-y-2">
+      {SAMPLE_BLOCKS.map((b) => (
+        <div key={b.blockType} data-block={b.blockType} className="rounded-[var(--sl-radius)] border border-dashed border-sl-border">
+          <p className="px-4 pt-3 font-sl-mono text-[10px] uppercase tracking-widest text-sl-text-subtle">{b.blockType}</p>
+          <BlockRenderer blocks={[b]} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StyleguidePage() {
   return (
     <div className="min-h-screen bg-sl-bg p-4 sm:p-8">
@@ -180,6 +211,10 @@ export default function StyleguidePage() {
           <ThemePanel theme="dark" />
           <ThemePanel theme="light" />
         </div>
+        <section>
+          <h2 className="mb-4 text-lg font-semibold text-sl-text">CMS blocks (§8)</h2>
+          <BlocksGallery />
+        </section>
       </div>
     </div>
   );

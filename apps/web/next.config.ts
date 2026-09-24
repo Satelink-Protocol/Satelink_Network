@@ -11,8 +11,10 @@ const API_BASE =
     : "http://localhost:8080");
 
 const nextConfig: NextConfig = {
-  // Transpile the @satelink/ui design-system package (ships raw TSX from src).
-  transpilePackages: ["@satelink/ui"],
+  // Transpile the design-system packages (both ship raw TSX from src):
+  // @satelink/ui (OS/admin dashboards) and @satelink/web-ui (Satelink Signal —
+  // the public-website system, shared with apps/corporate).
+  transpilePackages: ["@satelink/ui", "@satelink/web-ui", "@satelink/content", "@satelink/seo"],
 
   typescript: {
     ignoreBuildErrors: true,
@@ -59,6 +61,9 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
+      // IA-v2 §3 product-move redirects (/intelligence → /products/*, /rpc →
+      // /products/rpc) live in src/middleware.ts REDIRECTS — edge-cached, one
+      // place, and where that file's own comment says they belong.
       // Migrated to real routes (src/app/terms, src/app/privacy) — the old
       // static public/terms.html and public/privacy.html files are removed,
       // so these paths must redirect rather than 404.
@@ -146,7 +151,9 @@ const nextConfig: NextConfig = {
       "ent-api",
       "pair",
       "stream",
-      "support",
+      // "support" removed: the public IA-v2 site now owns /support/* (support
+      // center). No backend /support API is mounted or called, and the
+      // afterFiles proxy was shadowing the /support/[category] pages.
       "beta",
       "webhooks",
       "network-stats",
@@ -187,7 +194,7 @@ const nextConfig: NextConfig = {
       // task-commerce order-start route). Without the exclusion the
       // afterFiles rewrite shadows those local route handlers.
       {
-        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)|dodo-webhook(?:/|$)|tasks(?:/|$)).*)",
+        source: "/api/:path((?!grafana(?:/|$)|ops-auth(?:/|$)|dodo-webhook(?:/|$)|tasks(?:/|$)|contact-sales(?:/|$)|support-feedback(?:/|$)).*)",
         destination: `${API_BASE}/api/:path`,
       },
 

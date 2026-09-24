@@ -1,0 +1,34 @@
+{
+  "name": "@satelink/cms",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Satelink CMS — Payload 3 on Next.js (admin.satelink.network). ISOLATED from the npm workspace: it uses React 19 (Payload 3 requirement) while the workspace pins React 18.2.0 for apps/web. Install and run from this directory only: `cd apps/cms && npm install`.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3200",
+    "build": "next build",
+    "start": "next start -p 3200",
+    "generate:types": "payload generate:types",
+    "migrate": "payload migrate",
+    "seed": "tsx seed/index.ts"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.90.1",
+    "@payloadcms/next": "3.90.1",
+    "@payloadcms/richtext-lexical": "3.90.1",
+    "@payloadcms/storage-vercel-blob": "3.90.1",
+    "next": "15.4.11",
+    "payload": "3.90.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5",
+    "vitest": "^3.0.0"
+  }
+}

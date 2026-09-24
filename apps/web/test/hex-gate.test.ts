@@ -9,9 +9,12 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(__dirname, "..", "src");
+// Satelink Signal components were extracted to @satelink/web-ui
+// (packages/web-ui) in Phase 2; keep them in the hex gate's scope.
+const WEBUI = resolve(__dirname, "..", "..", "..", "packages", "web-ui", "src", "components");
 const SCOPED = [
-  join(ROOT, "components", "ui"),
-  join(ROOT, "components", "site"),
+  join(WEBUI, "ui"),
+  join(WEBUI, "site"),
   join(ROOT, "app", "(marketing)"),
   join(ROOT, "app", "(checkout)"),
 ];
