@@ -37,6 +37,43 @@ function argValue(name) {
   return i !== -1 ? process.argv[i + 1] : undefined;
 }
 
+// Some RPC providers cap the eth_getLogs block range (e.g. free tiers allow
+// only a 10-block span, or reject a range whose response would exceed a log
+// cap). This is read-only and idempotent, so on any range-limit error we
+// recursively bisect the [start,end] span and retry — the scan then completes
+// against ANY provider, just more slowly on a stingy one. Non-range errors
+// (auth, network) are re-thrown so we fail loudly instead of looping.
+function isRangeLimitError(err) {
+  const msg = `${err?.message || ''} ${err?.error?.message || ''} ${err?.info?.error?.message || ''}`.toLowerCase();
+  return (
+    err?.code === -32600 ||
+    err?.error?.code === -32600 ||
+    err?.info?.error?.code === -32600 ||
+    msg.includes('block range') ||
+    msg.includes('block_range') ||
+    msg.includes('range should') ||
+    msg.includes('range too') ||
+    msg.includes('exceed') ||
+    msg.includes('too many results') ||
+    msg.includes('response size') ||
+    msg.includes('query returned more than') ||
+    msg.includes('limit exceeded') ||
+    msg.includes('up to a')
+  );
+}
+
+async function queryFilterAdaptive(contract, start, end) {
+  try {
+    return await contract.queryFilter('Deposited', start, end);
+  } catch (err) {
+    if (start >= end || !isRangeLimitError(err)) throw err;
+    const mid = Math.floor((start + end) / 2);
+    const left = await queryFilterAdaptive(contract, start, mid);
+    const right = await queryFilterAdaptive(contract, mid + 1, end);
+    return left.concat(right);
+  }
+}
+
 async function main() {
   const rpcUrl = process.env.POLYGON_RPC_URL || process.env.RPC_URL;
   const dbUrl = process.env.DATABASE_URL;
@@ -83,7 +120,7 @@ async function main() {
     const onChainByTx = new Map();
     for (let start = fromBlock; start <= toBlock; start += chunk) {
       const end = Math.min(start + chunk - 1, toBlock);
-      const events = await contract.queryFilter('Deposited', start, end);
+      const events = await queryFilterAdaptive(contract, start, end);
       for (const ev of events) {
         const [from, amount] = ev.args;
         onChainByTx.set(ev.transactionHash, {

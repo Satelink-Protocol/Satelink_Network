@@ -183,3 +183,7 @@ __dburl_fixture__/
 # m5-gate.sh state carried between `purchase` and `refund` runs — amounts/ids
 # only, no secrets, but it's per-operator ephemeral state, not repo content.
 scripts/ops/.m5-gate-state.json
+
+# OAuth / provider client-secret JSON files must never be committed
+client_secret_*.json
+*.apps.googleusercontent.com.json
