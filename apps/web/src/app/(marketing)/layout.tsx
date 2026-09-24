@@ -8,6 +8,7 @@
 // as the homepage instead of each page shipping (or omitting) its own.
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { Toaster } from "@/components/ui/Toast";
 
 export default function MarketingLayout({
   children,
@@ -19,6 +20,7 @@ export default function MarketingLayout({
       <SiteHeader />
       <main style={{ paddingTop: "var(--header-height)" }}>{children}</main>
       <SiteFooter />
+      <Toaster />
     </>
   );
 }

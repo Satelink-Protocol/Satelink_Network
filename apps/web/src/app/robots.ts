@@ -11,7 +11,19 @@ export default function robots(): MetadataRoute.Robots {
         // /tasks is a separate, flag-gated product (TASKS_PRODUCT_ENABLED,
         // default OFF) unrelated to the RPC/intelligence products — kept out
         // of the index even on the rare occasion it's enabled.
-        disallow: ["/admin/", "/ops/", "/api/", "/satelink/os/", "/login", "/tasks"],
+        disallow: [
+          "/admin/",
+          "/ops/",
+          "/api/",
+          "/satelink/os/",
+          "/login",
+          "/tasks",
+          "/checkout",
+          "/checkout/",
+          "/styleguide",
+          "/machine-console",
+          "/design",
+        ],
       },
     ],
     sitemap: "https://satelink.network/sitemap.xml",

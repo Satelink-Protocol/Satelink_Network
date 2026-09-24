@@ -13,7 +13,9 @@ import type { NextRequest } from 'next/server'
 
 const SUBDOMAIN_MAP: Record<string, string> = {
   'developer': '/satelink/os',
-  'machine': '/machine',
+  // machine.satelink.network → the operator dashboard, moved to /machine-console
+  // so the apex /machine can be the public "For Agents" page (reposition §6).
+  'machine': '/machine-console',
   'node': '/node',
   'admin': '/admin',
   'status': '/status',

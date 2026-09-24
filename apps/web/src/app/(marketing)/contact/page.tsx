@@ -21,17 +21,21 @@ export default function ContactPage() {
       <div className="mt-8 rounded-lg border border-border p-6 text-base">
         <dl className="space-y-4">
           <div>
+            <dt className="text-sm font-medium text-muted-foreground">Legal entity</dt>
+            <dd className="mt-1 text-sm text-foreground">Jakuraa Commercial Pvt Ltd</dd>
+          </div>
+          <div>
             <dt className="text-sm font-medium text-muted-foreground">Support email</dt>
             <dd className="mt-1 text-sm text-foreground">
-              <a href="mailto:support@satelink.network" className="underline">
-                support@satelink.network
+              <a href="mailto:satelinknetwork@gmail.com" className="underline">
+                satelinknetwork@gmail.com
               </a>
             </dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-muted-foreground">Registered business address</dt>
             <dd className="mt-1 text-sm text-foreground">
-              38, 39 Malaviya Street, Ram Nagar, Coimbatore &ndash; 641009, Tamil Nadu, India
+              38/39 Malaviya Street, Ram Nagar, Coimbatore &ndash; 641009, Tamil Nadu, India
             </dd>
           </div>
           <div>
@@ -42,6 +46,12 @@ export default function ContactPage() {
           </div>
         </dl>
       </div>
+
+      <p className="mt-6 text-sm text-muted-foreground">
+        Buying for a team? Corporate enquiries (dedicated keys, custom metrics, consolidated invoicing)
+        go through the{" "}
+        <a href="/corporate#enquire" className="underline">Corporate Services enquiry form</a>.
+      </p>
 
       <p className="mt-8 text-sm text-muted-foreground">
         For real-time service status, see{" "}

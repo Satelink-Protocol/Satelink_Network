@@ -1,3 +1,9 @@
 .vercel
 tsconfig.tsbuildinfo
 .env*.local
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

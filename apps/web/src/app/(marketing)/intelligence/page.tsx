@@ -1,212 +1,152 @@
-// apps/web/src/app/intelligence/page.tsx
-//
-// Product/pricing page for the trading-intelligence product — Satelink's
-// primary product for the Dodo merchant review (see /pricing, which this
-// page must match exactly). Standalone page, no nested layout — same
-// pattern as /tasks and /status.
-//
-// PRICING MODEL: one-time USD credit pack (Dodo Payments), spent per call —
-// same account, same billing path as an x402 payment or a USDT deposit. No
-// subscription by default. Monthly INR subscriptions (Starter/Pro) exist in
-// code but stay behind NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED (default OFF,
-// per PR #386 — a subscription-renewal refund can't yet be matched back to
-// its funding payment_id) and are never mentioned in copy while the flag is
-// off, so this page never states a price the flag would contradict.
-//
-// HONESTY NOTE (updated, M3 clean rebuild): the four derived-analytics
-// endpoints under /v1/intelligence (funding rate heatmap, open interest
-// shifts, liquidation clusters, market microstructure) are real
-// (src/routes/intelligence_route.js on apps/api) — a paying customer's
-// account can actually CALL what it's billed for. The curl example below
-// hits the real, live discovery route (GET /v1/intelligence, no auth, no
-// cost), verified against the route's own free-discovery handler.
-//
-// DODO COMPLIANCE (2026-09-22): this is the primary page Dodo reviews for
-// the product it's underwriting — a SaaS market-analytics API, derived
-// statistics only, not investment advice, no custody. The Free/Starter/Pro
-// tiers are the Dodo-billed SaaS tiers; the x402 tier is a separate
-// crypto-native machine rail Dodo never processes, and is labeled as such
-// below rather than presented as an equivalent Dodo payment option.
-
+// /intelligence — Trading Intelligence product page. Catalog rendered from the
+// live GET /v1/intelligence (ISR + static fallback). Dodo compliance: SaaS
+// analytics, derived statistics from public data, not investment advice, no
+// custody; x402/USDT is a separate crypto rail Dodo never processes.
+import type { Metadata } from "next";
 import Link from "next/link";
-import { getCreditPacks } from "@/lib/dodo/credit-packs";
-import { CreditPackCard } from "./CreditPackCard";
+import { ArrowRight } from "lucide-react";
+import { getCatalog } from "@/lib/intelligence";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Disclosure } from "@/components/ui/Disclosure";
+import { CodeBlock } from "@/components/ui/CodeBlock";
 
-const DODO_STARTER_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_STARTER_URL;
-const DODO_PRO_URL = process.env.NEXT_PUBLIC_DODO_CHECKOUT_PRO_URL;
-
-// Dodo subscriptions are DISABLED by default (flag OFF). Renewal-refund matching
-// does not exist yet (a subscription-renewal refund can't be linked back to the
-// funding payment_id — see PR #386), so recurring billing must not be sold until
-// it does. Set NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED=true to re-enable.
-const SUBSCRIPTIONS_ENABLED =
-  process.env.NEXT_PUBLIC_DODO_SUBSCRIPTIONS_ENABLED === "true";
-
-export const metadata = {
-  title: "Intelligence — Satelink",
-  description: SUBSCRIPTIONS_ENABLED
-    ? "Market intelligence for machine-commerce agents: funding rate heatmaps, open interest shifts, liquidation clusters, market microstructure. Free discovery tier, one-time USD credit pack, monthly subscription, or $0.01/call via x402."
-    : "Market intelligence for machine-commerce agents: funding rate heatmaps, open interest shifts, liquidation clusters, market microstructure. Free discovery tier, one-time USD credit pack, or $0.01/call via x402.",
+export const metadata: Metadata = {
+  title: "Trading Intelligence",
+  description:
+    "Derived market analytics for machine-commerce agents: funding-rate heatmaps, open-interest shifts, liquidation clusters (modelled), and market microstructure. Free discovery, $9.99 Starter Pack, or $0.01/call via x402.",
+  alternates: { canonical: "https://satelink.network/intelligence" },
 };
 
-type Tier = {
-  name: string;
-  price: string;
-  period: string;
-  blurb: string;
-  features: string[];
-  cta: { label: string; href?: string; disabled?: boolean };
-  subscription?: boolean; // recurring Dodo billing — hidden unless the flag is on
-};
+export const revalidate = 300;
 
-const TIERS: Tier[] = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "discovery",
-    blurb: "Explore the product. Rate-limited, no card required.",
-    features: ["Daily request cap", "Full response shape", "No credit card"],
-    cta: { label: "No signup needed", disabled: true },
-  },
-  {
-    name: "x402 (pay-per-call)",
-    price: "$0.01",
-    period: "/call",
-    blurb:
-      "No account, no subscription — machine-to-machine, USDC on Base. A separate crypto rail; not processed by Dodo.",
-    features: ["Zero-commitment", "Agent-native (HTTP 402)", "No human checkout"],
-    cta: { label: "See x402 docs", href: "https://docs.satelink.network" },
-  },
-  {
-    name: "Starter",
-    price: "₹499",
-    period: "/month",
-    blurb: "For a single agent or a small workload.",
-    features: ["Higher daily cap", "Card or UPI via Dodo", "Cancel anytime"],
-    cta: { label: "Subscribe with Dodo", href: DODO_STARTER_URL },
-    subscription: true,
-  },
-  {
-    name: "Pro",
-    price: "₹1,999",
-    period: "/month",
-    blurb: "For production agents calling continuously.",
-    features: ["Highest daily cap", "Card or UPI via Dodo", "Cancel anytime"],
-    cta: { label: "Subscribe with Dodo", href: DODO_PRO_URL },
-    subscription: true,
-  },
+const FAQ: [string, string][] = [
+  ["Is this investment advice?", "No. Every endpoint returns derived statistics computed from public market data. It is not a recommendation to trade, and Satelink never takes custody of funds."],
+  ["Do you redistribute raw exchange feeds?", "No. We never redistribute a raw feed — every response is a statistic we compute from public data."],
+  ["What's the difference between 'derived' and 'model'?", "Derived metrics are computed directly from public data. A model/proxy metric (liquidation clusters) estimates something not directly observable; it is labelled as a model, not a measurement."],
+  ["How do I pay?", "Buy a $9.99 Starter Pack with card or UPI, or pay per call as an agent with x402 (USDC on Base) or an on-chain USDT deposit."],
+  ["Is there a subscription?", "No. Purchases are one-time credit; credits never expire."],
+  ["Where are the full docs?", "At docs.satelink.network — request signing, the x402 client, and the full API reference."],
 ];
 
-function TierCard({ tier }: { tier: Tier }) {
-  const ctaDisabled = tier.cta.disabled || !tier.cta.href;
+export default async function IntelligencePage() {
+  const { catalog } = await getCatalog();
+
   return (
-    <div className="flex flex-col rounded-lg border border-border p-6">
-      <h3 className="text-sm font-medium text-muted-foreground">{tier.name}</h3>
-      <div className="mt-2 flex items-baseline gap-1">
-        <span className="text-2xl font-semibold">{tier.price}</span>
-        <span className="text-sm text-muted-foreground">{tier.period}</span>
-      </div>
-      <p className="mt-3 text-sm text-muted-foreground">{tier.blurb}</p>
-      <ul className="mt-4 space-y-1.5 text-sm">
-        {tier.features.map((f) => (
-          <li key={f} className="text-muted-foreground">
-            · {f}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-6">
-        {ctaDisabled ? (
-          <span className="block rounded-md border border-border px-4 py-2 text-center text-sm text-muted-foreground">
-            {tier.cta.href === undefined && !tier.cta.disabled
-              ? "Checkout link not configured yet"
-              : tier.cta.label}
-          </span>
-        ) : (
-          <a
-            href={tier.cta.href}
-            className="block rounded-md bg-foreground px-4 py-2 text-center text-sm font-medium text-background"
-          >
-            {tier.cta.label}
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function IntelligencePage() {
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
-      <p className="text-sm font-medium text-muted-foreground">Satelink Intelligence</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-        Market intelligence for machine-commerce agents
-      </h1>
-      <p className="mt-4 max-w-2xl text-base text-muted-foreground">
-        Funding rate heatmaps, open interest shifts, liquidation clusters, and
-        market microstructure — derived analytics computed from public market
-        data, not raw exchange feeds. We never redistribute a raw feed; every
-        response is a statistic we compute. Pay once for a USD credit pack
-        via card or UPI (Dodo Payments), or pay per call as an agent with
-        x402 — a separate crypto rail Dodo does not process
-        {SUBSCRIPTIONS_ENABLED ? ", or subscribe monthly" : ""}.
-      </p>
-      <p className="mt-3 max-w-2xl text-xs text-muted-foreground">
-        Not investment advice. Satelink computes and sells statistics derived
-        from public market data — it does not recommend trades, manage
-        funds, or provide financial advice, and never takes custody of any
-        money or crypto asset.
-      </p>
-
-      <div className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Try it now — free discovery, no signup:</p>
-        <pre className="mt-2 overflow-x-auto rounded bg-background px-3 py-2 text-xs">
-          <code>curl https://rpc.satelink.network/v1/intelligence</code>
-        </pre>
-        <p className="mt-2">
-          Lists every metric, its price, and how to pay. Metered calls (e.g.
-          <code className="mx-1 rounded bg-background px-1">
-            /v1/intelligence/funding-rate-heatmap
-          </code>
-          ) need a funded API key — a one-time credit pack funds one
-          immediately, or fund one yourself via the x402 bundle on{" "}
-          <code className="rounded bg-background px-1">/rpc/polygon</code>.
-        </p>
-      </div>
-
-      <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {TIERS.filter((tier) => SUBSCRIPTIONS_ENABLED || !tier.subscription).map((tier) => (
-          <TierCard key={tier.name} tier={tier} />
-        ))}
-        {getCreditPacks().map((pack) => (
-          <CreditPackCard
-            key={pack.productId}
-            productId={pack.productId}
-            label={pack.label}
-            usdValue={pack.usdValue}
+    <>
+      {/* Hero */}
+      <section className="border-b border-sl-border">
+        <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-24">
+          <SectionHeader
+            eyebrow="Trading Intelligence"
+            title="Derived market analytics, priced per call"
+            lede="Funding-rate heatmaps, open-interest shifts, liquidation clusters, and market microstructure — computed from public market data, never raw feeds redistributed."
+            align="left"
           />
-        ))}
-      </div>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg"><Link href="/checkout?plan=starter">Start with $9.99 <ArrowRight className="size-4" /></Link></Button>
+            <Button asChild variant="secondary" size="lg"><a href="#try">Try free</a></Button>
+          </div>
+        </div>
+      </section>
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        Full rate card at{" "}
-        <Link href="/pricing" className="underline">/pricing</Link>. Refunds
-        claw back unused credit-pack balance — see{" "}
-        <Link href="/refund" className="underline">Refund &amp; Cancellation</Link>.
-      </p>
-
-      <div className="mt-16 border-t border-border pt-8">
-        <h2 className="text-lg font-semibold">API access</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          A credit pack funds your Satelink API key the same way an on-chain
-          deposit or an x402 payment does — it is spent per call, same
-          billing path as the RPC gateway. Full reference, request signing,
-          and the x402 client libraries are documented at{" "}
-          <a href="https://docs.satelink.network" className="underline">
-            docs.satelink.network
-          </a>
-          .
+      {/* Try it now */}
+      <section id="try" className="scroll-mt-24 mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <SectionHeader eyebrow="Try it now" title="Free discovery — no signup" align="left" />
+        <p className="mt-3 max-w-2xl text-sm text-sl-text-muted">
+          The discovery route lists every metric, its price, and how to pay. Metered calls need a funded
+          API key — the Starter Pack funds one instantly.
         </p>
-      </div>
-    </div>
+        <div className="mt-6 max-w-2xl">
+          <CodeBlock
+            tabs={[
+              { label: "curl", code: "curl https://rpc.satelink.network/v1/intelligence" },
+              { label: "TS", code: 'const res = await fetch(\n  "https://rpc.satelink.network/v1/intelligence"\n);\nconst catalog = await res.json();' },
+              { label: "Python", code: 'import requests\nr = requests.get("https://rpc.satelink.network/v1/intelligence")\nprint(r.json())' },
+            ]}
+          />
+        </div>
+      </section>
+
+      {/* Catalog */}
+      <section className="border-y border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-24">
+          <SectionHeader eyebrow="Catalog" title="Four metrics, one price" align="left" lede={`$${catalog.priceModel.amount.toFixed(2)} per call.`} />
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {catalog.metrics.map((m) => (
+              <MetricCard key={m.slug} name={m.name} slug={m.slug} kind={m.kind} price={`$${m.priceUsd.toFixed(2)}/call`} description={m.description} isModel={m.isModel} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Model vs derived */}
+      <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <SectionHeader eyebrow="Read the labels" title="Derived vs. model" align="left" />
+            <p className="mt-4 text-sm leading-relaxed text-sl-text-muted">
+              <Badge variant="neutral" className="mr-1">derived</Badge> metrics are computed directly from
+              public market data. A <Badge variant="model" className="mx-1">model</Badge> metric estimates
+              something not directly observable.
+            </p>
+          </div>
+          <Disclosure title="Liquidation clusters is a model">
+            Liquidation clusters is a <strong>modelled proxy</strong> — it infers likely liquidation
+            density from public price and open-interest data. It does <strong>not</strong> report real,
+            measured liquidation orders. Always read the limitations on its page before relying on it.
+          </Disclosure>
+        </div>
+      </section>
+
+      {/* Pricing summary + API access */}
+      <section className="border-y border-sl-border bg-sl-bg-raised">
+        <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+          <SectionHeader eyebrow="Pricing" title="Free · Starter Pack · pay-per-call" align="left" />
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+              <p className="font-semibold text-sl-text">Free discovery</p>
+              <p className="mt-1 text-sm text-sl-text-muted">Catalog + response shapes, rate-limited, no card.</p>
+            </div>
+            <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+              <p className="font-semibold text-sl-text">Starter Pack — $9.99</p>
+              <p className="mt-1 text-sm text-sl-text-muted">1:1 USD credit, no expiry. Card/UPI via Dodo.</p>
+            </div>
+            <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+              <p className="font-semibold text-sl-text">x402 — $0.01/call</p>
+              <p className="mt-1 text-sm text-sl-text-muted">Machine-to-machine. Crypto rail, not processed by Dodo.</p>
+            </div>
+          </div>
+          <p className="mt-5 text-sm text-sl-text-muted">
+            Full rate card at <Link href="/pricing" className="text-sl-accent underline">/pricing</Link>. A
+            credit pack funds your API key the same way an on-chain deposit or x402 payment does — spent
+            per call, same billing path as the RPC gateway. Full reference at{" "}
+            <a href="https://docs.satelink.network" className="text-sl-accent underline">docs.satelink.network</a>.
+          </p>
+        </div>
+      </section>
+
+      {/* Compliance + FAQ */}
+      <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
+        <Disclosure title="What this is">
+          SaaS analytics — derived statistics from public market data. Not investment advice. Satelink
+          never takes custody of funds or crypto. Payments are processed by Dodo (card/UPI); x402 and
+          USDT are a separate crypto rail Dodo never processes.
+        </Disclosure>
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-sl-text">FAQ</h2>
+          <dl className="mt-4 grid gap-5 sm:grid-cols-2">
+            {FAQ.map(([q, a]) => (
+              <div key={q}>
+                <dt className="font-medium text-sl-text">{q}</dt>
+                <dd className="mt-1 text-sm text-sl-text-muted">{a}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+    </>
   );
 }

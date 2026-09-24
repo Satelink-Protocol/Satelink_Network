@@ -1,0 +1,62 @@
+{
+  "_comment": "Static fallback for GET https://rpc.satelink.network/v1/intelligence. A DOCUMENTED CONSTANT (truth rule §2.1 permits this) used only when the live fetch fails or times out. Prices and kinds mirror the live catalog audited 2026-09-22. Keep in sync with apps/api src/routes/intelligence_route.js.",
+  "updatedAt": "2026-09-22",
+  "priceModel": { "unit": "call", "currency": "USD", "amount": 0.01 },
+  "rails": [
+    {
+      "id": "x402",
+      "label": "x402 (pay-per-call)",
+      "network": "eip155:8453",
+      "asset": "USDC on Base",
+      "endpoint": "POST /rpc/polygon",
+      "discovery": "/.well-known/satelink.json",
+      "processedByDodo": false
+    },
+    {
+      "id": "usdt-deposit",
+      "label": "USDT credit deposit",
+      "network": "Polygon (137)",
+      "asset": "USDT",
+      "endpoint": "/credits/deposit/initiate",
+      "processedByDodo": false
+    }
+  ],
+  "metrics": [
+    {
+      "slug": "funding-rate-heatmap",
+      "name": "Funding-rate heatmap",
+      "kind": "derived",
+      "isModel": false,
+      "priceUsd": 0.01,
+      "measures": "Cross-venue perpetual funding rates, normalized and arranged as a heatmap to surface divergence between markets.",
+      "description": "Derived funding-rate statistics across venues, computed from public market data. Research input, not a trade recommendation."
+    },
+    {
+      "slug": "open-interest-shifts",
+      "name": "Open-interest shifts",
+      "kind": "derived",
+      "isModel": false,
+      "priceUsd": 0.01,
+      "measures": "Period-over-period changes in aggregate open interest, by venue and instrument.",
+      "description": "Derived open-interest change statistics from public market data. Describes market structure; not investment advice."
+    },
+    {
+      "slug": "liquidation-clusters",
+      "name": "Liquidation clusters",
+      "kind": "derived-model",
+      "isModel": true,
+      "priceUsd": 0.01,
+      "measures": "A modelled proxy for where liquidation density is likely to concentrate — inferred from public price and open-interest data, NOT measured liquidation orders.",
+      "description": "A model/proxy statistic. It does not report real liquidations; it estimates likely clustering from public data. Always read the limitations before relying on it."
+    },
+    {
+      "slug": "market-microstructure",
+      "name": "Market microstructure",
+      "kind": "derived",
+      "isModel": false,
+      "priceUsd": 0.01,
+      "measures": "Derived microstructure statistics (e.g. spread and depth summaries) computed from public order-book snapshots.",
+      "description": "Derived microstructure statistics from public market data. Research input only; Satelink never takes custody of funds."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "_comment": "Illustrative EXAMPLE response shapes per metric (documented constants, labelled 'example shape' in the UI). Not live data and never presented as a live metric. Field names reflect each metric's derived output; values are placeholders.",
+  "funding-rate-heatmap": {
+    "fields": ["symbol", "exchange", "funding_apr", "cross_exchange_divergence"],
+    "example": "{\n  \"metric\": \"funding-rate-heatmap\",\n  \"as_of\": \"<iso8601>\",\n  \"rows\": [\n    { \"symbol\": \"BTC-PERP\", \"exchange\": \"venue_a\", \"funding_apr\": 0.0000, \"cross_exchange_divergence\": 0.0000 }\n  ]\n}"
+  },
+  "open-interest-shifts": {
+    "fields": ["symbol", "oi_change_pct", "window", "prior_snapshot_at"],
+    "example": "{\n  \"metric\": \"open-interest-shifts\",\n  \"as_of\": \"<iso8601>\",\n  \"rows\": [\n    { \"symbol\": \"ETH-PERP\", \"oi_change_pct\": 0.00, \"window\": \"1h\" }\n  ]\n}"
+  },
+  "liquidation-clusters": {
+    "fields": ["symbol", "price_level", "cluster_score", "model_version"],
+    "example": "{\n  \"metric\": \"liquidation-clusters\",\n  \"as_of\": \"<iso8601>\",\n  \"model\": true,\n  \"rows\": [\n    { \"symbol\": \"BTC-PERP\", \"price_level\": 0, \"cluster_score\": 0.00 }\n  ]\n}"
+  },
+  "market-microstructure": {
+    "fields": ["symbol", "spread_bps", "depth_usd", "imbalance"],
+    "example": "{\n  \"metric\": \"market-microstructure\",\n  \"as_of\": \"<iso8601>\",\n  \"rows\": [\n    { \"symbol\": \"BTC-PERP\", \"spread_bps\": 0.0, \"depth_usd\": 0 }\n  ]\n}"
+  }
+}
