@@ -112,7 +112,16 @@ export class DepositListener {
   }
 
   async start() {
-    const rpcUrl = process.env.POLYGON_RPC_URL || process.env.RPC_URL;
+    // Prefer a listener-specific RPC: the money-path listener does eth_getLogs
+    // over wide block ranges, which the app-wide POLYGON_RPC_URL (drpc free tier)
+    // rejects with "ranges over 10000 blocks are not supported" — leaving the
+    // listener unable to catch up or detect new deposits. DEPOSIT_LISTENER_RPC_URL
+    // lets it use a getLogs-capable provider (e.g. Ankr keyed) without changing
+    // the RPC every other read path uses.
+    const rpcUrl =
+      process.env.DEPOSIT_LISTENER_RPC_URL ||
+      process.env.POLYGON_RPC_URL ||
+      process.env.RPC_URL;
     // RevenueVaultV2 (Polygon 137). Read from VAULT_ADDRESS, falling back to the
     // legacy REVENUE_VAULT_ADDRESS var, then to the deployed V2 address so the
     // listener stays active even before the Railway env var is set.
