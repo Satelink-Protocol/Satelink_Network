@@ -32,7 +32,6 @@ const SUBDOMAIN_MAP: Record<string, string> = {
 // added in Phase 6 once those targets ship. `to` may include a hash.
 const REDIRECTS: Record<string, string> = {
   '/platform/pricing': '/pricing#platform',
-  '/dashboard': '/console',
   // IA-v2 §3 product-move canonicalization — targets shipped in Phase 7.
   // /intelligence/success is a REAL page (the #398 checkout claim) and is
   // intentionally absent here, so it is never redirected.
@@ -42,6 +41,23 @@ const REDIRECTS: Record<string, string> = {
   '/intelligence/liquidation-clusters': '/products/trading-intelligence/liquidation-clusters',
   '/intelligence/market-microstructure': '/products/trading-intelligence/market-microstructure',
   '/rpc': '/products/rpc',
+}
+
+const CONSOLE_ORIGIN = 'https://console.satelink.network'
+const CONSOLE_PATHS: Record<string, string> = {
+  '/console/products/trading-intelligence': '/trading-intelligence',
+  '/console/products/rpc': '/rpc',
+  '/console/products/x402': '/x402',
+  '/console/docs': '/rpc',
+}
+
+/** /console/* and /dashboard/* → console-host path; null for anything else. */
+function toConsolePath(pathname: string): string | null {
+  const m = pathname.match(/^\/(console|dashboard)(\/.*)?$/)
+  if (!m) return null
+  const mapped = CONSOLE_PATHS[`/console${m[2] ?? ''}`]
+  if (mapped) return mapped
+  return m[2] && m[2] !== '/' ? m[2] : '/'
 }
 
 export function middleware(req: NextRequest) {
@@ -56,6 +72,12 @@ export function middleware(req: NextRequest) {
   // subdomain rewrite, so /platform/pricing and /dashboard resolve everywhere.
   const isAppSubdomain = subdomain in SUBDOMAIN_MAP || subdomain === 'ops'
   if (!isAppSubdomain) {
+    // The customer console lives on its own host (apps/console). Old /console
+    // and /dashboard URLs 308 to the matching console page.
+    const consolePath = toConsolePath(url.pathname)
+    if (consolePath !== null) {
+      return NextResponse.redirect(new URL(consolePath + url.search, CONSOLE_ORIGIN), 308)
+    }
     const target = REDIRECTS[url.pathname]
     if (target) {
       const [path, hash] = target.split('#')
