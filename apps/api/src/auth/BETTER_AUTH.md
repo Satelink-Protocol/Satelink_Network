@@ -1,0 +1,58 @@
+# Better Auth (Track B — P5 backend)
+
+Customer authentication (email+password with verification, magic link, Google,
+sessions, 2FA) via Better Auth, in `src/auth/better_auth.mjs`. Apple is out for
+now (A6, 2026-09-23) — removed cleanly from this integration, not flag-gated;
+revisiting it later is new scope, not a resurrection of dead code.
+
+**Status: written, unit-tested (config gating), and INERT.** It is not mounted in
+`app_factory` and does not run until the founder enables it (below). With the flag
+off it imports nothing from `better-auth` and changes no existing auth or
+money-path behaviour. Full provider flows are validated on the preview with real
+secrets (§9), because they need OAuth credentials and the Better Auth schema.
+
+## Namespace (founder decision, 2026-09-23)
+Better Auth mounts at **`/api/identity/*`** — never `/api/auth`, which
+`app_factory.mjs` already mounts `createUnifiedAuthRouter()` on. This was a
+choice, not a technical necessity: the two could theoretically share `/api/auth`
+with careful ordering, but a distinct namespace means zero risk of the new
+customer-auth surface ever shadowing or being shadowed by the existing
+node/operator auth router, now or as either evolves. `mountBetterAuth()`'s
+default `basePath` and its `baseURL` config both already reflect this — no code
+change needed to act on this decision, only the founder steps below.
+
+The web P5 UI calls `/api/identity/sign-in/social?provider=google` and expects
+the OAuth callback at `/api/identity/callback/google`. Register **this**
+redirect URI with Google Cloud Console — see `docs/web/INFRA_SETUP.md` for the
+exact preview + production values.
+
+## Enabling (founder steps)
+1. **Provision secrets** (see `docs/web/INFRA_SETUP.md` for exact values): Google
+   OAuth, Resend domain + DNS, and set the env vars in `apps/api`
+   (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_*`, `RESEND_API_KEY`,
+   `AUTH_EMAIL_FROM`).
+2. **Create the schema.** Better Auth owns its schema; generate/apply it with its
+   CLI against the auth database (a new `auth_*`-namespaced set is recommended,
+   kept separate from the money-path tables):
+   `npx @better-auth/cli generate` then `npx @better-auth/cli migrate`
+   (point it at this config). Do **not** hand-write the schema — it is
+   version/plugin-specific.
+3. **Add the mount call.** In `app_factory.mjs`, call
+   `mountBetterAuth(app, pool)` — it defaults to `/api/identity` and is a no-op
+   until `AUTH_ENABLED=true`, so adding the call is safe even before secrets are
+   provisioned.
+4. **Set `AUTH_ENABLED=true`** in `apps/api` (and `NEXT_PUBLIC_AUTH_ENABLED=true`
+   in `apps/web`).
+
+## Account linking (§6.1)
+A Better Auth user should map 1:1 to the existing `api_credits` account by
+**verified email**. Implement this as a Better Auth `databaseHooks.user.create`
+after-hook that links/creates the `api_credits` row (mirroring
+`resolveOrCreateAccountForCheckout` in `internal_dodo.js`). It is intentionally
+NOT wired here because it writes to a money-adjacent table and must be validated
+against the live schema first. Existing API keys and wallet-linked accounts keep
+working unchanged.
+
+## Email
+Email flows use Resend. If `RESEND_API_KEY` is absent, `emailAndPassword` is
+disabled (`emailEnabled()` false) with a clear error — never silently log-only.

@@ -22,6 +22,7 @@ import { startEpochScheduler, schedulerStatus, runEpochCycle } from "./src/econo
 import { startClaimExpiryJob } from "./src/scheduler/jobs/claim_expiry_job.js";
 import { ensureMachineAccessTables } from "./src/machine-access/index.js";
 import { ensureDodoRailSchema } from "./src/db/dodo_rail_schema.js";
+import { ensurePlansSchema } from "./src/plans/plans_schema.mjs";
 import { startTreasurySettlementScheduler } from "./src/jobs/treasury_settlement_job.mjs";
 import { startSettlementAnchorScheduler, anchorSchedulerStatus } from "./src/scheduler/jobs/settlement_anchor_job.js";
 import { startGasManagerScheduler } from "./src/jobs/gas_manager_job.js";
@@ -216,6 +217,15 @@ async function ensureBillingTables(pool) {
   // and x402 stay up. apps/api/migrations/*.sql have no auto-runner, so this is
   // the only reliable prod application of the Dodo schema.
   await ensureDodoRailSchema(pool);
+
+  // ── Track B (P3.B): plans catalogue + entitlement-bucket schema. Additive,
+  // idempotent, fail-safe (never blocks boot; touches no money-path table).
+  try {
+    await ensurePlansSchema(pool);
+    console.log('[STARTUP] Plans schema ensured');
+  } catch (err) {
+    console.error('[STARTUP] Plans schema failed (non-fatal):', err.message);
+  }
 }
 
 async function start() {
