@@ -185,5 +185,6 @@ __dburl_fixture__/
 scripts/ops/.m5-gate-state.json
 
 # OAuth / provider client-secret JSON files must never be committed
-client_secret_*.json
+client_secret*.json
 *.apps.googleusercontent.com.json
+.env*
