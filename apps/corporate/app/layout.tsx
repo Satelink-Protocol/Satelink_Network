@@ -1,88 +1,69 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { company } from "@/content/company";
 
-const SITE = "https://jakuraa.com";
+const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-source-serif", display: "swap" });
+const sans = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
+const SITE = company.site;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: {
-    default: "Jakuraa — machine-commerce infrastructure",
+    default: "Jakuraa — a technology and trading company, established 2019",
     template: "%s — Jakuraa",
   },
   description:
-    "Jakuraa builds infrastructure for the machine economy. We operate Satelink, a pay-per-call RPC and data gateway where autonomous agents and machines settle on-chain.",
+    "Jakuraa Commercial Private Limited is a Coimbatore-based company established in 2019. It operates Satelink, machine-commerce infrastructure, and holds registrations for trading, international trade and industrial manufacturing.",
   openGraph: {
     type: "website",
     url: SITE,
     siteName: "Jakuraa",
-    title: "Jakuraa — machine-commerce infrastructure",
-    description:
-      "Infrastructure for the machine economy. Jakuraa operates Satelink, a pay-per-call RPC and data gateway with on-chain settlement.",
+    title: "Jakuraa",
+    description: "A technology and trading company, established 2019. Operator of Satelink.",
   },
   robots: { index: true, follow: true },
-  alternates: { canonical: SITE },
 };
+
+export const viewport: Viewport = { themeColor: "#faf8f3" };
 
 const orgJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "Jakuraa",
+  name: company.shortName,
+  legalName: company.legalName,
+  alternateName: company.formerName,
   url: SITE,
-  description:
-    "Jakuraa builds infrastructure for the machine economy and operates the Satelink machine-commerce network.",
-  brand: { "@type": "Brand", name: "Satelink", url: "https://satelink.network" },
-  sameAs: ["https://satelink.network"],
+  email: company.email,
+  foundingDate: company.incorporated,
+  taxID: company.gstin,
+  identifier: [{ "@type": "PropertyValue", propertyID: "CIN", value: company.cin }],
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: company.registeredOffice.street,
+    addressLocality: company.registeredOffice.locality,
+    addressRegion: company.registeredOffice.region,
+    postalCode: company.registeredOffice.postalCode,
+    addressCountry: company.registeredOffice.countryCode,
+  },
+  subOrganization: {
+    "@type": "Organization",
+    name: "Satelink",
+    url: "https://satelink.network",
+  },
 };
-
-function Nav() {
-  return (
-    <header className="border-b border-[var(--line)]">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <a href="/" className="text-sm font-semibold tracking-tight">
-          Jakuraa
-        </a>
-        <div className="flex items-center gap-5 text-sm text-[var(--muted)]">
-          <a href="/about" className="hover:text-[var(--fg)]">About</a>
-          <a href="/contact" className="hover:text-[var(--fg)]">Contact</a>
-          <a href="/legal" className="hover:text-[var(--fg)]">Legal</a>
-          <a
-            href="https://satelink.network"
-            className="rounded-md border border-[var(--line)] px-3 py-1.5 text-[var(--fg)] hover:border-[var(--accent)]"
-          >
-            Satelink ↗
-          </a>
-        </div>
-      </nav>
-    </header>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="mt-24 border-t border-[var(--line)]">
-      <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-8 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
-        <p>© {new Date().getFullYear()} Jakuraa. All rights reserved.</p>
-        <div className="flex gap-5">
-          <a href="https://satelink.network" className="hover:text-[var(--fg)]">Satelink</a>
-          <a href="/legal" className="hover:text-[var(--fg)]">Legal</a>
-          <a href="/contact" className="hover:text-[var(--fg)]">Contact</a>
-        </div>
-      </div>
-    </footer>
-  );
-}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
-        />
-        <Nav />
-        <main className="mx-auto max-w-5xl px-4">{children}</main>
-        <Footer />
+    <html lang="en-IN" className={`${serif.variable} ${sans.variable}`}>
+      <body className="min-h-screen">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
+        <SiteHeader />
+        <main id="main">{children}</main>
+        <SiteFooter />
       </body>
     </html>
   );

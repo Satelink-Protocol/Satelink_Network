@@ -1,24 +1,86 @@
 @import "tailwindcss";
 
+/* Jakuraa editorial palette — ivory, ink, stone greys, one deep green accent
+   and a warm secondary used sparingly for small highlights. */
 :root {
-  --bg: #07090c;
-  --fg: #e8ecf1;
-  --muted: #93a1b0;
-  --line: #1b232e;
-  --accent: #0e9f8b;
+  --ivory: #faf8f3;
+  --ivory-2: #f2efe6;
+  --ink: #15130f;
+  --stone-1: #e4e0d5;
+  --stone-2: #c9c3b4;
+  --stone-3: #6b6556;
+  --stone-4: #5c574b;
+  --green: #1f4d3a;
+  --green-soft: #e3ebe5;
+  --amber: #b8742a;
+  --amber-soft: #f4e8d8;
+  --amber-ink: #8a5217;
 }
 
+@theme inline {
+  --color-ivory: var(--ivory);
+  --color-ivory-2: var(--ivory-2);
+  --color-ink: var(--ink);
+  --color-stone-1: var(--stone-1);
+  --color-stone-2: var(--stone-2);
+  --color-stone-3: var(--stone-3);
+  --color-stone-4: var(--stone-4);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-ink: var(--amber-ink);
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
 html {
   scroll-behavior: smooth;
 }
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
 
 body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--ivory);
+  color: var(--ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a {
   color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+}
+
+.prose-j p + p {
+  margin-top: 1rem;
+}
+
+.link-u {
+  text-decoration: underline;
+  text-decoration-color: var(--stone-2);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.15s;
+}
+.link-u:hover {
+  text-decoration-color: var(--green);
+}
+
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
 }
