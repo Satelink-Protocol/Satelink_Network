@@ -23,6 +23,10 @@
 const ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 let lastAlertAt = 0;
 let suppressedSinceLastAlert = 0;
+// Most-recent in-flight send promise. Production never awaits it (fire-and-
+// forget), but tests can (`__internal.lastSend()`) to observe the send
+// deterministically instead of racing a fixed setTimeout.
+let _lastSend = Promise.resolve();
 
 async function sendDiscordAlert(message) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
@@ -66,7 +70,7 @@ export function alertX402UpgradeFailure(errorMessage) {
         : '';
     lastAlertAt = now;
     suppressedSinceLastAlert = 0;
-    sendDiscordAlert(`Error: ${errorMessage}${suppressedNote}`).catch(() => {});
+    _lastSend = sendDiscordAlert(`Error: ${errorMessage}${suppressedNote}`).catch(() => {});
   } catch {
     /* never let alerting break the caller */
   }
@@ -77,5 +81,10 @@ export const __internal = {
   reset() {
     lastAlertAt = 0;
     suppressedSinceLastAlert = 0;
+    _lastSend = Promise.resolve();
+  },
+  // Await the most recent in-flight send so tests never race a setTimeout.
+  lastSend() {
+    return _lastSend;
   },
 };
