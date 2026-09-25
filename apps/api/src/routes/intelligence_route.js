@@ -112,7 +112,7 @@ export function createIntelligenceRouter(pool, deps = {}) {
     // Canonical metered deduction.
     let meter;
     try {
-      meter = await authorizeAndMeter(pool, { apiKey, methodPrice: spec.price_usdt });
+      meter = await authorizeAndMeter(pool, { apiKey, methodPrice: spec.price_usdt, product: 'intelligence' });
     } catch (e) {
       // Fail CLOSED on billing infra error (M4/T-24 principle: never serve free).
       return res.status(503).json({ ok: false, error: 'billing_unavailable', message: e.message });
@@ -126,7 +126,8 @@ export function createIntelligenceRouter(pool, deps = {}) {
         message: meter.message,
         price_usdt: spec.price_usdt,
       };
-      if (http === 402) Object.assign(body, paymentGuidance());
+      // Owner controls (paused / cap / auto-use off) are not a funding problem.
+      if (http === 402 && !meter.terminal) Object.assign(body, paymentGuidance());
       return res.status(http).json(body);
     }
 

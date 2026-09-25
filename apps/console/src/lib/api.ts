@@ -9,12 +9,13 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; 
 
 export async function apiFetch<T>(
   path: string,
-  opts: { key?: string; cookie?: string; method?: "GET" | "POST"; body?: unknown; revalidate?: number } = {},
+  opts: { key?: string; cookie?: string; method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; revalidate?: number; headers?: Record<string, string> } = {},
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = { "User-Agent": UA, Accept: "application/json" };
   if (opts.key) headers["X-API-Key"] = opts.key;
   if (opts.cookie) headers.Cookie = opts.cookie;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  Object.assign(headers, opts.headers || {});
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method: opts.method || "GET",
