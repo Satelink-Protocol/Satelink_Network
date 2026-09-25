@@ -17,6 +17,8 @@ function makePool() {
     usageDaily: new Map(),
     unmatchedPayments: [],      // rows, in insertion order
     checkoutClaims: new Map(),  // token -> {api_key, created_at, expires_at, claimed_at}
+    entitlements: new Map(),    // api_key -> plan_entitlements row
+    grants: new Map(),          // tx_hash -> dodo_subscription_grants row
   };
 
   function client() {
@@ -25,6 +27,30 @@ function makePool() {
         const s = sql.replace(/\s+/g, ' ').trim();
 
         if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return { rows: [] };
+
+        // ── fix/legacy-dodo-subscription-bucket
+        if (s.startsWith('SELECT to_regclass($1)')) return { rows: [{ t: ['subscriptions', 'dodo_subscription_grants', 'plan_entitlements'].includes(params[0]) ? params[0] : null }] };
+        if (s.startsWith('CREATE TABLE IF NOT EXISTS dodo_subscription_grants')) return { rows: [] };
+        if (s.startsWith('SELECT included_calls FROM plans')) return { rows: params[0] === 'pro' ? [{ included_calls: 2500 }] : [] };
+        if (s.startsWith('INSERT INTO plan_entitlements')) {
+          const [apiKey, planId, total, start, end] = params;
+          state.entitlements.set(apiKey, { api_key: apiKey, plan_id: planId, source: 'plan', included_calls_total: total, included_calls_used: 0, period_start: start, period_end: end });
+          return { rowCount: 1, rows: [] };
+        }
+        if (s.startsWith('INSERT INTO dodo_subscription_grants')) {
+          const [txHash, subscriptionId, apiKey, planId, included, start, end] = params;
+          state.grants.set(txHash, { tx_hash: txHash, subscription_id: subscriptionId, api_key: apiKey, plan_id: planId, included_calls: included, period_start: start, period_end: end, status: 'active' });
+          return { rowCount: 1, rows: [] };
+        }
+        if (s.startsWith('SELECT api_key FROM dodo_subscription_grants WHERE subscription_id')) {
+          const g = [...state.grants.values()].reverse().find((x) => x.subscription_id === params[0]);
+          return { rows: g ? [{ api_key: g.api_key }] : [] };
+        }
+        if (s.startsWith('UPDATE api_credits SET tier = $2')) {
+          const row = state.apiCredits.get(params[0]);
+          if (row) { row.tier = params[1]; row.daily_limit = Math.max(row.daily_limit || 0, params[2]); }
+          return { rowCount: row ? 1 : 0, rows: [] };
+        }
 
         if (s.includes('SELECT 1 FROM payment_sources WHERE tx_hash')) {
           return { rows: state.paymentSources.has(params[0]) ? [{ '?column?': 1 }] : [] };
@@ -272,7 +298,7 @@ describe('POST /internal/dodo/credit', () => {
     expect(pool.state.apiCredits.size).to.equal(0); // never touched api_credits
   });
 
-  it('subscription.renewed credits the account already linked on the subscriptions row (no email fallback, no creation)', async () => {
+  it('subscription.renewed credits the account already linked on the subscriptions row (no email fallback, no creation) — flag OFF (default)', async () => {
     // Simulates an account already linked to this subscription (e.g. by an
     // earlier payment.succeeded that also carried subscriptionId) — renewal
     // resolution reads ONLY this link, never guesses by email.
@@ -295,6 +321,40 @@ describe('POST /internal/dodo/credit', () => {
     expect(res2.status).to.equal(200);
     const account = pool.state.apiCredits.get('sk_dodo_sub5');
     expect(account.credits_usdt).to.be.closeTo(998, 1e-6); // two renewals credited
+    expect(pool.state.grants.size).to.equal(0, 'flag off: no bucket grants');
+  });
+
+  it('subscription.renewed grants the Trading-Intelligence plan bucket to the linked account — never fungible credits (Dodo boundary) — flag ON', async () => {
+    process.env.DODO_LEGACY_SUB_BUCKET_ENABLED = 'true';
+    // Simulates an account already linked to this subscription (e.g. by an
+    // earlier payment.succeeded that also carried subscriptionId) — renewal
+    // resolution reads ONLY this link, never guesses by email.
+    pool.state.subscriptions.set('dodo:sub_5', { id: 'dodo:sub_5', provider: 'dodo', provider_subscription_id: 'sub_5', api_key: 'sk_dodo_sub5' });
+    seedAccount(pool, 'sk_dodo_sub5', { email: 'c@example.com' });
+
+    const payload = {
+      eventType: 'subscription.renewed', subscriptionId: 'sub_5', customerEmail: 'c@example.com',
+      currency: 'USD', amountMinor: 499_00, previousBillingDate: '2026-10-01T00:00:00Z',
+    };
+    const res = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET).send(payload);
+    expect(res.status).to.equal(200);
+    expect(res.body.entitled).to.equal(true);
+    expect(res.body.apiKey).to.equal('sk_dodo_sub5');
+    expect(pool.state.paymentSources.has('dodo:sub:sub_5:2026-10-01T00:00:00Z')).to.equal(true);
+
+    // A different renewal cycle (different previousBillingDate) is a DIFFERENT charge, not a duplicate.
+    const res2 = await request(app).post('/internal/dodo/credit').set('x-dodo-internal-secret', SECRET)
+      .send({ ...payload, previousBillingDate: '2026-11-01T00:00:00Z' });
+    expect(res2.status).to.equal(200);
+    const account = pool.state.apiCredits.get('sk_dodo_sub5');
+    // fix/legacy-dodo-subscription-bucket: subscription money is TI-only value.
+    expect(account.credits_usdt).to.equal(0, 'no fungible credits from a subscription');
+    expect(res.body.bucket).to.equal('plan_entitlement');
+    const ent = pool.state.entitlements.get('sk_dodo_sub5');
+    expect(ent).to.deep.include({ plan_id: 'pro', source: 'plan', included_calls_total: 2500, included_calls_used: 0 });
+    expect(pool.state.grants.size).to.equal(2); // one grant per paid period
+    expect(pool.state.revenueEvents.map((r) => r.requestId)).to.include('dodo:sub:sub_5:2026-11-01T00:00:00Z'); // revenue still recognised
+    delete process.env.DODO_LEGACY_SUB_BUCKET_ENABLED;
   });
 
   it('subscription.renewed with NO prior link (subscription.active never carried an account) → unmatched, not guessed', async () => {

@@ -46,6 +46,10 @@ import { creditAccount, resolveAccount, TIER_DAILY_LIMIT } from '../billing/cred
 import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
 import { discord } from '../services/discord_notify.mjs';
 import { isDodoSchemaReady } from '../db/dodo_schema_state.js';
+import {
+  isLegacySubBucketEnabled, isSubscriptionPayment, grantSubscriptionBucket, accountForSubscription, grantForPayment,
+  revokeGrant, suspendGrant, restoreGrant, tableExists,
+} from '../billing/legacy_sub_entitlement.mjs';
 
 const ENTITLING_EVENTS = new Set(['payment.succeeded', 'subscription.renewed']);
 
@@ -178,6 +182,9 @@ function requireInternalSecret(req, res, next) {
 
 async function upsertSubscriptionStatus(pool, { subscriptionId, apiKey, plan, status, currency, amountMinor, currentPeriodStart, currentPeriodEnd, cancelledAt }) {
   if (!subscriptionId) return;
+  // The subscriptions table (migration 018) is not applied everywhere yet; a
+  // missing table must not turn a status event into a 500 retry loop.
+  if (!(await tableExists(pool, 'subscriptions'))) return;
   await pool.query(
     `INSERT INTO subscriptions
        (id, provider, provider_subscription_id, api_key, plan, status, currency,
@@ -223,11 +230,15 @@ async function resolveAccountForOneTimePayment(client, { apiKeyHint }) {
 /** Strict resolution for subscription.renewed: the api_key linked at subscription.active time. No email fallback, no creation. */
 async function resolveAccountForSubscriptionRenewal(client, { subscriptionId }) {
   if (!subscriptionId) return null;
-  const r = await client.query(
-    `SELECT api_key FROM subscriptions WHERE provider = 'dodo' AND provider_subscription_id = $1`,
-    [subscriptionId]
-  );
-  return r.rows[0]?.api_key || null;
+  if (await tableExists(client, 'subscriptions')) {
+    const r = await client.query(
+      `SELECT api_key FROM subscriptions WHERE provider = 'dodo' AND provider_subscription_id = $1`,
+      [subscriptionId]
+    );
+    if (r.rows[0]?.api_key) return r.rows[0].api_key;
+  }
+  // The account an earlier payment of this subscription funded.
+  return accountForSubscription(client, subscriptionId);
 }
 
 /**
@@ -427,6 +438,9 @@ async function insertReversalRow(client, { clientId, magnitude, requestId, isTes
 
 /** Full refund / dispute lost on a subscription payment → expire the entitlement. */
 async function cancelEntitlementIfSubscription(client, apiKey) {
+  // Migration 018 (subscriptions) is not applied everywhere; a failed statement
+  // would abort the caller's transaction (a .catch() cannot undo that).
+  if (!(await tableExists(client, 'subscriptions'))) return;
   await client.query(
     `UPDATE subscriptions
         SET status = 'cancelled', cancelled_at = COALESCE(cancelled_at, now()), updated_at = now()
@@ -578,6 +592,11 @@ export function createDodoInternalRouter(pool) {
     }
 
     // ── Entitling events: payment.succeeded / subscription.renewed.
+    // Subscription money → the Trading-Intelligence plan bucket (payments
+    // boundary, fix/legacy-dodo-subscription-bucket); packs → credits as before.
+    // Flag OFF (default) → subscriptionPayment stays false → today's credit path.
+    const bucketOn = isLegacySubBucketEnabled();
+    let subscriptionPayment = bucketOn && eventType === 'subscription.renewed';
     let idKey;
     let amountUsd;
     if (eventType === 'payment.succeeded') {
@@ -587,7 +606,8 @@ export function createDodoInternalRouter(pool) {
       // above). 200, not 5xx — this is a legitimate non-credit outcome (e.g.
       // a task-commerce order that reached here despite apps/web's order_ref
       // discriminator), not an error Dodo should retry forever.
-      if (!isAllowlistedCreditPackProduct(planProductId)) {
+      subscriptionPayment = bucketOn && isSubscriptionPayment({ eventType, subscriptionId, planProductId });
+      if (!subscriptionPayment && !isAllowlistedCreditPackProduct(planProductId)) {
         console.error(
           `[internal/dodo] payment.succeeded product "${planProductId || '(none)'}" not in ` +
           `DODO_CREDIT_PACK_PRODUCT_IDS/DODO_CREDIT_PACK_USD_VALUES allowlist — not crediting (payment ${paymentId})`
@@ -595,7 +615,7 @@ export function createDodoInternalRouter(pool) {
         return res.json({ ok: true, entitled: false, eventType, reason: 'product_not_allowlisted' });
       }
       idKey = `dodo:${paymentId}`;
-      amountUsd = resolveCreditPackUsd(planProductId, amountMinor, currency).usd;
+      amountUsd = subscriptionPayment ? toUsdApprox(amountMinor, currency) : resolveCreditPackUsd(planProductId, amountMinor, currency).usd;
     } else {
       if (!subscriptionId || !previousBillingDate) {
         return res.status(400).json({ ok: false, error: 'subscriptionId and previousBillingDate required for subscription.renewed' });
@@ -669,18 +689,29 @@ export function createDodoInternalRouter(pool) {
         [customerEmail || apiKey, amountUsd, idKey, Math.floor(Date.now() / 1000), isTest]
       );
 
-      // T-17: the SAME creditAccount() the deposit listener uses. 1:1 credit —
-      // same semantics as every other deposit path (T-17b), no bundle discount.
-      const credited = await creditAccount(client, {
-        apiKey, amountUsdt: amountUsd, txHash: idKey, fromAddress: customerEmail || null,
-        tier: plan, dailyLimit: PLAN_DAILY_LIMIT[plan] || PLAN_DAILY_LIMIT.starter,
-      });
-      if (!credited.ok) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ ok: false, code: credited.code, message: credited.message });
+      let credited = null;
+      let granted = null;
+      if (subscriptionPayment) {
+        // Dodo boundary: a subscription buys the monthly Trading-Intelligence
+        // allowance, never fungible credits that could pay for RPC / x402.
+        granted = await grantSubscriptionBucket(client, {
+          apiKey, plan, txHash: idKey, subscriptionId,
+          periodStart: currentPeriodStart || null, periodEnd: currentPeriodEnd || null,
+        });
+      } else {
+        // T-17: the SAME creditAccount() the deposit listener uses. 1:1 credit —
+        // same semantics as every other deposit path (T-17b), no bundle discount.
+        credited = await creditAccount(client, {
+          apiKey, amountUsdt: amountUsd, txHash: idKey, fromAddress: customerEmail || null,
+          tier: plan, dailyLimit: PLAN_DAILY_LIMIT[plan] || PLAN_DAILY_LIMIT.starter,
+        });
+        if (!credited.ok) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ ok: false, code: credited.code, message: credited.message });
+        }
       }
 
-      if (subscriptionId) {
+      if (subscriptionId && (await tableExists(client, 'subscriptions'))) {
         await client.query(
           `INSERT INTO subscriptions
              (id, provider, provider_subscription_id, api_key, plan, status, currency,
@@ -702,7 +733,10 @@ export function createDodoInternalRouter(pool) {
       // exactly (T-17): fired AFTER commit, not inside the transaction above.
       shadowWriteRevenueLedger(pool, { requestId: idKey, amountUsdt: amountUsd, isTestData: isTest });
 
-      return res.json({ ok: true, entitled: true, apiKey, creditedUsdt: credited.balance, eventType });
+      return res.json({
+        ok: true, entitled: true, apiKey, eventType,
+        ...(granted ? { bucket: 'plan_entitlement', planId: granted.planId, includedCalls: granted.includedCalls, periodEnd: granted.periodEnd } : { creditedUsdt: credited.balance }),
+      });
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       if (err.code === '23505') {
@@ -762,6 +796,42 @@ export function createDodoInternalRouter(pool) {
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey: null, amount: 0, shortfall: 0, isTest });
         await client.query('COMMIT');
         return res.status(200).json({ ok: true, action: 'logged', eventType });
+      }
+
+      // Subscription payments granted a plan bucket, not credits: reverse the
+      // ENTITLEMENT they created — never claw back unrelated credits.
+      const grant = await grantForPayment(client, paymentId);
+      if (grant) {
+        const isTestGrant = !!isTest;
+        let result;
+        if (eventType === 'refund.succeeded' || DISPUTE_CLAWBACK.has(eventType)) {
+          if (grant.status !== 'revoked') await revokeGrant(client, grant);
+          const paid = await client.query(`SELECT amount_usd FROM payment_sources WHERE tx_hash = $1`, [grant.tx_hash]);
+          const paidUsd = Number(paid.rows[0]?.amount_usd ?? 0);
+          const magnitude = eventType === 'refund.succeeded' && isPartial ? Math.min(toUsdApprox(amountMinor, currency), paidUsd) : paidUsd;
+          const requestId = `dodo:${eventType === 'refund.succeeded' ? 'refund' : 'dispute'}:${dodoRef}`;
+          if (magnitude > 0) {
+            await insertReversalRow(client, { clientId: grant.api_key, magnitude, requestId, isTest: isTestGrant });
+            shadow = { requestId, amountUsdt: magnitude, isTestData: isTestGrant };
+          }
+          await cancelEntitlementIfSubscription(client, grant.api_key);
+          result = { action: 'entitlement_revoked', reversedUsd: magnitude };
+        } else if (eventType === 'dispute.opened') {
+          const paused = grant.status === 'active' ? await suspendGrant(client, grant) : 0;
+          result = { action: 'entitlement_suspended', pausedCalls: paused };
+        } else if (DISPUTE_UNFREEZE.has(eventType)) {
+          const restored = grant.status === 'suspended' ? await restoreGrant(client, grant) : 0;
+          result = { action: 'entitlement_restored', restoredCalls: restored };
+        } else {
+          // dispute.expired / unknown stage: stays suspended; a human decides.
+          alerts.push(['Dodo dispute on a subscription needs a decision', `dispute ${dodoRef} (payment ${paymentId}) ${eventType}; entitlement stays ${grant.status}`, 'critical']);
+          result = { action: 'entitlement_held', status: grant.status };
+        }
+        await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey: grant.api_key, amount: 0, shortfall: 0, isTest: isTestGrant });
+        await client.query('COMMIT');
+        if (shadow) shadowReverseRevenueLedger(pool, shadow);
+        for (const [title, message, severity] of alerts) discord.alert(title, message, severity).catch(() => {});
+        return res.status(200).json({ ok: true, matched: true, eventType, funding: 'entitlement', ...result });
       }
 
       const funding = await resolveFunding(client, paymentId);
