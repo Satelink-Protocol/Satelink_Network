@@ -88,7 +88,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="size-5" />
           </button>
-          <Link href="/console" className="font-sl-display text-base font-extrabold tracking-tight text-sl-text">Satelink</Link>
+          <Link href="/console" className="font-sl-display text-base font-normal tracking-tight text-sl-text">Satelink</Link>
           <span className="rounded-[var(--sl-radius-pill)] border border-sl-border px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-sl-text-subtle">Console</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-sl-text-muted">
@@ -112,7 +112,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
             <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} aria-hidden />
             <div className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-sl-border bg-sl-bg-raised p-4">
               <div className="mb-4 flex items-center justify-between">
-                <span className="font-sl-display font-extrabold text-sl-text">Satelink</span>
+                <span className="font-sl-display font-normal text-sl-text">Satelink</span>
                 <button type="button" aria-label="Close navigation" onClick={() => setOpen(false)} className="rounded-[var(--sl-radius-sm)] p-1.5 text-sl-text-muted hover:bg-sl-surface">
                   <X className="size-5" />
                 </button>

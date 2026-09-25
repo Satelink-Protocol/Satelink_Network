@@ -113,7 +113,7 @@ export default async function HomePage() {
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">
               Machine commerce infrastructure
             </p>
-            <h1 className="font-sl-display text-balance font-extrabold leading-[1.05] tracking-[-0.02em] text-sl-text" style={{ fontSize: "var(--sl-display-1)" }}>
+            <h1 className="font-sl-display text-balance font-normal leading-[1.05] tracking-[-0.02em] text-sl-text" style={{ fontSize: "var(--sl-display-1)" }}>
               Commerce for software that pays software.
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-sl-text-muted">
@@ -167,11 +167,11 @@ export default async function HomePage() {
           <LiveNetworkStrip />
           <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-sl-text-muted">
             <span>Signals from the public gateway health probe.</span>
-            <a href={VAULT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-settle hover:underline">
-              <ShieldCheck className="size-3.5" /> RevenueVault V2 on Polygon
+            <a href={VAULT_URL} className="inline-flex items-center gap-1.5 font-medium text-sl-text underline decoration-sl-border-strong underline-offset-4 hover:decoration-sl-text">
+              <ShieldCheck aria-hidden className="size-3.5 text-sl-settle" /> RevenueVault V2 on Polygon
             </a>
-            <a href={X402_KIT_URL} className="inline-flex items-center gap-1.5 font-semibold text-sl-machine hover:underline">
-              <FileCode2 className="size-3.5" /> x402-kit (open source)
+            <a href={X402_KIT_URL} className="inline-flex items-center gap-1.5 font-medium text-sl-text underline decoration-sl-border-strong underline-offset-4 hover:decoration-sl-text">
+              <FileCode2 aria-hidden className="size-3.5 text-sl-machine" /> x402-kit (open source)
             </a>
           </p>
         </div>
@@ -211,7 +211,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-[1200px] px-4 pb-24 sm:px-6">
         <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface px-6 py-14 text-center">
           <Badge variant="live" dot className="mx-auto">Live on Polygon</Badge>
-          <h2 className="mx-auto mt-4 max-w-xl text-balance font-sl-display text-3xl font-extrabold tracking-[-0.02em] text-sl-text sm:text-4xl">
+          <h2 className="mx-auto mt-4 max-w-xl text-balance font-sl-display text-3xl font-normal tracking-[-0.02em] text-sl-text sm:text-4xl">
             Build for the machine economy.
           </h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">

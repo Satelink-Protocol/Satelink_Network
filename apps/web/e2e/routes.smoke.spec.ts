@@ -48,7 +48,6 @@ const OK_ROUTES = [
   "/support/getting-started",
   "/support/getting-started/do-i-need-an-account",
   "/support/search?q=x402",
-  "/signup",
   "/contact-sales",
   "/network/run-a-node",
   "/acceptable-use",

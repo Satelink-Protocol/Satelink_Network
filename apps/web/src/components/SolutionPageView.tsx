@@ -152,7 +152,7 @@ export function SolutionPageView({ solution }: { solution: SolutionFacts }) {
       {/* CTA */}
       <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
         <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface px-6 py-12 text-center">
-          <h2 className="text-2xl font-semibold tracking-tight text-sl-text">See Satelink for {solution.name.toLowerCase()}</h2>
+          <h2 className="font-sl-display text-[1.75rem] font-normal leading-tight tracking-[-0.01em] text-sl-text">See Satelink for {solution.name.toLowerCase()}</h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg"><Link href="/contact-sales">Talk to Satelink</Link></Button>
             <Button asChild variant="secondary" size="lg"><Link href="/pricing">See pricing</Link></Button>

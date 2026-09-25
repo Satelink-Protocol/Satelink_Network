@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { keyHint } from '../security/key_mask.mjs';
 
 const PRICE_PER_CALL_USDT = 0.000030;
 
@@ -120,7 +121,7 @@ export async function createApiKeyWithCredits(pool, tier = 'free', walletAddress
       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7)
     `, [apiKey, tier, daily_limit, walletAddress, email, emailConsent, capturedAt]);
 
-    console.log(`[CreditSystem] Created key: ${apiKey.slice(0, 15)}... tier=${tier}${email ? ` email=yes consent=${emailConsent}` : ''}`);
+    console.log(`[CreditSystem] Created key: ${keyHint(apiKey)} tier=${tier}${email ? ` email=yes consent=${emailConsent}` : ''}`);
 
     return {
       api_key: apiKey,

@@ -83,19 +83,17 @@ export function SearchPalette({ search, placeholder = "Search Satelink…" }: { 
     <>
       <button
         type="button"
-        aria-label="Search"
+        aria-label="Search (⌘K)"
         aria-keyshortcuts="Meta+K Control+K"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-[var(--sl-radius-sm)] border border-sl-border px-2.5 py-1.5 text-sm text-sl-text-subtle hover:text-sl-text"
+        className="inline-flex size-9 items-center justify-center rounded-[var(--sl-radius-sm)] text-sl-text-muted transition-colors hover:bg-sl-surface-hover hover:text-sl-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sl-accent/45"
       >
-        <Search className="size-4" />
-        <span className="hidden sm:inline">Search</span>
-        <kbd className="hidden rounded bg-sl-bg px-1.5 py-0.5 font-sl-mono text-[10px] sm:inline">⌘K</kbd>
+        <Search className="size-[18px]" />
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 p-4 pt-[12vh]" onClick={() => setOpen(false)}>
-          <div role="dialog" aria-modal="true" aria-label="Search" className="w-full max-w-xl overflow-hidden rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface shadow-[var(--sl-shadow-2)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[var(--sl-z-dialog)] flex items-start justify-center bg-[color-mix(in_srgb,var(--sl-bg)_60%,black_25%)] p-4 pt-[12vh] backdrop-blur-[6px]" onClick={() => setOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Search" className="w-full max-w-xl overflow-hidden rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface shadow-[var(--sl-shadow-3)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 border-b border-sl-border px-4">
               <Search className="size-4 text-sl-text-subtle" />
               <input

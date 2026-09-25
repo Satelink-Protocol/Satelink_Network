@@ -17,7 +17,7 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-sl-bg px-4 py-12">
       <div className="sl-grad-hero pointer-events-none absolute inset-0" aria-hidden />
-      <Link href="/" className="relative mb-8 font-sl-display text-lg font-extrabold tracking-tight text-sl-text">
+      <Link href="/" className="relative mb-8 font-sl-display text-lg font-normal tracking-tight text-sl-text">
         Satelink
       </Link>
       <div className="relative">

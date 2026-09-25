@@ -10,6 +10,7 @@
  */
 
 import { Router } from 'express';
+import { keyRef } from '../../security/key_mask.mjs';
 import crypto from 'crypto';
 import { getSharedRedis } from '../../workloads/rpc_gateway/shared_redis.js';
 
@@ -166,7 +167,7 @@ export function createApiKeysRouter(db) {
         const redisClient = getRedis();
         if (redisClient) {
           await redisClient.set(
-            `rpc:apikey:${apiKey}`,
+            `rpc:apikey:${keyRef(apiKey)}`,
             JSON.stringify({ tier: planConfig.tier, plan: tier, created: now, status: 'active' })
           );
         }
@@ -234,7 +235,7 @@ export function createApiKeysRouter(db) {
         await incrementEmailKeyCount(redisClient, email);
         if (redisClient) {
           await redisClient.set(
-            `rpc:apikey:${apiKey}`,
+            `rpc:apikey:${keyRef(apiKey)}`,
             JSON.stringify({ tier: planConfig.tier, email, plan, created: now, status: 'active' })
           );
         }
@@ -291,7 +292,7 @@ export function createApiKeysRouter(db) {
         let usedToday = 0;
 
         if (redisClient) {
-          usedToday = parseInt(await redisClient.get(`rpc:usage:${apiKey}:${date}`)) || 0;
+          usedToday = parseInt(await redisClient.get(`rpc:usage:${keyRef(apiKey)}:${date}`)) || 0;
         }
 
         res.json({
@@ -309,7 +310,7 @@ export function createApiKeysRouter(db) {
           return res.status(503).json({ ok: false, error: 'Database unavailable' });
         }
 
-        const data = await redisClient.get(`rpc:apikey:${apiKey}`);
+        const data = await redisClient.get(`rpc:apikey:${keyRef(apiKey)}`);
         if (!data) {
           return res.json({ ok: true, valid: false, error: 'API key not found' });
         }
@@ -320,7 +321,7 @@ export function createApiKeysRouter(db) {
         }
 
         const date = getDateKey();
-        const usedToday = parseInt(await redisClient.get(`rpc:usage:${apiKey}:${date}`)) || 0;
+        const usedToday = parseInt(await redisClient.get(`rpc:usage:${keyRef(apiKey)}:${date}`)) || 0;
         const limit = PLAN_LIMITS[keyInfo.plan]?.limit || 100;
 
         res.json({
@@ -353,7 +354,7 @@ export function createApiKeysRouter(db) {
 
       let usedToday = 0;
       if (redisClient) {
-        usedToday = parseInt(await redisClient.get(`rpc:usage:${apiKey}:${date}`)) || 0;
+        usedToday = parseInt(await redisClient.get(`rpc:usage:${keyRef(apiKey)}:${date}`)) || 0;
       }
 
       if (db && db.query) {
@@ -421,11 +422,11 @@ export function createApiKeysRouter(db) {
 
       const redisClient = getRedis();
       if (redisClient) {
-        const data = await redisClient.get(`rpc:apikey:${apiKey}`);
+        const data = await redisClient.get(`rpc:apikey:${keyRef(apiKey)}`);
         if (data) {
           const keyInfo = JSON.parse(data);
           keyInfo.status = 'revoked';
-          await redisClient.set(`rpc:apikey:${apiKey}`, JSON.stringify(keyInfo));
+          await redisClient.set(`rpc:apikey:${keyRef(apiKey)}`, JSON.stringify(keyInfo));
         }
       }
 

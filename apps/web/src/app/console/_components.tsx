@@ -10,7 +10,7 @@ export function PageHeader({ title, lede, action }: { title: string; lede?: stri
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="font-sl-display text-2xl font-extrabold tracking-tight text-sl-text">{title}</h1>
+        <h1 className="font-sl-display text-2xl font-normal tracking-tight text-sl-text">{title}</h1>
         {lede && <p className="mt-1 max-w-2xl text-sm text-sl-text-muted">{lede}</p>}
       </div>
       {action}
