@@ -99,9 +99,10 @@ test("home (v3): claude-pattern — hero CTAs, product tiles, and plan cards", a
   // Three product tiles.
   await expect(page.getByRole("heading", { name: "Trading Intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Machine Payments/ })).toBeVisible();
-  // Explore plans: Free is purchasable; Pro is not yet ("notify me"), never a dead buy button.
-  await expect(page.getByRole("heading", { name: "Explore plans" })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Available soon — notify me/ }).first()).toBeVisible();
+  // Plans (Pricing V2, from the PlanCatalog) + the console showcase (test data, labelled).
+  await expect(page.getByRole("heading", { name: "Start free. Pay as you grow." })).toBeVisible();
+  await expect(page.getByTestId("plan-cards").getByText("$5 for your first month. Renews at $19/month.")).toBeVisible();
+  await expect(page.getByText("Shown with test data").first()).toBeVisible();
 });
 
 test("overview (v3): #lifecycle section anchors the SSR stepper", async ({ page }) => {
