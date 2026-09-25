@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, BarChart3, Bell, Bot, CreditCard, KeyRound, LayoutDashboard, LineChart, Menu, Moon, Search,
-  Server, Settings, Sun, X, Zap,
+  Activity, BarChart3, Bell, Bot, CreditCard, Home, KeyRound, LayoutDashboard, LineChart, Menu, MoreHorizontal, Moon, Search,
+  Server, Settings, Sun, Wallet, X, Zap,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; key: string; icon: React.ComponentType<{ className?: string }>; group?: string };
@@ -24,7 +24,39 @@ export const NAV: NavItem[] = [
   { href: "/settings", label: "Settings", key: "s", icon: Settings, group: "Account" },
 ];
 
+// Console V2 (account mode): Simple mode is task-first; Advanced keeps the
+// analytics pages. The bottom tab bar is the mobile navigation in both.
+export const SIMPLE_NAV: NavItem[] = [
+  { href: "/", label: "Home", key: "h", icon: Home },
+  { href: "/data", label: "Get market data", key: "d", icon: LineChart },
+  { href: "/agents", label: "Agents & keys", key: "a", icon: Bot },
+  { href: "/billing", label: "Billing", key: "b", icon: CreditCard },
+  { href: "/spend", label: "Spending", key: "p", icon: Wallet },
+  { href: "/settings", label: "Settings", key: "s", icon: Settings },
+];
+export const ADVANCED_NAV: NavItem[] = [
+  { href: "/", label: "Dashboard", key: "o", icon: LayoutDashboard },
+  { href: "/data", label: "Market data", key: "d", icon: LineChart },
+  { href: "/agents", label: "Agents", key: "a", icon: Bot },
+  { href: "/keys", label: "API keys", key: "k", icon: KeyRound },
+  { href: "/requests", label: "Requests", key: "r", icon: Activity },
+  { href: "/usage", label: "Usage", key: "u", icon: BarChart3 },
+  { href: "/rpc", label: "RPC", key: "c", icon: Server, group: "Products" },
+  { href: "/x402", label: "x402", key: "x", icon: Zap, group: "Products" },
+  { href: "/billing", label: "Billing", key: "b", icon: CreditCard, group: "Account" },
+  { href: "/spend", label: "Spending", key: "p", icon: Wallet, group: "Account" },
+  { href: "/alerts", label: "Alerts", key: "l", icon: Bell, group: "Account" },
+  { href: "/settings", label: "Settings", key: "s", icon: Settings, group: "Account" },
+];
+const TABS = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/data", label: "Data", icon: LineChart },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/billing", label: "Billing", icon: CreditCard },
+];
+
 type Props = {
+  mode?: "simple" | "advanced" | null;
   user: { name: string; email: string };
   keys: { fp: string; label: string }[];
   activeFp: string | null;
@@ -32,7 +64,8 @@ type Props = {
   children: React.ReactNode;
 };
 
-export function Shell({ user, keys, activeFp, theme: initialTheme, children }: Props) {
+export function Shell({ mode = null, user, keys, activeFp, theme: initialTheme, children }: Props) {
+  const nav = mode === "simple" ? SIMPLE_NAV : mode === "advanced" ? ADVANCED_NAV : NAV;
   const pathname = usePathname();
   const router = useRouter();
   const [theme, setTheme] = useState(initialTheme);
@@ -76,7 +109,7 @@ export function Shell({ user, keys, activeFp, theme: initialTheme, children }: P
         return;
       }
       if (gPending.current !== null) {
-        const item = NAV.find((n) => n.key === e.key.toLowerCase());
+        const item = nav.find((n) => n.key === e.key.toLowerCase());
         window.clearTimeout(gPending.current);
         gPending.current = null;
         if (item) {
@@ -89,17 +122,17 @@ export function Shell({ user, keys, activeFp, theme: initialTheme, children }: P
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, [router, nav]);
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
   const groups = ["", "Products", "Account"];
 
   const sidebar = (
     <nav aria-label="Console" className="flex h-full flex-col gap-4 overflow-y-auto p-2">
-      {groups.map((g) => (
+      {groups.filter((g) => nav.some((n) => (n.group || "") === g)).map((g) => (
         <ul key={g || "main"} className="space-y-px">
           {g && <li className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-sl-text-subtle">{g}</li>}
-          {NAV.filter((n) => (n.group || "") === g).map((n) => (
+          {nav.filter((n) => (n.group || "") === g).map((n) => (
             <li key={n.href}>
               <Link
                 href={n.href}
@@ -140,7 +173,8 @@ export function Shell({ user, keys, activeFp, theme: initialTheme, children }: P
           <kbd className="font-mono text-[10px]">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-1.5">
-          {keys.length > 0 && (
+          {mode && <ModeToggle mode={mode} />}
+          {!mode && keys.length > 0 && (
             <label className="flex items-center gap-1.5">
               <span className="sr-only">Active API key</span>
               <KeyRound className="hidden size-3.5 text-sl-text-subtle sm:block" />
@@ -164,14 +198,28 @@ export function Shell({ user, keys, activeFp, theme: initialTheme, children }: P
       <div className="flex flex-1">
         <aside className="sticky top-11 hidden h-[calc(100vh-2.75rem)] w-52 shrink-0 border-r border-sl-border bg-sl-bg-raised md:block">{sidebar}</aside>
         {drawer && <div className="fixed inset-0 top-11 z-20 bg-sl-bg-raised md:hidden">{sidebar}</div>}
-        <main id="main" className="min-w-0 flex-1 px-3 py-4 sm:px-5">{children}</main>
+        <main id="main" className={`min-w-0 flex-1 px-3 py-4 sm:px-5 ${mode ? "pb-24 md:pb-4" : ""}`}>{children}</main>
       </div>
+
+      {mode && (
+        <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-sl-border bg-sl-bg-raised pb-[env(safe-area-inset-bottom)] md:hidden">
+          {TABS.map((t) => (
+            <Link key={t.href} href={t.href} aria-current={isActive(t.href) ? "page" : undefined}
+              className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] ${isActive(t.href) ? "text-sl-accent" : "text-sl-text-muted"}`}>
+              <t.icon aria-hidden className="size-5" />{t.label}
+            </Link>
+          ))}
+          <button type="button" onClick={() => setDrawer(true)} aria-expanded={drawer} className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-sl-text-muted">
+            <MoreHorizontal aria-hidden className="size-5" />More
+          </button>
+        </nav>
+      )}
 
       {palette && (
         <CommandPalette
           onClose={() => setPalette(false)}
           actions={[
-            ...NAV.map((n) => ({ id: n.href, label: `Go to ${n.label}`, hint: `g ${n.key}`, run: () => router.push(n.href) })),
+            ...nav.map((n) => ({ id: n.href, label: `Go to ${n.label}`, hint: `g ${n.key}`, run: () => router.push(n.href) })),
             { id: "new-key", label: "Create an API key", hint: "", run: () => router.push("/keys?new=1") },
             { id: "theme", label: `Switch to ${theme === "dark" ? "light" : "dark"} theme`, hint: "", run: toggleTheme },
             { id: "docs", label: "Open API docs", hint: "", run: () => window.open("https://satelink.network/docs", "_blank", "noopener") },
@@ -237,6 +285,27 @@ function CommandPalette({ actions, onClose }: { actions: { id: string; label: st
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+function ModeToggle({ mode }: { mode: "simple" | "advanced" }) {
+  const router = useRouter();
+  const set = async (m: "simple" | "advanced") => {
+    if (m === mode) return;
+    document.cookie = `slc_mode=${m}; path=/; max-age=31536000; samesite=strict${location.protocol === "https:" ? "; secure" : ""}`;
+    // Remembered per account (server-side), so every browser opens in it.
+    await fetch("/api/console/me/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultMode: m }) }).catch(() => undefined);
+    router.refresh();
+  };
+  return (
+    <div role="radiogroup" aria-label="Console mode" className="flex rounded-[var(--sl-radius-sm)] border border-sl-border p-0.5 text-[12px]">
+      {(["simple", "advanced"] as const).map((m) => (
+        <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => set(m)}
+          className={`rounded-[4px] px-2 py-0.5 capitalize ${mode === m ? "bg-sl-surface-hover text-sl-text" : "text-sl-text-muted hover:text-sl-text"}`}>
+          {m}
+        </button>
+      ))}
     </div>
   );
 }

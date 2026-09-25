@@ -11,7 +11,7 @@ test.skip(!process.env.ACCOUNTS_E2E, "needs the accounts harness");
 test.describe.configure({ mode: "serial" });
 
 const HARNESS = process.env.HARNESS_URL || "http://127.0.0.1:4455";
-const ACCOUNT = "acct_demo";
+let ACCOUNT = "acct_demo"; // replaced by a fresh harness account per run
 
 async function profile(browser: Browser, baseURL: string, legacyKeys?: { k: string; label: string }[]) {
   const ctx = await browser.newContext();
@@ -36,6 +36,7 @@ async function keyRows(ctx: BrowserContext) {
 }
 
 test("same keys on Chrome, Brave and a fresh profile; changes propagate", async ({ browser, baseURL }) => {
+  ACCOUNT = (await (await fetch(`${HARNESS}/__seed/user`, { method: "POST" })).json()).id;
   const seed = await (
     await fetch(`${HARNESS}/__seed/key`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credits: 2.5 }) })
   ).json();
