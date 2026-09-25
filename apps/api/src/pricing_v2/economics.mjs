@@ -26,7 +26,8 @@ export function feeIndiaDomestic(priceUsd, { subscription }, fees) {
 function cycleUu(item, c) {
   if (item.grant_uu) return item.grant_uu;
   const ent = item.entitlement_plan ? c.plans.find((p) => p.id === item.entitlement_plan) : item;
-  return ent.allowance.weekly_uu * c.economics.weeks_per_month_worst;
+  // A yearly plan's cycle is the year: its allowance over the longest year.
+  return ent.allowance.weekly_uu * (item.interval === 'year' ? (c.economics.weeks_per_year_worst ?? 53) : c.economics.weeks_per_month_worst);
 }
 
 /** One row per charge the item can produce (Launch: intro cycle + renewal). */
@@ -36,7 +37,7 @@ export function worstCase(item, c) {
   const subscription = item.kind === 'subscription';
   const uu = item.kind === 'free' ? cycleUu(item, c) : cycleUu(item, c);
   const uuCost = uu * e.marginal_cost_usd_per_uu;
-  const charges = item.intro ? [{ label: 'intro cycle', price: item.intro.amount_usd }, { label: 'renewal', price: item.price_usd }] : [{ label: subscription ? 'monthly' : item.kind === 'free' ? 'free' : 'one-time', price: item.price_usd }];
+  const charges = item.intro ? [{ label: 'intro cycle', price: item.intro.amount_usd }, { label: 'renewal', price: item.price_usd }] : [{ label: subscription ? (item.interval === 'year' ? 'yearly' : 'monthly') : item.kind === 'free' ? 'free' : 'one-time', price: item.price_usd }];
   const rows = charges.map(({ label, price }) => {
     const fw = feeWorst(price, { subscription }, fees);
     const contribution = price - fw - uuCost;

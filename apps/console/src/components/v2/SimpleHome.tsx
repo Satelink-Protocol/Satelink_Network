@@ -1,17 +1,22 @@
 import Link from "next/link";
-import { ArrowRight, Bot, LineChart, PlusCircle, Wallet } from "lucide-react";
+import { ArrowRight, Blocks, Bot, LineChart, PlusCircle, Wallet } from "lucide-react";
 import type { AccountPlan, PlanCatalog } from "@/lib/v2";
+import { TASKS } from "@/lib/onboarding";
 import { Meter } from "./charts";
 
-const CARDS = [
-  { href: "/data", icon: LineChart, title: "Get market data", body: "Funding rates, open interest, order books — pick a market, see the price, get a chart." },
-  { href: "/agents/new", icon: Bot, title: "Give my software access", body: "Create a key for an app or agent, choose what it can use and set a monthly limit." },
-  { href: "/billing/add", icon: PlusCircle, title: "Add money", body: "Choose a plan or a credit pack, or top up with USDT." },
-  { href: "/spend", icon: Wallet, title: "See what I've spent", body: "This month, per agent, what's left and when it resets." },
-];
+const ICONS = { "market-data": LineChart, "agent-access": Bot, "add-money": PlusCircle, spend: Wallet, rpc: Blocks } as const;
+const DEFAULT_ORDER = ["market-data", "agent-access", "add-money", "spend"];
 
-export function SimpleHome({ name, plan, catalog }: { name: string; plan: AccountPlan | null; catalog: PlanCatalog | null }) {
+/** Cards: the use case's suggested tasks first (from onboarding), then the rest. */
+function cardOrder(suggested: string[]) {
+  const first = suggested.filter((t) => t in TASKS);
+  const rest = DEFAULT_ORDER.filter((t) => !first.includes(t));
+  return [...first, ...rest];
+}
+
+export function SimpleHome({ name, plan, catalog, suggested = [], highlight = null }: { name: string; plan: AccountPlan | null; catalog: PlanCatalog | null; suggested?: string[]; highlight?: string | null }) {
   const planName = plan ? catalog?.plans.find((p) => p.id === plan.plan.id)?.name ?? plan.plan.id : null;
+  const CARDS = cardOrder(suggested).map((id) => ({ id, ...TASKS[id], icon: ICONS[id as keyof typeof ICONS] }));
   return (
     <div className="mx-auto max-w-4xl">
       <p className="text-[15px] text-sl-text-muted">Hi{name ? ` ${name.split(" ")[0]}` : ""}.</p>
@@ -19,8 +24,11 @@ export function SimpleHome({ name, plan, catalog }: { name: string; plan: Accoun
       <ul className="mt-6 grid gap-3 sm:grid-cols-2">
         {CARDS.map((c) => (
           <li key={c.href}>
-            <Link href={c.href} className="group flex h-full flex-col rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5 transition-colors hover:border-sl-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sl-accent/45">
-              <c.icon aria-hidden className="size-6 text-sl-accent" />
+            <Link href={c.href} aria-describedby={c.id === highlight ? "first-step" : undefined} className={`group flex h-full flex-col rounded-[var(--sl-radius-lg)] border bg-sl-surface p-5 transition-colors hover:border-sl-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sl-accent/45 ${c.id === highlight ? "border-sl-accent ring-1 ring-sl-accent" : "border-sl-border"}`}>
+              <span className="flex items-start justify-between gap-2">
+                <c.icon aria-hidden className="size-6 text-sl-accent" />
+                {c.id === highlight && <span id="first-step" className="rounded-full bg-sl-accent-soft px-2.5 py-0.5 text-[12px] font-medium text-sl-accent">Your first step</span>}
+              </span>
               <span className="mt-4 text-[17px] font-medium text-sl-text">{c.title}</span>
               <span className="mt-1 flex-1 text-[14px] leading-snug text-sl-text-muted">{c.body}</span>
               <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-medium text-sl-accent">Start <ArrowRight aria-hidden className="size-3.5 transition-transform group-hover:translate-x-0.5" /></span>

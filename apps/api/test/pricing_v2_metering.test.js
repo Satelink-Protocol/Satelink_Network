@@ -11,7 +11,7 @@ import { authorizeAndMeter } from '../src/billing/credit_service.mjs';
 import { __resetSchemaCache, ensureConsoleAccountsSchema } from '../src/console_accounts/schema.mjs';
 import { linkKey } from '../src/console_accounts/keys.mjs';
 import { updateSettings } from '../src/console_accounts/settings.mjs';
-import { __resetCatalog } from '../src/pricing_v2/catalog.mjs';
+import { __resetCatalog, loadCatalog } from '../src/pricing_v2/catalog.mjs';
 import { __resetPricingSchema, ensurePricingV2Schema } from '../src/pricing_v2/schema.mjs';
 
 const URL_ = process.env.CONSOLE_ACCOUNTS_TEST_DB;
@@ -83,7 +83,7 @@ d('Pricing V2 — UU metering', function () {
     assert.deepEqual(await buckets(a.id), [{ bucket: 'credits', n: 1, uu: 10 }, { bucket: 'plan', n: 2, uu: 20 }]);
     const led = (await pool.query('SELECT pricing_version, meter, native_units FROM pv2_usage_ledger WHERE account_id = $1 LIMIT 1', [a.id])).rows[0];
     assert.equal(led.meter, 'intelligence_request');
-    assert.equal(led.pricing_version, '2026-09-25.1');
+    assert.equal(led.pricing_version, loadCatalog().version); // stamped with the catalog in force
   });
 
   it('auto-use off: hard stop with wait / enable credits / upgrade actions, nothing deducted', async () => {

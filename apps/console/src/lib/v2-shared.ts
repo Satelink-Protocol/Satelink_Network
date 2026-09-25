@@ -7,7 +7,7 @@ export type PlanCatalog = {
   unit: { name: string; symbol: string; usd_list_value: number };
   windows: { session_hours: number; week_starts: string };
   plans: {
-    id: string; name: string; kind: "free" | "subscription"; priceUsd: number; interval: string | null;
+    id: string; name: string; kind: "free" | "subscription"; priceUsd: number; interval: string | null; basePlanId?: string | null; entitlementPlanId?: string;
     intro: { amountUsd: number; days: number; copy: string } | null;
     allowance: { sessionUu: number; weeklyUu: number; sessionHours: number; sessionTiRequests: number; weeklyTiRequests: number; weeklyListValueUsd: number };
     limits: { api_keys: number; machines: number };

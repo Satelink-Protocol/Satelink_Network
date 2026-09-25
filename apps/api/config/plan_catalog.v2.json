@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-25.1",
+  "version": "2026-09-25.2",
   "unit": {
     "name": "Usage Unit",
     "symbol": "UU",
@@ -106,6 +106,52 @@
       },
       "inr_price": null,
       "sort": 3
+    },
+    {
+      "id": "pro_yearly",
+      "name": "Pro",
+      "kind": "subscription",
+      "base_plan": "pro",
+      "entitlement_plan": "pro",
+      "price_usd": 190,
+      "interval": "year",
+      "allowance": {
+        "session_uu": 1500,
+        "weekly_uu": 7500
+      },
+      "limits": {
+        "api_keys": 5,
+        "machines": 5
+      },
+      "dodo": {
+        "test": "pdt_0NoNG215niHtH4Bar1Qvs",
+        "live": null
+      },
+      "inr_price": null,
+      "sort": 4
+    },
+    {
+      "id": "max_yearly",
+      "name": "Max",
+      "kind": "subscription",
+      "base_plan": "max",
+      "entitlement_plan": "max",
+      "price_usd": 790,
+      "interval": "year",
+      "allowance": {
+        "session_uu": 5000,
+        "weekly_uu": 30000
+      },
+      "limits": {
+        "api_keys": 20,
+        "machines": 20
+      },
+      "dodo": {
+        "test": "pdt_0NoNG22gitFEXmPp6EUgP",
+        "live": null
+      },
+      "inr_price": null,
+      "sort": 5
     }
   ],
   "packs": [
@@ -156,6 +202,7 @@
     },
     "marginal_cost_usd_per_uu": 0,
     "marginal_cost_source": "docs/web/PRICING_MODEL.md — Trading Intelligence is served from cached derived snapshots; per-call marginal cost ≈ $0. Sensitivity (break-even cost per UU) is reported alongside.",
-    "weeks_per_month_worst": 4.43
+    "weeks_per_month_worst": 4.43,
+    "weeks_per_year_worst": 53
   }
 }
