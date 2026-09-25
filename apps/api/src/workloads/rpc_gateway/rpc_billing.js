@@ -8,6 +8,7 @@
  */
 
 import { getSharedRedis } from './shared_redis.js';
+import { keyRef } from '../../security/key_mask.mjs';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
 import { isFounderApiKey } from '../../payments/founder_wallets.js';
 import { shadowWriteRevenueLedger } from '../../ledger/shadow_ledger_write.js';
@@ -31,7 +32,12 @@ function getRedis() {
   return getSharedRedis();
 }
 
-export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId, amountUsdt, opType = 'rpc_call' }) {
+export async function recordRpcRevenue({ pool, chain, method, apiKey, source, requestId: rawRequestId, amountUsdt, opType = 'rpc_call' }) {
+  // Defence in depth (TI_KEY_LOGGING): request_id is copied into Redis dedup
+  // keys, the shadow ledger and receipts — it must never carry the API key.
+  const requestId = apiKey && typeof rawRequestId === 'string' && rawRequestId.includes(apiKey)
+    ? rawRequestId.split(apiKey).join(keyRef(apiKey))
+    : rawRequestId;
   // Customer Zero Phase 6 — phantom-billing elimination:
   // A revenue event is created ONLY for traffic that produced an ACTUAL credit
   // deduction. `amountUsdt` is the real amount deducted by creditService on the

@@ -4,10 +4,11 @@
  *
  * POST /api/sdk/ping
  * Records: sdk_version, chain, method_count, api_key
- * Store in Redis: sdk:usage:{apiKey}:{date}
+ * Store in Redis: sdk:usage:{keyRef(apiKey)}:{date}  (never the key)
  */
 
 import { Router } from 'express';
+import { keyRef } from '../../security/key_mask.mjs';
 import { getSharedRedis } from './shared_redis.js';
 
 // Use shared Redis client to avoid connection pool exhaustion
@@ -33,7 +34,7 @@ export function createSdkAnalyticsRouter() {
       const client = getRedis();
 
       if (client) {
-        const key = `sdk:usage:${apiKey}:${today}`;
+        const key = `sdk:usage:${keyRef(apiKey)}:${today}`;
 
         await client.hincrby(key, 'pings', 1);
         await client.hincrby(key, 'method_count', method_count || 0);
@@ -74,7 +75,7 @@ export function createSdkAnalyticsRouter() {
         return res.json({ ok: true, stats: null, reason: 'Redis not configured' });
       }
 
-      const key = `sdk:usage:${apiKey}:${today}`;
+      const key = `sdk:usage:${keyRef(apiKey)}:${today}`;
       const data = await client.hgetall(key);
 
       const stats = {

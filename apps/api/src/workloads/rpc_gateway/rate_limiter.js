@@ -15,6 +15,7 @@
  */
 
 import { getSharedRedis } from './shared_redis.js';
+import { keyHint, keyRef } from '../../security/key_mask.mjs';
 import crypto from 'crypto';
 
 const TIERS = {
@@ -49,12 +50,17 @@ function getDateKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Redis key names carry keyRef(apiKey), never the key (TI_KEY_LOGGING).
 function getApiKeyInfoKey(apiKey) {
-  return `rpc:apikey:${apiKey}`;
+  return `rpc:apikey:${keyRef(apiKey)}`;
+}
+
+function legacyApiKeyInfoKey(apiKey) {
+  return ['rpc', 'apikey', apiKey].join(':');
 }
 
 function getUsageKey(apiKey, date) {
-  return `rpc:usage:${apiKey}:${date}`;
+  return `rpc:usage:${keyRef(apiKey)}:${date}`;
 }
 
 function getIpUsageKey(ip, date) {
@@ -85,7 +91,7 @@ export async function createApiKey(tier, owner) {
 
   await client.set(getApiKeyInfoKey(apiKey), JSON.stringify(keyInfo));
 
-  console.log(`[RateLimiter] Created API key: ${apiKey.slice(0, 10)}... tier=${tier}`);
+  console.log(`[RateLimiter] Created API key: ${keyHint(apiKey)} tier=${tier}`);
 
   return { apiKey, ...keyInfo };
 }
@@ -95,7 +101,16 @@ export async function getApiKeyInfo(apiKey) {
   if (!client) return null;
 
   try {
-    const data = await client.get(getApiKeyInfoKey(apiKey));
+    let data = await client.get(getApiKeyInfoKey(apiKey));
+    if (!data) {
+      // One-time migration from the legacy raw-key name.
+      const legacy = legacyApiKeyInfoKey(apiKey);
+      data = await client.get(legacy);
+      if (data) {
+        await client.set(getApiKeyInfoKey(apiKey), data);
+        await client.del(legacy);
+      }
+    }
     return data ? JSON.parse(data) : null;
   } catch (err) {
     console.error('[RateLimiter] Failed to get API key info:', err.message);

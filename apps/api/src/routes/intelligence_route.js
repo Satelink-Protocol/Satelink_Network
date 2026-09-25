@@ -21,6 +21,8 @@
 //   served with stale:true + as_of. Payment required → 402 with x402 pointers.
 
 import { Router } from 'express';
+import crypto from 'node:crypto';
+import { keyRef } from '../security/key_mask.mjs';
 import { authorizeAndMeter } from '../billing/credit_service.mjs';
 import { recordRpcRevenue } from '../workloads/rpc_gateway/rpc_billing.js';
 import { readMetric } from '../intelligence/engine.js';
@@ -160,7 +162,8 @@ export function createIntelligenceRouter(pool, deps = {}) {
         method: metric,
         apiKey: meter.apiKey || apiKey,
         source: 'intelligence',
-        requestId: `intel:${metric}:${apiKey}:${now()}`,
+        // Never the key: a non-reversible reference + time + nonce (TI_KEY_LOGGING).
+        requestId: `intel:${metric}:${keyRef(apiKey)}:${now()}:${crypto.randomBytes(3).toString('hex')}`,
         amountUsdt: meter.cost,
         opType: 'intelligence',
       }).catch(() => {});

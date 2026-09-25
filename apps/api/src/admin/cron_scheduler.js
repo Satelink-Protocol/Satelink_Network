@@ -17,6 +17,7 @@
  */
 
 import cron from 'node-cron';
+import { redactKeys } from '../security/key_mask.mjs';
 import { IpClassifier }         from './jobs/ip_classifier.js';
 import { CustomerZeroDetector } from './jobs/customer_zero_detector.js';
 import { OutreachEngine }       from './jobs/outreach_engine.js';
@@ -73,7 +74,7 @@ export function startAdminCrons(pool, redis) {
       const report = await buildMachineCrm(pool, Date.now(), { source: 'cron' });
       await pool.query(
         `INSERT INTO machine_crm_snapshots (generated_at, summary, machines) VALUES (now(), $1, $2)`,
-        [report.summary, JSON.stringify(report.machines)]
+        [report.summary, redactKeys(JSON.stringify(report.machines))] // second guard: no key in snapshots
       );
       const s = report.summary;
       console.log(`[CRON] machine-crm: ${s.machines} machines (active ${s.active}, at_risk ${s.at_risk}, dormant ${s.dormant}, dead ${s.dead}); recurring-external-real ${s.recurring_external_real}`);
