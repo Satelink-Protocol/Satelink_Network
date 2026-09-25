@@ -1,42 +1,50 @@
 import { test, expect } from "@playwright/test";
 
-// Pricing gate (§4, web-v3 P3): audience toggle, plan cards with no dead buy
-// buttons, the usage calculator, the compare matrix, and the two-rails diagram.
+// Pricing V2 gate: /pricing renders from the PlanCatalog (the same source as
+// the API's /v2/plans and the console Billing page — see
+// test/plan-catalog-parity.test.ts). No old included-calls model anywhere.
 
-test("audience toggle switches Individuals / Agents & API / Enterprise", async ({ page }) => {
+test("plan cards come from the catalog: Free, Launch ($5 → $19), Pro, Max", async ({ page }) => {
   await page.goto("/pricing");
-  // Individuals is default: plan cards visible.
-  await expect(page.getByRole("tab", { name: "Individuals" })).toHaveAttribute("aria-selected", "true");
-  // Switch to Agents & API → rate card row visible.
-  await page.getByRole("tab", { name: "Agents & API" }).click();
-  await expect(page.getByRole("cell", { name: "Funding-rate heatmap" })).toBeVisible();
-  // Enterprise → "Coming later".
-  await page.getByRole("tab", { name: /Enterprise/ }).click();
-  await expect(page.getByRole("heading", { name: "Coming later" })).toBeVisible();
+  const cards = page.getByTestId("plan-cards");
+  for (const name of ["Free", "Launch", "Pro", "Max"]) await expect(cards.getByRole("heading", { name: new RegExp(`^${name}`) })).toBeVisible();
+  await expect(cards.getByText("$5 for your first month. Renews at $19/month.")).toBeVisible();
+  await expect(cards.getByText(/About 750 market-data requests a week/).first()).toBeVisible();
+  await expect(page.getByText(/2,500|12,000|300 Trading-Intelligence/)).toHaveCount(0);
 });
 
-test("Pro/Max cannot be bought yet — 'notify me', no dead buy button", async ({ page }) => {
+test("one primary choice per card; nothing is a dead buy button", async ({ page }) => {
   await page.goto("/pricing");
-  await expect(page.getByRole("link", { name: /Available soon — notify me/ }).first()).toBeVisible();
-  // No enabled "Choose Pro/Max" purchase control while plans are disabled.
-  await expect(page.getByRole("button", { name: /Choose Pro|Choose Max/ })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Choose Pro|Choose Max/ })).toHaveCount(0);
-});
-
-test("usage calculator recommends a cheapest option and reacts to input", async ({ page }) => {
-  await page.goto("/pricing");
-  const result = page.locator("#calc-result");
-  await expect(result).toContainText(/Cheapest option:/);
-  // A tiny volume should resolve to Free (within the 300/mo free quota).
-  await page.getByRole("spinbutton").fill("100");
-  await expect(result).toContainText(/Free/);
-});
-
-test("compare matrix shows grouped rows across plans", async ({ page }) => {
-  await page.goto("/pricing#compare");
-  const table = page.locator("#compare table");
-  await expect(table.getByText("Included Trading-Intelligence calls / month")).toBeVisible();
-  for (const group of ["Usage", "API & limits", "Payments", "Support", "Security"]) {
-    await expect(table.getByText(group, { exact: true })).toBeVisible();
+  const cards = page.getByTestId("plan-cards");
+  await expect(cards.getByRole("link", { name: "Start free" })).toHaveAttribute("href", /console\.satelink\.network\/sign-in\?mode=signup/);
+  // Purchasable items link to the console; anything not yet purchasable says so plainly.
+  for (const card of await cards.locator("article").all()) {
+    const link = card.getByRole("link");
+    const soon = card.getByText("Opening soon");
+    expect((await link.count()) + (await soon.count())).toBe(1);
   }
+});
+
+test("packs, per-call prices and how payment works", async ({ page }) => {
+  await page.goto("/pricing");
+  await expect(page.getByRole("heading", { name: "Credit packs" })).toBeVisible();
+  for (const p of ["$10", "$50", "$200"]) await expect(page.getByText(p, { exact: true })).toBeVisible();
+  const rates = page.getByRole("region", { name: "Per-call prices" });
+  await expect(rates.getByRole("cell", { name: "Polygon RPC" })).toBeVisible();
+  await expect(rates.getByRole("cell", { name: "$0.00003" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "How payment works" })).toBeVisible();
+});
+
+test("anchors used by redirects still resolve (#platform, #agents)", async ({ page }) => {
+  await page.goto("/pricing#platform");
+  await expect(page.locator("#platform")).toHaveCount(1);
+  await expect(page.locator("#agents")).toHaveCount(1);
+});
+
+test("FAQ explains UU and the two windows", async ({ page }) => {
+  await page.goto("/pricing");
+  await page.getByText("What is a UU?").click();
+  await expect(page.getByText(/one market-data request is 10 UU/)).toBeVisible();
+  await page.getByText("How do the session and weekly allowances work?").click();
+  await expect(page.getByText(/resets every Monday in your account's timezone/)).toBeVisible();
 });

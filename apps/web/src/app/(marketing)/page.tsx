@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { LiveNetworkStrip } from "@/components/site/LiveNetworkStrip";
-import { ExplorePlans } from "@/components/ExplorePlans";
+import { PlanCards } from "@/components/PlanCards";
+import { ConsoleShowcase } from "@/components/landing/ConsoleShowcase";
+import { CONSOLE, planCatalog } from "@/lib/plan-catalog";
 import { ProductVideo } from "@/components/landing/ProductVideo";
 import { HowMachinePays } from "@/components/landing/HowMachinePays";
 import { UnderTheHood } from "@/components/landing/UnderTheHood";
@@ -89,7 +91,7 @@ const FAQ = [
   {
     question: "How much does it cost?",
     answer:
-      "Trading Intelligence is $0.01 per call and Polygon RPC is $0.00003 per call. Individuals can start Free (300 calls/month) or buy a credit pack from $9.99; there is no subscription required.",
+      "Trading Intelligence is $0.01 per call and Polygon RPC is $0.00003 per call. Start free with a weekly allowance of market data, take a plan (Launch is $5 for the first month, then $19), or buy a credit pack from $10 — no subscription required.",
   },
   {
     question: "Is this investment advice?",
@@ -122,7 +124,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg">
-                <Link href="/signup">Start free <ArrowRight className="size-4" /></Link>
+                <a href={`${CONSOLE}/sign-in?mode=signup`}>Start free <ArrowRight className="size-4" /></a>
               </Button>
               <Button asChild variant="secondary" size="lg">
                 <Link href="/contact-sales">Talk to sales</Link>
@@ -179,19 +181,18 @@ export default async function HomePage() {
 
       <UnderTheHood />
 
-      {/* Explore plans */}
+      <ConsoleShowcase />
+
+      {/* Plans — rendered from the PlanCatalog (same source as /pricing and the console) */}
       <section className="border-y border-sl-border bg-sl-bg-raised">
         <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-24">
           <SectionHeader
             eyebrow="Plans"
-            title="Explore plans"
-            lede="Start Free, upgrade when you need more, or pay per call as an agent. Trading Intelligence is $0.01/call; RPC is $0.00003/call."
+            title="Start free. Pay as you grow."
+            lede="A weekly allowance of market data on a plan, a credit pack, or pay per call as software — RPC is $0.00003 a call."
           />
-          <div className="mt-10">
-            <ScrollReveal>
-              <ExplorePlans />
-            </ScrollReveal>
-          </div>
+          <div className="mt-10"><PlanCards catalog={planCatalog()} /></div>
+          <p className="mt-6 text-center text-sm"><Link href="/pricing" className="text-sl-text underline underline-offset-4">See full pricing</Link></p>
         </div>
       </section>
 

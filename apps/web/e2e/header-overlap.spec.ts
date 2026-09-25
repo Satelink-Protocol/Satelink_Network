@@ -114,7 +114,8 @@ for (const width of WIDTHS) {
 
       test("axe: no serious or critical violations on home", async ({ page }) => {
         await open(page, "/", width, theme);
-        const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+        // Cast: @axe-core/playwright resolves a second playwright-core copy in this monorepo.
+        const r = await new AxeBuilder({ page: page as never }).withTags(["wcag2a", "wcag2aa"]).analyze();
         const bad = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
         expect(bad.map((v) => `${v.id}: ${v.nodes.length} node(s) — ${v.nodes[0]?.target}`)).toEqual([]);
       });
