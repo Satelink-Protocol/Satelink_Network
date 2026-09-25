@@ -29,6 +29,7 @@
  */
 
 import { Router } from 'express';
+import { keyRef } from '../../security/key_mask.mjs';
 import crypto from 'crypto';
 import { broadcaster } from '../../realtime/broadcaster-instance.js';
 import { isFounderApiKey } from '../../payments/founder_wallets.js';
@@ -105,7 +106,7 @@ async function checkMevRateLimit(redis, apiKey, tier) {
 
   const limit = RATE_LIMITS[tier] || RATE_LIMITS.free;
   const window = 60; // seconds
-  const key = `mev:ratelimit:${apiKey}`;
+  const key = `mev:ratelimit:${keyRef(apiKey)}`;
   const now = Date.now();
   const windowStart = now - window * 1000;
 
@@ -251,7 +252,7 @@ async function validateApiKey(apiKey, db, redis) {
   // Check Redis cache first
   if (redis) {
     try {
-      const cacheKey = `mev:apikey:${apiKey}`;
+      const cacheKey = `mev:apikey:${keyRef(apiKey)}`;
       const cached = await redis.get(cacheKey);
       if (cached) {
         const keyRecord = JSON.parse(cached);
@@ -285,7 +286,7 @@ async function validateApiKey(apiKey, db, redis) {
     // Cache the result in Redis (5 minute TTL)
     if (redis) {
       try {
-        const cacheKey = `mev:apikey:${apiKey}`;
+        const cacheKey = `mev:apikey:${keyRef(apiKey)}`;
         await redis.setex(cacheKey, 300, JSON.stringify({ tier, status: 'active' }));
       } catch (e) {
         console.warn('[MEV] Redis cache write failed:', e.message);

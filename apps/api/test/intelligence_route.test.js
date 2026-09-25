@@ -73,6 +73,17 @@ describe('/v1/intelligence route', () => {
     expect(res.body.payment.how_to_pay.some((p) => p.rail === 'x402')).to.equal(true);
   });
 
+  it('GET /v1/intelligence/:metric/universe — free symbol list, never metered', async () => {
+    const pool = mockPool({ account: { api_key: 'sk_x', tier: 'basic', status: 'active' }, snapshot: FRESH_SNAPSHOT });
+    const res = await request(app(pool)).get('/v1/intelligence/funding-rate-heatmap/universe');
+    expect(res.status).to.equal(200);
+    expect(res.body.symbols).to.deep.equal(['BTCUSDT']);
+    expect(res.body.price_usdt).to.equal(0.01);
+    expect(res.body.data).to.equal(undefined, 'names only — no metric values');
+    expect(pool.state.credits).to.equal(5);
+    expect(pool.state.revenueInserts).to.have.length(0);
+  });
+
   it('unknown metric → 404 with the available list', async () => {
     const res = await request(app(mockPool())).get('/v1/intelligence/not-a-metric');
     expect(res.status).to.equal(404);

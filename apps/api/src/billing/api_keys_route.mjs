@@ -13,6 +13,7 @@
  */
 
 import { Router } from 'express';
+import { keyHint } from '../security/key_mask.mjs';
 import { ethers } from 'ethers';
 import {
   createApiKeyWithCredits,
@@ -388,7 +389,7 @@ export function createSimpleApiKeysRouter(pool) {
         WHERE api_key = $4
       `, [depositAmount, newTier, newLimit, key]);
 
-      console.log(`[DEPOSIT] Key ${key.slice(0, 12)}... deposited $${depositAmount} USDT → ${newTier} (TX: ${tx_hash.slice(0, 10)}...)`);
+      console.log(`[DEPOSIT] Key ${keyHint(key)} deposited $${depositAmount} USDT → ${newTier} (TX: ${tx_hash.slice(0, 10)}...)`);
 
       discord.deposit(key, depositAmount, newTier).catch(() => {});
 

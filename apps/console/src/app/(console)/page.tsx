@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import { accountsEnabled } from "@/lib/account";
+import { getMode } from "@/lib/mode";
+import { loadCatalog, loadPlan } from "@/lib/v2";
+import { SimpleHome } from "@/components/v2/SimpleHome";
+import { AdvancedDashboard } from "@/components/v2/AdvancedDashboard";
 import Link from "next/link";
 import { CheckCircle2, Circle } from "lucide-react";
 import { Badge, Empty, ErrorNote, Kpi, NeedsKey, PageHeader, Panel, Table } from "@/components/ui";
@@ -9,7 +14,16 @@ import { getSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Overview" };
 
-export default async function Overview() {
+const RANGES = ["1h", "24h", "7d", "30d", "90d"];
+
+export default async function Overview({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  const sp = searchParams ? await searchParams : undefined;
+  if (accountsEnabled()) {
+    const mode = await getMode();
+    if (mode === "advanced") return <AdvancedDashboard range={RANGES.includes(String(sp?.range)) ? String(sp?.range) : "30d"} />;
+    const [session, plan, catalog] = await Promise.all([getSession(), loadPlan(), loadCatalog()]);
+    return <SimpleHome name={session?.user.name ?? ""} plan={plan.ok ? plan.data : null} catalog={catalog} />;
+  }
   const [session, keys, active] = await Promise.all([getSession(), getKeys(), getActiveKey()]);
   const d = active ? await loadKey(active.k) : null;
   const s = d?.summary;

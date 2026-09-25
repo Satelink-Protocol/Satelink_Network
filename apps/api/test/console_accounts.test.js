@@ -357,6 +357,17 @@ d('CONSOLE_ACCOUNTS_V1', function () {
       assert.equal((await call('/intelligence/not-a-metric', { method: 'POST', body: { keyId: k.id } })).status, 404);
     });
 
+    it('deposit claim goes through the unchanged key route with MY key only', async () => {
+      const k = await fundedKey(1);
+      await linkKey(pool, A, { apiKey: k.key });
+      const tx = '0x' + 'a'.repeat(64);
+      const r = await (await call(`/keys/${k.id}/deposit`, { method: 'POST', body: { txHash: tx } })).json();
+      assert.equal(r.url, 'http://intel.test/api/keys/deposit');
+      assert.equal(r.sawKey, k.key);
+      assert.equal((await call(`/keys/${k.id}/deposit`, { method: 'POST', account: B, body: { txHash: tx } })).status, 404);
+      assert.equal((await call(`/keys/${k.id}/deposit`, { method: 'POST', body: { txHash: '0x12' } })).status, 400);
+    });
+
     it('usage series is zero-filled per key; deposits cover my keys only', async () => {
       const acct = 'user_usage';
       await pool.query(`INSERT INTO "user" VALUES ($1, 'u@example.test')`, [acct]);
