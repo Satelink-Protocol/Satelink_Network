@@ -226,7 +226,9 @@ async function insertDraw(client, { principalId, authorizationId, fundingSourceI
     `INSERT INTO draws (id, principal_id, authorization_id, funding_source_id, account_id, amount, currency, idempotency_key, state, version, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settling', 0, $9)
      ON CONFLICT (idempotency_key) DO NOTHING`,
-    [drawId, principalId, authorizationId, fundingSourceId, accountId, String(amountMinor), CAPACITY_CURRENCY, idempotencyKey, nowMs],
+    // draws.created_at is TIMESTAMPTZ since 009_ledger_txn_header (was BIGINT
+    // epoch ms in 008); pass a Date, as shadow_draw_write.js already does.
+    [drawId, principalId, authorizationId, fundingSourceId, accountId, String(amountMinor), CAPACITY_CURRENCY, idempotencyKey, new Date(nowMs)],
   );
   await client.query(
     `INSERT INTO settlements (draw_id, state, required_confirmations, confirmations, attempt_count)

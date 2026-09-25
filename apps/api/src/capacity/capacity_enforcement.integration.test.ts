@@ -357,6 +357,16 @@ describe('capacity enforcement — new-mode T-23 waterfall (integration)', () =>
         last_used      timestamptz,
         created_at     timestamptz NOT NULL DEFAULT now()
       );
+      -- apply-migrations.ts pre-seeds a minimal api_credits(api_key) for the
+      -- 018 FK, so the CREATE above is skipped; add the columns this block reads.
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS wallet_address text;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS tier text NOT NULL DEFAULT 'free';
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS daily_limit integer;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS credits_usdt numeric NOT NULL DEFAULT 0;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS total_spent numeric NOT NULL DEFAULT 0;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS last_used timestamptz;
+      ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
       CREATE TABLE IF NOT EXISTS api_usage_daily (
         api_key       text    NOT NULL,
         date          date    NOT NULL,
