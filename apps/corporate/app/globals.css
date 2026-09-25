@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Shared foundation (spacing, type scale, radius, elevation, stacking, motion)
+   from the unified design system; this file is the Jakuraa brand layer. */
+@import "../../../packages/web-ui/src/styles/foundation.css";
 
 /* Jakuraa editorial palette — ivory, ink, stone greys, one deep green accent
    and a warm secondary used sparingly for small highlights. */
@@ -15,6 +18,33 @@
   --amber: #b8742a;
   --amber-soft: #f4e8d8;
   --amber-ink: #8a5217;
+  /* the Satelink band stays deep green in both themes */
+  --band: #1f4d3a;
+  --on-band: #faf8f3;
+  --on-band-muted: #d5e2da;
+  --on-band-rule: #8fb09d;
+  color-scheme: light;
+}
+
+/* True dark mode (system preference; jakuraa.com has no toggle). Same roles,
+   inverted: ivory → deep warm black, ink → warm white, green lifted for AA. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ivory: #12110e;
+    --ivory-2: #1a1915;
+    --ink: #efece4;
+    --stone-1: #2a2823;
+    --stone-2: #3e3b34;
+    --stone-3: #a39e90;
+    --stone-4: #b5b0a3;
+    --green: #86c4a3;
+    --green-soft: #1c2a23;
+    --amber: #d9a05b;
+    --amber-soft: #2a2116;
+    --amber-ink: #e8b878;
+    --band: #173a2c;
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
@@ -30,6 +60,10 @@
   --color-amber: var(--amber);
   --color-amber-soft: var(--amber-soft);
   --color-amber-ink: var(--amber-ink);
+  --color-band: var(--band);
+  --color-on-band: var(--on-band);
+  --color-on-band-muted: var(--on-band-muted);
+  --color-on-band-rule: var(--on-band-rule);
   --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }

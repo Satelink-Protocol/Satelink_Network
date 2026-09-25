@@ -78,6 +78,15 @@ export function middleware(req: NextRequest) {
     if (consolePath !== null) {
       return NextResponse.redirect(new URL(consolePath + url.search, CONSOLE_ORIGIN), 308)
     }
+    // One sign-in for customers (unified system, 2026-09-25): /login and
+    // /signup hand off to the console's sign-in, the only surface where a
+    // session is useful. 307 (not 308) so it is trivially reversible.
+    // Staff sign-in stays at /ops/login.
+    if (url.pathname === '/login' || url.pathname === '/signup') {
+      const dest = new URL('/sign-in', CONSOLE_ORIGIN)
+      if (url.pathname === '/signup') dest.searchParams.set('mode', 'signup')
+      return NextResponse.redirect(dest, 307)
+    }
     const target = REDIRECTS[url.pathname]
     if (target) {
       const [path, hash] = target.split('#')

@@ -71,6 +71,8 @@ export function CodeBlock({ code, tabs, className, ariaLabel }: CodeBlockProps) 
         </button>
       </div>
       <pre
+        // Focusable so keyboard users can scroll long lines (axe scrollable-region-focusable).
+        tabIndex={0}
         aria-label={ariaLabel}
         className="overflow-x-auto px-4 py-3.5 font-sl-mono text-[0.8125rem] leading-relaxed text-sl-text"
       >

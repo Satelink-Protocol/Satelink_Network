@@ -109,7 +109,7 @@ export function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
 
   return (
     <div className="w-full max-w-md rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-6 shadow-[var(--sl-shadow-2)] sm:p-8">
-      <h1 className="font-sl-display text-2xl font-extrabold tracking-tight text-sl-text">
+      <h1 className="font-sl-display text-2xl font-normal tracking-tight text-sl-text">
         {isSignup ? "Create your account" : "Sign in"}
       </h1>
       <p className="mt-1 text-sm text-sl-text-muted">

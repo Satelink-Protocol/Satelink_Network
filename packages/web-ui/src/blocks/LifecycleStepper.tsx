@@ -83,7 +83,7 @@ export function LifecycleStepper({ steps = DEFAULT_LIFECYCLE, id = "lifecycle" }
             <p className="mt-3 text-lg text-sl-text">{s.plain}</p>
             <p className="mt-3 text-sm leading-relaxed text-sl-text-muted">{s.mechanism}</p>
           </div>
-          <pre className="overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
+          <pre tabIndex={0} className="overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-4 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
             <code>{s.reveal}</code>
           </pre>
         </div>

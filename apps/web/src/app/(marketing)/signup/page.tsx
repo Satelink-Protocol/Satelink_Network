@@ -33,7 +33,7 @@ export default function SignupPage() {
         <div className="relative mx-auto grid max-w-[1100px] items-center gap-12 px-4 py-16 sm:px-6 md:py-20 lg:grid-cols-[1fr_auto]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">Get started</p>
-            <h1 className="mt-3 max-w-[18ch] text-balance font-sl-display text-4xl font-extrabold tracking-tight text-sl-text sm:text-5xl">
+            <h1 className="mt-3 max-w-[18ch] text-balance font-sl-display text-4xl font-normal tracking-tight text-sl-text sm:text-5xl">
               Start free in a minute.
             </h1>
             <p className="mt-5 max-w-[52ch] text-lg text-sl-text-muted">

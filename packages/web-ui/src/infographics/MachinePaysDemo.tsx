@@ -35,7 +35,9 @@ const DIR_META: Record<Line["dir"], { mark: string; color: string }> = {
 
 export function MachinePaysDemo({ className }: { className?: string }) {
   // Deterministic initial state so SSR and the first client render match.
-  const [visibleCount, setVisibleCount] = React.useState(0);
+  // Starts on the first line (the request), never an empty frame
+  // (AUDIT_2026-09-25 D15); the loop restarts at 1 for the same reason.
+  const [visibleCount, setVisibleCount] = React.useState(1);
   const [prefersReduced, setPrefersReduced] = React.useState(false);
   const [paused, setPaused] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -62,7 +64,7 @@ export function MachinePaysDemo({ className }: { className?: string }) {
     }
     const id = window.setInterval(() => {
       if (!onscreenRef.current || pausedRef.current) return;
-      setVisibleCount((c) => (c >= SCRIPT.length + 1 ? 0 : c + 1)); // +1 = hold on the full frame
+      setVisibleCount((c) => (c >= SCRIPT.length + 1 ? 1 : c + 1)); // +1 = hold on the full frame
     }, STEP_MS);
     return () => {
       window.clearInterval(id);

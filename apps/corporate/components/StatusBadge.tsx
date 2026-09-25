@@ -3,7 +3,7 @@ import type { BusinessStatus } from "@/content/businesses";
 const styles: Record<BusinessStatus, string> = {
   Operating: "bg-green-soft text-green",
   "Registered capability": "bg-ivory-2 text-stone-4",
-  Planned: "bg-amber-soft text-[#7a4a15]",
+  Planned: "bg-amber-soft text-amber-ink",
 };
 
 export function StatusBadge({ status }: { status: BusinessStatus }) {

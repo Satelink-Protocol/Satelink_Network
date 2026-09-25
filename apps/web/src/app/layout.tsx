@@ -1,23 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
+import { Inter, JetBrains_Mono, Source_Serif_4 } from "next/font/google";
 import "../../../../packages/ui/src/styles/theme.css";
 import "./globals.css";
-import "../../../../packages/web-ui/src/styles/tokens.css";
 
 // Self-hosted (next/font) fonts, exposed as the CSS variables tokens.css
 // references (--sl-font-sans / --sl-font-display / --sl-font-mono). display:swap.
-// Signal 2.0 (P1): Manrope is the display face (H1–H2, tight tracking); Inter is
-// body; JetBrains Mono is code/numbers.
+// Unified system (2026-09-25): Source Serif 4 is the editorial display face —
+// the same family as jakuraa.com; Inter is body; JetBrains Mono is code/numbers.
+// Inter and Source Serif 4 are variable fonts: no `weight` list means ONE file
+// per family covering every weight (was five + three static files).
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-inter",
   display: "swap",
 });
-const manrope = Manrope({
+const serif = Source_Serif_4({
   subsets: ["latin"],
-  weight: ["600", "700", "800"],
-  variable: "--font-manrope",
+  variable: "--font-source-serif",
   display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({
@@ -142,7 +141,7 @@ export default function RootLayout({
       lang="en"
       data-theme="light"
       suppressHydrationWarning
-      className={`${inter.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${serif.variable} ${jetbrainsMono.variable}`}
     >
       <head>
         <script

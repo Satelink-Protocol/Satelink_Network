@@ -22,6 +22,7 @@
  */
 
 import { isFounderWallet } from '../payments/founder_wallets.js';
+import { consumePlanBucket, returnPlanBucketCall, isLegacySubBucketEnabled } from './legacy_sub_entitlement.mjs';
 import { isConsoleAccountsEnabled } from '../console_accounts/flag.mjs';
 import { deductWithAccountLimits } from '../console_accounts/limits.mjs';
 
@@ -162,6 +163,14 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
   // 2. Balance gate (paid tiers only). Atomic deduct; never goes negative.
   let cost = costFor(account, methodPrice);
   let uuInfo = null;
+  let bucket = null;
+  // Dodo subscription allowance (fix/legacy-dodo-subscription-bucket): a paid
+  // plan's monthly Trading-Intelligence calls are drawn BEFORE credits, and
+  // only for Trading Intelligence — RPC / x402 never touch this bucket.
+  if (product === 'intelligence' && cost > 0 && isLegacySubBucketEnabled()) {
+    const b = await consumePlanBucket(pool, key);
+    if (b.consumed) { cost = 0; bucket = { source: 'plan_entitlement', remaining: b.remaining }; }
+  }
   let balanceAfter = parseFloat(account.credits_usdt || 0);
   if (isConsoleAccountsEnabled() && typeof pool.connect === 'function') {
     // CONSOLE_ACCOUNTS_V1: pause / scope / credit auto-use / per-agent daily
@@ -169,6 +178,8 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
     // with the same conditional deduction as below (see limits.mjs).
     const g = await deductWithAccountLimits(pool, { key, cost, product });
     if (!g.ok) {
+      // A refused call must not use up a plan-bucket call drawn above.
+      if (bucket) await returnPlanBucketCall(pool, key);
       return {
         ...g,
         tier: account.tier,
@@ -224,6 +235,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
     limit,
     apiKey: key,
     ...(uuInfo ? { uu: uuInfo } : {}),
+    ...(bucket ? { bucket } : {}),
   };
 }
 

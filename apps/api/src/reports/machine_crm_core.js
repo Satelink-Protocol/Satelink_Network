@@ -1,3 +1,4 @@
+import { keyHint, keyRef } from '../security/key_mask.mjs';
 // machine_crm_core.js
 //
 // Reusable Machine-CRM builder. Pure reads (SELECT-only) — shared by the CLI
@@ -8,7 +9,7 @@
 // not manage the connection — callers own that.
 //
 // Identity model:
-//   * Machine ID = api_credits.api_key.
+//   * Machine ID = keyRef(api_credits.api_key) (never the key itself).
 //   * Revenue events matched by client_id ∈ {api_key, wallet, x402_<wallet>}.
 //   * Payments = api_deposits(api_key) ∪ payment_sources(credited_api_key=api_key OR payer=wallet).
 //   * revenue_events_v2.created_at is epoch SECONDS -> to_timestamp(created_at).
@@ -107,7 +108,10 @@ export async function buildMachineCrm(runner, now = Date.now(), meta = {}) {
     else lifecycle = 'active';
 
     return {
-      machine_id: mc.api_key,
+      // Secret keys never leave as ids (TI_KEY_LOGGING): a stable non-reversible
+      // ref + a display hint. x402_<wallet> ids are wallet-derived, not secrets.
+      machine_id: String(mc.api_key || '').startsWith('sk_') ? keyRef(mc.api_key) : mc.api_key,
+      machine_hint: String(mc.api_key || '').startsWith('sk_') ? keyHint(mc.api_key) : mc.api_key,
       partner: mc.demand_source || 'unattributed',
       discovery_source: firstSource || firstDemand || mc.demand_source || 'unknown',
       wallet: mc.wallet_address || (wallet ? wallet : null),

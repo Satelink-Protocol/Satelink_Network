@@ -18,7 +18,7 @@ export const NavMenu = z.object({
   // A menu with an href and no groups renders as a plain top-level link.
   href: z.string().optional(),
   groups: z.array(NavGroup).default([]),
-  featureCard: z.object({ title: z.string(), href: z.string() }).optional(),
+  featureCard: z.object({ title: z.string(), href: z.string(), description: z.string().optional(), eyebrow: z.string().optional() }).optional(),
 });
 export const NavCta = z.object({ label: z.string(), href: z.string(), variant: z.enum(["ghost", "primary", "secondary"]).optional() });
 export const Navigation = z.object({
@@ -39,7 +39,11 @@ export const Footer = z.object({
 });
 export type Footer = z.infer<typeof Footer>;
 
-// ---- Fallback fixtures (satelink) — the canonical IA (05/06) ----
+// ---- Fallback fixtures (satelink) — the canonical IA ----
+// Unified header (2026-09-25, claude.com pattern): five menus, then Log in +
+// one primary action. Search and theme live in a compact icon cluster; Contact
+// sales lives in Solutions and the footer — never in the header row.
+const CONSOLE = "https://console.satelink.network";
 export const navigationFallback: Navigation = {
   site: "satelink",
   menus: [
@@ -47,84 +51,70 @@ export const navigationFallback: Navigation = {
       label: "Products",
       groups: [
         { title: "Products", items: [
-          { label: "Machine Commerce", href: "/products/machine-commerce" },
-          { label: "Trading Intelligence", href: "/products/trading-intelligence" },
-          { label: "RPC Infrastructure", href: "/products/rpc" },
-          { label: "x402 Machine Payments", href: "/products/x402" },
-          { label: "API Metering", href: "/products/metering" },
+          { label: "Machine Commerce", href: "/products/machine-commerce", description: "Discover, pay and settle — end to end" },
+          { label: "Trading Intelligence", href: "/products/trading-intelligence", description: "Funding, open interest, liquidations, microstructure" },
+          { label: "RPC Infrastructure", href: "/products/rpc", description: "Polygon RPC at $0.00003 per call" },
+          { label: "x402 Machine Payments", href: "/products/x402", description: "Keyless pay-per-call in USDC" },
+          { label: "API Metering", href: "/products/metering", description: "Usage, caps and receipts per agent" },
         ] },
-        { title: "Get started", items: [
+        { title: "Platform", items: [
           { label: "Platform overview", href: "/product/overview" },
-          { label: "Pricing", href: "/pricing" },
+          { label: "Payments", href: "/platform/payments" },
+          { label: "Settlement", href: "/platform/settlement" },
+          { label: "Machine Identity", href: "/platform/machine-identity" },
           { label: "Status", href: "/status" },
         ] },
       ],
-      featureCard: { title: "How a machine pays", href: "/products/machine-commerce#lifecycle" },
-    },
-    {
-      label: "Platform",
-      groups: [
-        { title: "Build with Satelink", items: [
-          { label: "API", href: "/platform/api" },
-          { label: "x402", href: "/platform/x402" },
-          { label: "Metering", href: "/platform/metering" },
-          { label: "Payments", href: "/platform/payments" },
-          { label: "Machine Identity", href: "/platform/machine-identity" },
-          { label: "Settlement", href: "/platform/settlement" },
-          { label: "Developer Console", href: "/satelink/os/mission-control" },
-        ] },
-        { title: "Developers", items: [
-          { label: "Docs", href: "https://docs.satelink.network" },
-          { label: "Quickstart", href: "/developers/quickstart" },
-          { label: "SDKs", href: "/developers/sdks" },
-          { label: "API reference", href: "/developers/api" },
-        ] },
-      ],
+      featureCard: { eyebrow: "See it work", title: "How a machine pays", description: "A 402 price, a payment and a receipt — one request.", href: "/products/machine-commerce#lifecycle" },
     },
     {
       label: "Solutions",
       groups: [
-        { title: "By company", items: [
-          { label: "Enterprise", href: "/solutions/enterprise" },
-          { label: "Startups", href: "/solutions/startups" },
-          { label: "Developers", href: "/solutions/developers" },
-          { label: "AI-native companies", href: "/solutions/ai-native" },
-        ] },
         { title: "By use case", items: [
           { label: "AI Agents", href: "/solutions/ai-agents" },
-          { label: "Commerce", href: "/solutions/commerce" },
-          { label: "Machine Commerce", href: "/solutions/machine-commerce" },
           { label: "Trading Systems", href: "/solutions/trading" },
           { label: "API Monetization", href: "/solutions/api-monetization" },
           { label: "Automation", href: "/solutions/automation" },
+          { label: "Commerce", href: "/solutions/commerce" },
         ] },
-        { title: "By industry", items: [
-          { label: "Financial Services", href: "/solutions/industries/financial-services" },
-          { label: "AI", href: "/solutions/industries/ai" },
-          { label: "Software", href: "/solutions/industries/software" },
-          { label: "Infrastructure", href: "/solutions/industries/infrastructure" },
-          { label: "Developer Tools", href: "/solutions/industries/developer-tools" },
+        { title: "By company", items: [
+          { label: "Startups", href: "/solutions/startups" },
+          { label: "AI-native companies", href: "/solutions/ai-native" },
+          { label: "Enterprise", href: "/solutions/enterprise" },
+          { label: "Contact sales", href: "/contact-sales" },
         ] },
       ],
+      featureCard: { eyebrow: "Talk to us", title: "Contact sales", description: "Volume, invoicing or a custom integration.", href: "/contact-sales" },
     },
     { label: "Pricing", href: "/pricing", groups: [] },
     {
+      label: "Developers",
+      groups: [
+        { title: "Build", items: [
+          { label: "Docs", href: "https://docs.satelink.network" },
+          { label: "Quickstart", href: "/developers/quickstart" },
+          { label: "API reference", href: "/developers/api" },
+          { label: "SDKs", href: "/developers/sdks" },
+        ] },
+        { title: "Protocols", items: [
+          { label: "x402", href: "/platform/x402" },
+          { label: "Metering", href: "/platform/metering" },
+          { label: "Status", href: "/status" },
+          { label: "Changelog", href: "/changelog" },
+        ] },
+      ],
+      featureCard: { eyebrow: "5 minutes", title: "Quickstart", description: "Make your first paid call from a script.", href: "/developers/quickstart" },
+    },
+    {
       label: "Resources",
       groups: [
-        { title: "Resources", items: [
+        { title: "Read", items: [
           { label: "Blog", href: "/blog" },
           { label: "News", href: "/news" },
           { label: "Changelog", href: "/changelog" },
-          { label: "Status", href: "/status" },
         ] },
-      ],
-    },
-    {
-      label: "Learn",
-      groups: [
         { title: "Learn", items: [
           { label: "Academy", href: "/academy" },
-          { label: "Courses", href: "/academy/courses" },
           { label: "Tutorials", href: "/academy/tutorials" },
           { label: "Use cases", href: "/academy/use-cases" },
           { label: "Support center", href: "/support" },
@@ -133,10 +123,8 @@ export const navigationFallback: Navigation = {
     },
   ],
   cta: [
-    { label: "Docs", href: "https://docs.satelink.network", variant: "ghost" },
-    { label: "Log in", href: "/satelink/os/mission-control", variant: "ghost" },
-    { label: "Contact sales", href: "/contact-sales", variant: "secondary" },
-    { label: "Get started", href: "/developers/quickstart", variant: "primary" },
+    { label: "Log in", href: `${CONSOLE}/sign-in`, variant: "ghost" },
+    { label: "Try Satelink", href: `${CONSOLE}/sign-in?mode=signup`, variant: "primary" },
   ],
 };
 
@@ -176,7 +164,7 @@ export const footerFallback: Footer = {
       { label: "Quickstart", href: "/developers/quickstart" },
       { label: "API reference", href: "/developers/api" },
       { label: "SDKs", href: "/developers/sdks" },
-      { label: "Console", href: "/satelink/os/mission-control" },
+      { label: "Console", href: "https://console.satelink.network" },
       { label: "x402-kit (GitHub)", href: "https://github.com/Satelink-Protocol" },
     ] },
     { title: "Resources", links: [
@@ -206,6 +194,7 @@ export const footerFallback: Footer = {
       { label: "News", href: "https://jakuraa.com/company/news" },
       { label: "Careers", href: "https://jakuraa.com/careers" },
       { label: "Contact", href: "/contact" },
+      { label: "Contact sales", href: "/contact-sales" },
     ] },
     { title: "Terms and policies", links: [
       { label: "Privacy policy", href: "/privacy" },
