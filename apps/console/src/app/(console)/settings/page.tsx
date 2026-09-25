@@ -4,6 +4,10 @@ import { Badge, PageHeader, Panel, Table } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { date } from "@/lib/format";
 import { authCookieHeader, getSession } from "@/lib/session";
+import { accountsEnabled } from "@/lib/account";
+import { loadSettings } from "@/lib/v2";
+import { Preferences } from "@/components/v2/Preferences";
+import { TwoFactor } from "@/components/v2/TwoFactor";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -20,6 +24,8 @@ export default async function SettingsPage() {
     apiFetch<SessionRow[]>("/api/identity/list-sessions", { cookie }),
   ]);
   const u = session!.user;
+  const accountMode = accountsEnabled();
+  const prefs = accountMode ? await loadSettings() : null;
   const providers = accounts.ok ? accounts.data.map((a) => a.providerId) : null;
 
   return (
@@ -46,15 +52,25 @@ export default async function SettingsPage() {
         </Panel>
         <Panel title="Two-factor authentication">
           <p>{u.twoFactorEnabled ? <Badge tone="good">on</Badge> : <Badge tone="warn">off</Badge>}</p>
-          <p className="mt-2 text-sl-text-muted">
-            TOTP two-factor is supported by the account system and requires an email-and-password sign-in method. Self-serve setup in the console is not built yet.
-          </p>
+          {accountMode ? (
+            <div className="mt-2"><TwoFactor enabled={Boolean(u.twoFactorEnabled)} hasPassword={Boolean(providers?.includes("credential"))} /></div>
+          ) : (
+            <p className="mt-2 text-sl-text-muted">
+              TOTP two-factor is supported by the account system and requires an email-and-password sign-in method. Self-serve setup in the console is not built yet.
+            </p>
+          )}
         </Panel>
         <Panel title="Data">
           <p className="text-sl-text-muted">Download everything this console holds or reads for you: profile, connected keys (fingerprints only), usage and deposits.</p>
-          <a href="/api/console/export" className="mt-2 inline-block h-7 rounded border border-sl-border px-2.5 py-1.5 text-xs hover:border-sl-accent">Export my data (JSON)</a>
+          <a href={accountMode ? "/api/console/account-export" : "/api/console/export"} className="mt-2 inline-block h-7 rounded border border-sl-border px-2.5 py-1.5 text-xs hover:border-sl-accent">Export my data (JSON)</a>
         </Panel>
       </div>
+
+      {accountMode && (
+        <Panel title="Preferences, spending and alerts" className="mt-4">
+          {prefs?.ok ? <Preferences initial={prefs.data} /> : <p className="text-sl-text-muted">Couldn&apos;t load your settings.</p>}
+        </Panel>
+      )}
 
       <Panel title="Active sessions" className="mt-4" action={<RevokeOthers />}>
         {sessions.ok ? (

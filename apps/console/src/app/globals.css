@@ -25,3 +25,19 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Chart series (categorical, fixed order — never cycled). Validated with the
+   dataviz six-checks script against each surface (2026-09-25): light ALL PASS,
+   dark ALL PASS; tritan ΔE sits in the 6–8 band, so every multi-series chart
+   carries a legend + direct labels. Sequential = one hue (accent) light→dark;
+   diverging = teal ↔ amber around a neutral grey. */
+@layer base {
+  :root, [data-theme="light"] {
+    --chart-1: #0A9481; --chart-2: #5B5BF0; --chart-3: #C97A12; --chart-4: #1985BE;
+    --chart-grid: #E7E3DA; --chart-neg: #C97A12; --chart-pos: #0A9481; --chart-mid: #D8D4CB;
+  }
+  [data-theme="dark"] {
+    --chart-1: #26998A; --chart-2: #6F6FEA; --chart-3: #C4843A; --chart-4: #2791BE;
+    --chart-grid: #2C2B27; --chart-neg: #C4843A; --chart-pos: #26998A; --chart-mid: #3D3B36;
+  }
+}

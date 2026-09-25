@@ -131,6 +131,41 @@ export function createMeRouter(pool, {
   router.get('/usage', h((req) => usageSeries(pool, req.account.accountId, { days: req.query.days })));
   router.get('/deposits', h((req) => listDeposits(pool, req.account.accountId)));
 
+  // Resolve one of MY live keys (server-side only).
+  const ownedKeyString = async (req, keyId) => (await pool.query(
+    `SELECT c.api_key FROM account_api_keys l JOIN api_credits c ON c.id = l.api_key_id
+      WHERE l.account_id = $1 AND l.api_key_id = $2 AND l.revoked_at IS NULL`,
+    [req.account.accountId, keyId]
+  )).rows[0]?.api_key ?? null;
+  const loopback = async (res, path, key, init = {}) => {
+    const r = await fetchImpl(`${intelBase}${path}`, {
+      ...init,
+      headers: { 'x-api-key': key, accept: 'application/json', ...(init.body ? { 'content-type': 'application/json' } : {}) },
+      signal: AbortSignal.timeout(20000),
+    });
+    const body = await r.json().catch(() => ({ ok: false, error: 'bad_upstream_response' }));
+    return res.status(r.status).json(body);
+  };
+
+  // USDT top-up for one of MY keys: instructions + claim by tx hash, through
+  // the unchanged /api/keys deposit handlers (same on-chain verification).
+  router.get('/keys/:id/deposit-info', async (req, res) => {
+    try {
+      const key = await ownedKeyString(req, Number(req.params.id));
+      if (!key) return res.status(404).json({ ok: false, error: 'key_not_found' });
+      return await loopback(res, '/api/keys/deposit-info', key);
+    } catch { return res.status(502).json({ ok: false, error: 'deposit_unavailable' }); }
+  });
+  router.post('/keys/:id/deposit', async (req, res) => {
+    try {
+      const txHash = String(req.body?.txHash || '');
+      if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) return res.status(400).json({ ok: false, error: 'invalid_tx_hash' });
+      const key = await ownedKeyString(req, Number(req.params.id));
+      if (!key) return res.status(404).json({ ok: false, error: 'key_not_found' });
+      return await loopback(res, '/api/keys/deposit', key, { method: 'POST', body: JSON.stringify({ tx_hash: txHash }) });
+    } catch { return res.status(502).json({ ok: false, error: 'deposit_unavailable' }); }
+  });
+
   // Run a paid Trading Intelligence metric with one of MY keys (console
   // "Get market data"). The price is charged to that key exactly as a direct
   // API call would be; owner controls (pause, scopes, caps) apply.

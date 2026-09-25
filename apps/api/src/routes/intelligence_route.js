@@ -96,6 +96,23 @@ export function createIntelligenceRouter(pool, deps = {}) {
     });
   });
 
+  // Free: which symbols a metric currently covers (names only — no values), so
+  // a person can pick a market BEFORE paying for a read. Registered before
+  // '/:metric' so it is never metered.
+  router.get('/intelligence/:metric/universe', async (req, res) => {
+    const metric = req.params.metric;
+    if (!METRICS[metric]) return res.status(404).json({ ok: false, error: 'unknown_metric' });
+    try {
+      const snap = await readMetric(pool, metric, { now });
+      if (!snap.available) return res.status(503).json({ ok: false, error: 'warming_up', metric });
+      const symbols = [...new Set((snap.data?.symbols || []).map((s) => s.symbol).filter((s) => typeof s === 'string'))].sort();
+      const exchanges = [...new Set((snap.data?.symbols || []).flatMap((s) => (s.per_exchange || []).map((e) => e.exchange).concat(s.exchange ? [s.exchange] : [])))].sort();
+      return res.json({ ok: true, metric, price_usdt: METRICS[metric].price_usdt, as_of: snap.as_of, symbols, exchanges });
+    } catch (e) {
+      return res.status(503).json({ ok: false, error: 'intelligence_unavailable' });
+    }
+  });
+
   router.get('/intelligence/:metric', async (req, res) => {
     const metric = req.params.metric;
     const spec = METRICS[metric];

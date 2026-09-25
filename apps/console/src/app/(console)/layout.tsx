@@ -3,13 +3,27 @@ import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { fingerprint, getActiveKey, getKeys } from "@/lib/keys";
 import { getSession } from "@/lib/session";
+import { accountsEnabled } from "@/lib/account";
+import { loadSettings } from "@/lib/v2";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
+  const jar = await cookies();
+  const theme = jar.get("slc_theme")?.value === "light" ? "light" : "dark";
+  if (accountsEnabled()) {
+    // Console V2: mode is an account setting (cookie mirrors it for this browser).
+    const cookieMode = jar.get("slc_mode")?.value;
+    const settings = cookieMode === "simple" || cookieMode === "advanced" ? null : await loadSettings();
+    const mode = cookieMode === "simple" || cookieMode === "advanced" ? cookieMode : settings?.ok ? settings.data.defaultMode : "simple";
+    return (
+      <Shell mode={mode} user={{ name: session.user.name, email: session.user.email }} keys={[]} activeFp={null} theme={theme}>
+        {children}
+      </Shell>
+    );
+  }
   const keys = await getKeys();
   const active = await getActiveKey();
-  const theme = (await cookies()).get("slc_theme")?.value === "light" ? "light" : "dark";
   return (
     <Shell
       user={{ name: session.user.name, email: session.user.email }}
