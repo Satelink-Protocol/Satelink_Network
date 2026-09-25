@@ -42,6 +42,8 @@ import { createUnifiedAuthRouter as createUserAuthRouter } from "./src/gateway/r
 import { createUnifiedAuthRouter } from './src/routes/node_auth_route.mjs';
 import { createAuthController } from './src/auth/auth_controller.js';
 import { mountBetterAuth } from './src/auth/better_auth.mjs';
+import { isConsoleAccountsEnabled } from './src/console_accounts/flag.mjs';
+import { createMeRouter } from './src/console_accounts/router.mjs';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 import { createVnextKernelRouter } from './src/vnext/http/kernel_router.js';
@@ -433,6 +435,11 @@ app.get("/api/mode", (req, res) => {
   // so their paths are not shadowed. Additive; no money-path coupling.
   app.use("/v1", createPlansRouter(pool));
   app.use("/v1", createConsoleRouter(pool));
+
+  // CONSOLE_ACCOUNTS_V1 — session-authenticated account API (/v1/me/*): key
+  // links, settings, per-agent limits, request log, wallet links. Not mounted
+  // unless the flag is 'true' (read at boot). FOUNDER REVIEW: money-adjacent.
+  if (isConsoleAccountsEnabled()) app.use("/v1/me", createMeRouter(pool));
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));

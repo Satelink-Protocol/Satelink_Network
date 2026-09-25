@@ -22,6 +22,8 @@
  */
 
 import { isFounderWallet } from '../payments/founder_wallets.js';
+import { isConsoleAccountsEnabled } from '../console_accounts/flag.mjs';
+import { deductWithAccountLimits } from '../console_accounts/limits.mjs';
 
 export const PRICE_PER_CALL_USDT = 0.000030;
 
@@ -114,7 +116,7 @@ export function costFor(account, methodPrice) {
  * @returns {Promise<{ok:true, tier, cost, balanceAfter, remaining}
  *                  | {ok:false, code, http, message, ...}>}
  */
-export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = {}) {
+export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, product = 'rpc' } = {}) {
   if (!pool || !pool.query) {
     // Fail CLOSED (T-24): a DB outage must never mean free unlimited
     // service. Without a pool we cannot check the daily limit or deduct a
@@ -160,7 +162,20 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice } = 
   // 2. Balance gate (paid tiers only). Atomic deduct; never goes negative.
   const cost = costFor(account, methodPrice);
   let balanceAfter = parseFloat(account.credits_usdt || 0);
-  if (cost > 0) {
+  if (isConsoleAccountsEnabled() && typeof pool.connect === 'function') {
+    // CONSOLE_ACCOUNTS_V1: pause / scope / credit auto-use / per-agent daily
+    // cap / per-account monthly cap, checked and counted in ONE transaction
+    // with the same conditional deduction as below (see limits.mjs).
+    const g = await deductWithAccountLimits(pool, { key, cost, product });
+    if (!g.ok) {
+      return {
+        ...g,
+        tier: account.tier,
+        ...(g.code === 'insufficient_credits' ? { balance_usdt: parseFloat(account.credits_usdt || 0) } : {}),
+      };
+    }
+    if (g.balanceAfter !== null) balanceAfter = g.balanceAfter;
+  } else if (cost > 0) {
     const ded = await pool.query(
       `UPDATE api_credits
           SET credits_usdt = credits_usdt - $1,

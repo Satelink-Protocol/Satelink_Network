@@ -1,44 +1,94 @@
-# Console account linking — API spec for founder review
+# Console account linking — CONSOLE_ACCOUNTS_V1
 
-_2026-09-24 · status: proposal, not built. Touches `api_credits` (billing identity) → founder review required before any merge._
+_2026-09-25 · status: **built, flag OFF, FOUNDER REVIEW required** (touches the metering path
+in `authorizeAndMeter` and `enforceCapacity`, and moves balances on key rotation)._
+Branch `feat/console-accounts-v1`. Supersedes the 2026-09-24 proposal.
 
-## Why
-`console.satelink.network` signs people in with Better Auth (`user` table), but every
-customer data endpoint authenticates with an **API key** (`api_credits.api_key`).
-Nothing links the two. The console bridges this today by holding the keys a user
-connects in a Secure, httpOnly, SameSite=Strict cookie on the console host
-(`apps/console/src/lib/keys.ts`). That is honest and safe, but it is per-browser and
-cannot support: revoking/rotating keys, per-agent scopes and spend caps, alerts,
-saved queries, per-request logs, or cross-device key lists.
+## The bug this fixes
+The console kept connected API keys in a per-browser httpOnly cookie (`slc_keys`), so the same
+Google account showed keys and activity in Chrome and an empty console in Brave. Now keys belong to
+the **account** (Better Auth `user.id`) on the server; the console reads everything through the
+session and holds no key.
 
-## What the console already reads (no API change)
-| Console surface | Endpoint | Auth |
+## Flags
+| Flag | Where | Effect when `true` |
 |---|---|---|
-| Overview, Keys, Agents | `GET /v1/console/summary` | API key |
-| Usage, Requests (daily), Agents trend | `GET /api/keys/usage-history` | API key |
-| Billing, Overview deposits | `GET /api/keys/deposits`, `GET /api/keys/deposit-info` | API key |
-| Billing plans | `GET /v1/plans` | public |
-| Trading Intelligence explorer/playground | `GET /v1/intelligence`, `GET /v1/intelligence/:metric` | public / API key |
-| x402 | `GET /.well-known/x402` | public |
-| Create key | `POST /api/keys` (free tier) | none (rate-limited) |
-| Settings | Better Auth `get-session`, `list-accounts`, `list-sessions`, `revoke-session`, `revoke-other-sessions`, `sign-out` | session |
+| `CONSOLE_ACCOUNTS_V1` | Railway `Satelink-api` | mounts `/v1/me/*` (boot-time) and runs the owner-controls transaction in `authorizeAndMeter` (read per call) |
+| `CONSOLE_ACCOUNTS_V1` | Vercel `satelink-console` | console reads/writes through `/v1/me/*`; offers moving browser-held keys to the account |
 
-## Proposed additions (additive, flag-gated `CONSOLE_ACCOUNTS_ENABLED`)
-1. **Table `console_key_links`** — `(user_id text → user.id, api_key text → api_credits.api_key, label text, created_at, revoked_at null)`, unique `(user_id, api_key)`. No change to `api_credits`.
-2. **Session-authenticated router `/v1/me/*`** (Better Auth session cookie, mounted after `mountBetterAuth`):
-   - `GET /v1/me/keys` — linked keys with fingerprint, tier, balance, last-used.
-   - `POST /v1/me/keys` — issue a free key **and** link it (wraps `createApiKeyWithCredits`).
-   - `POST /v1/me/keys/link` — link an existing key; proof = caller presents the full key once.
-   - `POST /v1/me/keys/:fp/revoke` — sets `api_credits.revoked_at` (**money-path adjacent: founder review**).
-   - `GET /v1/me/requests?from&to&key&status` — per-request log **only if** a request log table exists; otherwise stays absent and the console keeps its empty state.
-3. **Agents** — `console_agents (id, user_id, name, api_key, scopes jsonb, spend_cap_usdt numeric null, rate_limit int null, paused bool)`; enforcement of caps/pause belongs in the RPC gateway and credit deduction → **founder review; separate PR**.
-4. **Alerts** — `console_alerts (user_id, kind, threshold, channel='email', last_sent_at)` + a job that reads `api_usage_daily` and sends via Resend.
-5. **Per-product meters** — split `api_usage_daily` by product (or read Pricing V2 UU meters once shipped).
+Both default OFF. With the API flag off, `authorizeAndMeter` runs its original single
+`UPDATE … WHERE credits_usdt >= cost` — byte-for-byte the previous path — and `/v1/me` is not
+mounted. **Enable the API flag first**, then the console flag. Rollback: unset either.
 
-## Migration of cookie-held keys
-When `/v1/me/keys` ships, the console offers a one-click "Save these keys to your account" that POSTs each cookie-held key to `/v1/me/keys/link`, then clears the cookie.
+## Schema (additive; never alters `api_credits`)
+`migrations/039_console_accounts_v1.sql`, applied idempotently on first use by
+`src/console_accounts/schema.mjs` (prod has no migration runner):
+`account_api_keys` (account ↔ `api_credits.id`, SHA-256 fingerprint + hint — **never the key**;
+one live owner per key), `account_settings`, `agent_limits`, `account_spend_counters`,
+`account_saved_queries`, `account_wallets`, `account_siwe_nonces`, `account_audit`,
+`account_idempotency`, plus `idx_rev2_client_created` built `CONCURRENTLY` for the request log.
 
-## Guardrails
-- Never return a full key after creation; fingerprints only.
-- CSRF: session routes require `Origin` ∈ trusted origins (Better Auth `trustedOrigins` already lists the console host).
-- Audit: every link/revoke/cap change writes an audit row (user, key fingerprint, action, before/after).
+## API — `/v1/me/*` (Better Auth session cookie)
+Mutations require `Content-Type: application/json`, `X-Satelink-Console: 1` and, when present, a
+trusted `Origin`. `Idempotency-Key` is honoured on key create and rotate.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/keys` | id, label, role, hint, tier, status, balance, limits — no key |
+| POST | `/keys` | issue a free key bound to the account; key returned **once** |
+| POST | `/keys/link` | link an existing key; possession proof = present it once; 409 if another account owns it; no existence oracle |
+| PATCH | `/keys/:id` | rename |
+| POST | `/keys/:id/revoke` | `api_credits.status='revoked'` → `authorizeAndMeter` refuses it immediately (403); balance stays on it |
+| POST | `/keys/:id/rotate` | new key + **exact balance move** + wallet binding move + limits move + old key revoked, one locked transaction, audited. **409** when the key has an active plan entitlement, webhook subscriptions, frozen funds or a payment hold |
+| PUT | `/keys/:id/limits` | `paused`, `scopes` (`rpc`, `intelligence`; null = all), `dailyCapUsdt` |
+| GET/PATCH | `/settings` | monthly spend cap, credit auto-use, alert thresholds, default mode, timezone (validated against `pg_timezone_names`), notifications |
+| GET | `/spend` | real spend (from `api_usage_daily`) + cap usage (from counters) |
+| GET | `/usage?days=` | daily series per key, zero-filled |
+| GET | `/deposits` | USDT deposits credited to the account's keys |
+| GET | `/requests?keyId&product&status&from&to&limit&cursor` | per-request log over existing `revenue_events_v2` rows, keyset pagination; latency / UU are `null` (not recorded yet) |
+| GET/POST/DELETE | `/saved-queries` | up to 100 per account |
+| POST | `/wallets/challenge`, `/wallets/verify` | SIWE-style (EIP-4361 format) link; single-use 10-min nonce bound to the account; Polygon 137 / Base 8453 |
+| GET/DELETE | `/wallets`, `/wallets/:address` | |
+| GET | `/x402?wallet=` | settled payments **for this wallet** (`payment_sources.payer`) vs 402 challenges **network-wide** (a challenge is issued before the payer is known — never attributed to a wallet) |
+| GET | `/export` | everything above for the account (data export) |
+
+## Owner controls in the metering path
+`authorizeAndMeter` (the single chokepoint for RPC-with-key and Trading Intelligence), when the
+flag is on, replaces its deduction with **one transaction** in a fixed lock order —
+agent-day counter → account-month counter → `api_credits` row:
+paused → 403 · product outside scopes → 403 · credit auto-use off → 402 · per-agent daily cap →
+402 · per-account monthly cap → 402 (conditional upserts) · the same conditional deduction · commit,
+or roll everything back. Counters therefore always equal the sum of committed charges and never
+exceed a cap. These denials are `terminal`: under `capacity_enforcement_path = new` (prod today)
+`enforceCapacity` returns them instead of falling through to the authorization layer, and the RPC /
+Intelligence 402 bodies omit "deposit USDT" guidance for them.
+
+## Migration of browser-held keys
+On the Keys page the console offers "Save to my account" for keys still in `slc_keys`. Each is
+linked with its possession proof server-to-server; keys that link (or were already linked) leave the
+cookie; the cookie is deleted once empty. A key owned by another account stays in the browser and
+is reported, never dropped silently.
+
+## Verification (2026-09-25)
+- `apps/api/test/console_accounts.test.js` — **22/22** on real Postgres 14: flag-off parity; link /
+  create / rename / revoke / cross-account isolation; rotation (exact balance, wallet, limits,
+  refusals, 6 concurrent rotations → exactly one); pause / scope / auto-use; **daily cap under 40
+  concurrent requests → exactly 3 served, counter == deducted**; monthly cap across two keys under
+  60 concurrent requests → exactly 10; insufficient-credit rollback; terminal under `new` path;
+  CSRF; idempotent replay; request-log pagination and isolation; SIWE link, forged signature,
+  nonce replay; x402 scopes.
+- Full API suite: branch and `main` both 321 passing / the same 19 pre-existing failures — **no new
+  failure**.
+- `apps/console/e2e/accounts-gate.spec.ts` — the production console build + real `/v1/me` router
+  (local harness) in three isolated browser profiles signed in to one account: legacy cookie keys
+  migrate, all three render identical keys, a create in one and a pause in another appear in all.
+
+## Founder review checklist
+1. Rotation moves `credits_usdt` between two `api_credits` rows (audited in `account_audit`); it is
+   not a revenue event. Confirm this needs no Financial OS ledger entry, or name the event to emit.
+2. Rotation moves `wallet_address` to the new row (wallet auth resolves the oldest row for a
+   wallet; a revoked row keeping it would shadow the new key).
+3. Enable order and rollback as above. `CONSOLE_ACCOUNTS_V1` on the API adds one transaction per
+   paid call (BEGIN, 1 context SELECT, 0–2 counter upserts, the deduction, COMMIT).
+4. Found while mapping the path (not changed here): Trading Intelligence deducts before reading
+   the metric and does not refund a `warming_up` / `read_failed` 503.

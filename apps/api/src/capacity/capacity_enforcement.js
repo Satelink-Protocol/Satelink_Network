@@ -336,7 +336,7 @@ function hrMs() {
  * gateway call site. Behaviour depends on CAPACITY_ENFORCEMENT_PATH, read here
  * so a Railway env change reverts with no redeploy.
  */
-export async function enforceCapacity(db, { apiKey, wallet, requestId = null }) {
+export async function enforceCapacity(db, { apiKey, wallet, requestId = null, product = 'rpc' }) {
   // Kill-switch source: the path is read from platform_flags (DB) via
   // getCapacityPath, not the CAPACITY_ENFORCEMENT_PATH env var, so an operator
   // can flip legacy⇄dual⇄new with a single row UPDATE and no redeploy
@@ -347,7 +347,7 @@ export async function enforceCapacity(db, { apiKey, wallet, requestId = null }) 
   const path = await getCapacityPath(db);
 
   if (path === 'legacy') {
-    return authorizeAndMeter(db, { apiKey, wallet });
+    return authorizeAndMeter(db, { apiKey, wallet, product });
   }
 
   if (path === 'new') {
@@ -360,8 +360,12 @@ export async function enforceCapacity(db, { apiKey, wallet, requestId = null }) 
     //    failed/partial prepaid attempt (authorizeAndMeter's own atomic
     //    UPDATE only commits on success), so there is never a double-charge
     //    across the two layers.
-    const prepaid = await authorizeAndMeter(db, { apiKey, wallet });
+    const prepaid = await authorizeAndMeter(db, { apiKey, wallet, product });
     if (prepaid.ok) return prepaid;
+    // CONSOLE_ACCOUNTS_V1: an owner's control on the key (paused, scope,
+    // spend cap, credit auto-use off) is a HARD STOP — it must never fall
+    // through to the authorization layer and be served anyway.
+    if (prepaid.terminal) return prepaid;
 
     // 2. Authorization cap. enforceNew's atomic UPDATE is the SOLE decision
     //    point — no separate "is there capacity" read happens here, so this
@@ -385,7 +389,7 @@ export async function enforceCapacity(db, { apiKey, wallet, requestId = null }) 
   // dual: evaluate both, time both, SERVE LEGACY, record parity.
   const cost = callCostMinor();
   const t0 = hrMs();
-  const legacy = await authorizeAndMeter(db, { apiKey, wallet });
+  const legacy = await authorizeAndMeter(db, { apiKey, wallet, product });
   const legacyMs = hrMs() - t0;
 
   const t1 = hrMs();

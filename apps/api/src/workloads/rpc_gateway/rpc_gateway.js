@@ -314,7 +314,9 @@ export function createRpcGateway(db) {
                 // dependency and should convert, it got no upgrade path
                 // (erpc journey audit, 2026-07-11). Response payload only;
                 // verdict logic untouched.
-                if (verdict.http === 402 || verdict.code === 'daily_limit_exceeded') {
+                // Owner controls (CONSOLE_ACCOUNTS_V1: paused / cap / auto-use off) are
+                // terminal and not a funding problem — no deposit instructions.
+                if (!verdict.terminal && (verdict.http === 402 || verdict.code === 'daily_limit_exceeded')) {
                     const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
                     payload.payment = {
                         vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
