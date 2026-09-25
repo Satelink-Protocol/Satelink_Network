@@ -40,6 +40,7 @@
  */
 
 import express from 'express';
+import { keyHint } from '../security/key_mask.mjs';
 import crypto from 'crypto';
 import { creditAccount, resolveAccount, TIER_DAILY_LIMIT } from '../billing/credit_service.mjs';
 import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
@@ -794,7 +795,7 @@ export function createDodoInternalRouter(pool) {
         if (shortfall > 0) {
           await setPaymentHold(client, apiKey);   // clawback under-covered → hold the account
           alerts.push(['Dodo refund shortfall — account on payment_hold',
-            `refund ${dodoRef} (payment ${paymentId}) clawed back ${actual}, shortfall ${shortfall} on ${apiKey}`, 'warning']);
+            `refund ${dodoRef} (payment ${paymentId}) clawed back ${actual}, shortfall ${shortfall} on ${keyHint(apiKey)}`, 'warning']);
         }
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: actual, shortfall, isTest });
         shadow = { requestId, amountUsdt: refundUsd, isTestData: isTest };
@@ -831,7 +832,7 @@ export function createDodoInternalRouter(pool) {
         if (shortfall > 0) {
           await setPaymentHold(client, apiKey);
           alerts.push(['Dodo dispute clawback shortfall — account on payment_hold',
-            `dispute ${dodoRef} (payment ${paymentId}) reversed ${creditedUsd}, shortfall ${shortfall} on ${apiKey}`, 'warning']);
+            `dispute ${dodoRef} (payment ${paymentId}) reversed ${creditedUsd}, shortfall ${shortfall} on ${keyHint(apiKey)}`, 'warning']);
         }
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: creditedUsd, shortfall, isTest });
         shadow = { requestId, amountUsdt: creditedUsd, isTestData: isTest };
@@ -843,9 +844,9 @@ export function createDodoInternalRouter(pool) {
         const opened = await getOpenedFreeze(client, dodoRef);
         const frozen = opened ? opened.frozen : 0;
         await logReversalEvent(client, { eventId, kind, eventType, dodoRef, paymentId, apiKey, amount: frozen, shortfall: 0, isTest });
-        console.error(`[internal/dodo] dispute.expired ${dodoRef} (payment ${paymentId}) — credits kept FROZEN (${frozen}) on ${apiKey}, needs manual resolution`);
+        console.error(`[internal/dodo] dispute.expired ${dodoRef} (payment ${paymentId}) — credits kept FROZEN (${frozen}) on ${keyHint(apiKey)}, needs manual resolution`);
         alerts.push(['Dodo dispute EXPIRED — credits held, manual decision needed',
-          `dispute ${dodoRef} (payment ${paymentId}) expired; ${frozen} kept frozen on ${apiKey}. Dodo SDK does not define expiry semantics — resolve manually (unfreeze or clawback).`, 'critical']);
+          `dispute ${dodoRef} (payment ${paymentId}) expired; ${frozen} kept frozen on ${keyHint(apiKey)}. Dodo SDK does not define expiry semantics — resolve manually (unfreeze or clawback).`, 'critical']);
         result = { action: 'expired_hold_frozen', frozen };
 
       } else {

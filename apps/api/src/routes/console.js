@@ -4,6 +4,7 @@
 // unavailable degrades to null so the console shows a designed empty state
 // rather than erroring (never "—"). Auth: the caller's own API key.
 import express from 'express';
+import { keyHint } from '../security/key_mask.mjs';
 import { resolveAccount } from '../billing/credit_service.mjs';
 import { getEntitlement } from '../plans/entitlement_service.mjs';
 
@@ -59,7 +60,7 @@ export function createConsoleRouter(pool) {
     res.json({
       ok: true,
       data: {
-        apiKey: `${apiKey.slice(0, 7)}…`,
+        apiKey: keyHint(apiKey),
         balanceUsd,
         tier: account.tier ?? null,
         plan: subscription?.plan ?? 'free',

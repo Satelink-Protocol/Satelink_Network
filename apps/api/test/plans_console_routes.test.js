@@ -70,7 +70,7 @@ describe('GET /v1/console/summary', () => {
     const res = await request(buildApp(pool)).get('/v1/console/summary').set('Authorization', `Bearer ${account.api_key}`);
     expect(res.status).to.equal(200);
     expect(res.body.data.balanceUsd).to.equal(12.5);
-    expect(res.body.data.apiKey).to.equal('sk_dodo…');
+    expect(res.body.data.apiKey).to.equal('sk_dodo_…c123'); // standard keyHint (TI_KEY_LOGGING)
     expect(res.body.data.entitlement.remaining).to.equal(288);
     expect(res.body.data.usage).to.deep.equal({ callsToday: 5, callsThisMonth: 5 });
     expect(res.body.data.plan).to.equal('free');
