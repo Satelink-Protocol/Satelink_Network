@@ -1,0 +1,161 @@
+{
+  "version": "2026-09-25.1",
+  "unit": {
+    "name": "Usage Unit",
+    "symbol": "UU",
+    "usd_list_value": 0.001
+  },
+  "meters": {
+    "intelligence_request": {
+      "uu": 10,
+      "note": "Trading Intelligence request, list $0.01"
+    }
+  },
+  "boundary": "Dodo-funded value (plan allowance, packs) is spendable on Trading Intelligence only. RPC / x402 stay on the crypto rail (USDT credits).",
+  "windows": {
+    "session_hours": 5,
+    "week_starts": "monday"
+  },
+  "notify_thresholds_pct": [
+    70,
+    85,
+    95,
+    100
+  ],
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "kind": "free",
+      "price_usd": 0,
+      "allowance": {
+        "session_uu": 100,
+        "weekly_uu": 500
+      },
+      "limits": {
+        "api_keys": 1,
+        "machines": 1
+      },
+      "sort": 0
+    },
+    {
+      "id": "launch",
+      "name": "Launch",
+      "kind": "subscription",
+      "entitlement_plan": "pro",
+      "price_usd": 19,
+      "interval": "month",
+      "intro": {
+        "amount_usd": 5,
+        "trial_period_days": 30,
+        "copy": "$5 for your first month. Renews at $19/month."
+      },
+      "allowance": {
+        "session_uu": 1500,
+        "weekly_uu": 7500
+      },
+      "limits": {
+        "api_keys": 5,
+        "machines": 5
+      },
+      "dodo": {
+        "test": "pdt_0NoMERVal8bc4as1QxBFh",
+        "live": null
+      },
+      "inr_price": null,
+      "sort": 1
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "kind": "subscription",
+      "price_usd": 19,
+      "interval": "month",
+      "allowance": {
+        "session_uu": 1500,
+        "weekly_uu": 7500
+      },
+      "limits": {
+        "api_keys": 5,
+        "machines": 5
+      },
+      "dodo": {
+        "test": "pdt_0NoLWYJyptwAdEZCsc3ui",
+        "live": null
+      },
+      "inr_price": null,
+      "sort": 2
+    },
+    {
+      "id": "max",
+      "name": "Max",
+      "kind": "subscription",
+      "price_usd": 79,
+      "interval": "month",
+      "allowance": {
+        "session_uu": 5000,
+        "weekly_uu": 30000
+      },
+      "limits": {
+        "api_keys": 20,
+        "machines": 20
+      },
+      "dodo": {
+        "test": "pdt_0NoMERbmVHn5d2jlpAAZX",
+        "live": null
+      },
+      "inr_price": null,
+      "sort": 3
+    }
+  ],
+  "packs": [
+    {
+      "id": "pack_10",
+      "name": "Credit pack $10",
+      "price_usd": 10,
+      "grant_uu": 10000,
+      "dodo": {
+        "test": "pdt_0NoMEReibUHWGhnHdJBfK",
+        "live": null
+      },
+      "inr_price": null
+    },
+    {
+      "id": "pack_50",
+      "name": "Credit pack $50",
+      "price_usd": 50,
+      "grant_uu": 50000,
+      "dodo": {
+        "test": "pdt_0NoMERgL454CfiHbnYgdh",
+        "live": null
+      },
+      "inr_price": null
+    },
+    {
+      "id": "pack_200",
+      "name": "Credit pack $200",
+      "price_usd": 200,
+      "grant_uu": 200000,
+      "dodo": {
+        "test": "pdt_0NoMERhtlswnoRgwYjJ1f",
+        "live": null
+      },
+      "inr_price": null
+    }
+  ],
+  "economics": {
+    "dodo_fees": {
+      "base_pct": 4,
+      "base_fixed_usd": 0.4,
+      "international_pct": 1.5,
+      "subscription_pct": 0.5,
+      "india_domestic_pct": 4,
+      "india_domestic_fixed_usd": 0.15,
+      "refund_fixed_usd": 1,
+      "dispute_fixed_usd": 30
+    },
+    "marginal_cost_usd_per_uu": 0,
+    "marginal_cost_source": "docs/web/PRICING_MODEL.md — Trading Intelligence is served from cached derived snapshots; per-call marginal cost ≈ $0. Sensitivity (break-even cost per UU) is reported alongside.",
+    "weeks_per_month_worst": 4.43
+  }
+}

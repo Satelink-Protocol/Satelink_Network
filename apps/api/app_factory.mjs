@@ -44,6 +44,9 @@ import { createAuthController } from './src/auth/auth_controller.js';
 import { mountBetterAuth } from './src/auth/better_auth.mjs';
 import { isConsoleAccountsEnabled } from './src/console_accounts/flag.mjs';
 import { createMeRouter } from './src/console_accounts/router.mjs';
+import { loadCatalog, publicCatalog } from './src/pricing_v2/catalog.mjs';
+import { createDodoV2WebhookHandler, isSubscriptionsEnabled, dodoMode } from './src/pricing_v2/webhooks.mjs';
+import { startPricingReconcile } from './src/pricing_v2/reconcile.mjs';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
 import { createVnextKernelRouter } from './src/vnext/http/kernel_router.js';
@@ -440,6 +443,18 @@ app.get("/api/mode", (req, res) => {
   // links, settings, per-agent limits, request log, wallet links. Not mounted
   // unless the flag is 'true' (read at boot). FOUNDER REVIEW: money-adjacent.
   if (isConsoleAccountsEnabled()) app.use("/v1/me", createMeRouter(pool));
+
+  // Pricing V2 — PlanCatalog (public, read-only; the source for console
+  // Billing and satelink.network/pricing). Dodo V2 webhooks + the daily
+  // reconciliation only with SATELINK_SUBSCRIPTIONS_ENABLED. FOUNDER REVIEW.
+  app.get("/v2/plans", (req, res) => {
+    try { res.json({ ok: true, data: publicCatalog(loadCatalog(), { mode: dodoMode() }) }); }
+    catch (err) { res.status(503).json({ ok: false, error: "catalog_unavailable" }); }
+  });
+  if (isSubscriptionsEnabled()) {
+    app.post("/webhooks/dodo/v2", express.raw({ type: "*/*", limit: "256kb" }), createDodoV2WebhookHandler(pool));
+    startPricingReconcile(pool);
+  }
 
   // AI Inference Gateway (S3-002) — OpenAI-compatible, per-token billing
   app.use("/v1", createAiGatewayRouter(pool, redis));
