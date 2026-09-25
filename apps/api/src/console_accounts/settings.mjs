@@ -78,12 +78,12 @@ export async function updateSettings(pool, accountId, patch = {}) {
 export async function setAgentLimits(pool, accountId, keyId, patch = {}) {
   const owned = await pool.query('SELECT 1 FROM account_api_keys WHERE account_id = $1 AND api_key_id = $2 AND revoked_at IS NULL', [accountId, keyId]);
   if (!owned.rowCount) throw new AccountError('key_not_found', 404, 'No such key on this account');
-  const allowed = ['paused', 'scopes', 'dailyCapUsdt'];
+  const allowed = ['paused', 'scopes', 'dailyCapUsdt', 'monthlyCapUsdt'];
   const unknown = Object.keys(patch).filter((k) => !allowed.includes(k));
   if (unknown.length) throw new AccountError('invalid_setting', 400, `Unknown limit: ${unknown.join(', ')}`);
 
-  const cur = (await pool.query('SELECT paused, scopes, daily_cap_usdt FROM agent_limits WHERE api_key_id = $1', [keyId])).rows[0]
-    || { paused: false, scopes: null, daily_cap_usdt: null };
+  const cur = (await pool.query('SELECT paused, scopes, daily_cap_usdt, monthly_cap_usdt FROM agent_limits WHERE api_key_id = $1', [keyId])).rows[0]
+    || { paused: false, scopes: null, daily_cap_usdt: null, monthly_cap_usdt: null };
   const paused = 'paused' in patch ? patch.paused : cur.paused;
   if (typeof paused !== 'boolean') throw new AccountError('invalid_setting', 400, 'paused must be true or false');
   let scopes = 'scopes' in patch ? patch.scopes : cur.scopes;
@@ -94,18 +94,20 @@ export async function setAgentLimits(pool, accountId, keyId, patch = {}) {
     scopes = [...new Set(scopes)];
   }
   const dailyCap = 'dailyCapUsdt' in patch ? money(patch.dailyCapUsdt, 'dailyCapUsdt') : cur.daily_cap_usdt;
+  const monthlyCap = 'monthlyCapUsdt' in patch ? money(patch.monthlyCapUsdt, 'monthlyCapUsdt') : cur.monthly_cap_usdt;
 
   const r = await pool.query(
-    `INSERT INTO agent_limits (api_key_id, account_id, scopes, daily_cap_usdt, paused, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
+    `INSERT INTO agent_limits (api_key_id, account_id, scopes, daily_cap_usdt, monthly_cap_usdt, paused, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
      ON CONFLICT (api_key_id) DO UPDATE SET scopes = EXCLUDED.scopes, daily_cap_usdt = EXCLUDED.daily_cap_usdt,
-       paused = EXCLUDED.paused, updated_at = NOW()
-     RETURNING paused, scopes, daily_cap_usdt`,
-    [keyId, accountId, scopes, dailyCap, paused]
+       monthly_cap_usdt = EXCLUDED.monthly_cap_usdt, paused = EXCLUDED.paused, updated_at = NOW()
+     RETURNING paused, scopes, daily_cap_usdt, monthly_cap_usdt`,
+    [keyId, accountId, scopes, dailyCap, monthlyCap, paused]
   );
   await pool.query('INSERT INTO account_audit (account_id, action, subject, detail) VALUES ($1, $2, $3, $4)', [accountId, 'agent.limits', String(keyId), JSON.stringify({ before: cur, patch })]);
   const row = r.rows[0];
-  return { paused: row.paused, scopes: row.scopes, dailyCapUsdt: row.daily_cap_usdt === null ? null : Number(row.daily_cap_usdt) };
+  const n = (v) => (v === null ? null : Number(v));
+  return { paused: row.paused, scopes: row.scopes, dailyCapUsdt: n(row.daily_cap_usdt), monthlyCapUsdt: n(row.monthly_cap_usdt) };
 }
 
 /**

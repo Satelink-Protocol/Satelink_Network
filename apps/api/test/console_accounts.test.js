@@ -222,6 +222,16 @@ d('CONSOLE_ACCOUNTS_V1', function () {
       assert.equal(Number((1 - (await balance(k.id))).toFixed(6)), 0.00009, 'deducted exactly what was counted');
     });
 
+    it('agent monthly cap holds under concurrency', async () => {
+      const k = await fundedKey(1);
+      await linkKey(pool, A, { apiKey: k.key });
+      await setAgentLimits(pool, A, k.id, { monthlyCapUsdt: 0.00015 }); // 5 calls
+      const res = await Promise.all(Array.from({ length: 30 }, () => authorizeAndMeter(pool, { apiKey: k.key })));
+      assert.equal(res.filter((r) => r.ok).length, 5);
+      assert.ok(res.filter((r) => !r.ok).every((r) => r.code === 'agent_monthly_cap_reached'));
+      assert.equal((await listKeys(pool, A)).find((x) => x.id === k.id).limits.monthlyCapUsdt, 0.00015);
+    });
+
     it('account monthly cap holds across two keys hammered concurrently', async () => {
       const acct = 'user_cap';
       await pool.query(`INSERT INTO "user" VALUES ($1, 'cap@example.test')`, [acct]);
@@ -278,7 +288,9 @@ d('CONSOLE_ACCOUNTS_V1', function () {
     before(async () => {
       const app = express();
       // Test session: the X-Test-Account header stands in for the Better Auth cookie.
-      app.use('/v1/me', createMeRouter(pool, { resolveSession: async (req) => (req.get('x-test-account') ? { accountId: req.get('x-test-account'), email: 'x' } : null), logger: { error() {}, warn() {} } }));
+      // Stub of the loopback /v1/intelligence route: echoes which key it was called with.
+      const fetchImpl = async (url, opts) => ({ status: 200, json: async () => ({ ok: true, url, sawKey: opts.headers['x-api-key'] }) });
+      app.use('/v1/me', createMeRouter(pool, { resolveSession: async (req) => (req.get('x-test-account') ? { accountId: req.get('x-test-account'), email: 'x' } : null), logger: { error() {}, warn() {} }, intelBase: 'http://intel.test', fetchImpl }));
       await new Promise((r) => { server = app.listen(0, r); });
       base = `http://127.0.0.1:${server.address().port}/v1/me`;
     });
@@ -320,16 +332,29 @@ d('CONSOLE_ACCOUNTS_V1', function () {
         await pool.query(`INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, method) VALUES ('rpc_call', $1, 0.00003, 'completed', $2, $3, 'eth_blockNumber')`, [mine.key, `log-${mine.id}-${i}`, now - i]);
       }
       await pool.query(`INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at) VALUES ('rpc_call', $1, 0.00003, 'completed', $2, $3)`, [theirs.key, `log-other-${theirs.id}`, now]);
+      // Trading Intelligence writes the FULL key into request_id — it must be masked.
+      await pool.query(`INSERT INTO revenue_events_v2 (op_type, client_id, amount_usdt, status, request_id, created_at, method) VALUES ('intelligence', $1, 0.01, 'completed', $2, $3, 'funding-rate-heatmap')`, [mine.key, `intel:funding-rate-heatmap:${mine.key}:${now}`, now - 10]);
       const p1 = await (await call('/requests?limit=2', { account: acct })).json();
       assert.equal(p1.data.items.length, 2);
       assert.ok(p1.data.nextCursor);
       const p2 = await (await call(`/requests?limit=10&cursor=${p1.data.nextCursor}`, { account: acct })).json();
-      assert.equal(p2.data.items.length, 3);
+      assert.equal(p2.data.items.length, 4);
+      assert.match(p2.data.items.at(-1).receiptId, /^intel:funding-rate-heatmap:sk_basic_…[0-9a-f]{4}:\d+$/);
       assert.equal(p2.data.nextCursor, null);
       const all = JSON.stringify([p1, p2]);
       assert.ok(!all.includes(mine.key) && !all.includes(theirs.key));
       assert.equal(p1.data.items[0].key.label, 'logger');
       assert.equal(p1.data.items[0].latencyMs, null);
+    });
+
+    it('intelligence run uses MY key server-side and never for another account', async () => {
+      const k = await fundedKey(1);
+      await linkKey(pool, A, { apiKey: k.key });
+      const r = await (await call('/intelligence/funding-rate-heatmap', { method: 'POST', body: { keyId: k.id } })).json();
+      assert.equal(r.url, 'http://intel.test/v1/intelligence/funding-rate-heatmap');
+      assert.equal(r.sawKey, k.key);
+      assert.equal((await call('/intelligence/funding-rate-heatmap', { method: 'POST', account: B, body: { keyId: k.id } })).status, 404);
+      assert.equal((await call('/intelligence/not-a-metric', { method: 'POST', body: { keyId: k.id } })).status, 404);
     });
 
     it('usage series is zero-filled per key; deposits cover my keys only', async () => {

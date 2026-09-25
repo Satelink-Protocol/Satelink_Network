@@ -2,7 +2,7 @@
 //
 // Called by authorizeAndMeter INSTEAD of its single deduction UPDATE when the
 // flag is on. One transaction, in a fixed lock order
-//     agent-day counter → account-month counter → api_credits row
+//     agent-day → agent-month → account-month counter → api_credits row
 // so concurrent requests can neither exceed a cap nor deadlock:
 //   1. read the key's link, agent limits and account settings;
 //   2. paused agent → 403, product outside the agent's scopes → 403,
@@ -21,6 +21,7 @@ const DENY = {
   scope_denied: { http: 403, message: 'This key is not allowed to use this product — change its scopes in the console' },
   credit_auto_use_off: { http: 402, message: 'Credit auto-use is off for this account — turn it on in console settings' },
   agent_daily_cap_reached: { http: 402, message: "This key reached its daily spend cap — it resets at midnight in the account's timezone" },
+  agent_monthly_cap_reached: { http: 402, message: 'This key reached its monthly spend cap — raise it in the console' },
   account_monthly_cap_reached: { http: 402, message: 'This account reached its monthly spend cap — raise it in console settings' },
 };
 
@@ -31,7 +32,7 @@ function deny(code, extra = {}) {
 const CONTEXT_SQL = `
   SELECT c.id AS api_key_id,
          l.account_id,
-         al.paused, al.scopes, al.daily_cap_usdt,
+         al.paused, al.scopes, al.daily_cap_usdt, al.monthly_cap_usdt AS agent_monthly_cap_usdt,
          s.monthly_spend_cap_usdt,
          COALESCE(s.credit_auto_use, TRUE) AS credit_auto_use,
          COALESCE(s.timezone, 'UTC')       AS tz
@@ -95,6 +96,10 @@ export async function deductWithAccountLimits(pool, { key, cost, product = 'rpc'
     if (cost > 0 && ctx.daily_cap_usdt !== null && ctx.daily_cap_usdt !== undefined) {
       const r = await client.query(COUNTER_SQL, ['agent_day', String(ctx.api_key_id), ctx.tz, 'YYYY-MM-DD', cost, ctx.daily_cap_usdt]);
       if (r.rowCount === 0) return finish(deny('agent_daily_cap_reached', { cap_usdt: Number(ctx.daily_cap_usdt) }));
+    }
+    if (cost > 0 && ctx.agent_monthly_cap_usdt !== null && ctx.agent_monthly_cap_usdt !== undefined) {
+      const r = await client.query(COUNTER_SQL, ['agent_month', String(ctx.api_key_id), ctx.tz, 'YYYY-MM', cost, ctx.agent_monthly_cap_usdt]);
+      if (r.rowCount === 0) return finish(deny('agent_monthly_cap_reached', { cap_usdt: Number(ctx.agent_monthly_cap_usdt) }));
     }
     if (cost > 0 && ctx.account_id && ctx.monthly_spend_cap_usdt !== null && ctx.monthly_spend_cap_usdt !== undefined) {
       const r = await client.query(COUNTER_SQL, ['account_month', ctx.account_id, ctx.tz, 'YYYY-MM', cost, ctx.monthly_spend_cap_usdt]);

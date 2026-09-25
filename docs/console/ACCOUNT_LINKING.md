@@ -40,7 +40,8 @@ trusted `Origin`. `Idempotency-Key` is honoured on key create and rotate.
 | PATCH | `/keys/:id` | rename |
 | POST | `/keys/:id/revoke` | `api_credits.status='revoked'` → `authorizeAndMeter` refuses it immediately (403); balance stays on it |
 | POST | `/keys/:id/rotate` | new key + **exact balance move** + wallet binding move + limits move + old key revoked, one locked transaction, audited. **409** when the key has an active plan entitlement, webhook subscriptions, frozen funds or a payment hold |
-| PUT | `/keys/:id/limits` | `paused`, `scopes` (`rpc`, `intelligence`; null = all), `dailyCapUsdt` |
+| PUT | `/keys/:id/limits` | `paused`, `scopes` (`rpc`, `intelligence`; null = all), `dailyCapUsdt`, `monthlyCapUsdt` |
+| POST | `/intelligence/:metric` `{keyId}` | run a paid Trading Intelligence metric with one of the account's keys — loopback to the unchanged `/v1/intelligence` route (same metering, revenue row, owner controls); the key never leaves the server |
 | GET/PATCH | `/settings` | monthly spend cap, credit auto-use, alert thresholds, default mode, timezone (validated against `pg_timezone_names`), notifications |
 | GET | `/spend` | real spend (from `api_usage_daily`) + cap usage (from counters) |
 | GET | `/usage?days=` | daily series per key, zero-filled |
@@ -55,9 +56,9 @@ trusted `Origin`. `Idempotency-Key` is honoured on key create and rotate.
 ## Owner controls in the metering path
 `authorizeAndMeter` (the single chokepoint for RPC-with-key and Trading Intelligence), when the
 flag is on, replaces its deduction with **one transaction** in a fixed lock order —
-agent-day counter → account-month counter → `api_credits` row:
+agent-day → agent-month → account-month counter → `api_credits` row:
 paused → 403 · product outside scopes → 403 · credit auto-use off → 402 · per-agent daily cap →
-402 · per-account monthly cap → 402 (conditional upserts) · the same conditional deduction · commit,
+402 · per-agent monthly cap → 402 · per-account monthly cap → 402 (conditional upserts) · the same conditional deduction · commit,
 or roll everything back. Counters therefore always equal the sum of committed charges and never
 exceed a cap. These denials are `terminal`: under `capacity_enforcement_path = new` (prod today)
 `enforceCapacity` returns them instead of falling through to the authorization layer, and the RPC /
@@ -70,12 +71,14 @@ cookie; the cookie is deleted once empty. A key owned by another account stays i
 is reported, never dropped silently.
 
 ## Verification (2026-09-25)
-- `apps/api/test/console_accounts.test.js` — **22/22** on real Postgres 14: flag-off parity; link /
+- `apps/api/test/console_accounts.test.js` — **24/24** on real Postgres 14: flag-off parity; link /
   create / rename / revoke / cross-account isolation; rotation (exact balance, wallet, limits,
-  refusals, 6 concurrent rotations → exactly one); pause / scope / auto-use; **daily cap under 40
+  refusals, 6 concurrent rotations → exactly one); pause / scope / auto-use; agent monthly cap under
+  30 concurrent → exactly 5; **daily cap under 40
   concurrent requests → exactly 3 served, counter == deducted**; monthly cap across two keys under
   60 concurrent requests → exactly 10; insufficient-credit rollback; terminal under `new` path;
-  CSRF; idempotent replay; request-log pagination and isolation; SIWE link, forged signature,
+  CSRF; idempotent replay; request-log pagination and isolation, **full keys masked in receipt ids**
+  (Trading Intelligence embeds the key in `request_id`); intelligence run uses only the caller's own key; SIWE link, forged signature,
   nonce replay; x402 scopes.
 - Full API suite: branch and `main` both 321 passing / the same 19 pre-existing failures — **no new
   failure**.

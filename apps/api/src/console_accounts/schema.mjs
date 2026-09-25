@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS agent_limits (
   account_id     TEXT        NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   scopes         TEXT[],
   daily_cap_usdt NUMERIC(20,6) CHECK (daily_cap_usdt IS NULL OR daily_cap_usdt >= 0),
+  monthly_cap_usdt NUMERIC(20,6) CHECK (monthly_cap_usdt IS NULL OR monthly_cap_usdt >= 0),
   paused         BOOLEAN     NOT NULL DEFAULT FALSE,
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS agent_limits (
 -- deduction with a conditional upsert, so a counter always equals the sum of
 -- committed charges and never exceeds its cap under concurrency.
 CREATE TABLE IF NOT EXISTS account_spend_counters (
-  scope      TEXT          NOT NULL CHECK (scope IN ('agent_day', 'account_month')),
+  scope      TEXT          NOT NULL CHECK (scope IN ('agent_day', 'agent_month', 'account_month')),
   scope_id   TEXT          NOT NULL,
   period     TEXT          NOT NULL,
   spent_usdt NUMERIC(20,6) NOT NULL DEFAULT 0,

@@ -54,7 +54,7 @@ const LIST_SQL = `
   SELECT l.api_key_id AS id, l.label, l.role, l.key_hint, l.key_fingerprint,
          l.created_at AS linked_at,
          c.tier, c.status, c.credits_usdt, c.daily_limit, c.last_used, c.created_at,
-         al.paused, al.scopes, al.daily_cap_usdt
+         al.paused, al.scopes, al.daily_cap_usdt, al.monthly_cap_usdt
     FROM account_api_keys l
     JOIN api_credits c ON c.id = l.api_key_id
     LEFT JOIN agent_limits al ON al.api_key_id = l.api_key_id
@@ -75,7 +75,12 @@ function shapeKey(r) {
     lastUsed: r.last_used,
     createdAt: r.created_at,
     linkedAt: r.linked_at,
-    limits: { paused: Boolean(r.paused), scopes: r.scopes ?? null, dailyCapUsdt: r.daily_cap_usdt === null || r.daily_cap_usdt === undefined ? null : Number(r.daily_cap_usdt) },
+    limits: {
+      paused: Boolean(r.paused),
+      scopes: r.scopes ?? null,
+      dailyCapUsdt: r.daily_cap_usdt === null || r.daily_cap_usdt === undefined ? null : Number(r.daily_cap_usdt),
+      monthlyCapUsdt: r.monthly_cap_usdt === null || r.monthly_cap_usdt === undefined ? null : Number(r.monthly_cap_usdt),
+    },
   };
 }
 

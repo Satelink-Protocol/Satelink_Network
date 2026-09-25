@@ -61,7 +61,7 @@ export async function listRequests(pool, accountId, q = {}) {
   // Revoked links are included: history stays visible after a key is revoked.
   const r = await pool.query(
     `SELECT e.id, e.created_at, e.op_type, e.method, e.chain, e.status, e.amount_usdt, e.request_id,
-            l.api_key_id, l.label, l.key_hint
+            c.api_key AS _k, l.api_key_id, l.label, l.key_hint
        FROM account_api_keys l
        JOIN api_credits c ON c.id = l.api_key_id
        JOIN revenue_events_v2 e ON e.client_id = c.api_key
@@ -80,7 +80,9 @@ export async function listRequests(pool, accountId, q = {}) {
       chain: e.chain,
       status: e.status,
       costUsdt: Number(e.amount_usdt),
-      receiptId: e.request_id,
+      // Some writers embed the full key in request_id (Trading Intelligence:
+      // "intel:<metric>:<key>:<ts>"). Never return it — swap in the hint.
+      receiptId: e.request_id ? e.request_id.split(e._k).join(e.key_hint) : null,
       key: { id: e.api_key_id, label: e.label, hint: e.key_hint },
       latencyMs: null,
       usageUnits: null,

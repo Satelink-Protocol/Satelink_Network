@@ -42,7 +42,17 @@ const keyIdParam = (req) => {
   return n;
 };
 
-export function createMeRouter(pool, { resolveSession = (req) => betterAuthSession(pool, req), logger = console } = {}) {
+const INTEL_METRICS = new Set(['funding-rate-heatmap', 'open-interest-shifts', 'liquidation-clusters', 'market-microstructure']);
+
+export function createMeRouter(pool, {
+  resolveSession = (req) => betterAuthSession(pool, req),
+  logger = console,
+  // Loopback to this same process: running a metric goes through the unchanged
+  // /v1/intelligence route (same metering, same revenue row) with the key the
+  // account owns — resolved here, never sent to the browser.
+  intelBase = process.env.INTEL_LOOPBACK_BASE || `http://127.0.0.1:${process.env.PORT || 8080}`,
+  fetchImpl = globalThis.fetch,
+} = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '16kb' }));
   router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -107,6 +117,30 @@ export function createMeRouter(pool, { resolveSession = (req) => betterAuthSessi
   router.get('/requests', h((req) => listRequests(pool, req.account.accountId, req.query)));
   router.get('/usage', h((req) => usageSeries(pool, req.account.accountId, { days: req.query.days })));
   router.get('/deposits', h((req) => listDeposits(pool, req.account.accountId)));
+
+  // Run a paid Trading Intelligence metric with one of MY keys (console
+  // "Get market data"). The price is charged to that key exactly as a direct
+  // API call would be; owner controls (pause, scopes, caps) apply.
+  router.post('/intelligence/:metric', async (req, res) => {
+    try {
+      const metric = req.params.metric;
+      if (!INTEL_METRICS.has(metric)) return res.status(404).json({ ok: false, error: 'unknown_metric' });
+      const keyId = Number(req.body?.keyId);
+      if (!Number.isInteger(keyId) || keyId <= 0) return res.status(400).json({ ok: false, error: 'invalid_key_id' });
+      const row = (await pool.query(
+        `SELECT c.api_key FROM account_api_keys l JOIN api_credits c ON c.id = l.api_key_id
+          WHERE l.account_id = $1 AND l.api_key_id = $2 AND l.revoked_at IS NULL`,
+        [req.account.accountId, keyId]
+      )).rows[0];
+      if (!row) return res.status(404).json({ ok: false, error: 'key_not_found' });
+      const r = await fetchImpl(`${intelBase}/v1/intelligence/${metric}`, { headers: { 'x-api-key': row.api_key, accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+      const body = await r.json().catch(() => ({ ok: false, error: 'bad_upstream_response' }));
+      return res.status(r.status).json(body);
+    } catch (err) {
+      logger.error?.('[console-accounts] intelligence run failed:', err.message);
+      return res.status(502).json({ ok: false, error: 'intelligence_unavailable' });
+    }
+  });
 
   // Wallets + x402
   router.get('/wallets', h((req) => listWallets(pool, req.account.accountId)));

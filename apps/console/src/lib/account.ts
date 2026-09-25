@@ -57,3 +57,21 @@ export async function meMutate<T>(
   const r = await apiFetch<Envelope<T>>(`/v1/me${path}`, { cookie, method, body: body ?? (method === "DELETE" ? undefined : {}), headers });
   return r.ok ? { ok: true, data: r.data.data } : r;
 }
+
+/** Mutation whose upstream body is returned verbatim (no {ok,data} envelope). */
+export async function meRaw(method: "POST", path: string, body?: unknown): Promise<{ status: number; body: unknown }> {
+  const { API_BASE } = await import("./api");
+  const cookie = await authCookieHeader();
+  try {
+    const r = await fetch(`${API_BASE}/v1/me${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", "X-Satelink-Console": "1", Cookie: cookie, Accept: "application/json" },
+      body: JSON.stringify(body ?? {}),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+    return { status: r.status, body: await r.json().catch(() => ({ ok: false, error: "non_json_response" })) };
+  } catch {
+    return { status: 502, body: { ok: false, error: "api_unavailable" } };
+  }
+}
