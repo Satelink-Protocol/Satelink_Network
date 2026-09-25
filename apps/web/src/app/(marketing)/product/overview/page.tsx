@@ -173,7 +173,7 @@ export default async function OverviewPage() {
           <SectionHeader eyebrow="Put Satelink to work" title="Three things you can build today" align="left" />
           <div className="mt-8 grid gap-5 lg:grid-cols-3">
             {TASKS.map((t) => (
-              <div key={t.title} className="flex flex-col rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
+              <div key={t.title} className="flex min-w-0 flex-col rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
                 <h3 className="font-semibold text-sl-text">{t.title}</h3>
                 <p className="mt-1.5 flex-1 text-sm text-sl-text-muted">{t.body}</p>
                 <CodeBlock code={t.code} ariaLabel={t.title} className="mt-4" />
@@ -310,7 +310,7 @@ export default async function OverviewPage() {
       {/* CTA */}
       <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
         <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface px-6 py-12 text-center">
-          <h2 className="text-2xl font-semibold tracking-tight text-sl-text">Ready to build?</h2>
+          <h2 className="font-sl-display text-[1.75rem] font-normal leading-tight tracking-[-0.01em] text-sl-text">Ready to build?</h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg"><Link href="/developers/quickstart">Start building</Link></Button>
             <Button asChild variant="secondary" size="lg"><Link href="/pricing">See pricing</Link></Button>

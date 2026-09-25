@@ -102,7 +102,7 @@ function BlockOne({ block: b }: { block: Block }) {
     case "cta":
       return (
         <Section className="text-center">
-          {b.heading && <h2 className="text-2xl font-semibold tracking-tight text-sl-text">{b.heading}</h2>}
+          {b.heading && <h2 className="font-sl-display text-[1.75rem] font-normal leading-tight tracking-[-0.01em] text-sl-text">{b.heading}</h2>}
           {b.label && b.href && <div className="mt-5"><Button asChild variant="primary" size="lg"><Link href={b.href}>{b.label}</Link></Button></div>}
         </Section>
       );
@@ -132,7 +132,7 @@ function BlockOne({ block: b }: { block: Block }) {
         <Section>
           <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">For machines</p>
-            <pre className="mt-3 overflow-x-auto font-sl-mono text-xs text-sl-text-muted"><code>{JSON.stringify(b.json ?? { product: b.productSlug, docs: "/products/" + b.productSlug + ".json" }, null, 2)}</code></pre>
+            <pre tabIndex={0} className="mt-3 overflow-x-auto font-sl-mono text-xs text-sl-text-muted"><code>{JSON.stringify(b.json ?? { product: b.productSlug, docs: "/products/" + b.productSlug + ".json" }, null, 2)}</code></pre>
           </div>
         </Section>
       );

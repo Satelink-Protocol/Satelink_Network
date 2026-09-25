@@ -75,7 +75,7 @@ export function InteractiveSelector({
             <h3 className="text-2xl font-bold tracking-tight text-sl-text">{product.name}</h3>
             <span className="font-sl-mono text-sm text-sl-accent">{product.priceLine}</span>
           </div>
-          <pre className="mt-4 overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-bg p-4 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
+          <pre tabIndex={0} className="mt-4 overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-bg p-4 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
             <code>{product.exampleRequest}</code>
           </pre>
           <div className="mt-5 flex flex-wrap gap-4">

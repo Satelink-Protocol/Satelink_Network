@@ -27,11 +27,27 @@ test("mega-menu: opens, exposes aria-expanded, shows grouped links, Esc closes",
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
 });
 
-test("mega-menu: keyboard focus opens the panel", async ({ page }) => {
+test("mega-menu: keyboard — ArrowDown opens and focuses the first link, Esc returns focus", async ({ page }) => {
   await page.goto("/");
-  const trigger = page.getByRole("button", { name: "Platform" });
+  const trigger = page.getByRole("button", { name: "Solutions" });
   await trigger.focus();
+  await page.keyboard.press("ArrowDown");
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("region", { name: "Solutions" }).getByRole("link").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toBeFocused();
+});
+
+test("header is the claude.com pattern: five menus, Log in, one primary action", async ({ page }) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  for (const m of ["Products", "Solutions", "Developers", "Resources"]) await expect(nav.getByRole("button", { name: m })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Pricing" })).toBeVisible();
+  const banner = page.getByRole("banner");
+  await expect(banner.getByRole("link", { name: "Log in" })).toBeVisible();
+  await expect(banner.getByRole("link", { name: "Try Satelink" })).toBeVisible();
+  await expect(banner.getByRole("link", { name: "Contact sales" })).toHaveCount(0);
 });
 
 test("Pricing is a plain top-level link", async ({ page }) => {
@@ -69,7 +85,8 @@ test("redirect: /platform/pricing → /pricing#platform", async ({ page }) => {
   await expect(page).toHaveURL(/\/pricing(#platform)?$/);
 });
 
-test("redirect: /dashboard → /console", async ({ page }) => {
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/console$/);
+test("redirect: /dashboard → the console host (308, not followed)", async ({ request }) => {
+  const r = await request.get("/dashboard", { maxRedirects: 0 });
+  expect(r.status()).toBe(308);
+  expect(r.headers()["location"]).toMatch(/^https:\/\/console\.satelink\.network\/?$/);
 });

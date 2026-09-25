@@ -1,16 +1,23 @@
+// Screenshot + measurement audit: satelink.network, console, jakuraa.com at
+// 360/390/768/1024/1440 × light/dark. Bases default to production; override
+// with SAT_BASE / CONSOLE_BASE / JAK_BASE to audit local builds or previews.
+//   node scripts/audit/prod-screenshot-audit.mjs <outdir>
 import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
+const SAT = process.env.SAT_BASE || 'https://satelink.network';
+const CON = process.env.CONSOLE_BASE || 'https://console.satelink.network';
+const JAK = process.env.JAK_BASE || 'https://jakuraa.com';
 const OUT = process.argv[2];
 fs.mkdirSync(OUT, { recursive: true });
 const widths = [360, 390, 768, 1024, 1440];
 const themes = ['light', 'dark'];
 const targets = [
-  ['sat-home', 'https://satelink.network/'],
-  ['sat-pricing', 'https://satelink.network/pricing'],
-  ['sat-product', 'https://satelink.network/product/overview'],
-  ['sat-login', 'https://satelink.network/login'],
-  ['console', 'https://console.satelink.network/'],
-  ['jakuraa', 'https://jakuraa.com/'],
+  ['sat-home', `${SAT}/`],
+  ['sat-pricing', `${SAT}/pricing`],
+  ['sat-product', `${SAT}/product/overview`],
+  ['console', `${CON}/sign-in`],
+  ['jakuraa', `${JAK}/`],
 ];
 const results = [];
 const browser = await chromium.launch();
@@ -28,9 +35,11 @@ for (const [name, url] of targets) for (const w of widths) for (const t of theme
     rec.hscroll = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     rec.dataTheme = await p.evaluate(() => document.documentElement.getAttribute('data-theme'));
     await p.screenshot({ path: `${OUT}/${name}-${w}-${t}.png` });
+    const axe = await new AxeBuilder({ page: p }).withTags(['wcag2a', 'wcag2aa']).analyze().catch(() => null);
+    rec.axe = axe ? axe.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => `${v.id}×${v.nodes.length}`) : 'n/a';
     if (name === 'sat-home' && w >= 1024) {
       // open Products mega-menu
-      const trig = p.locator('header').getByRole('button', { name: /^Products/i }).first();
+      const trig = p.getByRole('banner').getByRole('button', { name: /^Products/i }).first();
       if (await trig.count()) {
         await trig.hover(); await trig.click().catch(()=>{}); await p.waitForTimeout(500);
         const panel = await p.evaluate(() => {
@@ -50,4 +59,4 @@ for (const [name, url] of targets) for (const w of widths) for (const t of theme
 }
 await browser.close();
 fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(results, null, 2));
-console.log(JSON.stringify(results.map(r=>[r.name,r.w,r.t,r.status,r.finalUrl!==r.url?r.finalUrl:'',r.hscroll,r.dataTheme,r.error||''].join(' ')),null,0));
+for (const r of results) console.log([r.name,r.w,r.t,r.status,r.finalUrl!==r.url?r.finalUrl:'','hscroll='+r.hscroll,'axe='+JSON.stringify(r.axe),r.error||''].join(' '));

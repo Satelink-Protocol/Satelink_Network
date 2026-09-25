@@ -85,7 +85,7 @@ export default async function PricingPage() {
                 <p className="font-sl-mono text-2xl font-bold tabular-nums text-sl-text">${pack.price}</p>
                 <p className="mt-1 text-sm text-sl-text-muted">{pack.label}</p>
                 {pack.bonusPct > 0 && (
-                  <p className="mt-1 text-xs font-semibold text-sl-market">+{pack.bonusPct}% bonus credit</p>
+                  <p className="mt-1 text-xs font-semibold text-sl-accent">+{pack.bonusPct}% bonus credit</p>
                 )}
                 <div className="mt-4">
                   {actionable ? (
@@ -123,7 +123,7 @@ export default async function PricingPage() {
       <div>
         <SectionHeader eyebrow="Rate card" title="Agents & API — pay per call" align="left"
           lede="No plan, no commitment. Keyless x402 or prepaid credits." />
-        <div className="mt-6 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
+        <div tabIndex={0} role="region" aria-label="Price table" className="mt-6 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sl-accent/45">
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
               <tr>
@@ -176,7 +176,7 @@ export default async function PricingPage() {
   const enterprise = (
     <div className="mx-auto max-w-xl rounded-[var(--sl-radius-lg)] border border-dashed border-sl-border bg-sl-surface p-8 text-center">
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-sl-text-subtle">Enterprise</p>
-      <h3 className="mt-2 font-sl-display text-2xl font-extrabold text-sl-text">Coming later</h3>
+      <h3 className="mt-2 font-sl-display text-2xl font-normal text-sl-text">Coming later</h3>
       <p className="mx-auto mt-3 max-w-md text-sm text-sl-text-muted">
         Dedicated keys, spend controls, per-key attribution, and consolidated invoicing. Talk to us about
         an early engagement.
@@ -196,7 +196,7 @@ export default async function PricingPage() {
         <div className="sl-grad-hero pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto max-w-[1200px] px-4 py-16 text-center sm:px-6 md:py-20">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">Pricing</p>
-          <h1 className="mx-auto mt-3 max-w-[20ch] text-balance font-sl-display text-4xl font-extrabold tracking-[-0.02em] text-sl-text sm:text-5xl">
+          <h1 className="mx-auto mt-3 max-w-[20ch] text-balance font-sl-display text-4xl font-normal tracking-[-0.02em] text-sl-text sm:text-5xl">
             Pay for what a machine calls.
           </h1>
           <p className="mx-auto mt-5 max-w-[62ch] text-lg text-sl-text-muted">

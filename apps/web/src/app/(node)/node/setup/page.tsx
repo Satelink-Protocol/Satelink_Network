@@ -121,7 +121,7 @@ export default function NodeSetupPage() {
                                 <div className="text-sm font-medium">Run this on your node:</div>
                                 {setupData.install_commands.map((cmd: string, i: number) => (
                                     <div key={i} className="relative group">
-                                        <pre className="bg-black text-green-400 p-4 rounded-md font-mono text-sm overflow-x-auto border border-neutral-800">
+                                        <pre tabIndex={0} className="bg-black text-green-400 p-4 rounded-md font-mono text-sm overflow-x-auto border border-neutral-800">
                                             RES=$({cmd})
                                         </pre>
                                         <Button

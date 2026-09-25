@@ -132,7 +132,7 @@ export function ProductPageView({
       <section className="border-y border-sl-border bg-sl-bg-raised">
         <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
           <SectionHeader eyebrow="For machines" title="Machine-readable facts" align="left" />
-          <pre className="mt-6 overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-5 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
+          <pre tabIndex={0} className="mt-6 overflow-x-auto rounded-[var(--sl-radius)] border border-sl-border bg-sl-surface p-5 font-sl-mono text-xs leading-relaxed text-sl-text-muted">
             <code>{JSON.stringify({
               product: product.slug,
               endpoint: product.endpoint,
@@ -181,7 +181,7 @@ export function ProductPageView({
       {/* Final CTA */}
       <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
         <div className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface px-6 py-12 text-center">
-          <h2 className="text-2xl font-semibold tracking-tight text-sl-text">Start building with {product.name}</h2>
+          <h2 className="font-sl-display text-[1.75rem] font-normal leading-tight tracking-[-0.01em] text-sl-text">Start building with {product.name}</h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg"><Link href={primaryCta.href}>{primaryCta.label}</Link></Button>
             <Button asChild variant="secondary" size="lg"><Link href="/pricing">See pricing</Link></Button>

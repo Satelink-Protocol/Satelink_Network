@@ -2,7 +2,7 @@
   "name": "@satelink/web-ui",
   "version": "0.0.0",
   "private": true,
-  "description": "Satelink Signal — the public-website design system (tokens + components). Shared by apps/web (satelink.network) and apps/corporate (jakuraa.com). Distinct from @satelink/ui, which is the OS/admin dashboard system.",
+  "description": "Satelink Signal \u2014 the public-website design system (tokens + components). Shared by apps/web (satelink.network) and apps/corporate (jakuraa.com). Distinct from @satelink/ui, which is the OS/admin dashboard system.",
   "type": "module",
   "sideEffects": [
     "*.css"
@@ -14,9 +14,11 @@
     "./site": "./src/components/site/index.ts",
     "./site/*": "./src/components/site/*.tsx",
     "./lib/utils": "./src/lib/utils.ts",
-    "./tokens.css": "./src/styles/tokens.css"
+    "./tokens.css": "./src/styles/tokens.css",
+    "./foundation.css": "./src/styles/foundation.css"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",

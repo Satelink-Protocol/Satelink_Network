@@ -16,7 +16,7 @@ export function CompareMatrix() {
   const proIndex = PLANS.findIndex((p) => p.featured);
 
   return (
-    <div className="overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
+    <div tabIndex={0} role="region" aria-label="Plan comparison" className="overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sl-accent/45">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-sl-surface">
           <tr>

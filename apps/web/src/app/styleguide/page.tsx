@@ -206,14 +206,14 @@ function Gallery() {
             <span className="font-sl-mono text-xs text-sl-accent-ink">--sl-grad-brand</span>
           </div>
           <div className="flex h-24 items-center justify-center rounded-[var(--sl-radius)] border border-sl-border">
-            <span className="sl-text-grad font-sl-display text-2xl font-extrabold">Signal 2.0</span>
+            <span className="sl-text-grad font-sl-display text-2xl font-normal">Signal 2.0</span>
           </div>
         </div>
       </div>
 
       <div>
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sl-text-subtle">Display type (Manrope)</h3>
-        <p className="font-sl-display font-extrabold tracking-tight text-sl-text" style={{ fontSize: "var(--sl-display-2)" }}>
+        <p className="font-sl-display font-normal tracking-tight text-sl-text" style={{ fontSize: "var(--sl-display-2)" }}>
           Commerce for software that pays software.
         </p>
       </div>
