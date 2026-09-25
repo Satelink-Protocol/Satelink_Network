@@ -21,7 +21,7 @@
 //   served with stale:true + as_of. Payment required → 402 with x402 pointers.
 
 import { Router } from 'express';
-import { authorizeAndMeter } from '../billing/credit_service.mjs';
+import { authorizeAndMeter, resolveAccount } from '../billing/credit_service.mjs';
 import { recordRpcRevenue } from '../workloads/rpc_gateway/rpc_billing.js';
 import { readMetric } from '../intelligence/engine.js';
 import { METRICS } from '../intelligence/compute.js';
@@ -58,6 +58,14 @@ function paymentGuidance() {
   };
 }
 
+function withTimeout(promise, ms) {
+  let t;
+  return Promise.race([
+    promise.finally(() => clearTimeout(t)),
+    new Promise((_, reject) => { t = setTimeout(() => reject(new Error('read_timeout')), ms); }),
+  ]);
+}
+
 function metricsCatalog() {
   return Object.entries(METRICS).map(([name, m]) => ({
     metric: name,
@@ -70,6 +78,7 @@ function metricsCatalog() {
 
 export function createIntelligenceRouter(pool, deps = {}) {
   const now = deps.now || (() => Date.now());
+  const readTimeoutMs = deps.readTimeoutMs ?? 5000;
   const router = Router();
 
   // Free discovery — no billing, mirrors /v1/pricing's honesty discipline.
@@ -109,7 +118,49 @@ export function createIntelligenceRouter(pool, deps = {}) {
       });
     }
 
-    // Canonical metered deduction.
+    // Unknown / inactive keys are refused up front (free check, no charge), so
+    // they get the same answer whether or not data is available.
+    try {
+      const acct = await resolveAccount(pool, { apiKey });
+      if (!acct) return res.status(401).json({ ok: false, error: 'account_not_found', message: 'Unknown API key or wallet', price_usdt: spec.price_usdt });
+      if (acct.status && acct.status !== 'active') return res.status(403).json({ ok: false, error: 'account_inactive', message: `Account status: ${acct.status}`, price_usdt: spec.price_usdt });
+    } catch (e) {
+      return res.status(503).json({ ok: false, error: 'billing_unavailable', message: e.message });
+    }
+
+    // Read FIRST, charge SECOND (fix/ti-charge-after-success). A snapshot that
+    // is missing, fails to read or times out returns 503 and charges nothing.
+    // The deduction below only runs once there is data to serve, and the data
+    // is only returned if the deduction succeeded — never data without payment,
+    // never payment without data.
+    let snap;
+    try {
+      snap = await withTimeout(readMetric(pool, metric, { now }), readTimeoutMs);
+    } catch (e) {
+      console.error(`[Intel] read failed for ${metric} (not charged): ${e.message}`);
+      return res.status(503).json({ ok: false, error: 'intelligence_unavailable', message: e.message === 'read_timeout' ? 'read_timeout' : 'read_failed', charged: false });
+    }
+
+    if (!snap.available) {
+      return res.status(503).json({
+        ok: false,
+        error: 'warming_up',
+        metric,
+        message: 'No snapshot has been captured yet for this metric. Retry shortly. You were not charged.',
+        charged: false,
+      });
+    }
+
+    // Prove the payload can be sent BEFORE charging (a response that cannot be
+    // serialised must not cost anything).
+    try {
+      JSON.stringify(snap.data);
+    } catch (e) {
+      console.error(`[Intel] unserialisable snapshot for ${metric} (not charged): ${e.message}`);
+      return res.status(503).json({ ok: false, error: 'intelligence_unavailable', message: 'bad_snapshot', charged: false });
+    }
+
+    // Canonical metered deduction — only now that there is data to serve.
     let meter;
     try {
       meter = await authorizeAndMeter(pool, { apiKey, methodPrice: spec.price_usdt, product: 'intelligence' });
@@ -129,27 +180,6 @@ export function createIntelligenceRouter(pool, deps = {}) {
       // Owner controls (paused / cap / auto-use off) are not a funding problem.
       if (http === 402 && !meter.terminal) Object.assign(body, paymentGuidance());
       return res.status(http).json(body);
-    }
-
-    // Paid — serve the derived intelligence from the snapshot cache.
-    let snap;
-    try {
-      snap = await readMetric(pool, metric, { now });
-    } catch (e) {
-      // NOTE: the credit was already deducted above. A read failure after a
-      // successful deduction is logged; we return 503 and rely on the client
-      // retry (idempotent read) rather than fabricate data.
-      console.error(`[Intel] read failed after deduction for ${metric}: ${e.message}`);
-      return res.status(503).json({ ok: false, error: 'intelligence_unavailable', message: 'read_failed' });
-    }
-
-    if (!snap.available) {
-      return res.status(503).json({
-        ok: false,
-        error: 'warming_up',
-        metric,
-        message: 'No snapshot has been captured yet for this metric. Retry shortly.',
-      });
     }
 
     // Record real revenue for the deduction (fire-and-forget; only cost > 0).
