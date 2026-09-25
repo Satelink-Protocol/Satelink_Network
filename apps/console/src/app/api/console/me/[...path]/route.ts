@@ -19,7 +19,15 @@ const ALLOW: [string, RegExp][] = [
   ["POST", /^\/intelligence\/[a-z-]+$/],
   ["POST", /^\/checkout$/],
   ["POST", /^\/keys\/\d+\/deposit$/],
+  ["POST", /^\/onboarding\/(account|name|use|plan|review|safety|back)$/],
 ];
+
+/** The browser's IP / UA, for consent records (Vercel sets x-forwarded-for). */
+function clientHeaders(req: Request): Record<string, string> {
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || "";
+  const ua = req.headers.get("user-agent") || "";
+  return { ...(ip ? { "X-Satelink-Client-IP": ip.slice(0, 64) } : {}), ...(ua ? { "X-Satelink-Client-UA": ua.slice(0, 300) } : {}) };
+}
 
 async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
   if (!accountsEnabled()) return NextResponse.json({ ok: false, error: "accounts_disabled" }, { status: 404 });
@@ -37,7 +45,7 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
     audit(g.session, path.startsWith("/intelligence/") ? "me/intelligence" : "me/deposit", { target: path.split("/")[2], status: raw.status });
     return NextResponse.json(raw.body, { status: raw.status });
   }
-  const r = await meMutate<unknown>(method, path, body, req.headers.get("idempotency-key") || undefined);
+  const r = await meMutate<unknown>(method, path, body, req.headers.get("idempotency-key") || undefined, path.startsWith("/onboarding/") ? clientHeaders(req) : {});
   audit(g.session, `me${path.replace(/\d+/g, ":id")}`, { method, ok: r.ok });
   return r.ok ? NextResponse.json({ ok: true, data: r.data }) : NextResponse.json({ ok: false, error: r.error }, { status: r.status || 502 });
 }

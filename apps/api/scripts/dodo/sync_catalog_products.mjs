@@ -48,12 +48,12 @@ function desiredBody(item, kind) {
   }
   const price = {
     type: 'recurring_price', price: Math.round(item.price_usd * 100), currency: 'USD', discount: 0, purchasing_power_parity: false,
-    payment_frequency_count: 1, payment_frequency_interval: 'Month', subscription_period_count: 10, subscription_period_interval: 'Year',
+    payment_frequency_count: 1, payment_frequency_interval: item.interval === 'year' ? 'Year' : 'Month', subscription_period_count: 10, subscription_period_interval: 'Year',
   };
   if (item.intro) Object.assign(price, { trial_period_days: item.intro.trial_period_days, trial_amount: Math.round(item.intro.amount_usd * 100), trial_apply_discounts: false });
   return {
-    name: `Satelink ${item.name}`,
-    description: item.intro ? item.intro.copy : `Satelink ${item.name} — $${item.price_usd}/month.`,
+    name: `Satelink ${item.name}${item.interval === 'year' ? ' (yearly)' : ''}`,
+    description: item.intro ? item.intro.copy : `Satelink ${item.name} — $${item.price_usd}/${item.interval === 'year' ? 'year' : 'month'}.`,
     tax_category: 'saas',
     price,
     metadata,

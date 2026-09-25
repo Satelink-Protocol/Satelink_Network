@@ -22,6 +22,11 @@ const { ensurePricingV2Schema } = await import('../../src/pricing_v2/schema.mjs'
 const { loadCatalog, publicCatalog } = await import('../../src/pricing_v2/catalog.mjs');
 const { createIntelligenceRouter } = await import('../../src/routes/intelligence_route.js');
 const { createConsoleRouter } = await import('../../src/routes/console.js');
+const { createDodoV2WebhookHandler } = await import('../../src/pricing_v2/webhooks.mjs');
+const crypto = await import('node:crypto');
+// Onboarding E2E: run with CONSOLE_ONBOARDING_V1=true. Webhooks are signed with
+// this TEST-ONLY secret (Standard Webhooks, exactly as Dodo signs them).
+const WEBHOOK_SECRET = 'whsec_' + Buffer.from('satelink-harness-webhook-secret!').toString('base64');
 
 const url = process.env.HARNESS_DB;
 if (!url || !['127.0.0.1', 'localhost'].includes(new URL(url).hostname)) throw new Error('HARNESS_DB must be a local database');
@@ -77,9 +82,9 @@ app.get('/api/identity/get-session', async (req, res) => {
 app.get('/api/identity/list-accounts', (_req, res) => res.json([{ providerId: 'google', createdAt: new Date().toISOString() }]));
 app.get('/api/identity/list-sessions', (_req, res) => res.json([]));
 // Seed helper: a fresh account (TEST DATA) so each E2E run starts empty.
-app.post('/__seed/user', async (_req, res) => {
+app.post('/__seed/user', express.json(), async (req, res) => {
   const id = `acct_e2e_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-  await pool.query('INSERT INTO "user" (id, email, name) VALUES ($1, $2, $3)', [id, `${id}@example.test`, 'E2E Tester']);
+  await pool.query('INSERT INTO "user" (id, email, name) VALUES ($1, $2, $3)', [id, `${id}@example.test`, req.body?.name || 'E2E Tester']);
   res.json({ id });
 });
 // Seed helper: a funded legacy key (as if created before accounts).
@@ -94,12 +99,39 @@ app.post('/__seed/key', express.json(), async (req, res) => {
   }
   res.json({ key });
 });
+// The REAL V2 webhook handler (signature-verified), and a helper that delivers
+// an event to it signed as Dodo would — Dodo cannot reach a laptop.
+app.post('/webhooks/dodo/v2', express.raw({ type: '*/*' }), createDodoV2WebhookHandler(pool, { secret: () => WEBHOOK_SECRET, mode: 'test' }));
+app.post('/__seed/webhook', express.json(), async (req, res) => {
+  const body = JSON.stringify({ type: req.body.type, business_id: 'bus_test', timestamp: new Date().toISOString(), data: req.body.data });
+  const id = `msg_${crypto.randomUUID()}`;
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = 'v1,' + crypto.createHmac('sha256', Buffer.from(WEBHOOK_SECRET.slice(6), 'base64')).update(`${id}.${ts}.${body}`).digest('base64');
+  const r = await fetch(`http://127.0.0.1:${port}/webhooks/dodo/v2`, { method: 'POST', headers: { 'content-type': 'application/json', 'webhook-id': id, 'webhook-timestamp': String(ts), 'webhook-signature': sig }, body });
+  res.status(r.status).json(await r.json());
+});
+// Read helpers for assertions (TEST DATA only).
+app.get('/__seed/product', (req, res) => {
+  const c = loadCatalog();
+  const item = [...c.plans, ...c.packs].find((x) => x.id === req.query.id);
+  res.json({ product: item?.dodo?.test ?? null });
+});
+app.get('/__seed/consents', async (req, res) => {
+  res.json((await pool.query('SELECT purpose, granted, document, document_version, ip, ip_source, created_at FROM consent_records WHERE account_id = $1 ORDER BY id', [req.query.account])).rows);
+});
+app.get('/__seed/settings', async (req, res) => {
+  res.json((await pool.query('SELECT monthly_spend_cap_usdt FROM account_settings WHERE account_id = $1', [req.query.account])).rows[0] ?? null);
+});
 app.get('/v2/plans', (_req, res) => res.json({ ok: true, data: publicCatalog(loadCatalog(), { mode: 'test' }) }));
 app.use('/v1', express.json(), createIntelligenceRouter(pool));
 app.use('/v1', createConsoleRouter(pool));
 app.get('/api/keys/deposit-info', (_req, res) => res.json({ ok: true, address: '0x966E1Ae22996545015b1414B35234b10719d7Ad4', network: 'Polygon (ChainId 137)', token_address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', test_fixture: true }));
 app.use('/v1/me', createMeRouter(pool, {
-  resolveSession: async (req) => { const id = userFromCookie(req); return id ? { accountId: id, email: 'demo@example.test' } : null; },
+  resolveSession: async (req) => {
+    const id = userFromCookie(req);
+    const u = id ? (await pool.query('SELECT email, name FROM "user" WHERE id = $1', [id])).rows[0] : null;
+    return id ? { accountId: id, email: u?.email ?? 'demo@example.test', name: u?.name ?? null } : null;
+  },
   intelBase: `http://127.0.0.1:${port}`,
 }));
 app.listen(port, () => console.log(`harness on :${port} schema=${schema} dodo=${process.env.DODO_TESTMODE_API_KEY ? 'test-key' : 'none'}`));

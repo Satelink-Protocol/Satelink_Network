@@ -17,6 +17,7 @@ import { listRequests, usageSeries, listDeposits } from './requests.mjs';
 import { createChallenge, verifyAndLink, listWallets, unlinkWallet, x402ForWallet } from './wallets.mjs';
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
 import { createCheckout, isPlanBillingV2Enabled } from '../pricing_v2/checkout.mjs';
+import { isOnboardingEnabled, getOnboarding, submitStep, backTo, clientMeta, consentHistory } from './onboarding.mjs';
 
 /** Default session resolver: Better Auth, from the request's cookies. */
 export async function betterAuthSession(pool, req) {
@@ -24,7 +25,7 @@ export async function betterAuthSession(pool, req) {
   if (!auth) return null;
   const { fromNodeHeaders } = await import('better-auth/node');
   const s = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-  return s?.user ? { accountId: s.user.id, email: s.user.email } : null;
+  return s?.user ? { accountId: s.user.id, email: s.user.email, name: s.user.name ?? null } : null;
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -126,6 +127,15 @@ export function createMeRouter(pool, {
     return { status: 201, body: await createCheckout({ accountId: req.account.accountId, email: req.account.email, itemId: req.body?.itemId, returnUrl }) };
   }));
 
+  // Onboarding (CONSOLE_ONBOARDING_V1): server-side, resumable first-run flow.
+  const onboardingOn = (req, res, next) => (isOnboardingEnabled() ? next() : res.status(404).json({ ok: false, error: 'onboarding_disabled' }));
+  router.get('/onboarding', onboardingOn, h((req) => getOnboarding(pool, req.account)));
+  router.post('/onboarding/back', onboardingOn, h(async (req) => { await backTo(pool, req.account, req.body?.to); return getOnboarding(pool, req.account); }));
+  router.post('/onboarding/:step', onboardingOn, h(async (req) => {
+    const out = await submitStep(pool, req.account, req.params.step, req.body || {}, clientMeta(req));
+    return out?.checkoutUrl ? out : getOnboarding(pool, req.account);
+  }));
+
   // Per-request log
   router.get('/requests', h((req) => listRequests(pool, req.account.accountId, req.query)));
   router.get('/usage', h((req) => usageSeries(pool, req.account.accountId, { days: req.query.days })));
@@ -204,7 +214,8 @@ export function createMeRouter(pool, {
       listKeys(pool, id), getSettings(pool, id), listWallets(pool, id), listSavedQueries(pool, id),
       pool.query('SELECT action, subject, detail, created_at FROM account_audit WHERE account_id = $1 ORDER BY created_at DESC LIMIT 1000', [id]).then((r) => r.rows),
     ]);
-    return { exportedAt: new Date().toISOString(), account: req.account, keys, settings, wallets, savedQueries: queries, audit };
+    const consents = await consentHistory(pool, id);
+    return { exportedAt: new Date().toISOString(), account: req.account, keys, settings, wallets, savedQueries: queries, audit, consents };
   }));
 
   return router;

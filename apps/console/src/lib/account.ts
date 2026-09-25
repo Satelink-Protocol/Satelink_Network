@@ -27,9 +27,10 @@ export async function meMutate<T>(
   path: string,
   body?: unknown,
   idempotencyKey?: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<ApiResult<T> & { replayed?: boolean }> {
   const cookie = await authCookieHeader();
-  const headers: Record<string, string> = { "X-Satelink-Console": "1" };
+  const headers: Record<string, string> = { ...extraHeaders, "X-Satelink-Console": "1" };
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const r = await apiFetch<Envelope<T>>(`/v1/me${path}`, { cookie, method, body: body ?? (method === "DELETE" ? undefined : {}), headers });
   return r.ok ? { ok: true, data: r.data.data } : r;

@@ -5,6 +5,7 @@ import { fingerprint, getActiveKey, getKeys } from "@/lib/keys";
 import { getSession } from "@/lib/session";
 import { accountsEnabled } from "@/lib/account";
 import { loadSettings } from "@/lib/v2";
+import { loadOnboarding, onboardingEnabled } from "@/lib/onboarding-server";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -12,6 +13,12 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   const jar = await cookies();
   const theme = jar.get("slc_theme")?.value === "light" ? "light" : "dark";
   if (accountsEnabled()) {
+    if (onboardingEnabled()) {
+      // First run: finish onboarding (consents, plan, spend protection) before
+      // the console. If the API is unreachable we do not lock people out.
+      const ob = await loadOnboarding();
+      if (ob.ok && ob.data.step !== "done") redirect("/welcome");
+    }
     // Console V2: mode is an account setting (cookie mirrors it for this browser).
     const cookieMode = jar.get("slc_mode")?.value;
     const settings = cookieMode === "simple" || cookieMode === "advanced" ? null : await loadSettings();

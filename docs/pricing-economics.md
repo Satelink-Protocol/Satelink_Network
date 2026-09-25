@@ -1,6 +1,6 @@
 # Pricing V2 — worst-case economics per plan
 
-_Generated from `apps/api/config/plan_catalog.v2.json` version **2026-09-25.1** by `apps/api/scripts/pricing/economics_report.mjs`. Do not edit by hand — change the catalog and regenerate._
+_Generated from `apps/api/config/plan_catalog.v2.json` version **2026-09-25.2** by `apps/api/scripts/pricing/economics_report.mjs`. Do not edit by hand — change the catalog and regenerate._
 
 ## Rule
 A plan or pack is **purchasable only if its worst-case contribution per charge is ≥ $0** (`publicCatalog().purchasable`; checkout refuses otherwise). Worst case = the most expensive Dodo fee path (base + international + subscription surcharge + fixed fee) **and** the full allowance of the longest month consumed at the configured marginal cost per UU.
@@ -19,6 +19,8 @@ A plan or pack is **purchasable only if its worst-case contribution per charge i
 | launch | renewal | $19.00 | $1.54 | $1.00 | 33,225 | $0.00 | **$17.46** | $0.000526 | −$20.00 | −$49.00 | pass |
 | pro | monthly | $19.00 | $1.54 | $1.00 | 33,225 | $0.00 | **$17.46** | $0.000526 | −$20.00 | −$49.00 | pass |
 | max | monthly | $79.00 | $5.14 | $3.70 | 132,900 | $0.00 | **$73.86** | $0.000556 | −$80.00 | −$109.00 | pass |
+| pro_yearly | yearly | $190.00 | $11.80 | $8.70 | 397,500 | $0.00 | **$178.20** | $0.000448 | −$191.00 | −$220.00 | pass |
+| max_yearly | yearly | $790.00 | $47.80 | $35.70 | 1,590,000 | $0.00 | **$742.20** | $0.000467 | −$791.00 | −$820.00 | pass |
 | pack_10 | one-time | $10.00 | $0.95 | $0.55 | 10,000 | $0.00 | **$9.05** | $0.000905 | −$11.00 | −$40.00 | pass |
 | pack_50 | one-time | $50.00 | $3.15 | $2.15 | 50,000 | $0.00 | **$46.85** | $0.000937 | −$51.00 | −$80.00 | pass |
 | pack_200 | one-time | $200.00 | $11.40 | $8.15 | 200,000 | $0.00 | **$188.60** | $0.000943 | −$201.00 | −$230.00 | pass |

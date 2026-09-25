@@ -78,6 +78,9 @@ export function publicCatalog(c = loadCatalog(), { mode = 'test' } = {}) {
         kind: p.kind,
         priceUsd: p.price_usd,
         interval: p.interval || null,
+        // Yearly variants point at their monthly plan (same allowance, billed yearly).
+        basePlanId: p.base_plan || null,
+        entitlementPlanId: ent.id,
         intro: p.intro ? { amountUsd: p.intro.amount_usd, days: p.intro.trial_period_days, copy: p.intro.copy } : null,
         allowance: {
           sessionUu: ent.allowance.session_uu,
