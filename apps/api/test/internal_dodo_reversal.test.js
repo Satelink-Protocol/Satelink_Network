@@ -24,6 +24,10 @@ function makePool() {
 
         if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return { rows: [] };
 
+        // fix/legacy-dodo-subscription-bucket: subscriptions table present; no subscription grants in these pack tests.
+
+        if (s.startsWith('SELECT to_regclass($1)')) return { rows: [{ t: params[0] === 'subscriptions' ? 'subscriptions' : null }] };
+
         // ── idempotency log
         if (s.includes('SELECT 1 FROM dodo_refund_dispute_log WHERE event_id')) {
           return { rows: state.reversalLog.has(params[0]) ? [{ '?column?': 1 }] : [] };
