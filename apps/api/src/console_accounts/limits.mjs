@@ -15,6 +15,7 @@
 // Every denial here is `terminal`: enforceCapacity must not fall through to
 // another payment layer for a paused / capped agent.
 import { ensureConsoleAccountsSchema } from './schema.mjs';
+import { isUsageLimitsV2Enabled, meterIntelligence } from '../pricing_v2/metering.mjs';
 
 const DENY = {
   agent_paused: { http: 403, message: 'This key is paused by its owner — resume it in the console' },
@@ -91,7 +92,24 @@ export async function deductWithAccountLimits(pool, { key, cost, product = 'rpc'
 
     if (ctx.paused) return finish(deny('agent_paused'));
     if (Array.isArray(ctx.scopes) && !ctx.scopes.includes(product)) return finish(deny('scope_denied', { product }));
-    if (cost > 0 && ctx.account_id && ctx.credit_auto_use === false) return finish(deny('credit_auto_use_off'));
+
+    // Pricing V2 (SATELINK_USAGE_LIMITS_V2_ENABLED): Trading Intelligence on a
+    // linked key draws plan UU → pack UU first; only the remainder reaches the
+    // crypto-credit deduction below. Dodo-funded value never pays for RPC.
+    let v2 = null;
+    if (isUsageLimitsV2Enabled() && product === 'intelligence' && ctx.account_id) {
+      v2 = await meterIntelligence(client, { accountId: ctx.account_id, apiKeyId: ctx.api_key_id, tz: ctx.tz, creditAutoUse: ctx.credit_auto_use !== false });
+      if (v2.stop) {
+        const { recordCredits, ...stop } = v2;
+        return finish({ ok: false, ...stop });
+      }
+      if (v2.covered) {
+        await client.query('UPDATE api_credits SET last_used = NOW() WHERE api_key = $1', [key]);
+        return finish({ ok: true, balanceAfter: null, accountId: ctx.account_id, effectiveCost: 0, uu: { bucket: v2.bucket, units: v2.uu, usage: v2.usage } });
+      }
+    } else if (cost > 0 && ctx.account_id && ctx.credit_auto_use === false) {
+      return finish(deny('credit_auto_use_off'));
+    }
 
     if (cost > 0 && ctx.daily_cap_usdt !== null && ctx.daily_cap_usdt !== undefined) {
       const r = await client.query(COUNTER_SQL, ['agent_day', String(ctx.api_key_id), ctx.tz, 'YYYY-MM-DD', cost, ctx.daily_cap_usdt]);
@@ -111,7 +129,8 @@ export async function deductWithAccountLimits(pool, { key, cost, product = 'rpc'
       if (ded.rowCount === 0) {
         return finish({ ok: false, code: 'insufficient_credits', http: 402, required_usdt: cost, message: 'Insufficient credits — deposit USDT to continue' });
       }
-      return finish({ ok: true, balanceAfter: parseFloat(ded.rows[0].credits_usdt), accountId: ctx.account_id });
+      if (v2?.recordCredits) await v2.recordCredits(cost);
+      return finish({ ok: true, balanceAfter: parseFloat(ded.rows[0].credits_usdt), accountId: ctx.account_id, ...(v2 ? { uu: { bucket: 'credits', units: v2.uu, usage: v2.usage } } : {}) });
     }
     await client.query('UPDATE api_credits SET last_used = NOW() WHERE api_key = $1', [key]);
     return finish({ ok: true, balanceAfter: null, accountId: ctx.account_id });

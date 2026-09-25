@@ -15,6 +15,8 @@ import { AccountError, listKeys, createKey, linkKey, renameKey, revokeKey, rotat
 import { getSettings, updateSettings, setAgentLimits, spendSummary, listSavedQueries, saveQuery, deleteSavedQuery } from './settings.mjs';
 import { listRequests, usageSeries, listDeposits } from './requests.mjs';
 import { createChallenge, verifyAndLink, listWallets, unlinkWallet, x402ForWallet } from './wallets.mjs';
+import { accountPlan } from '../pricing_v2/account_plan.mjs';
+import { createCheckout, isPlanBillingV2Enabled } from '../pricing_v2/checkout.mjs';
 
 /** Default session resolver: Better Auth, from the request's cookies. */
 export async function betterAuthSession(pool, req) {
@@ -112,6 +114,17 @@ export function createMeRouter(pool, {
   router.get('/saved-queries', h((req) => listSavedQueries(pool, req.account.accountId)));
   router.post('/saved-queries', h(async (req) => ({ status: 201, body: await saveQuery(pool, req.account.accountId, req.body || {}) })));
   router.delete('/saved-queries/:qid', h((req) => deleteSavedQuery(pool, req.account.accountId, Number(req.params.qid))));
+
+  // Pricing V2: current plan, UU windows, pack balance; Dodo checkout.
+  router.get('/plan', h(async (req) => accountPlan(pool, req.account.accountId, { tz: (await getSettings(pool, req.account.accountId)).timezone })));
+  router.post('/checkout', h(async (req) => {
+    if (!isPlanBillingV2Enabled()) throw new AccountError('billing_v2_disabled', 404, 'Plan checkout is not enabled yet');
+    const returnUrl = String(req.body?.returnUrl || 'https://console.satelink.network/billing?checkout=done');
+    if (!/^https:\/\/(console\.)?satelink\.network\//.test(returnUrl) && !/^http:\/\/localhost:\d+\//.test(returnUrl)) {
+      throw new AccountError('invalid_return_url', 400, 'Return URL must be a Satelink page');
+    }
+    return { status: 201, body: await createCheckout({ accountId: req.account.accountId, email: req.account.email, itemId: req.body?.itemId, returnUrl }) };
+  }));
 
   // Per-request log
   router.get('/requests', h((req) => listRequests(pool, req.account.accountId, req.query)));
