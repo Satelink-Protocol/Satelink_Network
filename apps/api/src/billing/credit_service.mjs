@@ -160,7 +160,8 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
   }
 
   // 2. Balance gate (paid tiers only). Atomic deduct; never goes negative.
-  const cost = costFor(account, methodPrice);
+  let cost = costFor(account, methodPrice);
+  let uuInfo = null;
   let balanceAfter = parseFloat(account.credits_usdt || 0);
   if (isConsoleAccountsEnabled() && typeof pool.connect === 'function') {
     // CONSOLE_ACCOUNTS_V1: pause / scope / credit auto-use / per-agent daily
@@ -175,6 +176,11 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
       };
     }
     if (g.balanceAfter !== null) balanceAfter = g.balanceAfter;
+    // Pricing V2: a call covered by plan / pack UU costs nothing in credits —
+    // report cost 0 so no second revenue row is written (the revenue was the
+    // Dodo payment) and api_usage_daily records $0 for it.
+    if (g.effectiveCost === 0) cost = 0;
+    if (g.uu) uuInfo = g.uu;
   } else if (cost > 0) {
     const ded = await pool.query(
       `UPDATE api_credits
@@ -217,6 +223,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
     remaining: Math.max(0, limit - used - 1),
     limit,
     apiKey: key,
+    ...(uuInfo ? { uu: uuInfo } : {}),
   };
 }
 
