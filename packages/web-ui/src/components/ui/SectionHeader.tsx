@@ -28,11 +28,11 @@ export function SectionHeader({
       )}
     >
       {eyebrow && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-sl-accent">
+        <p className="mb-3 text-sm font-medium text-sl-text-muted">
           {eyebrow}
         </p>
       )}
-      <Heading className="text-balance text-[1.75rem] font-bold tracking-[-0.02em] text-sl-text sm:text-[2.25rem]">
+      <Heading className="text-balance font-sl-display text-[2rem] font-normal leading-[1.1] tracking-[-0.015em] text-sl-text sm:text-[2.75rem]">
         {title}
       </Heading>
       {lede && (

@@ -57,6 +57,7 @@ export function PlanCalculator() {
         />
         <input
           type="number"
+          aria-label="Calls per month"
           min={0}
           value={calls}
           onChange={(e) => setCalls(Math.max(0, Number(e.target.value) || 0))}
@@ -81,7 +82,7 @@ export function PlanCalculator() {
               key={o.id}
               className={`rounded-[var(--sl-radius)] border p-3 ${best ? "border-sl-accent bg-sl-accent-soft" : "border-sl-border"}`}
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-sl-text-subtle">{o.label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-sl-text-muted">{o.label}</p>
               <p className="mt-1 font-sl-mono text-lg font-bold tabular-nums text-sl-text">
                 {o.monthly === Infinity ? "n/a" : o.monthly === 0 ? "$0" : `$${o.monthly.toFixed(2)}`}
               </p>

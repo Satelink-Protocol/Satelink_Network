@@ -21,27 +21,29 @@
    .theme-shadcn / .satelink-os slate palette (globals.css) is left in
    place: it is scoped and never leaks to public pages.
    ============================================================ */
+@import "./foundation.css";
+
 @layer base {
   /* ---- LIGHT is the default (marketing) ---------------------------- */
   :root,
   [data-theme="light"] {
     /* surfaces */
-    --sl-bg:            #F6F7FB;
+    --sl-bg:            #FAF9F5;
     --sl-bg-raised:     #FFFFFF;
     --sl-surface:       #FFFFFF;
-    --sl-surface-hover: #EEF1F7;
-    --sl-border:        #E1E6EF;
-    --sl-border-strong: #C9D1DF;
+    --sl-surface-hover: #F2F0EA;
+    --sl-border:        #E7E3DA;
+    --sl-border-strong: #D2CDC1;
     /* text */
-    --sl-text:          #0A1020;
-    --sl-text-muted:    #4B5566;
-    --sl-text-subtle:   #667085; /* deepened from #76819A for AA on 11px labels */
+    --sl-text:          #1A1915;
+    --sl-text-muted:    #55524A;
+    --sl-text-subtle:   #6B675C; /* deepened from #76819A for AA on 11px labels */
     /* brand / platform (teal) — deepened for AA: white text on --sl-accent is
        5.10:1 and accent-as-text on bg/surface is >=4.76:1 (see DECISIONS.md). */
-    --sl-accent:        #0A7C6D;
+    --sl-accent:        #0B7A6B;
     --sl-accent-strong: #085F53;
     --sl-accent-ink:    #FFFFFF;
-    --sl-accent-soft:   #0A7C6D14;
+    --sl-accent-soft:   #0B7A6B14;
     /* product rails — colour carries meaning */
     --sl-machine:       #5B5BF0; /* agents / x402 / machine rail (indigo) */
     --sl-market:        #F29F38; /* trading intelligence data (amber)    */
@@ -51,9 +53,7 @@
     --sl-market-soft:   #F29F3818;
     --sl-settle-soft:   #1FA8E014;
     /* gradients */
-    --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF026 0%, transparent 60%),
-                    radial-gradient(50% 70% at 85% 20%, #0E9F8B29 0%, transparent 60%),
-                    radial-gradient(40% 60% at 60% 90%, #F29F381F 0%, transparent 60%);
+    --sl-grad-hero: none;
     --sl-grad-brand: linear-gradient(120deg, #0E9F8B 0%, #1FA8E0 45%, #5B5BF0 100%);
 
     /* data semantics (charts, deltas) — kept from Signal 1 */
@@ -67,14 +67,9 @@
     --sl-shadow-2: 0 8px 24px -8px rgb(16 24 40 / .12);
     --sl-ring:     0 0 0 3px rgb(10 124 109 / .30);
 
-    /* shape */
-    --sl-radius-sm: 6px;
-    --sl-radius: 10px;
-    --sl-radius-lg: 16px;
-    --sl-radius-pill: 999px;
     /* type */
     --sl-font-sans: var(--font-inter, "Inter"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --sl-font-display: var(--font-manrope, "Manrope"), var(--font-inter, "Inter"), ui-sans-serif, system-ui, sans-serif;
+    --sl-font-display: var(--font-source-serif, "Source Serif 4"), ui-serif, Georgia, "Times New Roman", serif;
     --sl-font-mono: var(--font-jetbrains-mono, "JetBrains Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
     /* display type scale */
     --sl-display-1: clamp(2.75rem, 6vw, 5rem);
@@ -132,27 +127,26 @@
 
   /* ---- DARK is the console default + optional marketing dark -------- */
   [data-theme="dark"] {
-    --sl-bg:            #070B14;
-    --sl-bg-raised:     #0C1220;
-    --sl-surface:       #111A2C;
-    --sl-surface-hover: #16213A;
-    --sl-border:        #1E2A42;
-    --sl-border-strong: #2B3A58;
-    --sl-text:          #E8EDF6;
-    --sl-text-muted:    #A0ACC1;
-    --sl-text-subtle:   #7C89A1; /* lightened from #6B7890 for AA on 11px labels */
-    --sl-accent:        #5EEAD4;
-    --sl-accent-strong: #2DD4BF;
-    --sl-accent-ink:    #04201C;
-    --sl-accent-soft:   #5EEAD41F;
+    --sl-bg:            #0F0F0E;
+    --sl-bg-raised:     #151513;
+    --sl-surface:       #1A1A18;
+    --sl-surface-hover: #22221F;
+    --sl-border:        #2C2B27;
+    --sl-border-strong: #3D3B36;
+    --sl-text:          #EEECE6;
+    --sl-text-muted:    #AAA69C;
+    --sl-text-subtle:   #8E8A80; /* lightened from #6B7890 for AA on 11px labels */
+    --sl-accent:        #5CD6C3;
+    --sl-accent-strong: #3FC4AF;
+    --sl-accent-ink:    #06201C;
+    --sl-accent-soft:   #5CD6C31F;
     --sl-machine:       #8B8BFF;
     --sl-market:        #FFB45C;
     --sl-settle:        #4CC3F0;
     --sl-machine-soft:  #8B8BFF1F;
     --sl-market-soft:   #FFB45C1F;
     --sl-settle-soft:   #4CC3F01F;
-    --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF040 0%, transparent 60%),
-                    radial-gradient(50% 70% at 85% 20%, #2DD4BF33 0%, transparent 60%);
+    --sl-grad-hero: none;
     --sl-grad-brand: linear-gradient(120deg, #2DD4BF 0%, #4CC3F0 45%, #8B8BFF 100%);
     /* data semantics tuned for dark */
     --sl-up:            #34D399;
@@ -163,33 +157,33 @@
     /* elevation (dark) */
     --sl-shadow-1: 0 1px 2px rgb(0 0 0 / .4);
     --sl-shadow-2: 0 8px 24px -8px rgb(0 0 0 / .55);
+    --sl-shadow-3: 0 24px 48px -12px rgb(0 0 0 / .6), 0 0 0 1px rgb(255 255 255 / .04);
     --sl-ring:     0 0 0 3px rgb(94 234 212 / .35);
   }
 
   /* OS/browser dark preference when the user hasn't explicitly chosen light. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --sl-bg:            #070B14;
-      --sl-bg-raised:     #0C1220;
-      --sl-surface:       #111A2C;
-      --sl-surface-hover: #16213A;
-      --sl-border:        #1E2A42;
-      --sl-border-strong: #2B3A58;
-      --sl-text:          #E8EDF6;
-      --sl-text-muted:    #A0ACC1;
-      --sl-text-subtle:   #7C89A1;
-      --sl-accent:        #5EEAD4;
-      --sl-accent-strong: #2DD4BF;
-      --sl-accent-ink:    #04201C;
-      --sl-accent-soft:   #5EEAD41F;
+      --sl-bg:            #0F0F0E;
+      --sl-bg-raised:     #151513;
+      --sl-surface:       #1A1A18;
+      --sl-surface-hover: #22221F;
+      --sl-border:        #2C2B27;
+      --sl-border-strong: #3D3B36;
+      --sl-text:          #EEECE6;
+      --sl-text-muted:    #AAA69C;
+      --sl-text-subtle:   #8E8A80;
+      --sl-accent:        #5CD6C3;
+      --sl-accent-strong: #3FC4AF;
+      --sl-accent-ink:    #06201C;
+      --sl-accent-soft:   #5CD6C31F;
       --sl-machine:       #8B8BFF;
       --sl-market:        #FFB45C;
       --sl-settle:        #4CC3F0;
       --sl-machine-soft:  #8B8BFF1F;
       --sl-market-soft:   #FFB45C1F;
       --sl-settle-soft:   #4CC3F01F;
-      --sl-grad-hero: radial-gradient(60% 80% at 20% 10%, #5B5BF040 0%, transparent 60%),
-                      radial-gradient(50% 70% at 85% 20%, #2DD4BF33 0%, transparent 60%);
+      --sl-grad-hero: none;
       --sl-grad-brand: linear-gradient(120deg, #2DD4BF 0%, #4CC3F0 45%, #8B8BFF 100%);
       --sl-up:            #34D399;
       --sl-down:          #F87171;
@@ -198,6 +192,7 @@
       --sl-model:         #C4B5FD;
       --sl-shadow-1: 0 1px 2px rgb(0 0 0 / .4);
       --sl-shadow-2: 0 8px 24px -8px rgb(0 0 0 / .55);
+    --sl-shadow-3: 0 24px 48px -12px rgb(0 0 0 / .6), 0 0 0 1px rgb(255 255 255 / .04);
       --sl-ring:     0 0 0 3px rgb(94 234 212 / .35);
     }
   }
@@ -216,6 +211,12 @@
     background-clip: text;
     color: transparent;
   }
+}
+
+/* Mega-menu sheet reveal (motion is reserved for reveal + the demo). */
+@keyframes sl-sheet-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* Expose the Satelink Signal tokens as namespaced Tailwind v4 utilities:

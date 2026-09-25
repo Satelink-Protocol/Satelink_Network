@@ -15,7 +15,7 @@ export function LegalView({ doc }: { doc: LegalDoc }) {
   const updated = doc.updated ?? LEGAL_UPDATED;
   return (
     <article className="mx-auto max-w-[820px] px-4 py-16 sm:px-6">
-      <h1 className="font-sl-display text-3xl font-extrabold tracking-tight text-sl-text sm:text-4xl">{doc.title}</h1>
+      <h1 className="font-sl-display text-3xl font-normal tracking-tight text-sl-text sm:text-4xl">{doc.title}</h1>
       <p className="mt-2 text-xs text-sl-text-subtle">
         Version {doc.version} · Last updated {fmt(updated)}
       </p>

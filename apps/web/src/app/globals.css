@@ -1,5 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Signal tokens + their @theme mapping MUST be imported here, inside the
+   Tailwind compilation. Imported separately from layout.tsx, Tailwind never
+   sees the @theme block and generates NO sl-* utilities — the root cause of
+   the transparent mega-menu / black borders / unfilled CTAs (AUDIT_2026-09-25
+   D1–D3). Guarded by test/tailwind-token-entry.test.ts. */
+@import "../../../../packages/web-ui/src/styles/tokens.css";
 
 /* Tailwind must scan the web src and both design-system package sources.
    @satelink/web-ui (Satelink Signal) now houses the marketing components +

@@ -67,7 +67,7 @@ export function EnquiryForm({ fallbackEmail }: { fallbackEmail: string }) {
         <p className="text-sm text-stone-3">We use your details only to reply. See our <a href="/legal/privacy" className="link-u">privacy notice</a>.</p>
       </div>
       {(state === "error" || state === "unavailable") && (
-        <p role="alert" className="rounded-lg bg-amber-soft px-4 py-3 text-sm text-[#7a4a15]">
+        <p role="alert" className="rounded-lg bg-amber-soft px-4 py-3 text-sm text-amber-ink">
           {state === "unavailable" ? "The form is not accepting messages right now." : "Something went wrong sending your message."} Please email{" "}
           <a href={`mailto:${fallbackEmail}`} className="underline">{fallbackEmail}</a> directly.
         </p>

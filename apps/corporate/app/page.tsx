@@ -62,27 +62,27 @@ export default function Home() {
         </Container>
       </section>
 
-      <section aria-labelledby="satelink" className="bg-green py-20 text-ivory sm:py-28">
+      <section aria-labelledby="satelink" className="bg-band py-20 text-on-band sm:py-28">
         <Container className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <p className="text-sm font-medium text-[#c9d9cf]">Technology</p>
+            <p className="text-sm font-medium text-on-band-muted">Technology</p>
             <h2 id="satelink" className="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">
               Satelink: commerce between machines.
             </h2>
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-[#dfe8e2]">
+            <p className="mt-6 max-w-lg text-lg leading-relaxed text-on-band-muted">
               An autonomous agent asks for data, pays for exactly that request, and gets the answer — no contract, no monthly
               plan. Payment travels in the HTTP request over x402, or draws down prepaid credits settled on Polygon.
             </p>
             <div className="mt-8 flex flex-wrap gap-5 text-sm font-medium">
-              <Link href="/technology" className="underline decoration-[#8fb09d] underline-offset-4 hover:decoration-ivory">
+              <Link href="/technology" className="underline decoration-on-band-rule underline-offset-4 hover:decoration-on-band">
                 How Satelink works
               </Link>
-              <a href="https://satelink.network" className="underline decoration-[#8fb09d] underline-offset-4 hover:decoration-ivory">
+              <a href="https://satelink.network" className="underline decoration-on-band-rule underline-offset-4 hover:decoration-on-band">
                 satelink.network ↗
               </a>
             </div>
           </div>
-          <Illustration kind="network" className="w-full max-w-md justify-self-center text-[#b9cfc1]" />
+          <Illustration kind="network" className="w-full max-w-md justify-self-center text-on-band-rule" />
         </Container>
       </section>
 

@@ -1,44 +1,95 @@
-# Satelink Signal — Design System
+# Unified design system — "the jakuraa.com standard"
 
-The single design language for the public marketing site (`apps/web`, the `(marketing)` + `(checkout)` route groups and the shared chrome). Source of truth: **`apps/web/src/styles/tokens.css`**. Components: **`apps/web/src/components/ui/`**. Live gallery: **`/styleguide`** (noindex), both themes side by side.
+One modern-minimalist system for **satelink.network**, **console.satelink.network**,
+**docs** and **jakuraa.com** (2026-09-25). Structure, spacing, interaction and
+typographic hierarchy follow the claude.com / claude.ai pattern; assets, fonts,
+logos and copy are our own.
 
-> Not to be confused with `@satelink/ui` (`packages/ui`), the separate shadcn/Radix system scoped to `.satelink-os` that dresses the admin/operator dashboards. Satelink Signal does not depend on it.
+> `@satelink/ui` (`packages/ui`) is the separate admin/operator system scoped to
+> `.satelink-os`. It is not part of this system.
 
-## Principles (§5.2)
-Serious financial-data product, not crypto hype. Dense but calm — data is the hero. **One** accent. Monospace **only** for numbers, code, and identifiers. **No emoji icons** (lucide-react via `<Icon>`). No gradients-on-everything. Dark-first with a complete light theme.
+## Where it lives
 
-## Tokens
-All tokens are CSS custom properties prefixed `--sl-*`, defined for dark (`:root, [data-theme="dark"]`), light (`[data-theme="light"]`), and the OS-preference fallback (`@media (prefers-color-scheme: light)`). Legacy names (`--bg-*`, `--text-*`, `--accent`, …) and the bare shadcn names (`--background`, `--card`, `--border`, …) are **aliased** onto `--sl-*` in the same file so pre-migration markup keeps rendering with no regression.
+| Layer | File | Owns |
+|---|---|---|
+| Foundation (brand-agnostic) | `packages/web-ui/src/styles/foundation.css` | spacing scale, type scale, radius, elevation-3, stacking (`--sl-z-*`), motion |
+| Satelink brand layer | `packages/web-ui/src/styles/tokens.css` | palette (light + true dark), fonts, `@theme` → `sl-*` Tailwind utilities, legacy aliases |
+| Jakuraa brand layer | `apps/corporate/app/globals.css` | ivory/ink/green palette (light + dark), `band` tokens |
+| Components | `packages/web-ui/src/components/{ui,site}` | Button, Card, …, `MegaMenuHeader`, `Wordmark`, `SearchPalette`, `DataFooter` |
 
-| Group | Tokens |
-| --- | --- |
-| Surfaces | `--sl-bg`, `--sl-bg-raised`, `--sl-surface`, `--sl-surface-hover`, `--sl-border`, `--sl-border-strong` |
-| Text | `--sl-text`, `--sl-text-muted`, `--sl-text-subtle` |
-| Brand | `--sl-accent`, `--sl-accent-strong`, `--sl-accent-ink`, `--sl-accent-soft` |
-| Data | `--sl-up`, `--sl-down`, `--sl-warn`, `--sl-info`, `--sl-model` (modelled/proxy only) |
-| Elevation | `--sl-shadow-1`, `--sl-shadow-2`, `--sl-ring` |
-| Shape | `--sl-radius-sm` 6px, `--sl-radius` 10px, `--sl-radius-lg` 16px, `--sl-radius-pill` |
-| Type | `--sl-font-sans` (Inter), `--sl-font-mono` (JetBrains Mono) — both self-hosted via `next/font` |
-| Motion | `--sl-ease`, `--sl-dur-1` 120ms, `--sl-dur-2` 220ms |
+**Import rule (load-bearing).** Each app imports its brand layer from its
+Tailwind entry, *after* `@import "tailwindcss"`:
 
-### Tailwind v4 utilities
-Exposed via `@theme inline` under an `sl-` namespace so nothing clobbers existing `--color-*`:
-`bg-sl-surface`, `text-sl-text`, `text-sl-text-muted`, `border-sl-border`, `text-sl-accent`, `bg-sl-accent-soft`, `font-sl-mono`, `rounded-[var(--sl-radius)]`, etc.
+```css
+@import "tailwindcss";
+@import "../../../../packages/web-ui/src/styles/tokens.css"; /* pulls foundation.css */
+```
 
-## Type scale
-rem: 0.75 / 0.875 / 1 / 1.125 / 1.375 / 1.75 / 2.25 / 3 / 3.75. Body line-height 1.5, display 1.15, letter-spacing −0.02em at ≥1.75rem. `font-variant-numeric: tabular-nums` on all numeric data (`.sl-tnum`, `tabular-nums`).
+Imported anywhere else (e.g. from `layout.tsx`) Tailwind never sees the `@theme`
+block and **no `sl-*` utility is generated** — which is exactly what made the
+production mega-menu transparent, every border black and every primary button
+unfilled (AUDIT_2026-09-25 D1–D3). Guarded by `apps/web/test/tailwind-token-entry.test.ts`.
 
-## Layout
-Container max 1200px; section padding `py-20 md:py-28`; 16px side gutter on mobile, no horizontal page scroll.
+## Brand layers
 
-## Components (§5.5) — `src/components/ui/`
-`Button` (primary/secondary/ghost/link · sm/md/lg · loading · asChild) · `Badge` (live/planned/model/neutral/up/down) · `Card` (+ `CardTitle`, `CardDescription`) · `SectionHeader` (eyebrow/title/lede) · `StatTile` (loading / error / ok — **never "—"**) · `MetricCard` · `PriceCard` (featured, note) · `CodeBlock` (copy + curl/TS/Python tabs) · `TerminalWindow` (traffic-light dots — the only allowlisted hardcoded hex) · `ComparisonTable` (booleans → check/dash, factual cells only) · `Disclosure` (info style, never warning-red) · `Stepper` (checkout) · `Field`/`Input`/`Textarea`/`Select`/`Checkbox` · `Icon` (lucide wrapper) · `ThemeToggle` · `Toaster`/`toast` (sonner). Shared chrome `SiteHeader`/`SiteFooter` are in `src/components/site/`.
+**Satelink** — calm, high-contrast, warm-neutral.
 
-Every interactive primitive has a `focus-visible` ring (`--sl-ring` / `ring-sl-accent`), works in dark + light, and is keyboard-complete.
+| Token | Light (default) | Dark (true dark) |
+|---|---|---|
+| `--sl-bg` | `#FAF9F5` | `#0F0F0E` |
+| `--sl-surface` | `#FFFFFF` | `#1A1A18` |
+| `--sl-border` / `-strong` | `#E7E3DA` / `#D2CDC1` | `#2C2B27` / `#3D3B36` |
+| `--sl-text` / `-muted` / `-subtle` | `#1A1915` / `#55524A` / `#6B675C` | `#EEECE6` / `#AAA69C` / `#8E8A80` |
+| `--sl-accent` (the one primary) | `#0B7A6B` | `#5CD6C3` |
 
-## Do / Don't
-- **Do** use `font-sl-mono` for prices, counts, latencies, addresses, code.
-- **Do** show `StatTile` error state when a live fetch fails.
-- **Don't** hardcode hex outside the §5.4 allowlist (`TerminalWindow`, chart palette, OG image, icon).
-- **Don't** use emoji as icons, or red for compliance callouts (that's `Disclosure`, info style).
-- **Don't** reintroduce the shadcn HSL set or the oklch slate palette at `:root`.
+Product colours carry meaning and are used sparingly — **icons, dots, chart
+series and tints only, never body or link text** (they fail AA as small text):
+teal `--sl-accent` platform · indigo `--sl-machine` machine/x402 · amber
+`--sl-market` market data · sky `--sl-settle` settlement. Every text pair is
+AA-checked by `apps/web/test/token-contrast.test.ts`.
+
+**Jakuraa** — ivory `#faf8f3`, ink `#15130f`, deep green `#1f4d3a`; dark mode
+inverts roles (`#12110e` / `#efece4`, green lifted to `#86c4a3`). The Satelink
+band (`bg-band`) stays deep green in both themes.
+
+## Type
+- **Display:** Source Serif 4 (same family as jakuraa.com), weight 400, tracking −0.015em, line-height ~1.08. H1, section H2s, feature-card titles, the wordmark.
+- **Body:** Inter. **Numbers & code:** JetBrains Mono, tabular numerals.
+- Both Inter and Source Serif 4 load as **variable fonts** (one file each; no `weight` list) — part of the Lighthouse ≥ 90 budget.
+- Eyebrows are sentence-case muted text, not uppercase accent labels.
+
+## Foundation scales
+Spacing `--sl-space-1…10` (4 → 128 px) · section rhythm `--sl-section-y`
+(64–128 px) · radius 6 / 10 / 16 / pill · elevation `--sl-shadow-1/2/3`
+(3 = overlays) · motion `--sl-dur-1/2/3` 120/220/360 ms — **motion only for
+reveal and the machine-pays demo** · stacking `--sl-z-backdrop` 40 <
+`--sl-z-header` 50 (the mega-menu sheet lives inside the header) <
+`--sl-z-dialog` 80 < `--sl-z-toast` 90.
+
+## Header (claude.com pattern)
+`Wordmark · Products · Solutions · Pricing · Developers · Resources` —
+right: `[search][theme]` icon cluster · **Log in** · **Try Satelink** (the single
+primary). Contact sales lives in Solutions and the footer. Nav data:
+`packages/content/src/navigation.ts` (CMS-overridable).
+
+Mega-menu: a **solid** full-width sheet (`bg-sl-surface`, `shadow-3`), 2–3 link
+columns + one feature card, over a dimmed + blurred backdrop so the page is never
+legible through or beside it. Keyboard: Enter/Space/↓ open (↓ focuses the first
+link), Esc closes and returns focus, focus leaving closes. Mobile: full-screen
+drawer, focus trap, scroll lock, 56 px rows, CTAs pinned to the bottom.
+
+## Sign-in (claude.ai/login pattern)
+`console.satelink.network/sign-in` is the one customer sign-in: wordmark, one
+serif headline, Continue with Google, OR, email → magic link, legal line.
+`?mode=signup` changes the words only. `satelink.network/login` and `/signup`
+307 to it; staff stay on `/ops/login`.
+
+## Gates
+| Gate | Where |
+|---|---|
+| No overlap / clipping at 360–1440 × light/dark; menu opaque + covering hero (hit-test); drawer full-screen + focus trap; no horizontal scroll; axe | `apps/web/e2e/header-overlap.spec.ts` |
+| Sign-in pattern, theme-follow, axe at 5 breakpoints × 2 themes | `apps/console/e2e/sign-in.spec.ts` |
+| Tokens compiled by Tailwind | `apps/web/test/tailwind-token-entry.test.ts` |
+| AA contrast of every text pair, both themes | `apps/web/test/token-contrast.test.ts` |
+| Lighthouse mobile Performance ≥ 90 on `/` | `npx lighthouse <url> --only-categories=performance` (2026-09-25 local prod build: 92 / 96 / 95) |
+| Screenshot audit (all three properties, 60 captures + axe) | `scripts/audit/prod-screenshot-audit.mjs` (`SAT_BASE` / `CONSOLE_BASE` / `JAK_BASE` to target previews) |

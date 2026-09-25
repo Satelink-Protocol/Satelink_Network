@@ -3,7 +3,9 @@
 // Next <Link>) via Radix Slot. Variants/sizes via cva; focus-visible ring;
 // dark + light via --sl-* tokens.
 import * as React from "react";
-import { Slot } from "radix-ui";
+// The standalone slot package — importing { Slot } from the "radix-ui"
+// umbrella pulled ~380 kB of unrelated primitives into every page.
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
@@ -42,7 +44,7 @@ export interface ButtonProps
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, children, disabled, ...props }, ref) => {
-    const Comp = asChild ? Slot.Root : "button";
+    const Comp = asChild ? Slot : "button";
     return (
       <Comp
         ref={ref}

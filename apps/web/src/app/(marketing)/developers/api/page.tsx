@@ -49,7 +49,7 @@ export default function ApiSurfacePage() {
 
       <section className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6">
         <SectionHeader eyebrow="Endpoints" title="What you can call" align="left" as="h2" />
-        <div className="mt-8 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
+        <div tabIndex={0} role="region" aria-label="Endpoints" className="mt-8 overflow-x-auto rounded-[var(--sl-radius-lg)] border border-sl-border">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>

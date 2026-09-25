@@ -28,7 +28,7 @@ export function UnderTheHood() {
             <SettlementFlow className="mx-auto w-full" />
             <figcaption className="mt-3 text-sm text-sl-text-muted">
               The designed settlement path. Deposits to{" "}
-              <a href={VAULT_URL} className="font-semibold text-sl-settle hover:underline">RevenueVault V2</a> are live;
+              <a href={VAULT_URL} className="font-medium text-sl-text underline decoration-sl-border-strong underline-offset-4 hover:decoration-sl-text">RevenueVault V2</a> are live;
               epoch settlement and the 50/30/20 split currently run in dry-run.
             </figcaption>
           </figure>
