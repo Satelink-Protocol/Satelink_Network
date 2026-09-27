@@ -59,7 +59,7 @@ function check(env) {
 module.exports = { check, hostOf };
 
 if (require.main === module || !process.env.PROD_DB_GUARD_NO_AUTORUN) {
-  try { require('dotenv').config(); } catch { /* dotenv absent: nothing to load */ }
+  try { require('dotenv').config({ quiet: true }); } catch { /* dotenv absent: nothing to load */ }
   const problems = check(process.env);
   if (problems.length) {
     process.stderr.write(

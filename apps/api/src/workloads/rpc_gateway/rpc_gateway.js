@@ -7,9 +7,7 @@ import { checkRateLimit, incrementUsage, createApiKey, getUsageStats, getTiers }
 import { createHealthEndpoint, startHealthMonitor } from './health_monitor.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
-import { enforceCapacity } from '../../capacity/capacity_enforcement.js';
-import { precheckCharge } from '../../billing/credit_service.mjs';
-import { getCapacityPath } from '../../lib/flags.js';
+import { enforceCapacity, precheckCapacity } from '../../capacity/capacity_enforcement.js';
 import { paymentRequiredResponse } from '../../utils/payment_required.js';
 
 // Customer Zero P0 recovery: when CREDIT_CANONICAL=true, authenticated callers
@@ -372,15 +370,12 @@ export function createRpcGateway(db) {
         };
 
         if (metered) {
-            // Preflight (read-only). Under the 'new' capacity path a key with no
-            // prepaid balance may still be served by its authorization cap, so
-            // the balance/account preflight is skipped there and the post-call
-            // charge alone decides (the data is still withheld on a denial).
+            // Preflight (read-only), mirroring enforceCapacity for every
+            // capacity path — under 'new' an unfunded key is still refused here
+            // unless its authorization has capacity (precheckCapacity).
             let pre;
             try {
-                pre = (await getCapacityPath(db)) === 'new'
-                    ? { ok: true }
-                    : await precheckCharge(db, { apiKey, wallet: walletForBilling });
+                pre = await precheckCapacity(db, { apiKey, wallet: walletForBilling });
             } catch (err) {
                 console.error('[RPC Gateway] billing preflight error (fail-closed):', err.message);
                 pre = { ok: false, code: 'capacity_check_failed', http: 503, message: 'Capacity check unavailable — try again shortly' };
