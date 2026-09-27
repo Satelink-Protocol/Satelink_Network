@@ -1,6 +1,6 @@
 # PRICING_TRUTH
 
-Status: **DRAFT (Wave 2 / C1)**. Built 2026-09-27 from the machine-readable catalog
+Status: **DRAFT (Wave 2 / C1)** · founder decisions D-1/D-2/D-4 recorded 2026-09-28. Built 2026-09-27 from the machine-readable catalog
 `apps/api/config/plan_catalog.v2.json` (version `2026-09-25.2`), live production responses, and the founder
 decisions in contract §1. Anything marked **FOUNDER** is a price or limit value the founder must confirm;
 none of those values has been changed.
@@ -33,7 +33,7 @@ the rail next to the number (C4).
 | Plan | Price | Session UU (5 h window) | Weekly UU (week starts Monday) | Keys / machines | Source |
 |---|---|---|---|---|---|
 | Free | $0 | 100 | 500 | 1 / 1 | catalog |
-| Launch | $5 first month (30-day intro), then $19/month | **1,500** | **7,500** | 5 / 5 | catalog (`entitlement_plan: pro`) — **FOUNDER: §1 says 300 / 1,500** |
+| Launch | $5 first month (30-day intro), then $19/month | **1,500** | **7,500** | 5 / 5 | catalog (`entitlement_plan: pro`) — **founder D-1 (2026-09-28): Launch = Pro limits at the intro price; catalog wins** |
 | Pro | $19/month · $190/year | 1,500 | 7,500 | 5 / 5 | catalog |
 | Max | $79/month · $790/year | 5,000 | 30,000 | 20 / 20 | catalog |
 
@@ -44,8 +44,8 @@ Usage notices at 70 / 85 / 95 / 100 % (catalog `notify_thresholds_pct`).
 | Pack | Price | Grant | Bonus | Source |
 |---|---|---|---|---|
 | pack_10 | $10 | 10,000 UU | none | catalog |
-| pack_50 | $50 | 50,000 UU | **none** — **FOUNDER: §1 says +5 %** | catalog |
-| pack_200 | $200 | 200,000 UU | **none** — **FOUNDER: §1 says +10 %** | catalog |
+| pack_50 | $50 | 50,000 UU + **2,500 bonus** = 52,500 UU | **+5 %** (founder D-2) | catalog after bonus PR |
+| pack_200 | $200 | 200,000 UU + **20,000 bonus** = 220,000 UU | **+10 %** (founder D-2) | catalog after bonus PR |
 
 INR: every plan and pack carries `inr_price: null`; the display path exists (onboarding e2e "India: plans say
 rupees, GST included" passes). Values are **FOUNDER** (C7).
@@ -73,3 +73,12 @@ rupees, GST included" passes). Values are **FOUNDER** (C7).
 | Docs | not audited yet | Wave 6 (F7) |
 
 Next (C8): one CI test that fetches the catalog and asserts every row above renders the same numbers.
+
+## 7. What is charged on the RPC rail (founder D-4, 2026-09-28)
+
+| Outcome of the upstream call | HTTP to client | Charged? |
+|---|---|---|
+| Result (`result` present) | 200 | yes |
+| Provider JSON-RPC error (revert, invalid params, method errors — `error` object in a 2xx body) | **200 with the JSON-RPC error body passed through** | **yes** |
+| Transport failure (connect/reset/DNS), timeout | 502/504 | no |
+| Provider HTTP 5xx | 502 | no |
