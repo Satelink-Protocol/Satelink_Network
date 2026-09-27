@@ -1,7 +1,7 @@
 // M3 — connectors + engine tests (offline: injected fetchImpl + in-memory pool).
 import { expect } from 'chai';
 import { fetchFundingRates, fetchOrderBooks } from '../src/intelligence/connectors.js';
-import { refreshMetric, readMetric } from '../src/intelligence/engine.js';
+import { refreshMetric, readMetric, refreshAll } from '../src/intelligence/engine.js';
 
 // A fetchImpl stub: maps URL substrings → JSON, or simulates failure.
 function stubFetch(map) {
@@ -130,8 +130,11 @@ describe('intelligence: US geo-block fallback (Binance 451 / Bybit 403)', () => 
   const hlCtx = [{ universe: [{ name: 'BTC' }, { name: 'ETH' }] },
     [{ funding: '0.0000125', openInterest: '100', markPx: '50000' }, { funding: '0.00001', openInterest: '1000', markPx: '3000' }]];
   const hlBook = { levels: [[{ px: '49999', sz: '2', n: 3 }], [{ px: '50001', sz: '1', n: 2 }]] };
-  function usFetch({ okx = true, deribit = true } = {}) {
+  function usFetch({ okx = true, calls = null, binancePartial = false } = {}) {
     return async (url, init = {}) => {
+      if (calls) calls.push(url + (init.body || ''));
+      if (binancePartial && url.includes('fapi.binance.com/fapi/v1/premiumIndex')) return { ok: true, status: 200, json: async () => [{ symbol: 'BTCUSDT', markPrice: '100', lastFundingRate: '0.0001' }, { symbol: 'ETHUSDT', markPrice: '10', lastFundingRate: '0.0001' }] };
+      if (binancePartial && url.includes('openInterest?symbol=BTCUSDT')) return { ok: true, status: 200, json: async () => ({ openInterest: '1' }) };
       if (url.includes('fapi.binance.com')) return { ok: false, status: 451, json: async () => ({}) };
       if (url.includes('api.bybit.com')) return { ok: false, status: 403, json: async () => ({}) };
       if (url.includes('api.hyperliquid.xyz/info')) {
@@ -140,7 +143,6 @@ describe('intelligence: US geo-block fallback (Binance 451 / Bybit 403)', () => 
       }
       if (okx && url.includes('okx.com/api/v5/public/funding-rate')) return { ok: true, status: 200, json: async () => ({ data: [{ fundingRate: '0.0001', fundingTime: '0', nextFundingTime: String(8 * 3600e3) }] }) };
       if (okx && url.includes('okx.com/api/v5/public/open-interest')) return { ok: true, status: 200, json: async () => ({ data: [{ oiUsd: '5000000' }] }) };
-      if (deribit && url.includes('deribit.com')) return { ok: true, status: 200, json: async () => ({ result: { funding_8h: 0.00002 } }) };
       return { ok: false, status: 403, json: async () => ({}) };
     };
   }
@@ -148,7 +150,7 @@ describe('intelligence: US geo-block fallback (Binance 451 / Bybit 403)', () => 
   before(() => { process.env.INTEL_SYMBOLS = 'BTCUSDT,ETHUSDT'; });
   after(() => { if (prevSyms === undefined) delete process.env.INTEL_SYMBOLS; else process.env.INTEL_SYMBOLS = prevSyms; });
 
-  it('all four metrics are stored from OKX / Deribit / Hyperliquid, with per-venue status', async () => {
+  it('all four metrics are stored from OKX / Hyperliquid, with per-venue status', async () => {
     const pool = memPool();
     for (const m of ['funding-rate-heatmap', 'open-interest-shifts', 'liquidation-clusters', 'market-microstructure']) {
       const r = await refreshMetric(pool, m, { fetchImpl: usFetch() });
@@ -156,7 +158,7 @@ describe('intelligence: US geo-block fallback (Binance 451 / Bybit 403)', () => 
       expect(r.sources.find((v) => v.source === 'binance').status).to.equal(451);
     }
     const f = (await readMetric(pool, 'funding-rate-heatmap', {})).data;
-    expect(f.sources).to.have.members(['okx', 'deribit', 'hyperliquid']);
+    expect(f.sources).to.have.members(['okx', 'hyperliquid']);
     const btc = f.symbols.find((s) => s.symbol === 'BTCUSDT');
     // Hyperliquid funding is hourly: 0.0000125 × 8760 h = 0.1095 APR.
     expect(btc.per_exchange.find((e) => e.exchange === 'hyperliquid').funding_apr).to.be.closeTo(0.1095, 1e-9);
@@ -177,6 +179,38 @@ describe('intelligence: US geo-block fallback (Binance 451 / Bybit 403)', () => 
     // Same venue again → a real baseline.
     await refreshMetric(pool, 'open-interest-shifts', { fetchImpl: usFetch({ okx: false }) });
     expect((await readMetric(pool, 'open-interest-shifts', {})).data.has_baseline).to.equal(true);
+  });
+
+  it('a snapshot written before venue tracking (no sources) is not used as an OI baseline', async () => {
+    const pool = memPool();
+    pool._rows.push({ metric: 'open-interest-shifts', payload: { symbols: [{ symbol: 'BTCUSDT', open_interest_usd: 1 }] }, source_rows: 1, captured_at: new Date() });
+    await refreshMetric(pool, 'open-interest-shifts', { fetchImpl: usFetch() });
+    const d = (await readMetric(pool, 'open-interest-shifts', {})).data;
+    expect(d.has_baseline).to.equal(false);
+    expect(d.symbols.every((s) => s.change_usd === null)).to.equal(true);
+  });
+
+  it('an OI baseline older than 3 refresh intervals is ignored', async () => {
+    const pool = memPool();
+    await refreshMetric(pool, 'open-interest-shifts', { fetchImpl: usFetch() });
+    pool._rows[0].captured_at = new Date(Date.now() - 24 * 3600e3);
+    await refreshMetric(pool, 'open-interest-shifts', { fetchImpl: usFetch() });
+    expect((await readMetric(pool, 'open-interest-shifts', {})).data.has_baseline).to.equal(false);
+  });
+
+  it('partial Binance OI coverage falls back to a venue that covers every symbol', async () => {
+    const pool = memPool();
+    await refreshMetric(pool, 'open-interest-shifts', { fetchImpl: usFetch({ binancePartial: true }) });
+    const d = (await readMetric(pool, 'open-interest-shifts', {})).data;
+    expect(d.sources).to.deep.equal(['okx']);
+    expect(d.symbols).to.have.length(2);
+  });
+
+  it('refreshAll fetches the shared Hyperliquid context once per pass', async () => {
+    const calls = [];
+    await refreshAll(memPool(), { fetchImpl: usFetch({ calls }) });
+    expect(calls.filter((c) => c.includes('metaAndAssetCtxs'))).to.have.length(1);
+    expect(calls.filter((c) => c.includes('premiumIndex'))).to.have.length(1);
   });
 
   it('every venue down → nothing stored, the last good snapshot is kept', async () => {

@@ -97,8 +97,12 @@ export async function refreshMetric(pool, metric, { fetchImpl = globalThis.fetch
     const venue = rows[0]?.exchange ?? null;
     const prev = await latestSnapshot(pool, metric);
     const prevVenues = prev?.payload?.sources;
-    const sameVenue = !prevVenues || (prevVenues.length === 1 && prevVenues[0] === venue);
-    const previous = sameVenue
+    // Snapshots written before venue tracking have no `sources` → not a
+    // comparable baseline. A baseline older than 3 refresh intervals is stale.
+    const sameVenue = Array.isArray(prevVenues) && prevVenues.length === 1 && prevVenues[0] === venue;
+    const fresh = prev && Date.now() - new Date(prev.captured_at).getTime() <= 3 * REFRESH_INTERVAL_MS;
+    const comparable = sameVenue && fresh;
+    const previous = comparable
       ? (prev?.payload?.symbols || [])
         .filter((s) => Number.isFinite(s.open_interest_usd))
         .map((s) => ({ symbol: s.symbol, openInterestUsd: s.open_interest_usd }))
@@ -125,11 +129,32 @@ export async function refreshMetric(pool, metric, { fetchImpl = globalThis.fetch
 }
 
 /** Refresh every metric; never throws (per-metric errors are captured). */
+// Binance premiumIndex and Hyperliquid metaAndAssetCtxs feed several metrics;
+// fetch each once per refresh pass instead of once per metric.
+function sharedFetch(fetchImpl) {
+  const memo = new Map();
+  return (url, init = {}) => {
+    const key = `${url}|${init.body || ''}`;
+    const shareable = url.includes('/fapi/v1/premiumIndex') || String(init.body || '').includes('metaAndAssetCtxs');
+    if (!shareable) return fetchImpl(url, init);
+    if (!memo.has(key)) {
+      memo.set(key, Promise.resolve(fetchImpl(url, init)).then(async (r) => ({
+        ok: !!r?.ok, status: r?.status, data: r?.ok ? await r.json().catch(() => undefined) : null,
+      })));
+    }
+    return memo.get(key).then((x) => ({
+      ok: x.ok && x.data !== undefined, status: x.status,
+      json: async () => x.data,
+    }));
+  };
+}
+
 export async function refreshAll(pool, opts = {}) {
   const results = [];
+  const fetchImpl = sharedFetch(opts.fetchImpl || globalThis.fetch);
   for (const metric of METRIC_NAMES) {
     try {
-      results.push(await refreshMetric(pool, metric, opts));
+      results.push(await refreshMetric(pool, metric, { ...opts, fetchImpl }));
     } catch (e) {
       results.push({ metric, source_rows: 0, stored: false, reason: `error:${e.message}` });
     }
@@ -170,7 +195,10 @@ let _timer = null;
 export function startIntelRefresh(pool, { fetchImpl = globalThis.fetch, logger = console } = {}) {
   if (process.env.INTEL_REFRESH_ENABLED !== 'true') return null;
   if (_timer) return _timer;
+  let running = false;
   const tick = async () => {
+    if (running) return; // never overlap: a slow pass skips the next tick
+    running = true;
     try {
       const res = await refreshAll(pool, { fetchImpl });
       const stored = res.filter((r) => r.stored).length;
@@ -185,6 +213,8 @@ export function startIntelRefresh(pool, { fetchImpl = globalThis.fetch, logger =
       logger.log?.(`[Intel] refresh: ${stored}/${res.length} metrics updated${detail ? ` (${detail})` : ''}`);
     } catch (e) {
       logger.error?.(`[Intel] refresh error: ${e.message}`);
+    } finally {
+      running = false;
     }
   };
   tick();

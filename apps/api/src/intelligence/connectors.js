@@ -11,7 +11,7 @@
 //  - `fetchImpl` and `now` are injectable so the whole layer is unit-testable
 //    offline and deterministically.
 //
-// Source ToS note (prompt §15): Binance/Bybit/OKX/Deribit/Hyperliquid public
+// Source ToS note (prompt §15): Binance/Bybit/OKX/Hyperliquid public
 // market data is YELLOW for raw redistribution; Satelink serves only DERIVED
 // statistics (see compute.js), which is the mitigation. Sources are configurable via env so a licensed feed
 // can be swapped in without code changes.
@@ -47,6 +47,11 @@ async function safeJson(fetchImpl, url, opts) {
 // Per-source outcome of one refresh, for the refresh log and the snapshot
 // payload ("which venues this number came from"). `status` is an optional
 // array the caller passes in; entries: { source, status, rows }.
+/** 200 if any call of a venue succeeded, else the first failure status. */
+function bestStatus(list) {
+  return list.includes(200) ? 200 : (list.find((x) => x != null) ?? null);
+}
+
 function note(status, source, httpStatus, rows) {
   if (Array.isArray(status)) status.push({ source, status: httpStatus, rows });
 }
@@ -54,17 +59,15 @@ function note(status, source, httpStatus, rows) {
 const BINANCE = () => process.env.INTEL_BINANCE_BASE || 'https://fapi.binance.com';
 const BYBIT = () => process.env.INTEL_BYBIT_BASE || 'https://api.bybit.com';
 const OKX = () => process.env.INTEL_OKX_BASE || 'https://www.okx.com';
-const DERIBIT = () => process.env.INTEL_DERIBIT_BASE || 'https://www.deribit.com';
 const HYPERLIQUID = () => process.env.INTEL_HYPERLIQUID_BASE || 'https://api.hyperliquid.xyz';
 
 // Venue symbol maps. The universe is Binance-style (BTCUSDT); a venue that
 // does not list a symbol simply contributes no row for it.
 const base = (symbol) => symbol.replace(/USDT$/, '');
 const okxInst = (symbol) => `${base(symbol)}-USDT-SWAP`;
-const DERIBIT_PERPS = { BTCUSDT: 'BTC-PERPETUAL', ETHUSDT: 'ETH-PERPETUAL' }; // inverse perps, deepest books
 
 // Binance futures and Bybit refuse US IP addresses (HTTP 451 / 403); the API
-// runs in a US region, so OKX, Deribit and Hyperliquid are queried as well and
+// runs in a US region, so OKX and Hyperliquid are queried as well and
 // every metric uses whichever venues answer. Order = preference.
 async function hyperliquidCtxs(fetchImpl) {
   const { data, status: st } = await fetchJson(fetchImpl, `${HYPERLIQUID()}/info`, {
@@ -80,7 +83,9 @@ async function hyperliquidCtxs(fetchImpl) {
 /**
  * Funding rates across exchanges → rows for fundingRateHeatmap().
  * Binance premiumIndex (8h), Bybit tickers (8h), OKX funding-rate (interval
- * from fundingTime → nextFundingTime), Deribit funding_8h, Hyperliquid (1h).
+ * from fundingTime → nextFundingTime), Hyperliquid (1h). All are the current
+ * period's rate, so the cross-venue divergence compares like with like
+ * (Deribit's funding_8h is a trailing average, so it is not used).
  * Returns [{ symbol, exchange, fundingRate, intervalHours }].
  */
 export async function fetchFundingRates(fetchImpl, symbols = symbolUniverse(), status) {
@@ -110,10 +115,10 @@ export async function fetchFundingRates(fetchImpl, symbols = symbolUniverse(), s
   }
   note(status, 'bybit', by.status, n);
 
-  n = 0; let okxSt = null;
-  for (const symbol of symbols) {
-    const o = await fetchJson(fetchImpl, `${OKX()}/api/v5/public/funding-rate?instId=${encodeURIComponent(okxInst(symbol))}`);
-    okxSt = okxSt === 200 ? 200 : o.status;
+  n = 0;
+  const okx = await Promise.all(symbols.map((symbol) =>
+    fetchJson(fetchImpl, `${OKX()}/api/v5/public/funding-rate?instId=${encodeURIComponent(okxInst(symbol))}`).then((o) => ({ symbol, o }))));
+  for (const { symbol, o } of okx) {
     const d = o.data?.data?.[0];
     const fr = Number(d?.fundingRate);
     if (!Number.isFinite(fr)) continue;
@@ -121,18 +126,8 @@ export async function fetchFundingRates(fetchImpl, symbols = symbolUniverse(), s
     push({ symbol, exchange: 'okx', fundingRate: fr, intervalHours: hours > 0 && hours <= 24 ? hours : 8 });
     n++;
   }
-  note(status, 'okx', okxSt, n);
+  note(status, 'okx', bestStatus(okx.map((x) => x.o.status)), n);
 
-  n = 0; let derSt = null;
-  for (const symbol of symbols) {
-    const inst = DERIBIT_PERPS[symbol];
-    if (!inst) continue;
-    const d = await fetchJson(fetchImpl, `${DERIBIT()}/api/v2/public/ticker?instrument_name=${inst}`);
-    derSt = derSt === 200 ? 200 : d.status;
-    const fr = Number(d.data?.result?.funding_8h);
-    if (Number.isFinite(fr)) { push({ symbol, exchange: 'deribit', fundingRate: fr, intervalHours: 8 }); n++; }
-  }
-  note(status, 'deribit', derSt, n);
 
   const hl = await hyperliquidCtxs(fetchImpl);
   n = 0;
@@ -152,44 +147,56 @@ export async function fetchFundingRates(fetchImpl, symbols = symbolUniverse(), s
  * Returns [{ symbol, exchange, openInterestUsd }].
  */
 export async function fetchOpenInterest(fetchImpl, symbols = symbolUniverse(), status) {
-  // Binance: contracts × mark price.
-  const bin = await fetchJson(fetchImpl, `${BINANCE()}/fapi/v1/premiumIndex`);
-  if (Array.isArray(bin.data)) {
-    const mark = new Map(bin.data.map((r) => [r.symbol, Number(r.markPrice)]));
-    const rows = [];
-    for (const symbol of symbols) {
-      const oi = await safeJson(fetchImpl, `${BINANCE()}/fapi/v1/openInterest?symbol=${encodeURIComponent(symbol)}`);
-      const contracts = Number(oi?.openInterest);
-      const m = mark.get(symbol);
-      if (Number.isFinite(contracts) && Number.isFinite(m) && m > 0) rows.push({ symbol, exchange: 'binance', openInterestUsd: contracts * m });
-    }
-    note(status, 'binance', bin.status, rows.length);
-    if (rows.length) return rows;
-  } else note(status, 'binance', bin.status, 0);
-
-  // OKX: oiUsd per instrument.
-  const okxRows = [];
-  let okxSt = null;
-  for (const symbol of symbols) {
-    const o = await fetchJson(fetchImpl, `${OKX()}/api/v5/public/open-interest?instType=SWAP&instId=${encodeURIComponent(okxInst(symbol))}`);
-    okxSt = okxSt === 200 ? 200 : o.status;
-    const usd = Number(o.data?.data?.[0]?.oiUsd);
-    if (Number.isFinite(usd) && usd > 0) okxRows.push({ symbol, exchange: 'okx', openInterestUsd: usd });
+  const venues = [
+    // Binance: contracts × mark price.
+    async () => {
+      const bin = await fetchJson(fetchImpl, `${BINANCE()}/fapi/v1/premiumIndex`);
+      if (!Array.isArray(bin.data)) return { source: 'binance', st: bin.status, rows: [] };
+      const mark = new Map(bin.data.map((r) => [r.symbol, Number(r.markPrice)]));
+      const oi = await Promise.all(symbols.map((symbol) =>
+        safeJson(fetchImpl, `${BINANCE()}/fapi/v1/openInterest?symbol=${encodeURIComponent(symbol)}`).then((d) => ({ symbol, d }))));
+      const rows = [];
+      for (const { symbol, d } of oi) {
+        const contracts = Number(d?.openInterest);
+        const m = mark.get(symbol);
+        if (Number.isFinite(contracts) && Number.isFinite(m) && m > 0) rows.push({ symbol, exchange: 'binance', openInterestUsd: contracts * m });
+      }
+      return { source: 'binance', st: bin.status, rows };
+    },
+    // OKX: oiUsd per instrument.
+    async () => {
+      const res = await Promise.all(symbols.map((symbol) =>
+        fetchJson(fetchImpl, `${OKX()}/api/v5/public/open-interest?instType=SWAP&instId=${encodeURIComponent(okxInst(symbol))}`).then((o) => ({ symbol, o }))));
+      const rows = [];
+      for (const { symbol, o } of res) {
+        const usd = Number(o.data?.data?.[0]?.oiUsd);
+        if (Number.isFinite(usd) && usd > 0) rows.push({ symbol, exchange: 'okx', openInterestUsd: usd });
+      }
+      return { source: 'okx', st: bestStatus(res.map((x) => x.o.status)), rows };
+    },
+    // Hyperliquid: openInterest (coins) × markPx.
+    async () => {
+      const hl = await hyperliquidCtxs(fetchImpl);
+      const rows = [];
+      for (const symbol of symbols) {
+        const c = hl.byCoin.get(base(symbol));
+        const coins = Number(c?.openInterest);
+        const m = Number(c?.markPx);
+        if (Number.isFinite(coins) && Number.isFinite(m) && m > 0) rows.push({ symbol, exchange: 'hyperliquid', openInterestUsd: coins * m });
+      }
+      return { source: 'hyperliquid', st: hl.st, rows };
+    },
+  ];
+  // ONE venue per snapshot: the first with full coverage; otherwise the one
+  // with the most symbols (ties → preference order).
+  let best = null;
+  for (const v of venues) {
+    const r = await v();
+    note(status, r.source, r.st, r.rows.length);
+    if (r.rows.length === symbols.length) return r.rows;
+    if (!best || r.rows.length > best.rows.length) best = r;
   }
-  note(status, 'okx', okxSt, okxRows.length);
-  if (okxRows.length) return okxRows;
-
-  // Hyperliquid: openInterest (coins) × markPx.
-  const hl = await hyperliquidCtxs(fetchImpl);
-  const hlRows = [];
-  for (const symbol of symbols) {
-    const c = hl.byCoin.get(base(symbol));
-    const coins = Number(c?.openInterest);
-    const m = Number(c?.markPx);
-    if (Number.isFinite(coins) && Number.isFinite(m) && m > 0) hlRows.push({ symbol, exchange: 'hyperliquid', openInterestUsd: coins * m });
-  }
-  note(status, 'hyperliquid', hl.st, hlRows.length);
-  return hlRows;
+  return best ? best.rows : [];
 }
 
 /**
@@ -226,35 +233,36 @@ export async function fetchMarkAndFunding(fetchImpl, symbols = symbolUniverse(),
 
 /**
  * Order-book depth per symbol → rows for marketMicrostructure().
- * First venue that answers: Binance depth → Hyperliquid l2Book (sizes in coins,
- * same unit as Binance, so depth in USD stays comparable).
+ * First venue that answers: Binance depth → Hyperliquid l2Book. Both are read
+ * to the same 20 levels per side (Hyperliquid's maximum) with sizes in coins,
+ * so depth in USD stays comparable when the venue changes.
  * Returns [{ symbol, exchange, bids, asks }].
  */
-export async function fetchOrderBooks(fetchImpl, symbols = symbolUniverse(), limit = 50, status) {
+export const BOOK_LEVELS = 20;
+export async function fetchOrderBooks(fetchImpl, symbols = symbolUniverse(), limit = BOOK_LEVELS, status) {
+  const bin = await Promise.all(symbols.map((symbol) =>
+    fetchJson(fetchImpl, `${BINANCE()}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=${limit}`).then((d) => ({ symbol, d }))));
   const rows = [];
-  let binSt = null;
-  for (const symbol of symbols) {
-    const d = await fetchJson(fetchImpl, `${BINANCE()}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=${limit}`);
-    binSt = binSt === 200 ? 200 : d.status;
+  for (const { symbol, d } of bin) {
     if (d.data && Array.isArray(d.data.bids) && Array.isArray(d.data.asks)) {
-      rows.push({ symbol, exchange: 'binance', bids: d.data.bids, asks: d.data.asks });
+      rows.push({ symbol, exchange: 'binance', bids: d.data.bids.slice(0, limit), asks: d.data.asks.slice(0, limit) });
     }
   }
-  note(status, 'binance', binSt, rows.length);
+  note(status, 'binance', bestStatus(bin.map((x) => x.d.status)), rows.length);
   if (rows.length) return rows;
 
-  let hlSt = null;
-  for (const symbol of symbols) {
-    const b = await fetchJson(fetchImpl, `${HYPERLIQUID()}/info`, {
+  const hl = await Promise.all(symbols.map((symbol) =>
+    fetchJson(fetchImpl, `${HYPERLIQUID()}/info`, {
       init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'l2Book', coin: base(symbol) }) },
-    });
-    hlSt = hlSt === 200 ? 200 : b.status;
+    }).then((b) => ({ symbol, b }))));
+  for (const { symbol, b } of hl) {
     const lv = b.data?.levels;
     if (Array.isArray(lv) && Array.isArray(lv[0]) && Array.isArray(lv[1]) && lv[0].length && lv[1].length) {
-      rows.push({ symbol, exchange: 'hyperliquid', bids: lv[0].map((x) => [x.px, x.sz]), asks: lv[1].map((x) => [x.px, x.sz]) });
+      const side = (l) => l.slice(0, limit).filter((x) => x && x.px != null && x.sz != null).map((x) => [x.px, x.sz]);
+      rows.push({ symbol, exchange: 'hyperliquid', bids: side(lv[0]), asks: side(lv[1]) });
     }
   }
-  note(status, 'hyperliquid', hlSt, rows.length);
+  note(status, 'hyperliquid', bestStatus(hl.map((x) => x.b.status)), rows.length);
   return rows;
 }
 
