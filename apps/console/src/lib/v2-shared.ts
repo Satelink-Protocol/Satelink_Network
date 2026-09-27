@@ -61,7 +61,7 @@ export type AlertRule = { kind: Exclude<AlertKind, "test">; status: "on" | "off"
 export type AlertEvent = { id: number; kind: AlertKind; subject: string; delivery: "queued" | "sent" | "failed" | "suppressed" | "skipped_no_sender"; error: string | null; createdAt: string; deliveredAt: string | null };
 export type AlertsState = {
   sender: { configured: boolean; from: string };
-  evaluator: { enabled: boolean; everyMinutes: number };
+  evaluator: { enabled: boolean; reason: "no_sender" | "disabled" | null; everyMinutes: number };
   prefs: AlertPrefs;
   rules: AlertRule[];
   history: AlertEvent[];

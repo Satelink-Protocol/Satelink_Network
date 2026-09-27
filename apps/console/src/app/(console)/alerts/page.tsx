@@ -86,7 +86,8 @@ async function AlertsV2() {
             <p className="px-4 pb-4 text-[12px] text-sl-text-muted">
               Usage levels, the monthly cap and which emails you get are in <Link href="/settings" className="text-sl-accent underline">Settings</Link>.
               {" "}Alerts go to your account email from {r.data.sender.from}.
-              {!r.data.evaluator.enabled && " Alert checks are paused on the server right now."}
+              {r.data.evaluator.reason === "no_sender" && " Alert checks are paused until email sending is configured on the server — nothing is lost: alerts still due are sent once it is."}
+              {r.data.evaluator.reason === "disabled" && " Alert checks are paused on the server right now."}
             </p>
           </Panel>
           <Panel title="Alert settings" className="mt-4">

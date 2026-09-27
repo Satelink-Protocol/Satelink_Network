@@ -30,6 +30,7 @@ import { isConsoleAccountsEnabled } from './flag.mjs';
 import { ensureConsoleAccountsSchema } from './schema.mjs';
 import { isUsageLimitsV2Enabled } from '../pricing_v2/metering.mjs';
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
+import { PRICE_PER_CALL_USDT } from '../billing/credit_service.mjs';
 
 export const ALERT_FROM_DEFAULT = 'Satelink <automation@satelink.network>';
 const HISTORY_LIMIT = 50;
@@ -49,6 +50,7 @@ function shapePrefs(r) {
     depositConfirmed: r.deposit_confirmed,
     errorRatePct: n(r.error_rate_pct),
     cooldownMinutes: r.cooldown_minutes,
+    depositsSince: r.enabled_at,
     updatedAt: r.updated_at,
   };
 }
@@ -81,11 +83,16 @@ export async function updateAlertPrefs(pool, accountId, patch = {}) {
     throw new AccountError('invalid_setting', 400, 'cooldownMinutes must be a whole number from 15 to 10080 (one week)');
   }
   const r = await pool.query(
-    `INSERT INTO account_alert_prefs (account_id, low_balance_usdt, deposit_confirmed, error_rate_pct, cooldown_minutes, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
+    // enabled_at = where deposit alerts start. Deposit alerts are on by default,
+    // so a first save keeps the default window; it moves only when they are
+    // switched from off to on — saving other settings never skips a deposit.
+    `INSERT INTO account_alert_prefs (account_id, low_balance_usdt, deposit_confirmed, error_rate_pct, cooldown_minutes, enabled_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, CASE WHEN $3 THEN 'epoch'::timestamptz ELSE NOW() END, NOW())
      ON CONFLICT (account_id) DO UPDATE SET low_balance_usdt = EXCLUDED.low_balance_usdt,
        deposit_confirmed = EXCLUDED.deposit_confirmed, error_rate_pct = EXCLUDED.error_rate_pct,
-       cooldown_minutes = EXCLUDED.cooldown_minutes, updated_at = NOW()
+       cooldown_minutes = EXCLUDED.cooldown_minutes,
+       enabled_at = CASE WHEN EXCLUDED.deposit_confirmed AND NOT account_alert_prefs.deposit_confirmed THEN NOW() ELSE account_alert_prefs.enabled_at END,
+       updated_at = NOW()
      RETURNING *`,
     [accountId, next.lowBalanceUsdt, next.depositConfirmed, next.errorRatePct, next.cooldownMinutes]
   );
@@ -128,7 +135,7 @@ async function deliver(pool, { accountId, email, kind, dedupeKey, message, detai
     `INSERT INTO account_alert_events (account_id, kind, dedupe_key, subject, detail, delivery)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (account_id, dedupe_key) DO UPDATE
-        SET delivery = 'queued', attempts = account_alert_events.attempts + 1, last_attempt_at = NOW()
+        SET delivery = EXCLUDED.delivery, attempts = account_alert_events.attempts + 1, last_attempt_at = NOW()
       -- Re-claim only a FAILED send, after 30 min, at most 3 attempts in total.
       WHERE account_alert_events.delivery = 'failed' AND account_alert_events.attempts < 3
         AND account_alert_events.last_attempt_at < NOW() - interval '30 minutes'
@@ -216,7 +223,11 @@ export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = i
     );
     const spent = Number(r.rows[0]?.spent_usdt || 0);
     const period = r.rows[0]?.period || now.toISOString().slice(0, 7);
-    const crossed = levels.filter((t) => pct(spent, cap) >= t);
+    // The account_month counter only grows while it stays within the cap
+    // (limits.mjs COUNTER_SQL), so it rarely equals the cap exactly: once less
+    // than the cheapest call is left, nothing more can be spent — that is 100%.
+    const capPct = cap - spent < PRICE_PER_CALL_USDT ? 100 : pct(spent, cap);
+    const crossed = levels.filter((t) => capPct >= t);
     crossed.forEach((t, i) => out.push({
       kind: 'spend_cap', dedupeKey: `spend_cap:${period}:${t}`, suppressed: i < crossed.length - 1,
       detail: { level: t, spentUsdt: spent, capUsdt: cap, period },
@@ -230,13 +241,20 @@ export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = i
 
   // Low balance (RPC-spendable crypto credits, per key that was funded once).
   if (notices && prefs.lowBalanceUsdt !== null) {
-    const bucket = Math.floor(now.getTime() / (prefs.cooldownMinutes * 60_000));
     for (const k of keys) {
       if (!(Number(k.total_deposited) > 0)) continue;
       const spendable = Math.max(0, Number(k.credits_usdt) - Number(k.dodo_fence));
       if (spendable >= prefs.lowBalanceUsdt) continue;
+      // Cooldown measured from the last warning for this key (not a clock bucket).
+      const last = await pool.query(
+        `SELECT 1 FROM account_alert_events
+          WHERE account_id = $1 AND kind = 'low_balance' AND detail ->> 'keyId' = $2
+            AND created_at > $3::timestamptz - make_interval(mins => $4) LIMIT 1`,
+        [accountId, String(k.id), now, prefs.cooldownMinutes]
+      );
+      if (last.rowCount) continue;
       out.push({
-        kind: 'low_balance', dedupeKey: `low_balance:${k.id}:${bucket}`,
+        kind: 'low_balance', dedupeKey: `low_balance:${k.id}:${now.toISOString().slice(0, 16)}`,
         detail: { keyId: k.id, spendableUsdt: spendable, floorUsdt: prefs.lowBalanceUsdt },
         message: {
           subject: `Satelink: low balance on ${keyName(k)}`,
@@ -249,7 +267,7 @@ export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = i
 
   // Deposit confirmed.
   if (notices && prefs.depositConfirmed && keys.length) {
-    const since = new Date(Math.max(new Date(prefs.updatedAt || 0).getTime(), now.getTime() - 24 * 3600e3));
+    const since = new Date(Math.max(new Date(prefs.depositsSince || 0).getTime(), now.getTime() - 24 * 3600e3));
     const deps = (await pool.query(
       `SELECT d.tx_hash, d.amount_usdt, COALESCE((to_jsonb(d) ->> 'credited_usdt')::numeric, d.amount_usdt) AS credited, d.created_at, l.api_key_id, l.label, l.key_hint
          FROM api_deposits d JOIN api_credits c ON c.api_key = d.api_key
@@ -295,6 +313,9 @@ export async function evaluateAccount(pool, accountId, { send = sendAlertEmail, 
 /** One evaluator pass over every account with a linked key or alert prefs. */
 export async function runAlertsTick(pool, { send = sendAlertEmail, env = process.env, logger = console, ...opts } = {}) {
   if (!isConsoleAccountsEnabled() || env.CONSOLE_ALERTS_DISABLED === '1') return { ran: false, reason: 'disabled' };
+  // Without a sender, claiming alerts would use them up unsent; wait instead —
+  // everything still due is delivered once email is configured.
+  if (!senderConfigured(env)) return { ran: false, reason: 'no_sender' };
   await ensureConsoleAccountsSchema(pool);
   const client = await pool.connect();
   let locked = false;
@@ -375,7 +396,11 @@ export async function getAlerts(pool, accountId, { env = process.env } = {}) {
   const levels = settings.alertThresholds || [];
   return {
     sender: { configured: senderConfigured(env), from: env.ALERTS_EMAIL_FROM || ALERT_FROM_DEFAULT },
-    evaluator: { enabled: isConsoleAccountsEnabled() && env.CONSOLE_ALERTS_DISABLED !== '1', everyMinutes: 5 },
+    evaluator: {
+      enabled: isConsoleAccountsEnabled() && env.CONSOLE_ALERTS_DISABLED !== '1' && senderConfigured(env),
+      reason: !senderConfigured(env) ? 'no_sender' : (isConsoleAccountsEnabled() && env.CONSOLE_ALERTS_DISABLED !== '1' ? null : 'disabled'),
+      everyMinutes: 5,
+    },
     prefs,
     rules: [
       { kind: 'usage', status: usageOn && levels.length ? 'on' : 'off', levels, detail: 'Daily request limit per key, and plan allowance windows when usage limits are on' },

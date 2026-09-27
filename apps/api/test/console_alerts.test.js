@@ -112,6 +112,15 @@ d('D7 console alerts', function () {
     assert.deepEqual(await evaluateAccount(pool, A, { send, env, usageV2: false }), {});
   });
 
+  it('monthly spend cap: 100% when less than one call is left (the counter never exceeds the cap)', async () => {
+    await linkedKey(A);
+    await updateSettings(pool, A, { monthlySpendCapUsdt: 10 });
+    await pool.query(`INSERT INTO account_spend_counters (scope, scope_id, period, spent_usdt) VALUES ('account_month', $1, to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM'), 9.99999)`, [A]);
+    const c = await evaluateAccount(pool, A, { send, env, usageV2: false });
+    assert.equal(c.sent, 1);
+    assert.match(sent[0].subject, /100% of your monthly spend cap/);
+  });
+
   it('monthly spend cap: alert at 100% of the cap', async () => {
     await linkedKey(A);
     await updateSettings(pool, A, { monthlySpendCapUsdt: 2 });
@@ -127,6 +136,8 @@ d('D7 console alerts', function () {
     assert.equal((await evaluateAccount(pool, A, { send, env, usageV2: false, now: NOW })).sent, 1);
     assert.match(sent[0].text, /\$0\.10000 of USDT credits left for RPC/);
     assert.deepEqual(await evaluateAccount(pool, A, { send, env, usageV2: false, now: NOW }), {}, 'same window: no repeat');
+    const soon = new Date(NOW.getTime() + 2 * 60_000);
+    assert.deepEqual(await evaluateAccount(pool, A, { send, env, usageV2: false, now: soon }), {}, 'cooldown counts from the last warning, not a clock boundary');
     const later = new Date(NOW.getTime() + 61 * 60_000);
     assert.equal((await evaluateAccount(pool, A, { send, env, usageV2: false, now: later })).sent, 1, 'next window: alert again');
   });
@@ -135,6 +146,23 @@ d('D7 console alerts', function () {
     await linkedKey(A, { credits: 0, deposited: 0 });
     await updateAlertPrefs(pool, A, { lowBalanceUsdt: 1 });
     assert.deepEqual(await evaluateAccount(pool, A, { send, env, usageV2: false }), {});
+  });
+
+  it('deposit confirmed: saving other alert settings never skips a pending deposit', async () => {
+    const k = await linkedKey(A);
+    await pool.query(`INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, credited_usdt, created_at) VALUES ($1, '0xdef', 5, 5, NOW() - interval '1 minute')`, [k.key]);
+    await updateAlertPrefs(pool, A, { lowBalanceUsdt: 2 }); // saved after the deposit landed
+    await updateAlertPrefs(pool, A, { cooldownMinutes: 60 });
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    assert.equal(sent.filter((m) => /deposit of \$5\.00 confirmed/.test(m.subject)).length, 1, 'the pending deposit is still alerted');
+    // Turning deposit alerts off → on starts from that moment (no back-fill).
+    await updateAlertPrefs(pool, A, { depositConfirmed: false });
+    await pool.query(`INSERT INTO api_deposits (api_key, tx_hash, amount_usdt, credited_usdt, created_at) VALUES ($1, '0xoff', 5, 5, NOW() - interval '1 second')`, [k.key]);
+    await new Promise((r) => setTimeout(r, 20));
+    await updateAlertPrefs(pool, A, { depositConfirmed: true });
+    const before = sent.length;
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    assert.equal(sent.slice(before).filter((m) => /deposit/.test(m.subject)).length, 0, 'no back-fill after off → on');
   });
 
   it('deposit confirmed: one email per deposit transaction', async () => {
@@ -155,13 +183,27 @@ d('D7 console alerts', function () {
     assert.equal((await events(A)).filter((e) => e.kind === 'error_rate').length, 0);
   });
 
-  it('no sender configured → recorded as skipped_no_sender (visible in history), not silently dropped', async () => {
+  it('no sender configured → the evaluator waits (claims nothing), so alerts go out once email is configured', async () => {
     const k = await linkedKey(A);
     await usedToday(k.key, 1000);
-    const { sendAlertEmail } = await import('../src/console_accounts/alerts.mjs');
-    const c = await evaluateAccount(pool, A, { send: sendAlertEmail, env: {}, usageV2: false });
-    assert.equal(c.skipped_no_sender, 1);
-    assert.equal((await getAlerts(pool, A, { env: {} })).sender.configured, false);
+    process.env.CONSOLE_ACCOUNTS_V1 = 'true';
+    assert.deepEqual(await runAlertsTick(pool, { send, env: {}, usageV2: false }), { ran: false, reason: 'no_sender' });
+    assert.equal((await events(A)).length, 0, 'nothing used up while unconfigured');
+    const g = await getAlerts(pool, A, { env: {} });
+    assert.equal(g.sender.configured, false);
+    assert.equal(g.evaluator.reason, 'no_sender');
+    assert.equal((await runAlertsTick(pool, { send, env, usageV2: false })).sent, 1, 'delivered once configured');
+    delete process.env.CONSOLE_ACCOUNTS_V1;
+  });
+
+  it('a previously failed lower level that is now superseded is recorded as suppressed, not left "sending"', async () => {
+    const k = await linkedKey(A, { dailyLimit: 1000 });
+    await pool.query(`INSERT INTO account_alert_events (account_id, kind, dedupe_key, subject, delivery, last_attempt_at)
+      VALUES ($1, 'usage', $2, 'x', 'failed', NOW() - interval '1 hour')`, [A, `usage:key:${k.id}:${TODAY}:70`]);
+    await usedToday(k.key, 900);
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    const row = (await events(A)).find((e) => e.dedupe_key.endsWith(':70'));
+    assert.equal(row.delivery, 'suppressed');
   });
 
   it('a failed send is recorded with its error and retried later, at most 3 attempts', async () => {
