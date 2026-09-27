@@ -84,45 +84,77 @@ export async function refreshMetric(pool, metric, { fetchImpl = globalThis.fetch
 
   let payload;
   let sourceRows = 0;
+  let rows = [];
+  const status = []; // per-venue outcome: { source, status, rows }
 
   if (metric === 'funding-rate-heatmap') {
-    const rows = await fetchFundingRates(fetchImpl);
-    sourceRows = rows.length;
+    rows = await fetchFundingRates(fetchImpl, undefined, status);
     payload = fundingRateHeatmap(rows);
   } else if (metric === 'open-interest-shifts') {
-    const current = await fetchOpenInterest(fetchImpl);
-    sourceRows = current.length;
-    // Prior baseline = the last snapshot's per-symbol absolute OI.
+    rows = await fetchOpenInterest(fetchImpl, undefined, status);
+    // Prior baseline = the last snapshot's per-symbol OI, but only if it came
+    // from the same venue — a venue switch must never read as an OI move.
+    const venue = rows[0]?.exchange ?? null;
     const prev = await latestSnapshot(pool, metric);
-    const previous = (prev?.payload?.symbols || [])
-      .filter((s) => Number.isFinite(s.open_interest_usd))
-      .map((s) => ({ symbol: s.symbol, openInterestUsd: s.open_interest_usd }));
-    payload = openInterestShifts(current, previous);
+    const prevVenues = prev?.payload?.sources;
+    // Snapshots written before venue tracking have no `sources` → not a
+    // comparable baseline. A baseline older than 3 refresh intervals is stale.
+    const sameVenue = Array.isArray(prevVenues) && prevVenues.length === 1 && prevVenues[0] === venue;
+    const fresh = prev && Date.now() - new Date(prev.captured_at).getTime() <= 3 * REFRESH_INTERVAL_MS;
+    const comparable = sameVenue && fresh;
+    const previous = comparable
+      ? (prev?.payload?.symbols || [])
+        .filter((s) => Number.isFinite(s.open_interest_usd))
+        .map((s) => ({ symbol: s.symbol, openInterestUsd: s.open_interest_usd }))
+      : [];
+    payload = openInterestShifts(rows, previous);
   } else if (metric === 'liquidation-clusters') {
-    const rows = await fetchMarkAndFunding(fetchImpl);
-    sourceRows = rows.length;
+    rows = await fetchMarkAndFunding(fetchImpl, undefined, status);
     payload = liquidationClusters(rows);
   } else if (metric === 'market-microstructure') {
-    const rows = await fetchOrderBooks(fetchImpl);
-    sourceRows = rows.length;
+    rows = await fetchOrderBooks(fetchImpl, undefined, undefined, status);
     payload = marketMicrostructure(rows);
   }
+  sourceRows = rows.length;
 
   if (sourceRows === 0) {
     // Upstream gave us nothing — keep the last good snapshot, don't clobber it.
-    return { metric, source_rows: 0, stored: false, reason: 'no_upstream_data' };
+    return { metric, source_rows: 0, stored: false, reason: 'no_upstream_data', sources: status };
   }
 
+  // Which venues this snapshot was derived from (shown with the data).
+  payload = { ...payload, sources: [...new Set(rows.map((r) => r.exchange).filter(Boolean))] };
   await insertSnapshot(pool, metric, payload, sourceRows);
-  return { metric, source_rows: sourceRows, stored: true };
+  return { metric, source_rows: sourceRows, stored: true, sources: status };
 }
 
 /** Refresh every metric; never throws (per-metric errors are captured). */
+// Binance premiumIndex and Hyperliquid metaAndAssetCtxs feed several metrics;
+// fetch each once per refresh pass instead of once per metric.
+function sharedFetch(fetchImpl) {
+  const memo = new Map();
+  return (url, init = {}) => {
+    const key = `${url}|${init.body || ''}`;
+    const shareable = url.includes('/fapi/v1/premiumIndex') || String(init.body || '').includes('metaAndAssetCtxs');
+    if (!shareable) return fetchImpl(url, init);
+    if (!memo.has(key)) {
+      memo.set(key, Promise.resolve(fetchImpl(url, init)).then(async (r) => ({
+        ok: !!r?.ok, status: r?.status, data: r?.ok ? await r.json().catch(() => undefined) : null,
+      })));
+    }
+    return memo.get(key).then((x) => ({
+      ok: x.ok && x.data !== undefined, status: x.status,
+      json: async () => x.data,
+    }));
+  };
+}
+
 export async function refreshAll(pool, opts = {}) {
   const results = [];
+  const fetchImpl = sharedFetch(opts.fetchImpl || globalThis.fetch);
   for (const metric of METRIC_NAMES) {
     try {
-      results.push(await refreshMetric(pool, metric, opts));
+      results.push(await refreshMetric(pool, metric, { ...opts, fetchImpl }));
     } catch (e) {
       results.push({ metric, source_rows: 0, stored: false, reason: `error:${e.message}` });
     }
@@ -163,13 +195,26 @@ let _timer = null;
 export function startIntelRefresh(pool, { fetchImpl = globalThis.fetch, logger = console } = {}) {
   if (process.env.INTEL_REFRESH_ENABLED !== 'true') return null;
   if (_timer) return _timer;
+  let running = false;
   const tick = async () => {
+    if (running) return; // never overlap: a slow pass skips the next tick
+    running = true;
     try {
       const res = await refreshAll(pool, { fetchImpl });
       const stored = res.filter((r) => r.stored).length;
-      logger.log?.(`[Intel] refresh: ${stored}/${res.length} metrics updated`);
+      // Per-venue HTTP outcome, so a blocked or failing source is visible
+      // (Binance/Bybit answer 451/403 to US IPs).
+      const venues = new Map();
+      for (const r of res) for (const v of r.sources || []) {
+        const cur = venues.get(v.source);
+        if (!cur || v.rows > cur.rows) venues.set(v.source, v);
+      }
+      const detail = [...venues.values()].map((v) => `${v.source}:${v.status ?? '-'}/${v.rows}`).join(' ');
+      logger.log?.(`[Intel] refresh: ${stored}/${res.length} metrics updated${detail ? ` (${detail})` : ''}`);
     } catch (e) {
       logger.error?.(`[Intel] refresh error: ${e.message}`);
+    } finally {
+      running = false;
     }
   };
   tick();
