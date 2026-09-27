@@ -1,0 +1,49 @@
+# DB snapshot (read-only) 2026-09-27T13:06:04Z
+db_size | 681 MB
+schema_migrations | 1 | 001_principals.sql | 2026-08-01 07:31:59.683149+00
+schema_migrations | 2 | 002_accounts.sql | 2026-08-01 07:32:00.894434+00
+schema_migrations | 3 | 003_ledger_entries.sql | 2026-08-01 07:32:02.274421+00
+schema_migrations | 4 | 004_ledger_revoke_mutation.sql | 2026-08-01 07:32:03.731903+00
+schema_migrations | 5 | 005_system_accounts.sql | 2026-08-01 21:00:38.856496+00
+schema_migrations | 6 | 006_principal_account_version.sql | 2026-08-02 15:24:30.486791+00
+schema_migrations | 7 | 007_authorization.sql | 2026-08-02 21:44:28.466099+00
+schema_migrations | 8 | 008_draws.sql | 2026-08-02 22:45:38.861743+00
+schema_migrations | 9 | 009_ledger_txn_header.sql | 2026-08-06 03:17:41.730332+00
+schema_migrations | 10 | 010_account_state_frozen.sql | 2026-08-11 19:34:13.733535+00
+schema_migrations | 11 | 011_reconciliation.sql | 2026-08-11 19:34:15.501464+00
+schema_migrations | 12 | 012_nonce_schedule.sql | 2026-08-18 21:09:36.904864+00
+schema_migrations | 13 | 013_platform_flags.sql | 2026-08-20 12:32:23.228719+00
+schema_migrations | 14 | 014_revenue_is_billable.sql | 2026-08-27 13:24:29.450791+00
+schema_migrations | 15 | 015_revenue_billable_amount_check.sql | 2026-08-27 14:04:00.043124+00
+schema_migrations | 16 | 016_guardrails.sql | 2026-08-28 15:13:33.31187+00
+count | api_credits | 55
+count | ledger_entries | 691310
+count | ledger_txns | 345655
+count | revenue_events_v2 | 345887
+count | api_deposits | 8
+size | ledger_entries | 302 MB | 691302
+size | revenue_events_v2 | 203 MB | 345887
+size | ledger_txns | 62 MB | 344622
+size | epoch_ledger | 28 MB | 146318
+size | developer_intel | 27 MB | 75795
+size | machine_crm_snapshots | 14 MB | 1331
+size | epochs | 14 MB | 106457
+size | node_health_logs | 9488 kB | 70141
+size | epoch_earnings | 7488 kB | 56798
+size | settlement_batches | 1144 kB | 2135
+size | pricing_decisions | 480 kB | 251
+size | gas_alerts | 344 kB | 2153
+size | automation_logs | 168 kB | 272
+size | registered_nodes | 144 kB | 3
+size | payment_sources | 120 kB | 7
+size | api_credits | 120 kB | 51
+size | principals | 112 kB | 12
+size | auth_nonces | 112 kB | 1
+size | authorizations | 112 kB | 7
+size | conversion_targets | 104 kB | 103
+size | authorization_nonces | 96 kB | 7
+size | api_deposits | 88 kB | 8
+size | rpc_usage_hourly | 88 kB | 0
+size | funding_sources | 88 kB | 7
+size | api_usage_daily | 88 kB | 2
+table_count | 71
