@@ -553,6 +553,17 @@ async function start() {
     console.error('[BOOT] ⚠️ DB cleanup job failed (non-fatal):', err.message);
   }
 
+  // Step 12d2: Console alerts evaluator (D7) — every 5 min. Inert unless
+  // CONSOLE_ACCOUNTS_V1=true (read on every tick); kill switch
+  // CONSOLE_ALERTS_DISABLED=1. Cross-instance safe (advisory lock + de-dup).
+  try {
+    const { startAlertsJob } = await import('./src/console_accounts/alerts.mjs');
+    startAlertsJob(pool);
+    console.log('[BOOT] ✅ Console alerts evaluator scheduled (active only with CONSOLE_ACCOUNTS_V1=true)');
+  } catch (err) {
+    console.error('[BOOT] ⚠️ Console alerts evaluator failed to start (non-fatal):', err.message);
+  }
+
   // Step 12e: Admin Command Center crons (ip-classifier, customer-zero, outreach).
   // Off by default — set ADMIN_CRONS_ENABLED=1 to start them. This keeps the
   // admin API/dashboard usable (manual triggers always work) without silently

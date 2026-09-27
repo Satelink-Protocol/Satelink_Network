@@ -14,6 +14,7 @@ import { ensureConsoleAccountsSchema } from './schema.mjs';
 import { AccountError, listKeys, createKey, linkKey, renameKey, revokeKey, rotateKey, withIdempotency } from './keys.mjs';
 import { getSettings, updateSettings, setAgentLimits, spendSummary, listSavedQueries, saveQuery, deleteSavedQuery } from './settings.mjs';
 import { listRequests, usageSeries, listDeposits } from './requests.mjs';
+import { getAlerts, updateAlertPrefs, sendTestAlert } from './alerts.mjs';
 import { createChallenge, verifyAndLink, listWallets, unlinkWallet, x402ForWallet } from './wallets.mjs';
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
 import { createCheckout, isPlanBillingV2Enabled } from '../pricing_v2/checkout.mjs';
@@ -137,6 +138,11 @@ export function createMeRouter(pool, {
   }));
 
   // Per-request log
+  // Alerts (D7): rules + history, preferences (audited), rate-limited test send.
+  router.get('/alerts', h((req) => getAlerts(pool, req.account.accountId)));
+  router.put('/alerts', h((req) => updateAlertPrefs(pool, req.account.accountId, req.body || {})));
+  router.post('/alerts/test', h(async (req) => ({ status: 201, body: await sendTestAlert(pool, req.account) })));
+
   router.get('/requests', h((req) => listRequests(pool, req.account.accountId, req.query)));
   router.get('/usage', h((req) => usageSeries(pool, req.account.accountId, { days: req.query.days })));
   router.get('/deposits', h((req) => listDeposits(pool, req.account.accountId)));

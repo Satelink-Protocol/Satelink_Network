@@ -53,3 +53,16 @@ export const METRIC_WORDS: Record<string, { title: string; question: string; uni
 
 export const usd = (n: number, dp = 2) => `$${n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 export const pct = (used: number, cap: number) => (cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0);
+
+/** GET /v1/me/alerts (D7). */
+export type AlertKind = "usage" | "spend_cap" | "low_balance" | "deposit_confirmed" | "error_rate" | "test";
+export type AlertPrefs = { lowBalanceUsdt: number | null; depositConfirmed: boolean; errorRatePct: number | null; cooldownMinutes: number; updatedAt?: string };
+export type AlertRule = { kind: Exclude<AlertKind, "test">; status: "on" | "off" | "not_measured"; levels?: number[]; capUsdt?: number | null; floorUsdt?: number | null; thresholdPct?: number | null; detail?: string };
+export type AlertEvent = { id: number; kind: AlertKind; subject: string; delivery: "queued" | "sent" | "failed" | "suppressed" | "skipped_no_sender"; error: string | null; createdAt: string; deliveredAt: string | null };
+export type AlertsState = {
+  sender: { configured: boolean; from: string };
+  evaluator: { enabled: boolean; reason: "no_sender" | "disabled" | null; everyMinutes: number };
+  prefs: AlertPrefs;
+  rules: AlertRule[];
+  history: AlertEvent[];
+};

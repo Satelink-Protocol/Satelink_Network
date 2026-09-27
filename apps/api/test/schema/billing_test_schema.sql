@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS api_credits (
   last_used       TIMESTAMP,
   status          VARCHAR(20) DEFAULT 'active'
 );
+-- Production adds this on boot (ensureDodoRailSchema, migration 041 — the Dodo
+-- ring-fence that RPC / x402 cannot spend). Mirrored here so real-Postgres suites
+-- exercise the same deduction SQL as production.
+ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS dodo_funded_usdt NUMERIC(18,6) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS api_usage_daily (
   id            SERIAL PRIMARY KEY,
