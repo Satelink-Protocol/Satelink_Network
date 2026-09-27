@@ -10,7 +10,7 @@ Updated 2026-09-27 ~20:45 IST.
 | FG-PR-438 | **DONE** — merged 07e7cb2 (founder-approved), deployed | — |
 | FG-PR-439 | **DONE** — merged 35cb2b5 (founder-approved), deployed; column verified in prod | — |
 | FG-PR-442 | **REVIEW** — RPC preflight on the 'new' capacity path (regression from #438: unfunded/unknown keys reached upstream) | recommended before FG-FLAG (d) |
-| FG-FLAG-CONSOLE_ACCOUNTS_V1 | APPROVED-CONDITIONAL → (a) ✅ · (b) ✅ (D7 #441 1bc4558; Agents/Keys/Requests/Usage/Alerts clean) · (c) ✅ #438+#439 live · (e) ⚠️ TI deduction not demonstrable (0 TI snapshots in prod) | A5, D2–D14 |
+| FG-FLAG-CONSOLE_ACCOUNTS_V1 | **FLIPPED 2026-09-27 22:16Z** (founder go). Railway ✅ `/v1/me/*` 404→401; Vercel prod `dpl_DFXLuWueftXjztdon4xobRu1Qa1U` @ 4ca6b44 ✅ (`me-migrate` 404 `accounts_disabled` → 403 `bad_origin`); smoke ✅; signed-in prod check pending founder session | D2–D14 |
 | FG-RPC-REFUND | GATED | `refund_rpc_failed_charges.mjs --apply` (external $0; founder ≤ $0.00102) |
 | FG-DODO-FENCE | GATED | `backfill_dodo_ringfence.mjs --apply` after #439 deploys (key 132 → $19.98) |
 | FG-DODO-TESTDATA | GATED | reclassify payment_sources 349, 350 (founder TEST-mode Dodo) as `is_test_data=true` |
@@ -69,7 +69,15 @@ Updated 2026-09-27 ~20:45 IST.
   exactly $0.00003 (4.999280 → 4.999250) + revenue row `rpc_cc5eec8e…`; TI key 29 → 503 warming_up, **not charged**;
   unfunded founder key 134 → 402. TI cannot show a deduction: `intelligence_snapshots` has 0 rows and the refresh job
   logs `0/4 metrics updated` (upstream data sources failing from Railway) — founder to accept (e) without a TI debit.
-- (d)/(f) not started. Rollback (pre-written):
+- (d) DONE 22:16Z: Railway `CONSOLE_ACCOUNTS_V1=true` → restart SUCCESS (same commit 4ca6b44), health 200 (db ok),
+  `/v1/me/alerts` + `/v1/me/keys` 404 → 401 `sign_in_required`. First-use schema created (all `account_*` incl.
+  `account_alert_prefs`/`account_alert_events`), `idx_rev2_client_created` valid, no errors in logs. Then Vercel production
+  env + new production deployment `dpl_DFXLuWueftXjztdon4xobRu1Qa1U` READY @ 4ca6b44.
+- (e) post-flip smoke (`evidence/smoke-postflip-2026-09-28.txt`, founder keys): RPC key 29 → 200, charged exactly
+  $0.00003 (4.999250 → 4.999220) through the accounts deduction path + revenue row `rpc_7125e271…`; TI → 503
+  warming_up, not charged; unfunded founder key 134 → 402. TI debit not demonstrable (0 snapshots) — accepted by "flip".
+- Remaining for PROD-VERIFIED of D2–D14: one signed-in Playwright pass on console.satelink.network (needs a founder
+  session). Rollback (pre-written, unused):
   Railway: `railway variables --service Satelink-api --set CONSOLE_ACCOUNTS_V1=false` (restart; read at call time).
   Vercel: `vercel env rm CONSOLE_ACCOUNTS_V1 production --yes` then redeploy the current production deployment.
 

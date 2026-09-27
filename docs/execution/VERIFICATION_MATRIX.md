@@ -1,19 +1,19 @@
 # VERIFICATION_MATRIX
 
-Only PROD-VERIFIED counts toward completion. Completion now: 1 / 89 = 1.1% (B5).
+Only PROD-VERIFIED counts toward completion. Completion now: 2 / 89 = 2.2% (B5, B4).
 
 | ID | Requirement | UI | Backend | Data | Tests | PR | Deployed | Prod-verified | Evidence | Status | Blocker |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| A1 | Evidence-backed root cause of "merged but V1 in production". |  |  |  |  |  |  |  | EXECUTION_STATE A1 | IMPLEMENTED | fix = flag flip (FG-FLAG) |
+| A1 | Evidence-backed root cause of "merged but V1 in production". |  |  |  |  |  |  |  | root cause fixed by FG-FLAG flip | DEPLOYED | signed-in prod screenshot pending |
 | A2 | Console, web, admin, docs Vercel projects serve `main` HEAD (SHA proof). | | | | | | | | | IN PROGRESS | 3 Vercel + Railway == main 4b2865f; docs/admin have no Vercel project |
 | A3 | Railway `Satelink-api` serves `main` HEAD; migrations through latest applied (list proof). | | | | | | | | | IN PROGRESS | Railway == main; migrations 017–019 pending (FG-MIG) |
 | A4 | Flag inventory: exact names from code, where read (build/runtime), value per environment. | | | | | | | | | IN PROGRESS | names+read sites+values captured (EXECUTION_STATE) |
-| A5 | UI flags enabled in production after preview proof, rollback documented. |  |  |  |  |  |  |  | FOUNDER_GATES | FOUNDER-GATE:FG-FLAG | (b) 2 pages fail; (c) needs #438+#439 |
+| A5 | UI flags enabled in production after preview proof, rollback documented. |  |  |  |  |  |  |  | Railway+Vercel flipped 22:16Z; probes 404→401 / 404→403 | DEPLOYED | signed-in prod Playwright pass needs founder session |
 | A6 | Money flags prepared as FOUNDER-GATE with ordered commands and post-flip verification scri… | | | | | | | | | IN PROGRESS | commands drafted in FOUNDER_GATES |
 | B1 | `cloudflare_Example Usage` token: FOUNDER-GATE rotate → then delete variable → verify gone… | | | | | | | | | FOUNDER-GATE:FG-CF-TOKEN |  |
 | B2 | Exposed keys: rotate 3 funded first (FOUNDER-GATE), plan for remaining 48 active, redactio… | | | | | | | | | FOUNDER-GATE:FG-KEYROT |  |
 | B3 | No full API key in any log path (code grep + prod log count proof). | | | | | | | | | NOT STARTED |  |
-| B4 | TI charge-after-success live; past failed-call refunds confirmed (amount + key count). |  |  |  |  |  |  |  | #429 + #438 07e7cb2; live TI 503 uncharged, RPC charged once | DEPLOYED | prod proof via FG-FLAG (e) |
+| B4 | TI charge-after-success live; past failed-call refunds confirmed (amount + key count). |  |  |  |  |  |  |  | post-flip smoke: RPC charged once on success; TI 503 uncharged (evidence/smoke-postflip-2026-09-28.txt); #429+#438 | PROD-VERIFIED |  |
 | B5 | Refund ledger `kind` constraint fixed in production DB. |  |  |  |  |  |  |  | schema_migrations 19 + rolled-back refund insert (evidence/mig-017-019-after.txt); #430 merge 0547420 | PROD-VERIFIED |  |
 | B6 | Dodo-funded value cannot pay RPC/x402 (negative test in prod with test key). |  |  |  |  |  |  |  | #439 35cb2b5; column live | DEPLOYED | ring-fence backfill FG-DODO-FENCE |
 | B7 | Railway/Vercel env: list vars unread by code (names only) → removal proposals (gate). | | | | | | | | | NOT STARTED |  |

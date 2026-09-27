@@ -32,3 +32,4 @@
 - 20:30 D7 alerts #441 merged (1bc4558) after review (5 findings fixed); deployed; evaluator scheduled; /v1/me/alerts 404 (flag off).
 - 20:40 Pre-flip smoke (founder keys): RPC charged once; TI 503 uncharged; unfunded 402. Found prod capacity path = 'new' (platform_flags) → #442. Found TI snapshots empty (0/4 refresh).
 - 20:45 #437 (cc6e0f4) and #440 (45dd274) merged.
+- 2026-09-28 03:46 IST CONSOLE_ACCOUNTS_V1 flipped: Railway (22:16Z, restart SUCCESS, /v1/me 404→401, schema created, no errors) → smoke pass → Vercel production env + deploy dpl_DFXLuWueftXjztdon4xobRu1Qa1U @ 4ca6b44 (me-migrate 404→403 bad_origin). Vercel API token had expired; refreshed via CLI.
