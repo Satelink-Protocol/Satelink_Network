@@ -16,3 +16,14 @@
 - 18:40 Tests: api 351/76 pending/7 fail (local satelink_test; prod DATABASE_URL overridden); vitest 283/283.
 - 18:45 BEFORE screenshots: console 17 routes → all redirect /sign-in (no founder session: BLOCKED for signed-in state); admin command-center renders unauthenticated (22 console errors); 12 other admin tabs → /login.
 - 18:55 FG-FLAG (c) code trace: RPC pre-deducts, no refund on 502 (F-1); Dodo credit packs fund RPC balance (F-2); payment_sources 349/350 founder TEST Dodo marked non-test (F-3).
+- 19:02 Founder instructions round 2 received (truncated at STEP 5).
+- 19:03 ~/.zshrc backup zshrc.bak-20260927-190243; removed last `export DATABASE_URL=` (line 66); clean `zsh -ic` prints nothing. Running session still inherits the var → FG-SESSION-RESTART.
+- 19:08 Prod-write check = NO: tests ran with DATABASE_URL overridden to /tmp socket; worktree has no .env; prod has api_deposits.credited_usdt but tests failed on its absence (proves local); prod api_credits/api_deposits/payment_sources: 0 rows created today; revenue_events_v2: 0 rows today (none at all since 2026-09-25 03:51Z — separate finding).
+- 19:15 PR #437 test(api) prod-DB guard (allowlist; --require + 000_ file; CI check in ci-baseline-check.sh).
+- 19:09 FG-MIG applied + verified (see FOUNDER_GATES).
+- 19:25 PR #438 fix(billing) RPC charge-after-success (money-path). 3 failure-mode tests fail on main, 7/7 pass; suite 358/7 (same 7).
+- 19:29 PR #439 fix(billing) Dodo→RPC/x402 boundary (money-path). 4/5 fail on main; suite 356/7 (same 7); 42 Dodo tests pass.
+- 19:30 PR #436 merged (51b2c88) — CI 13 pass / 1 skipped.
+- 19:32 Vercel preview dpl_57k1UPuEUZbJ5CGizbUiiJtwKV1G READY (branch-scoped flags).
+- 19:40 Local harness verification: onboarding 6/6, accounts-gate + simple-flows 14/14; V1 scan fails /alerts + /trading-intelligence.
+- 19:48 PRICING_TRUTH draft; conflicts C-10…C-15.

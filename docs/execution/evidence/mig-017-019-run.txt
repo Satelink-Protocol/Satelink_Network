@@ -1,0 +1,4 @@
+Applying pending migrations…
+Applied: 017_satelink_app_role.sql, 018_subscriptions.sql, 019_ledger_kind_refund.sql
+Skipped (already applied): 001_principals.sql, 002_accounts.sql, 003_ledger_entries.sql, 004_ledger_revoke_mutation.sql, 005_system_accounts.sql, 006_principal_account_version.sql, 007_authorization.sql, 008_draws.sql, 009_ledger_txn_header.sql, 010_account_state_frozen.sql, 011_reconciliation.sql, 012_nonce_schedule.sql, 013_platform_flags.sql, 014_revenue_is_billable.sql, 015_revenue_billable_amount_check.sql, 016_guardrails.sql
+Done.
