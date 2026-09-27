@@ -56,7 +56,7 @@
         "dev": "NODE_ENV=development nodemon server.js",
         "worker": "node worker.js",
         "gateway": "node gateway.js",
-        "test": "mocha test/**/*.test.js",
-        "test:baseline": "mocha --no-config --exit --reporter min --no-colors 'test/**/*.test.js'"
+        "test": "mocha --require test/_guard/prod_db_guard.cjs test/**/*.test.js",
+        "test:baseline": "mocha --no-config --exit --require test/_guard/prod_db_guard.cjs --reporter min --no-colors 'test/**/*.test.js'"
     }
 }
