@@ -25,7 +25,10 @@ export function validateCatalog(c) {
     if (p.intro && !(p.intro.amount_usd > 0 && p.intro.trial_period_days > 0)) errs.push(`${p.id}: intro`);
     if (p.inr_price !== null && p.inr_price !== undefined && !Number.isInteger(p.inr_price)) errs.push(`${p.id}: inr_price must be whole rupees or null`);
   }
-  for (const k of c?.packs || []) if (!(k.grant_uu > 0)) errs.push(`${k.id}: grant_uu`);
+  for (const k of c?.packs || []) {
+    if (!(k.grant_uu > 0)) errs.push(`${k.id}: grant_uu`);
+    if (k.bonus_uu !== undefined && !(Number.isInteger(k.bonus_uu) && k.bonus_uu >= 0)) errs.push(`${k.id}: bonus_uu must be a whole number >= 0`);
+  }
   return errs;
 }
 
@@ -43,6 +46,10 @@ export function getPlan(id, c = loadCatalog()) {
 }
 export function getPack(id, c = loadCatalog()) {
   return c.packs.find((p) => p.id === id) || null;
+}
+/** UU a pack credits on purchase: its grant plus its bonus (founder D-2). */
+export function packTotalUu(k) {
+  return k.grant_uu + (k.bonus_uu || 0);
 }
 /** The entitlement a plan grants (Launch grants Pro's). */
 export function entitlementPlan(planId, c = loadCatalog()) {
@@ -102,7 +109,10 @@ export function publicCatalog(c = loadCatalog(), { mode = 'test' } = {}) {
       name: k.name,
       priceUsd: k.price_usd,
       grantUu: k.grant_uu,
-      tiRequests: Math.floor(k.grant_uu / tiReq),
+      bonusUu: k.bonus_uu || 0,
+      bonusPct: k.bonus_uu ? Math.round((k.bonus_uu / k.grant_uu) * 100) : 0,
+      totalUu: packTotalUu(k),
+      tiRequests: Math.floor(packTotalUu(k) / tiReq),
       inrPrice: k.inr_price ?? null,
       purchasable: Boolean(k.dodo?.[mode]) && worstCase(k, c).gate === 'pass',
     })),

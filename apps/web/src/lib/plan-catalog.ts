@@ -13,7 +13,7 @@ export type PublicPlan = {
   limits: { api_keys: number; machines: number };
   inrPrice: number | null; purchasable: boolean; economicsGate: "pass" | "fail";
 };
-export type PublicPack = { id: string; name: string; priceUsd: number; grantUu: number; tiRequests: number; inrPrice: number | null; purchasable: boolean };
+export type PublicPack = { id: string; name: string; priceUsd: number; grantUu: number; bonusUu?: number; bonusPct?: number; totalUu?: number; tiRequests: number; inrPrice: number | null; purchasable: boolean };
 export type PublicCatalog = { version: string; unit: { name: string; symbol: string; usd_list_value: number }; boundary: string; windows: { session_hours: number }; plans: PublicPlan[]; packs: PublicPack[] };
 
 /** mode: which Dodo product ids decide "purchasable" (test until live is switched on). */
