@@ -75,7 +75,7 @@ describe('Dodo → RPC/x402 boundary (fix/dodo-rpc-boundary)', function () {
   const fundViaCrypto = (amount, id) => creditAccount(raw, { apiKey: KEY, amountUsdt: amount, txHash: `0x${id}` });
   const balances = async () => (await raw.query(`SELECT credits_usdt::float AS c, dodo_funded_usdt::float AS d FROM api_credits WHERE api_key = $1`, [KEY])).rows[0];
 
-  function rpcCall() {
+  function rpcCall(id = 1) {
     const app = express();
     app.use(express.json());
     app.use('/rpc', createRpcGateway(raw));
@@ -84,12 +84,20 @@ describe('Dodo → RPC/x402 boundary (fix/dodo-rpc-boundary)', function () {
     // transaction. Providers (stubbed fetch) serve every call.
     initRouterWithPool(null);
     return request(app).post('/rpc/polygon').set('X-API-Key', KEY)
-      .send({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 });
+      .send({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id });
   }
 
   it('NEGATIVE: a Dodo-funded account calling RPC gets 402 and is not charged', async () => {
     expect((await fundViaDodo(10, 'pay_neg')).ok).to.equal(true);
-    const res = await rpcCall();
+    let upstreamCalls = 0;
+    // Count only this request's upstream calls (distinct JSON-RPC id) — the
+    // gateway's health monitor also pings providers through fetch.
+    globalThis.fetch = async (_url, init) => {
+      if (String(init?.body || '').includes('"id":424242')) upstreamCalls += 1;
+      return new Response('{}', { status: 200 });
+    };
+    const res = await rpcCall(424242);
+    expect(upstreamCalls, 'refused by the preflight, before any upstream call').to.equal(0);
     expect(res.status, JSON.stringify(res.body)).to.equal(402);
     expect(res.body.error).to.equal('insufficient_credits');
     const b = await balances();

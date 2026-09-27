@@ -51,7 +51,8 @@ function isApiKey(s) {
 // ('true'/'false') or null; isOnPaymentHold() normalizes it.
 const ACCOUNT_COLS =
   `api_key, wallet_address, tier, daily_limit, credits_usdt, status, ` +
-  `(to_jsonb(api_credits) ->> 'payment_hold') AS payment_hold`;
+  `(to_jsonb(api_credits) ->> 'payment_hold') AS payment_hold, ` +
+  `(to_jsonb(api_credits) ->> 'dodo_funded_usdt') AS dodo_funded_usdt`;
 
 /** True iff the resolved account row is flagged payment_hold (text or boolean). */
 export function isOnPaymentHold(account) {
@@ -122,7 +123,7 @@ export function costFor(account, methodPrice) {
  *
  * @returns {Promise<{ok:true, tier, cost} | {ok:false, code, http, message, ...}>}
  */
-export async function precheckCharge(pool, { apiKey, wallet, methodPrice } = {}) {
+export async function precheckCharge(pool, { apiKey, wallet, methodPrice, product = 'rpc' } = {}) {
   if (!pool || !pool.query) {
     return { ok: false, code: 'no_pool', http: 503, message: 'Billing store unavailable — try again shortly', degraded: true };
   }
@@ -150,7 +151,9 @@ export async function precheckCharge(pool, { apiKey, wallet, methodPrice } = {})
     };
   }
   const cost = costFor(account, methodPrice);
-  const balance = parseFloat(account.credits_usdt || 0);
+  // Same rule as deductSql: RPC / x402 cannot spend the Dodo ring-fence.
+  const fence = product === 'intelligence' ? 0 : parseFloat(account.dodo_funded_usdt || 0);
+  const balance = parseFloat(account.credits_usdt || 0) - fence;
   if (cost > 0 && balance < cost) {
     return {
       ok: false, code: 'insufficient_credits', http: 402,
