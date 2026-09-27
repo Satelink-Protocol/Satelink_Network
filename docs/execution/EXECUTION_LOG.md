@@ -27,3 +27,8 @@
 - 19:32 Vercel preview dpl_57k1UPuEUZbJ5CGizbUiiJtwKV1G READY (branch-scoped flags).
 - 19:40 Local harness verification: onboarding 6/6, accounts-gate + simple-flows 14/14; V1 scan fails /alerts + /trading-intelligence.
 - 19:48 PRICING_TRUTH draft; conflicts C-10…C-15.
+- 20:00 #438 merged (07e7cb2) on founder request; #439 follow-up (preflight excludes ring-fence) then merged (35cb2b5); prod column verified.
+- 20:05 Found: real-DB suites regression from #439 (test schema lacked dodo_funded_usdt) — fixed in #441.
+- 20:30 D7 alerts #441 merged (1bc4558) after review (5 findings fixed); deployed; evaluator scheduled; /v1/me/alerts 404 (flag off).
+- 20:40 Pre-flip smoke (founder keys): RPC charged once; TI 503 uncharged; unfunded 402. Found prod capacity path = 'new' (platform_flags) → #442. Found TI snapshots empty (0/4 refresh).
+- 20:45 #437 (cc6e0f4) and #440 (45dd274) merged.

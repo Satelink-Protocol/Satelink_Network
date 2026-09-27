@@ -2,14 +2,15 @@
 
 Protocol (contract §3): each gate lists exact commands, what is prepared, and the post-action verification.
 Founder replies `APPROVE <gate-id>`. Conditional approvals are executed only when every condition is shown met.
-Updated 2026-09-27 ~19:50 IST.
+Updated 2026-09-27 ~20:45 IST.
 
 | Gate | Status | Blocking |
 |---|---|---|
 | FG-MIG-017-019 | **DONE 2026-09-27 13:39Z** — pre-approved shape (DROP CONSTRAINT re-added as superset); all conditions verified | — |
-| FG-PR-438 | **REVIEW** — merge PR #438 (RPC charge-after-success, money path) | FG-FLAG (c), B4 |
-| FG-PR-439 | **REVIEW** — merge PR #439 (Dodo → RPC/x402 boundary, money path) | FG-FLAG (c), B6, C6 |
-| FG-FLAG-CONSOLE_ACCOUNTS_V1 | APPROVED-CONDITIONAL → (a) ✅ met · (b) ⚠️ 2 pages fail · (c) ⏳ needs #438 + #439 merged | A5, D2–D14 |
+| FG-PR-438 | **DONE** — merged 07e7cb2 (founder-approved), deployed | — |
+| FG-PR-439 | **DONE** — merged 35cb2b5 (founder-approved), deployed; column verified in prod | — |
+| FG-PR-442 | **REVIEW** — RPC preflight on the 'new' capacity path (regression from #438: unfunded/unknown keys reached upstream) | recommended before FG-FLAG (d) |
+| FG-FLAG-CONSOLE_ACCOUNTS_V1 | APPROVED-CONDITIONAL → (a) ✅ · (b) ✅ (D7 #441 1bc4558; Agents/Keys/Requests/Usage/Alerts clean) · (c) ✅ #438+#439 live · (e) ⚠️ TI deduction not demonstrable (0 TI snapshots in prod) | A5, D2–D14 |
 | FG-RPC-REFUND | GATED | `refund_rpc_failed_charges.mjs --apply` (external $0; founder ≤ $0.00102) |
 | FG-DODO-FENCE | GATED | `backfill_dodo_ringfence.mjs --apply` after #439 deploys (key 132 → $19.98) |
 | FG-DODO-TESTDATA | GATED | reclassify payment_sources 349, 350 (founder TEST-mode Dodo) as `is_test_data=true` |
@@ -61,7 +62,14 @@ Updated 2026-09-27 ~19:50 IST.
 - (c) Deduction path with the flag on: `rpc_gateway.js` → `enforceCapacity` → `authorizeAndMeter` →
   `deductWithAccountLimits` (`console_accounts/limits.mjs`) → `deductSql(product)`. Charge-after-success = PR #438;
   Dodo value cannot pay RPC/x402 = PR #439. Both need your merge.
-- (d)/(e)/(f) not started. Rollback (pre-written):
+- (b) update 20:30 IST: D7 alerts merged (#441, 1bc4558) → with the flag on, `/alerts` has no V1 text
+  (Simple + Advanced); accounts + simple-flows + alerts e2e 17/17 on that commit. `/trading-intelligence` still has
+  its V1 note (not in the condition list; D10).
+- (e) pre-flip baseline (`evidence/smoke-preflip-2026-09-27.txt`, founder keys only): RPC key 29 → 200, charged
+  exactly $0.00003 (4.999280 → 4.999250) + revenue row `rpc_cc5eec8e…`; TI key 29 → 503 warming_up, **not charged**;
+  unfunded founder key 134 → 402. TI cannot show a deduction: `intelligence_snapshots` has 0 rows and the refresh job
+  logs `0/4 metrics updated` (upstream data sources failing from Railway) — founder to accept (e) without a TI debit.
+- (d)/(f) not started. Rollback (pre-written):
   Railway: `railway variables --service Satelink-api --set CONSOLE_ACCOUNTS_V1=false` (restart; read at call time).
   Vercel: `vercel env rm CONSOLE_ACCOUNTS_V1 production --yes` then redeploy the current production deployment.
 

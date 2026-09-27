@@ -1,0 +1,7 @@
+BEFORE: key29 credits=4.999280 spent=0.000720 rev_rows=11 ledger_txns=345655
+RPC key29      → HTTP 200 body={"jsonrpc":"2.0","result":"0x5a2a011","id":1}
+TI  key29      → HTTP 503 body={"ok":false,"error":"warming_up","metric":"funding-rate-heatmap","message":"No s
+RPC key134 (unfunded) → HTTP 402 error=no_authorization
+AFTER:  key29 credits=4.999250 spent=0.000750 rev_rows=12 ledger_txns=345655
+rev rows (last 2 for key29) | rpc_call | 0.00003000 | rpc_cc5eec8e-4f83-406e-b765-012a7f5ca043 | 2026-09-27 14:56:13
+rev rows (last 2 for key29) | rpc_call | 0.00003000 | rpc_1ac20cbe-2de1-4104-846c-6bb085f0f982 | 2026-07-15 11:25:31

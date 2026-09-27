@@ -13,9 +13,9 @@ Only PROD-VERIFIED counts toward completion. Completion now: 1 / 89 = 1.1% (B5).
 | B1 | `cloudflare_Example Usage` token: FOUNDER-GATE rotate → then delete variable → verify gone… | | | | | | | | | FOUNDER-GATE:FG-CF-TOKEN |  |
 | B2 | Exposed keys: rotate 3 funded first (FOUNDER-GATE), plan for remaining 48 active, redactio… | | | | | | | | | FOUNDER-GATE:FG-KEYROT |  |
 | B3 | No full API key in any log path (code grep + prod log count proof). | | | | | | | | | NOT STARTED |  |
-| B4 | TI charge-after-success live; past failed-call refunds confirmed (amount + key count). |  |  |  |  |  |  |  | PR #438 | FOUNDER-GATE:FG-PR-438 | TI done in #429; RPC in #438 |
+| B4 | TI charge-after-success live; past failed-call refunds confirmed (amount + key count). |  |  |  |  |  |  |  | #429 + #438 07e7cb2; live TI 503 uncharged, RPC charged once | DEPLOYED | prod proof via FG-FLAG (e) |
 | B5 | Refund ledger `kind` constraint fixed in production DB. |  |  |  |  |  |  |  | schema_migrations 19 + rolled-back refund insert (evidence/mig-017-019-after.txt); #430 merge 0547420 | PROD-VERIFIED |  |
-| B6 | Dodo-funded value cannot pay RPC/x402 (negative test in prod with test key). |  |  |  |  |  |  |  | PR #439 negative test | FOUNDER-GATE:FG-PR-439 |  |
+| B6 | Dodo-funded value cannot pay RPC/x402 (negative test in prod with test key). |  |  |  |  |  |  |  | #439 35cb2b5; column live | DEPLOYED | ring-fence backfill FG-DODO-FENCE |
 | B7 | Railway/Vercel env: list vars unread by code (names only) → removal proposals (gate). | | | | | | | | | NOT STARTED |  |
 | B8 | Triage the 286 GitHub security alerts: fix critical/high in production deps via PRs; docum… | | | | | | | | | NOT STARTED |  |
 | B9 | Alchemy key rotation status confirmed or gated. | | | | | | | | | NOT STARTED |  |
@@ -27,7 +27,7 @@ Only PROD-VERIFIED counts toward completion. Completion now: 1 / 89 = 1.1% (B5).
 | C3 | Free-tier contradiction resolved everywhere (UI, API gate, docs, well-known). |  |  |  |  |  |  |  | PRICING_TRUTH §5 | IN PROGRESS | surfaces not yet catalog-fed |
 | C4 | RPC per-rail prices labeled (USDT credits $0.00003/call vs x402 bundle $0.10/1,000 = $0.00… | | | | | | | | | NOT STARTED |  |
 | C5 | x402 page: rail/status per route truthful (TI routes shown as api_credits-metered, not x40… | | | | | | | | | NOT STARTED |  |
-| C6 | Dodo boundary enforced in code and stated in UI + docs + billing policy. |  |  |  |  |  |  |  | PR #439 | FOUNDER-GATE:FG-PR-439 |  |
+| C6 | Dodo boundary enforced in code and stated in UI + docs + billing policy. |  |  |  |  |  |  |  | #439 | DEPLOYED |  |
 | C7 | INR display path ready (`inr_price`); values = FOUNDER-GATE. | | | | | | | | | NOT STARTED |  |
 | C8 | CI consistency test across all public surfaces. | | | | | | | | | NOT STARTED |  |
 | C9 | Balances shown per asset/rail with source, timestamp, reference — never a blended "credits… | | | | | | | | | NOT STARTED |  |
@@ -37,7 +37,7 @@ Only PROD-VERIFIED counts toward completion. Completion now: 1 / 89 = 1.1% (B5).
 | D4 | Agents as server-side entities: create, describe, bind key(s), pause/resume (enforced at g… | | | | | | | | | NOT STARTED |  |
 | D5 | Request log: reuse `revenue_events_v2`/usage tables if they hold per-call rows; otherwise … | | | | | | | | | NOT STARTED |  |
 | D6 | Usage: per-product meters from Pricing V2 endpoints; 24h/7d/30d/90d/custom; requests, succ… | | | | | | | | | NOT STARTED |  |
-| D7 | Alerts: thresholds stored per account (usage 70/85/95/100%, monthly spend cap, error rate,… |  |  |  |  |  |  |  |  | NOT STARTED | no backend; blocks FG-FLAG (b) |
+| D7 | Alerts: thresholds stored per account (usage 70/85/95/100%, monthly spend cap, error rate,… |  |  |  |  |  |  |  | #441 1bc4558; 17 api + 3 e2e tests | DEPLOYED | live only after FG-FLAG; error-rate not measured (D5) |
 | D8 | Spend controls: monthly cap + credit auto-use toggle, enforced in the credit gate (FOUNDER… | | | | | | | | | NOT STARTED |  |
 | D9 | x402 per-wallet view: link a wallet to the account by signed message; show 402s issued vs … | | | | | | | | | NOT STARTED |  |
 | D10 | Trading Intelligence: playground works end to end with correct charging; server-side saved… |  |  |  |  |  |  |  |  | NOT STARTED | TI saved-queries page has no V2 branch |
