@@ -1,0 +1,19 @@
+# post-migration verification 2026-09-27T13:40:36Z
+schema_migrations | 16 | 016_guardrails.sql | 2026-08-28 15:13:33.31187+00
+schema_migrations | 17 | 017_satelink_app_role.sql | 2026-09-27 13:39:49.519351+00
+schema_migrations | 18 | 018_subscriptions.sql | 2026-09-27 13:39:50.521879+00
+schema_migrations | 19 | 019_ledger_kind_refund.sql | 2026-09-27 13:39:51.768766+00
+api_deposits | 8
+api_credits | 55
+revenue_events_v2 | 345887
+ledger_txns | 345655
+ledger_entries | 691310
+constraint | CHECK ((kind = ANY (ARRAY['draw'::text, 'settlement'::text, 'deposit'::text, 'adjustment'::text, 'reversal'::text, 'refund'::text])))
+subscriptions table | t
+satelink_app role (login/super) | t | f
+--- rolled-back refund insert:
+BEGIN
+inserted kind=refund
+INSERT 0 1
+ROLLBACK
+row persisted after rollback: 0

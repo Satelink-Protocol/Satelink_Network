@@ -1,0 +1,7 @@
+# pre-migration snapshot 2026-09-27T13:39:43Z
+schema_migrations max | 16 | 16
+api_deposits | 8
+api_credits | 55
+revenue_events_v2 | 345887
+ledger_txns | 345655
+ledger_entries | 691310

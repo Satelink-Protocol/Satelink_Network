@@ -1,0 +1,20 @@
+{
+ "mode": "dry-run",
+ "upper_bound_external_usdt": 0,
+ "upper_bound_founder_usdt": 0.00102,
+ "keys": [
+  {
+   "key_id": 12,
+   "tier": "basic",
+   "founder": true,
+   "gap_usdt": 0.00063
+  },
+  {
+   "key_id": 29,
+   "tier": "basic",
+   "founder": true,
+   "gap_usdt": 0.00039
+  }
+ ],
+ "refunded_now_usdt": null
+}

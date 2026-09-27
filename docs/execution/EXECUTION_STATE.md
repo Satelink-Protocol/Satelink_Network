@@ -1,7 +1,7 @@
 # EXECUTION_STATE
 
 Updated: 2026-09-27 ~19:05 IST · Contract: `~/satelink-prompts/SATELINK_MASTER_EXECUTION.md` v2
-Current wave: **0 → 1** · Current item: A1/A5 (flag gate) — paused on founder input (see FOUNDER_GATES FG-MIG, FG-FLAG)
+Current wave: **1 + 2** · Current item: A5 flag gate waiting on #438/#439 merge; Wave 2 C1 PRICING_TRUTH draft (updated 2026-09-27 ~19:50 IST)
 
 ## Deployed SHA per surface (origin/main HEAD = 4b2865f, #434)
 | Surface | Source dir | Serving SHA | == main | Evidence |
@@ -48,6 +48,11 @@ a **redeploy is still required** after setting it.
 - Playwright: fixed (pinned global `@playwright/mcp@0.0.82` registered as user MCP `playwright-local`; chromium 1246 installed).
 
 ## Next 3 actions
-1. Founder answers FG-MIG (019 DROP CONSTRAINT) and FG-FLAG (c) findings F-1/F-2.
-2. Prepare money-path fix PRs (FOUNDER-GATE merge): F-1 refund-on-upstream-failure, F-2 Dodo value excluded from RPC/x402.
-3. Wave 2: PRICING_TRUTH.md from catalog + code; resolve §1 contradictions 1–5 in CONFLICT_REGISTER.
+1. Founder: review/merge #438 and #439 (money path); decide FG-PRICE-LAUNCH / FG-PRICE-PACKS; restart Claude Code (FG-SESSION-RESTART).
+2. Non-money: D10 TI saved-queries V2 page branch (UI PR); C8 catalog consistency test + wire /v1/pricing and /.well-known/* to the catalog.
+3. D7 alerts backend (thresholds table, evaluator job, Resend sender) — required for FG-FLAG (b) "no V1 text on Alerts".
+
+## Open PRs (2026-09-27)
+- #437 test(api) prod-DB guard — non-money, CI green, awaiting review.
+- #438 fix(billing) RPC charge-after-success — money-path, CI green.
+- #439 fix(billing) Dodo→RPC/x402 boundary — money-path.

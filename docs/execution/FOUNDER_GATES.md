@@ -2,71 +2,78 @@
 
 Protocol (contract §3): each gate lists exact commands, what is prepared, and the post-action verification.
 Founder replies `APPROVE <gate-id>`. Conditional approvals are executed only when every condition is shown met.
+Updated 2026-09-27 ~19:50 IST.
 
 | Gate | Status | Blocking |
 |---|---|---|
-| FG-MIG-017-019 | APPROVED-CONDITIONAL → **STOPPED at condition (a)**: 019 contains `DROP CONSTRAINT` | B5, FG-FLAG |
-| FG-FLAG-CONSOLE_ACCOUNTS_V1 | APPROVED-CONDITIONAL → **cannot proceed**: (a) unmet; (c) fails (F-1, F-2) | A5, D2–D14 |
+| FG-MIG-017-019 | **DONE 2026-09-27 13:39Z** — pre-approved shape (DROP CONSTRAINT re-added as superset); all conditions verified | — |
+| FG-PR-438 | **REVIEW** — merge PR #438 (RPC charge-after-success, money path) | FG-FLAG (c), B4 |
+| FG-PR-439 | **REVIEW** — merge PR #439 (Dodo → RPC/x402 boundary, money path) | FG-FLAG (c), B6, C6 |
+| FG-FLAG-CONSOLE_ACCOUNTS_V1 | APPROVED-CONDITIONAL → (a) ✅ met · (b) ⚠️ 2 pages fail · (c) ⏳ needs #438 + #439 merged | A5, D2–D14 |
+| FG-RPC-REFUND | GATED | `refund_rpc_failed_charges.mjs --apply` (external $0; founder ≤ $0.00102) |
+| FG-DODO-FENCE | GATED | `backfill_dodo_ringfence.mjs --apply` after #439 deploys (key 132 → $19.98) |
+| FG-DODO-TESTDATA | GATED | reclassify payment_sources 349, 350 (founder TEST-mode Dodo) as `is_test_data=true` |
+| FG-PRICE-LAUNCH | DECISION | Launch allowance: catalog 1,500/7,500 vs §1 300/1,500 |
+| FG-PRICE-PACKS | DECISION | pack bonuses: catalog none vs §1 +5 % / +10 % |
+| FG-INR | DECISION | `inr_price` values (all null) |
 | FG-SUBS | GATED | SATELINK_SUBSCRIPTIONS_ENABLED |
 | FG-PLANV2 | GATED | PLAN_BILLING_V2_ENABLED |
-| FG-USAGEV2 | GATED | SATELINK_USAGE_LIMITS_V2_ENABLED (contract spelling USAGE_LIMITS_V2 is not what code reads) |
+| FG-USAGEV2 | GATED | SATELINK_USAGE_LIMITS_V2_ENABLED (code name; contract says USAGE_LIMITS_V2) |
 | FG-LEGACYSUB | GATED | DODO_LEGACY_SUB_BUCKET_ENABLED |
-| FG-SETTLE | GATED | SETTLEMENT_DRY_RUN (stays 1) |
+| FG-SETTLE | GATED | SETTLEMENT_DRY_RUN stays 1 (external metered revenue $0.20 < $0.50) |
 | FG-DODO-WEBHOOK | GATED | Dodo TEST webhook registration |
 | FG-REDACT | GATED | #428 redaction `--apply` |
-| FG-KEYROT | GATED | rotation of 3 funded + 48 active exposed keys |
+| FG-KEYROT | GATED | rotate 3 funded + 48 active exposed keys |
 | FG-CF-TOKEN | GATED | rotate Cloudflare token, then delete Railway var `cloudflare_Example Usage` |
-| FG-GLM-KEY | NEW | `GLM_API_KEY` in `~/.zshrc` was printed into an agent transcript on 2026-09-27 → rotate at provider |
-| FG-DODO-TESTDATA | NEW | reclassify payment_sources 349, 350 (founder TEST-mode Dodo) as `is_test_data=true` |
+| FG-GLM-KEY | GATED | rotate `GLM_API_KEY` (printed into an agent transcript 2026-09-27) |
+| FG-SESSION-RESTART | ACTION | restart Claude Code once: this session still inherits the old prod `DATABASE_URL` from its launch environment |
 
 ---
 
-## FG-MIG-017-019 — apply `database/migrations` 017, 018, 019
-**Condition (a) result — STOP.** Full SQL reviewed (017: 62 lines, 018: 50, 019: 16):
-- 017 `satelink_app_role`: CREATE ROLE (no password, inert while prod connects as `postgres`), GRANTs, `REVOKE UPDATE, DELETE ON ledger_entries FROM satelink_app`. No DROP, no UPDATE/DELETE of data.
-- 018 `subscriptions`: `CREATE TABLE subscriptions` (no IF NOT EXISTS) + 3 indexes. Preconditions verified in prod: table absent, `principals`/`accounts` exist, `api_credits.api_key` unique.
-- 019 `ledger_kind_refund`: **`ALTER TABLE ledger_txns DROP CONSTRAINT IF EXISTS ledger_txns_kind_check;`** then `ADD CONSTRAINT … CHECK (kind IN (…,'refund'))`. No rows changed; it widens the allowed set. It is nonetheless a DROP → your condition says stop and show you.
-Risk notes for your decision: the runner wraps each migration in BEGIN/COMMIT (`database/runner.ts:163-173`), so DROP+ADD is atomic — if ADD fails the old constraint is restored. ADD CONSTRAINT validates 345,655 rows under an ACCESS EXCLUSIVE lock on `ledger_txns` (all current rows are kind='deposit', so it will pass); expect a lock of seconds. Also `ledger_txns` writers block during that window.
-Alternative with no DROP (if you prefer): a new migration that adds `ledger_txns_kind_check_v2 … NOT VALID`, `VALIDATE CONSTRAINT`, then drops the old one — still a DROP, just later. There is no DROP-free way to widen a CHECK in Postgres.
-**Condition (b) — done (read-only):** `docs/execution/evidence/db-snapshot-before-2026-09-27.txt`
-(schema_migrations 1–16; api_credits 55 · ledger_entries 691,310 · ledger_txns 345,655 · revenue_events_v2 345,887 · api_deposits 8; DB 681 MB).
-**To approve despite the DROP, reply:** `APPROVE FG-MIG-017-019 incl-019-drop-constraint`
-Command (from worktree on main, connection string passed as argument, never printed):
-`npx tsx database/runner.ts migrate "$(railway variables --service Postgres-iQeW --kv | grep ^DATABASE_PUBLIC_URL= | cut -d= -f2-)"`
-Post-verify (c): schema_migrations shows 017–019; `BEGIN; INSERT INTO ledger_txns(… kind='refund' …); ROLLBACK;` succeeds; the 5 row counts unchanged.
+## FG-MIG-017-019 — DONE
+- Only DROP: `019:14 ALTER TABLE ledger_txns DROP CONSTRAINT IF EXISTS ledger_txns_kind_check;` re-added at `019:15-16` with
+  `(…'reversal','refund')` ⊃ old set; runner wraps each file in BEGIN/COMMIT (`database/runner.ts:163-173`). No DROP TABLE/COLUMN,
+  no data UPDATE/DELETE (017's UPDATE/DELETE tokens are GRANT/REVOKE privileges).
+- Pre-proof: prod constraint name matches; 0 rows violate the new set; 019 executed in a rolled-back prod transaction
+  (`lock_timeout 3s`) → new definition in-txn, old definition after ROLLBACK.
+- Applied: `evidence/mig-017-019-run.txt` — Applied 017, 018, 019; 001–016 skipped (checksums match).
+- Verified (`evidence/mig-017-019-after.txt`): schema_migrations 17–19 present; constraint includes 'refund';
+  `INSERT … kind='refund'` succeeds in a rolled-back txn (0 rows persisted); 5/5 row counts identical to
+  `evidence/mig-017-019-before.txt`; `api.satelink.network/health` 200.
 
-## FG-FLAG-CONSOLE_ACCOUNTS_V1
-- (a) blocked on FG-MIG.
-- (b) Preview proof: a Vercel preview of `satelink-console` with the flag ON needs an API that serves `/v1/me/*`;
-  Railway has only a production environment, so the preview can only show V2 UI against a 404ing API until the
-  Railway flag is on. Options: (1) accept a Railway-first flip with rollback, (2) create a Railway `staging` env
-  (new infra — your call).
-- (c) **FAILS** as the code stands:
-  - Deduction path (flag ON): `rpc_gateway.js:294 enforceCapacity` → `credit_service.mjs:120 authorizeAndMeter`
-    → `:175-194 deductWithAccountLimits` (`console_accounts/limits.mjs:72`) — one transaction: pause/scope/auto-use/
-    per-agent daily cap/monthly cap, then conditional `UPDATE api_credits … WHERE credits_usdt >= cost`.
-    Flag OFF: `:195-213` single conditional UPDATE. **Both run BEFORE the upstream call.** Upstream failure returns
-    502 at `rpc_gateway.js:435-437` / catch ~`:462` with **no refund** → a paid key is charged for 5xx.
-    (Trading Intelligence already charges after data since #429 — RPC does not.)
-  - Dodo boundary: plan/pack UU is drawn only for `product === 'intelligence'` (`limits.mjs:100`, `credit_service.mjs:170`),
-    BUT one-time Dodo credit packs are credited into `api_credits.credits_usdt` via `/internal/dodo/credit`
-    (`internal_dodo.js:704` → `creditAccount`) — the same balance RPC deducts. Dodo-funded value can pay RPC today
-    (flag-independent). Prod holds 2 such payments ($19.98, founder TEST mode).
-  - Fix PRs to be prepared (money path → your merge): refund-or-charge-after-success for RPC; separate Dodo-funded
-    balance (or source-tagged credits) excluded from RPC/x402 deduction.
-- Rollback (pre-written, used if any post-flip check fails):
-  Railway: `railway variables --service Satelink-api --set CONSOLE_ACCOUNTS_V1=false` (triggers restart; flag read at call time).
-  Vercel: `vercel env rm CONSOLE_ACCOUNTS_V1 production --yes && vercel redeploy <current-prod-deployment-url> --prod` (from apps/console link).
-  Note: first-use DDL (`account_*` tables) is additive and stays; it is inert with the flag off.
+## FG-FLAG-CONSOLE_ACCOUNTS_V1 — condition status
+- (a) ✅ migrations 017–019 applied (above).
+- (b) Preview proof:
+  - Vercel preview `dpl_57k1UPuEUZbJ5CGizbUiiJtwKV1G` READY from branch `preview/console-v2-flags` @ 51b2c88 with
+    `CONSOLE_ACCOUNTS_V1=true`, `CONSOLE_ONBOARDING_V1=true` scoped to that branch + preview target only. It is behind
+    Vercel SSO and calls the production API, where `/v1/me/*` is 404 until the Railway flag is on — so signed-in
+    verification on the Vercel preview is structurally impossible before (d).
+  - Same commit, built with both flags, against the repo's local harness API (real `/v1/me`, `/v2/plans`,
+    intelligence routers on local Postgres; real Dodo TEST checkout):
+    - `e2e/onboarding.spec.ts` **6/6** (desktop + 360 px; Free + Launch; Dodo TEST checkout → pending → signed webhook →
+      home; resume; India INR). Optional marketing consent **unticked by default** (asserted).
+    - `e2e/accounts-gate.spec.ts` + `e2e/simple-flows.spec.ts` **14/14** (account-linked keys identical across 3 browser
+      profiles; Simple task flows; Advanced dashboard + mode remembered; Pricing V2 billing, no V1 plan table; mobile).
+    - V1-placeholder scan, Simple + Advanced × 12 routes (`evidence/after-preview-v2-2026-09-27/`): all 200, 0 console
+      errors; Agents, Keys, Requests, Usage clean. **FAIL: `/alerts` still "Alerts aren't available yet"** (no alerts
+      backend exists — D7) and **`/trading-intelligence` still "Saved queries arrive…"** (API exists; page has no V2
+      branch — D10 UI fix).
+- (c) Deduction path with the flag on: `rpc_gateway.js` → `enforceCapacity` → `authorizeAndMeter` →
+  `deductWithAccountLimits` (`console_accounts/limits.mjs`) → `deductSql(product)`. Charge-after-success = PR #438;
+  Dodo value cannot pay RPC/x402 = PR #439. Both need your merge.
+- (d)/(e)/(f) not started. Rollback (pre-written):
+  Railway: `railway variables --service Satelink-api --set CONSOLE_ACCOUNTS_V1=false` (restart; read at call time).
+  Vercel: `vercel env rm CONSOLE_ACCOUNTS_V1 production --yes` then redeploy the current production deployment.
 
 ## Still-gated flags — exact commands (not executed)
 Order (after FG-FLAG verified): FG-SUBS → FG-DODO-WEBHOOK → FG-PLANV2 → FG-USAGEV2 → FG-LEGACYSUB.
-- `railway variables --service Satelink-api --set SATELINK_SUBSCRIPTIONS_ENABLED=true` → verify `curl -s -o /dev/null -w '%{http_code}' -X POST https://api.satelink.network/webhooks/dodo/v2` ≠ 404 (expect 400/401 unsigned).
-- Dodo dashboard (TEST mode) → Webhooks → add `https://api.satelink.network/webhooks/dodo/v2`; copy signing secret →
+- `railway variables --service Satelink-api --set SATELINK_SUBSCRIPTIONS_ENABLED=true` → verify `POST /webhooks/dodo/v2` unsigned ≠ 404 (expect 400/401).
+- Dodo dashboard (TEST) → Webhooks → add `https://api.satelink.network/webhooks/dodo/v2`; copy signing secret →
   `railway variables --service Satelink-api --set DODO_WEBHOOK_SECRET=<paste>` (handler falls back to another var if unset — set explicitly).
-- `railway variables --service Satelink-api --set PLAN_BILLING_V2_ENABLED=true` → verify checkout endpoint returns a TEST checkout URL.
-- `railway variables --service Satelink-api --set SATELINK_USAGE_LIMITS_V2_ENABLED=true` → verify TI call writes a `pv2_usage_ledger` row.
+- `railway variables --service Satelink-api --set PLAN_BILLING_V2_ENABLED=true` → verify checkout returns a TEST checkout URL.
+- `railway variables --service Satelink-api --set SATELINK_USAGE_LIMITS_V2_ENABLED=true` → verify a TI call writes a `pv2_usage_ledger` row.
 - `railway variables --service Satelink-api --set DODO_LEGACY_SUB_BUCKET_ENABLED=true` → verify RPC with a plan-only key still 402s.
-- SETTLEMENT_DRY_RUN stays `1` (condition: external metered revenue > $0.50 from a non-founder wallet — currently $0.20).
-- Redaction: `node apps/api/scripts/incidents/redact_exposed_keys.mjs --apply` (dry-run output first) — after FG-KEYROT.
+- Refund (after #438): `node apps/api/scripts/incidents/refund_rpc_failed_charges.mjs "<conn>" --apply` (founder keys only with `--include-founder`).
+- Ring-fence (after #439 deploys): `node apps/api/scripts/incidents/backfill_dodo_ringfence.mjs "<conn>" --apply`.
+- Redaction: `node apps/api/scripts/incidents/redact_exposed_keys.mjs --apply` (dry-run first) — after FG-KEYROT.
 - Cloudflare: rotate token in dashboard → `railway variables --service Satelink-api --remove "cloudflare_Example Usage"` → verify absent via `railway variables --kv | cut -d= -f1`.
