@@ -22,7 +22,7 @@
 // shadow_ledger_write.js — it does NOT import apps/api/src/payments/.
 
 import crypto from 'crypto';
-import { authorizeAndMeter } from '../billing/credit_service.mjs';
+import { authorizeAndMeter, precheckCharge } from '../billing/credit_service.mjs';
 import { parityRecorder } from './parity_recorder.js';
 import { getCapacityPath } from '../lib/flags.js';
 
@@ -410,6 +410,26 @@ export async function enforceCapacity(db, { apiKey, wallet, requestId = null, pr
   }
 
   return legacy; // always serve the legacy decision in dual mode
+}
+
+/**
+ * Read-only preflight that mirrors enforceCapacity's decision without writing
+ * anything (charge-after-success, #438: the RPC gateway calls this BEFORE the
+ * upstream call and enforceCapacity only AFTER it succeeded).
+ *   legacy / dual → the prepaid gates (precheckCharge) — dual serves legacy.
+ *   new           → prepaid first; any non-terminal prepaid refusal falls
+ *                   through to a read-only authorization-capacity check, the
+ *                   same order enforceCapacity uses. So an unknown or unfunded
+ *                   key is refused here, before any upstream work.
+ */
+export async function precheckCapacity(db, { apiKey, wallet, product = 'rpc' } = {}) {
+  const path = await getCapacityPath(db);
+  const pre = await precheckCharge(db, { apiKey, wallet, product });
+  if (pre.ok || path !== 'new') return pre;
+  const neu = await evaluateNewReadOnly(db, { apiKey, wallet, cost: callCostMinor() });
+  if (neu.decision === 'allow') return { ok: true, creditSource: 'authorization' };
+  const reason = neu.reason || 'no_authorization';
+  return { ok: false, code: reason, http: DENY_HTTP[reason] || 402, message: DENY_MSG[reason] || pre.message };
 }
 
 // Exposed for tests / diagnostics.

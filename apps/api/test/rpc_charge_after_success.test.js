@@ -15,14 +15,16 @@ import request from 'supertest';
 const KEY = 'sk_basic_rpccharge_test_000000000000000000000000000000000';
 const PRICE = 0.00003;
 
-function fakePool({ credits = 1, dailyUsed = 0, spentConcurrently = false } = {}) {
+function fakePool({ credits = 1, dailyUsed = 0, spentConcurrently = false, path = null, known = true } = {}) {
   const state = { credits, deductions: [], usageInserts: 0, revenueInserts: 0 };
   const pool = {
     state,
     async query(sql, params = []) {
       const s = String(sql);
-      if (/platform_flags/.test(s)) return { rows: [] }; // → 'legacy'
+      if (/platform_flags/.test(s)) return { rows: path ? [{ value: path }] : [] }; // default → 'legacy'
+      if (/FROM principals/.test(s)) return { rows: [] }; // no authorization principal
       if (/FROM api_credits WHERE api_key = \$1/.test(s)) {
+        if (!known) return { rows: [] };
         return { rows: [{ api_key: KEY, wallet_address: null, tier: 'basic', daily_limit: 1000000, credits_usdt: String(state.credits), status: 'active', payment_hold: null }] };
       }
       if (/SELECT request_count FROM api_usage_daily/.test(s)) return { rows: dailyUsed ? [{ request_count: dailyUsed }] : [] };
@@ -60,7 +62,9 @@ describe('RPC charge-after-success (fix/rpc-charge-after-success)', function () 
     if (prevCanonical === undefined) delete process.env.CREDIT_CANONICAL; else process.env.CREDIT_CANONICAL = prevCanonical;
     if (prevRedis !== undefined) process.env.REDIS_URL = prevRedis;
   });
-  afterEach(() => { globalThis.fetch = realFetch; });
+  // The capacity path is cached for 10 s; every case starts from a clean read.
+  beforeEach(async () => { (await import('../src/lib/flags.js')).bustCapacityPathCache(); });
+  afterEach(async () => { globalThis.fetch = realFetch; (await import('../src/lib/flags.js')).bustCapacityPathCache(); });
 
   function app(pool) {
     const a = express();
@@ -110,6 +114,21 @@ describe('RPC charge-after-success (fix/rpc-charge-after-success)', function () 
     expect(pool.state.deductions).to.deep.equal([]);
     expect(pool.state.revenueInserts).to.equal(0);
   });
+
+  // Production runs capacity_enforcement_path = 'new' (platform_flags). The
+  // preflight must still refuse an unfunded / unknown key before any upstream
+  // work (regression from #438, which skipped the preflight on 'new').
+  for (const [name, opts] of [['unfunded key', { credits: 0 }], ['unknown key', { known: false }]]) {
+    it(`'new' capacity path: ${name} with no authorization → 402 before any upstream call`, async () => {
+      const pool = fakePool({ ...opts, path: 'new' });
+      let upstreamCalls = 0;
+      globalThis.fetch = async (_u, init) => { if (String(init?.body || '').includes('"id":7')) upstreamCalls += 1; return new Response('{}', { status: 200 }); };
+      const res = await call(pool);
+      expect(res.status, JSON.stringify(res.body)).to.equal(402);
+      expect(upstreamCalls).to.equal(0);
+      expect(pool.state.deductions).to.deep.equal([]);
+    });
+  }
 
   it('an unfunded key is refused with 402 BEFORE any upstream call', async () => {
     const pool = fakePool({ credits: 0 });
