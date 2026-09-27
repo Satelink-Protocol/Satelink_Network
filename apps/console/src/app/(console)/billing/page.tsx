@@ -143,7 +143,7 @@ async function BillingV2() {
                 </ul>
                 {x.kind !== "free" && current?.id !== x.id && (x.purchasable
                   ? <Link href="/billing/add" className="mt-3 inline-block text-xs text-sl-accent hover:underline">Choose {x.name}</Link>
-                  : <p className="mt-3 text-[11px] text-sl-text-subtle">Not available to buy yet</p>)}
+                  : <p className="mt-3 text-[11px] text-sl-text-subtle">Available soon</p>)}
               </div>
             ))}
           </div>
@@ -157,7 +157,7 @@ async function BillingV2() {
             <Table head={["Pack", "UU", "≈ requests", ""]} numeric={[1, 2]}>
               {cat.packs.map((k) => (
                 <tr key={k.id}><td>${k.priceUsd}</td><td className="text-right">{k.grantUu.toLocaleString()}</td><td className="text-right">{k.tiRequests.toLocaleString()}</td>
-                  <td className="text-right">{k.purchasable ? <Link className="text-xs text-sl-accent hover:underline" href="/billing/add">Buy</Link> : <span className="text-[11px] text-sl-text-subtle">soon</span>}</td></tr>
+                  <td className="text-right">{k.purchasable ? <Link className="text-xs text-sl-accent hover:underline" href="/billing/add">Buy</Link> : <span className="text-[11px] text-sl-text-subtle">Available soon</span>}</td></tr>
               ))}
             </Table>
           ) : <ErrorNote what="packs" />}

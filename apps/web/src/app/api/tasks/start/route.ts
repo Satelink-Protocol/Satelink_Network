@@ -18,6 +18,9 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createPendingOrder } from "@/lib/task-orders/db";
 import { isTasksProductEnabled } from "@/lib/tasks-product";
+import { getDodoEnvironment } from "@/lib/dodo/environment";
+// @ts-expect-error — plain ESM module from apps/api (one allowlist rule for both services).
+import { checkoutAllowed } from "../../../../../../api/src/pricing_v2/test_checkout_guard.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +55,15 @@ export async function POST(req: Request) {
   if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
     return backToFormWithError(req, "invalid_email");
   }
+
+  // TEST mode: the payment link is handed out only to the founder allowlist.
+  let dodoMode: "test" | "live";
+  try {
+    dodoMode = getDodoEnvironment() === "live_mode" ? "live" : "test";
+  } catch {
+    return NextResponse.json({ ok: false, error: "dodo_not_configured" }, { status: 503 });
+  }
+  if (!checkoutAllowed(email, dodoMode)) return backToFormWithError(req, "available_soon");
 
   const checkoutLink = process.env.DODO_CHECKOUT_LINK;
   if (!checkoutLink) {

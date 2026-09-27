@@ -12,7 +12,15 @@ const json = JSON.parse(readFileSync(resolve(__dirname, "..", "..", "api", "conf
 
 describe("PlanCatalog parity (web /pricing ≡ API /v2/plans ≡ console Billing)", () => {
   it("web adapter equals the API's publicCatalog for the shipped config", () => {
-    expect(planCatalog("test")).toEqual(publicCatalog(json, { mode: "test" }));
+    // Same call /v2/plans makes for an anonymous caller.
+    expect(planCatalog("test")).toEqual(publicCatalog(json, { mode: "test", checkoutAllowed: false }));
+  });
+  it("TEST mode: nothing is purchasable on the public page — every paid item reads Available soon", () => {
+    const c = planCatalog("test");
+    for (const x of [...c.plans.filter((p) => p.kind !== "free"), ...c.packs]) {
+      expect(x.purchasable, x.id).toBe(false);
+      expect((x as { availability?: string }).availability, x.id).toBe("soon");
+    }
   });
   it("the pricing page carries no hard-coded plan numbers from the old model", () => {
     const page = readFileSync(resolve(__dirname, "..", "src", "app", "(marketing)", "pricing", "page.tsx"), "utf8");
