@@ -374,7 +374,9 @@ async function clawbackCredits(client, apiKey, amount) {
   const actual = Math.min(amount, bal);
   if (actual > 0) {
     await client.query(
-      `UPDATE api_credits SET credits_usdt = credits_usdt - $1 WHERE api_key = $2`,
+      // A Dodo refund removes Dodo value: the ring-fence shrinks with it.
+      `UPDATE api_credits SET credits_usdt = credits_usdt - $1,
+              dodo_funded_usdt = GREATEST(0, dodo_funded_usdt - $1) WHERE api_key = $2`,
       [actual, apiKey]
     );
   }
@@ -397,7 +399,8 @@ async function freezeCredits(client, apiKey, amount) {
   const frozen = Math.min(amount, bal);
   if (frozen > 0) {
     await client.query(
-      `UPDATE api_credits SET credits_usdt = credits_usdt - $1, frozen_usdt = frozen_usdt + $1 WHERE api_key = $2`,
+      `UPDATE api_credits SET credits_usdt = credits_usdt - $1, frozen_usdt = frozen_usdt + $1,
+              dodo_funded_usdt = GREATEST(0, dodo_funded_usdt - $1) WHERE api_key = $2`,
       [frozen, apiKey]
     );
   }
@@ -408,7 +411,9 @@ async function freezeCredits(client, apiKey, amount) {
 async function unfreezeCredits(client, apiKey, amount) {
   if (amount > 0) {
     await client.query(
-      `UPDATE api_credits SET credits_usdt = credits_usdt + $1, frozen_usdt = GREATEST(0, frozen_usdt - $1) WHERE api_key = $2`,
+      // Unfrozen Dodo value returns to the ring-fence, not to RPC-spendable credit.
+      `UPDATE api_credits SET credits_usdt = credits_usdt + $1, frozen_usdt = GREATEST(0, frozen_usdt - $1),
+              dodo_funded_usdt = dodo_funded_usdt + $1 WHERE api_key = $2`,
       [amount, apiKey]
     );
   }
@@ -701,9 +706,12 @@ export function createDodoInternalRouter(pool) {
       } else {
         // T-17: the SAME creditAccount() the deposit listener uses. 1:1 credit —
         // same semantics as every other deposit path (T-17b), no bundle discount.
+        // fundingSource 'dodo' ring-fences it (dodo_funded_usdt): Dodo money pays
+        // for Trading Intelligence only, never RPC / x402 (fix/dodo-rpc-boundary).
         credited = await creditAccount(client, {
           apiKey, amountUsdt: amountUsd, txHash: idKey, fromAddress: customerEmail || null,
           tier: plan, dailyLimit: PLAN_DAILY_LIMIT[plan] || PLAN_DAILY_LIMIT.starter,
+          fundingSource: 'dodo',
         });
         if (!credited.ok) {
           await client.query('ROLLBACK');

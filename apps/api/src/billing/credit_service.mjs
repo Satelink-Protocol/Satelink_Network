@@ -25,6 +25,7 @@ import { isFounderWallet } from '../payments/founder_wallets.js';
 import { consumePlanBucket, returnPlanBucketCall, isLegacySubBucketEnabled } from './legacy_sub_entitlement.mjs';
 import { isConsoleAccountsEnabled } from '../console_accounts/flag.mjs';
 import { deductWithAccountLimits } from '../console_accounts/limits.mjs';
+import { deductSql } from './deduct_sql.mjs';
 
 export const PRICE_PER_CALL_USDT = 0.000030;
 
@@ -50,7 +51,8 @@ function isApiKey(s) {
 // ('true'/'false') or null; isOnPaymentHold() normalizes it.
 const ACCOUNT_COLS =
   `api_key, wallet_address, tier, daily_limit, credits_usdt, status, ` +
-  `(to_jsonb(api_credits) ->> 'payment_hold') AS payment_hold`;
+  `(to_jsonb(api_credits) ->> 'payment_hold') AS payment_hold, ` +
+  `(to_jsonb(api_credits) ->> 'dodo_funded_usdt') AS dodo_funded_usdt`;
 
 /** True iff the resolved account row is flagged payment_hold (text or boolean). */
 export function isOnPaymentHold(account) {
@@ -121,7 +123,7 @@ export function costFor(account, methodPrice) {
  *
  * @returns {Promise<{ok:true, tier, cost} | {ok:false, code, http, message, ...}>}
  */
-export async function precheckCharge(pool, { apiKey, wallet, methodPrice } = {}) {
+export async function precheckCharge(pool, { apiKey, wallet, methodPrice, product = 'rpc' } = {}) {
   if (!pool || !pool.query) {
     return { ok: false, code: 'no_pool', http: 503, message: 'Billing store unavailable — try again shortly', degraded: true };
   }
@@ -149,7 +151,9 @@ export async function precheckCharge(pool, { apiKey, wallet, methodPrice } = {})
     };
   }
   const cost = costFor(account, methodPrice);
-  const balance = parseFloat(account.credits_usdt || 0);
+  // Same rule as deductSql: RPC / x402 cannot spend the Dodo ring-fence.
+  const fence = product === 'intelligence' ? 0 : parseFloat(account.dodo_funded_usdt || 0);
+  const balance = parseFloat(account.credits_usdt || 0) - fence;
   if (cost > 0 && balance < cost) {
     return {
       ok: false, code: 'insufficient_credits', http: 402,
@@ -243,15 +247,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
     if (g.effectiveCost === 0) cost = 0;
     if (g.uu) uuInfo = g.uu;
   } else if (cost > 0) {
-    const ded = await pool.query(
-      `UPDATE api_credits
-          SET credits_usdt = credits_usdt - $1,
-              total_spent  = COALESCE(total_spent, 0) + $1,
-              last_used    = NOW()
-        WHERE api_key = $2 AND credits_usdt >= $1
-        RETURNING credits_usdt`,
-      [cost, key]
-    );
+    const ded = await pool.query(deductSql(product), [cost, key]);
     if (ded.rowCount === 0) {
       return {
         ok: false, code: 'insufficient_credits', http: 402,
@@ -296,7 +292,7 @@ export async function authorizeAndMeter(pool, { apiKey, wallet, methodPrice, pro
  *
  * @returns {Promise<{ok:true, balance, credited} | {ok:false, code, message}>}
  */
-export async function creditAccount(pool, { apiKey, wallet, amountUsdt, txHash, fromAddress, tier, dailyLimit } = {}) {
+export async function creditAccount(pool, { apiKey, wallet, amountUsdt, txHash, fromAddress, tier, dailyLimit, fundingSource } = {}) {
   if (!pool || !pool.query) return { ok: false, code: 'no_pool', message: 'no database' };
   const amount = parseFloat(amountUsdt);
   if (!(amount > 0)) return { ok: false, code: 'bad_amount', message: 'amount must be > 0' };
@@ -324,12 +320,19 @@ export async function creditAccount(pool, { apiKey, wallet, amountUsdt, txHash, 
      account.tier, tier || account.tier, isFounderWallet(depositor)]
   );
 
+  // Dodo boundary (fix/dodo-rpc-boundary): Dodo-originated value is also
+  // added to the dodo_funded_usdt ring-fence, which RPC / x402 may not spend.
+  // Only the Dodo path names the column, so crypto deposits never depend on it.
+  const ringFence = fundingSource === 'dodo'
+    ? `,
+            dodo_funded_usdt = COALESCE(dodo_funded_usdt, 0) + $1`
+    : '';
   const upd = await pool.query(
     `UPDATE api_credits
         SET credits_usdt    = COALESCE(credits_usdt, 0) + $1,
             total_deposited = COALESCE(total_deposited, 0) + $1,
             tier            = COALESCE($2, tier),
-            daily_limit     = COALESCE($3, daily_limit)
+            daily_limit     = COALESCE($3, daily_limit)${ringFence}
       WHERE api_key = $4
       RETURNING credits_usdt, tier, daily_limit`,
     [amount, tier || null, dailyLimit || null, key]
