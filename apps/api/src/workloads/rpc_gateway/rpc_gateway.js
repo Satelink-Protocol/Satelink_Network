@@ -7,8 +7,9 @@ import { checkRateLimit, incrementUsage, createApiKey, getUsageStats, getTiers }
 import { createHealthEndpoint, startHealthMonitor } from './health_monitor.js';
 import { recordRpcRevenue } from './rpc_billing.js';
 import { createCreditGate } from '../../middleware/credit_gate.js';
-import { authorizeAndMeter } from '../../billing/credit_service.mjs';
 import { enforceCapacity } from '../../capacity/capacity_enforcement.js';
+import { precheckCharge } from '../../billing/credit_service.mjs';
+import { getCapacityPath } from '../../lib/flags.js';
 import { paymentRequiredResponse } from '../../utils/payment_required.js';
 
 // Customer Zero P0 recovery: when CREDIT_CANONICAL=true, authenticated callers
@@ -269,80 +270,95 @@ export function createRpcGateway(db) {
             return res.status(400).json({ ok: false, error: 'Invalid JSON-RPC method' });
         }
 
-        // ── AUTHORIZE + METER ────────────────────────────────────────────────
+        // ── AUTHORIZE → SERVE → CHARGE (fix/rpc-charge-after-success) ─────────
+        // Same rule as Trading Intelligence (#429): never payment without
+        // data, never data without payment. A read-only preflight refuses a
+        // caller that would be refused anyway (unknown key 402, inactive 403,
+        // payment hold / no credits 402, daily limit 429) BEFORE any upstream
+        // work. The binding, atomic charge — enforceCapacity, unchanged — runs
+        // only AFTER the upstream call succeeded; an upstream failure (provider
+        // 5xx, JSON-RPC error, timeout, network error) returns 502 uncharged.
+        // If the charge is refused at that point (balance spent by a concurrent
+        // call, an owner control such as a paused key), the caller gets that
+        // denial and NOT the data.
+        //
         // Phase 6: a revenue event is created ONLY for an actual deduction. This
         // holds the real amount deducted (0 for free/anonymous → no revenue event).
         let billedUsdt = 0;
-        // Generated HERE (not at the old billing-record call site below) so the
-        // 'new' capacity path (enforceCapacity → enforceNew, M6) can use the
-        // SAME id as the draws.idempotency_key that recordRpcRevenue later uses
-        // for revenue_events_v2.request_id — one request, one id, everywhere.
+        // Generated HERE so the 'new' capacity path (enforceCapacity →
+        // enforceNew, M6) uses the SAME id as the draws.idempotency_key that
+        // recordRpcRevenue later uses for revenue_events_v2.request_id — one
+        // request, one id, everywhere.
         const request_id = `rpc_${crypto.randomUUID()}`;
-        if (canonical && (apiKey || walletForBilling)) {
-            // CANONICAL: api_credits is authoritative. One atomic call does the
-            // daily-limit gate (429), balance deduct (402), and usage metering.
-            // No Redis, no credit_balances, no anonymous downgrade (unknown key → 401).
-            // wallet is walletForBilling ONLY — never the raw header (P0-wallet-auth).
+        // CANONICAL: api_credits is authoritative. No Redis, no credit_balances,
+        // no anonymous downgrade (unknown key → 402). wallet is walletForBilling
+        // ONLY — never the raw header (P0-wallet-auth).
+        const metered = Boolean(canonical && (apiKey || walletForBilling));
+
+        const sendBillingDenial = (verdict) => {
+            if (verdict.code === 'account_not_found') {
+                return res.status(402).json(paymentRequiredBody(
+                    'The API key or wallet you sent matches no account. Register the wallet (see "register") or check the X-API-Key value.'));
+            }
+            const payload = { ok: false, error: verdict.code, message: verdict.message };
+            // Payment path on BOTH money moments: balance exhausted (402)
+            // AND the keyed daily limit (429). The 429 was previously a
+            // dead end — the exact moment a key's workload has formed
+            // dependency and should convert, it got no upgrade path
+            // (erpc journey audit, 2026-07-11). Response payload only;
+            // verdict logic untouched.
+            // Owner controls (CONSOLE_ACCOUNTS_V1: paused / cap / auto-use off) are
+            // terminal and not a funding problem — no deposit instructions.
+            if (!verdict.terminal && (verdict.http === 402 || verdict.code === 'daily_limit_exceeded')) {
+                const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
+                payload.payment = {
+                    vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
+                    token: 'USDT',
+                    token_address: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+                    chain_id: 137,
+                    minimum_deposit_usdt: parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50'),
+                    deposit_url: `${apiBase}/api/keys/deposit-info`,
+                    calldata_url: `${apiBase}/credits/deposit/initiate?amount=1.00`
+                };
+                payload.manifest_url = `${apiBase}/.well-known/satelink.json`;
+                payload.pricing_url = `${apiBase}/v1/pricing`;
+                if (verdict.code === 'daily_limit_exceeded') {
+                    payload.message =
+                        `${verdict.message}. Lift it without waiting for the UTC reset: deposit USDT ` +
+                        `(any amount ≥ $0.50) to the vault and claim it on THIS key — ` +
+                        `1) GET ${apiBase}/credits/deposit/initiate?amount=<usdt> for ready-to-sign calldata, ` +
+                        `2) POST ${apiBase}/api/keys/deposit {"tx_hash":"0x…"} with your X-API-Key header. ` +
+                        'Credits upgrade the key to a paid tier with a higher ceiling and never expire.';
+                    payload.upgrade_steps = [
+                        `GET ${apiBase}/credits/deposit/initiate?amount=1.00`,
+                        `POST ${apiBase}/api/keys/deposit with {"tx_hash":"0x…"} and your X-API-Key header`,
+                    ];
+                }
+            }
+            return res.status(verdict.http || 402).json(payload);
+        };
+
+        // Charges the served call. Returns false (response already sent) when
+        // the charge is refused — the upstream result is then NOT returned.
+        const chargeServedCall = async () => {
+            if (!metered) return true;
             let verdict;
             try {
                 // M8: capacity enforcement cutover. In legacy mode this is the
                 // unchanged api_credits authorizeAndMeter; in dual it evaluates
                 // both paths and serves legacy; in new the authorization
-                // capacity decision is served. Path is read at request time
-                // (CAPACITY_ENFORCEMENT_PATH) so a Railway flip reverts with no
-                // redeploy.
+                // capacity decision is served.
                 verdict = await enforceCapacity(db, { apiKey, wallet: walletForBilling, requestId: request_id });
             } catch (err) {
-                // M6: fail CLOSED, same principle as T-24 (credit_service.mjs
-                // authorizeAndMeter) — a capacity-check exception (DB hiccup, or
-                // now also a data-integrity gap like a principal with an active
-                // authorization but no capacity account, see capacity_enforcement.js
-                // insertDraw) must never silently become free unlimited service.
+                // Fail CLOSED (M6 / T-24): a capacity-check exception must never
+                // silently become free service — the data is withheld.
                 console.error('[RPC Gateway] capacity check error (fail-closed):', err.message);
                 verdict = { ok: false, code: 'capacity_check_failed', http: 503, message: 'Capacity check unavailable — try again shortly' };
             }
             res.set('X-Credit-Source', verdict.creditSource === 'authorization' ? 'authorization' : 'api_credits');
             if (!verdict.ok) {
-                if (verdict.code === 'account_not_found') {
-                    return res.status(402).json(paymentRequiredBody(
-                        'The API key or wallet you sent matches no account. Register the wallet (see "register") or check the X-API-Key value.'));
-                }
-                const payload = { ok: false, error: verdict.code, message: verdict.message };
-                // Payment path on BOTH money moments: balance exhausted (402)
-                // AND the keyed daily limit (429). The 429 was previously a
-                // dead end — the exact moment a key's workload has formed
-                // dependency and should convert, it got no upgrade path
-                // (erpc journey audit, 2026-07-11). Response payload only;
-                // verdict logic untouched.
-                // Owner controls (CONSOLE_ACCOUNTS_V1: paused / cap / auto-use off) are
-                // terminal and not a funding problem — no deposit instructions.
-                if (!verdict.terminal && (verdict.http === 402 || verdict.code === 'daily_limit_exceeded')) {
-                    const apiBase = process.env.API_BASE_URL || 'https://rpc.satelink.network';
-                    payload.payment = {
-                        vault_address: process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF',
-                        token: 'USDT',
-                        token_address: process.env.USDT_CONTRACT_ADDRESS || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-                        chain_id: 137,
-                        minimum_deposit_usdt: parseFloat(process.env.MIN_DEPOSIT_USDT || '0.50'),
-                        deposit_url: `${apiBase}/api/keys/deposit-info`,
-                        calldata_url: `${apiBase}/credits/deposit/initiate?amount=1.00`
-                    };
-                    payload.manifest_url = `${apiBase}/.well-known/satelink.json`;
-                    payload.pricing_url = `${apiBase}/v1/pricing`;
-                    if (verdict.code === 'daily_limit_exceeded') {
-                        payload.message =
-                            `${verdict.message}. Lift it without waiting for the UTC reset: deposit USDT ` +
-                            `(any amount ≥ $0.50) to the vault and claim it on THIS key — ` +
-                            `1) GET ${apiBase}/credits/deposit/initiate?amount=<usdt> for ready-to-sign calldata, ` +
-                            `2) POST ${apiBase}/api/keys/deposit {"tx_hash":"0x…"} with your X-API-Key header. ` +
-                            'Credits upgrade the key to a paid tier with a higher ceiling and never expire.';
-                        payload.upgrade_steps = [
-                            `GET ${apiBase}/credits/deposit/initiate?amount=1.00`,
-                            `POST ${apiBase}/api/keys/deposit with {"tx_hash":"0x…"} and your X-API-Key header`,
-                        ];
-                    }
-                }
-                return res.status(verdict.http || 402).json(payload);
+                sendBillingDenial(verdict);
+                return false;
             }
             res.set({
                 'X-RateLimit-Limit': verdict.limit ?? '',
@@ -352,6 +368,27 @@ export function createRpcGateway(db) {
             });
             // Only a real deduction (paid tier, cost > 0) bills revenue.
             billedUsdt = Number(verdict.cost) > 0 ? Number(verdict.cost) : 0;
+            return true;
+        };
+
+        if (metered) {
+            // Preflight (read-only). Under the 'new' capacity path a key with no
+            // prepaid balance may still be served by its authorization cap, so
+            // the balance/account preflight is skipped there and the post-call
+            // charge alone decides (the data is still withheld on a denial).
+            let pre;
+            try {
+                pre = (await getCapacityPath(db)) === 'new'
+                    ? { ok: true }
+                    : await precheckCharge(db, { apiKey, wallet: walletForBilling });
+            } catch (err) {
+                console.error('[RPC Gateway] billing preflight error (fail-closed):', err.message);
+                pre = { ok: false, code: 'capacity_check_failed', http: 503, message: 'Capacity check unavailable — try again shortly' };
+            }
+            if (!pre.ok) {
+                res.set('X-Credit-Source', 'api_credits');
+                return sendBillingDenial(pre);
+            }
         } else {
             // LEGACY: Redis rate-limit (flag off, or anonymous public traffic).
             // An x402-settled call is paid per-request: the per-IP daily counter
@@ -410,6 +447,8 @@ export function createRpcGateway(db) {
             }
 
             if (cachedResponse) {
+                // A cache hit is a served call: charge it before returning it.
+                if (!(await chargeServedCall())) return;
                 // Billing - fire and forget (only when a real deduction occurred)
                 recordRpcRevenue({
                     pool: db,
@@ -426,34 +465,40 @@ export function createRpcGateway(db) {
                 return res.status(200).json({ ...cachedResponse, id: body.id ?? null });
             }
 
+            // billedUsdt is 0 here: the call is not charged until it succeeded,
+            // so a network node that serves it records node stats only — the
+            // revenue row is written below, after the charge, for every source.
             const routeResult = await routeRpcRequest(chain, method, params, body.id, {
                 apiKey,
                 requestId: request_id,
-                billedUsdt
+                billedUsdt: 0
             });
 
             if (!routeResult.success) {
-                return res.status(502).json({ ok: false, error: routeResult.error });
+                // Upstream failed — nothing was charged.
+                return res.status(502).json({ ok: false, error: routeResult.error, charged: false });
             }
+
+            if (!(await chargeServedCall())) return;
 
             // Cache set - fire and forget
             if (isCacheable(method)) {
                 setCached(chain, method, params, routeResult.result).catch(() => {});
             }
 
-            // Billing - fire and forget
-            // Skip if request was served by a network node (revenue already attributed in dispatcher)
-            if (routeResult.source !== 'network_node') {
-                recordRpcRevenue({
-                    pool: db,
-                    chain,
-                    method,
-                    apiKey,
-                    source: routeResult.provider || 'external_provider',
-                    requestId: request_id,
-                    amountUsdt: billedUsdt
-                }).catch(() => {});
-            }
+            // Billing - fire and forget (only when a real deduction occurred).
+            // Includes network-node-served calls: the dispatcher no longer sees
+            // the charge (it happens after the call), so it records node stats
+            // only and the revenue row is written here.
+            recordRpcRevenue({
+                pool: db,
+                chain,
+                method,
+                apiKey,
+                source: routeResult.provider || 'external_provider',
+                requestId: request_id,
+                amountUsdt: billedUsdt
+            }).catch(() => {});
 
             const elapsed = Date.now() - startTime;
             console.log(`[RPC Gateway] ${chain}/${method} → ${routeResult.provider} (${elapsed}ms)`);
@@ -461,7 +506,8 @@ export function createRpcGateway(db) {
             res.status(200).json(routeResult.result);
         } catch (error) {
             console.error('[RPC Gateway] Execution error:', error.message);
-            res.status(502).json({ ok: false, error: 'RPC execution failed', message: error.message });
+            if (res.headersSent) return;
+            res.status(502).json({ ok: false, error: 'RPC execution failed', message: error.message, charged: billedUsdt > 0 });
         }
     });
 

@@ -112,6 +112,56 @@ export function costFor(account, methodPrice) {
 }
 
 /**
+ * Read-only preflight for charge-after-success serving
+ * (fix/rpc-charge-after-success). Evaluates the same gates as
+ * authorizeAndMeter — account, status, payment hold, daily limit, balance —
+ * WITHOUT writing anything, so a caller that would be refused is refused
+ * before any upstream work. The binding, atomic decision is still
+ * authorizeAndMeter, run only once the call has succeeded. Denials use the
+ * same codes, HTTP statuses and messages as authorizeAndMeter.
+ *
+ * @returns {Promise<{ok:true, tier, cost} | {ok:false, code, http, message, ...}>}
+ */
+export async function precheckCharge(pool, { apiKey, wallet, methodPrice } = {}) {
+  if (!pool || !pool.query) {
+    return { ok: false, code: 'no_pool', http: 503, message: 'Billing store unavailable — try again shortly', degraded: true };
+  }
+  const account = await resolveAccount(pool, { apiKey, wallet });
+  if (!account) {
+    return { ok: false, code: 'account_not_found', http: 401, message: 'Unknown API key or wallet' };
+  }
+  if (account.status && account.status !== 'active') {
+    return { ok: false, code: 'account_inactive', http: 403, message: `Account status: ${account.status}` };
+  }
+  if (isOnPaymentHold(account)) {
+    return {
+      ok: false, code: 'payment_hold', http: 402,
+      tier: account.tier, reason: 'payment_hold',
+      message: 'Account is on payment hold (refund/dispute shortfall) — contact support',
+    };
+  }
+  const limit = account.daily_limit || TIER_DAILY_LIMIT[account.tier] || TIER_DAILY_LIMIT.free;
+  const used = await getDailyCount(pool, account.api_key);
+  if (used >= limit) {
+    return {
+      ok: false, code: 'daily_limit_exceeded', http: 429,
+      tier: account.tier, limit, used,
+      message: `Daily request limit reached for tier ${account.tier} (${limit}/day)`,
+    };
+  }
+  const cost = costFor(account, methodPrice);
+  const balance = parseFloat(account.credits_usdt || 0);
+  if (cost > 0 && balance < cost) {
+    return {
+      ok: false, code: 'insufficient_credits', http: 402,
+      tier: account.tier, required_usdt: cost, balance_usdt: balance,
+      message: 'Insufficient credits — deposit USDT to continue',
+    };
+  }
+  return { ok: true, tier: account.tier, cost };
+}
+
+/**
  * Atomically record one served request: bump api_usage_daily and, for paid
  * accounts, decrement credits_usdt. Returns the verdict the gate acts on.
  *
