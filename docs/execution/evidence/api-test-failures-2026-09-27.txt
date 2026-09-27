@@ -1,0 +1,19 @@
+apps/api baseline — origin/main 4b2865f — 2026-09-27
+Command: env -u DATABASE_URL DATABASE_URL="postgres:///satelink_test?host=/tmp" NODE_ENV=test npx mocha --no-config --exit 'test/**/*.test.js'
+(DATABASE_URL overridden: the login shell exports the PRODUCTION url from ~/.zshrc — never run tests without the override.)
+
+351 passing · 76 pending · 7 failing
+
+Failing (all pre-existing on main; none touched by this run):
+1) C1: x-payer-address credit theft is closed › REPLAY same settlement twice → 409  — column "credited_usdt" of relation "api_deposits" does not exist (local satelink_test schema lacks migration 030)
+2) x402 payment rail › t2 flag ON — 402 carries x402 accepts + USDT instructions — expected undefined to be an array
+3) x402 payment rail › t9 keyless handler 402 upgraded with x402 accepts — expected undefined to be an array
+4) x402 payment rail › t11 one settlement credits exactly N calls, once — column "credited_usdt" does not exist (local schema)
+5) x402 payment rail › t12 x-payer-address header not a billing identity — cannot read credits_usdt of undefined (cascade of #4)
+6) x402 payment rail › t13 exhausted credits → normal x402 402 — expected undefined to be an array
+7) x402 payment rail › t14 duplicate settlement tx_hash → 409 — got 500 (cascade of local schema)
+
+Root-cause hypothesis: #1,#4,#5,#7 = local test DB drift (apps/api/migrations/030 not applied to satelink_test); #2,#3,#6 = x402 accepts array absent in 402 body under test config — to investigate in Wave 9 (I1).
+
+vitest (--project libs --project tools): 18 files, 283 passed, 0 failed.
+Contract §1 claimed "321 pass / 19 fail" — reality differs; logged in CONFLICT_REGISTER C-01.
