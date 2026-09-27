@@ -18,7 +18,10 @@ export type PublicCatalog = { version: string; unit: { name: string; symbol: str
 
 /** mode: which Dodo product ids decide "purchasable" (test until live is switched on). */
 export function planCatalog(mode: "test" | "live" = process.env.DODO_MODE === "live" ? "live" : "test"): PublicCatalog {
-  return apiPublicCatalog(catalogJson, { mode }) as PublicCatalog;
+  // Public page, no identity: while Dodo is in TEST mode checkout is open only to
+  // allowlisted founder emails (inside the console), so every paid item here reads
+  // "Available soon".
+  return apiPublicCatalog(catalogJson, { mode, checkoutAllowed: mode !== "test" }) as PublicCatalog;
 }
 
 export const CONSOLE = "https://console.satelink.network";

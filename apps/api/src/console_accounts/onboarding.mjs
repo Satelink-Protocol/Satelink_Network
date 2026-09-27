@@ -13,6 +13,7 @@
 import { AccountError } from './keys.mjs';
 import { updateSettings } from './settings.mjs';
 import { loadCatalog, publicCatalog } from '../pricing_v2/catalog.mjs';
+import { checkoutAllowed } from '../pricing_v2/test_checkout_guard.mjs';
 import { createCheckout } from '../pricing_v2/checkout.mjs';
 import { ensurePricingV2Schema } from '../pricing_v2/schema.mjs';
 import { dodoMode } from '../pricing_v2/webhooks.mjs';
@@ -155,8 +156,9 @@ export async function consentHistory(pool, accountId) {
 }
 
 /** Catalog item for (plan, period), or an error the UI can show. */
-export function itemFor(planId, period, catalog = loadCatalog()) {
-  const pub = publicCatalog(catalog, { mode: dodoMode() });
+export function itemFor(planId, period, catalog = loadCatalog(), email = null) {
+  const mode = dodoMode();
+  const pub = publicCatalog(catalog, { mode, checkoutAllowed: checkoutAllowed(email, mode) });
   const base = pub.plans.find((p) => p.id === planId && !p.basePlanId);
   if (!base) throw bad('unknown_plan', 'Choose one of the listed plans');
   if (base.kind === 'free') return base;
@@ -269,8 +271,9 @@ export async function submitStep(pool, session, step, body = {}, meta = { ip: nu
 
   if (step === 'plan') {
     const period = body.period === 'year' ? 'year' : 'month';
-    const item = itemFor(body.planId, period);
+    const item = itemFor(body.planId, period, loadCatalog(), session.email);
     if (item.kind === 'free') return setStep(pool, id, 'safety', { plan_id: 'free', period: null, item_id: 'free', checkout_session_id: null });
+    if (item.availability === 'soon') throw new AccountError('checkout_not_available', 403, 'Available soon — paid plans open when billing goes live. You can continue with Free.');
     if (!item.purchasable) throw new AccountError('not_purchasable', 409, 'This plan is not available to buy yet');
     return setStep(pool, id, 'review', { plan_id: body.planId, period, item_id: item.id, checkout_session_id: null });
   }
@@ -278,7 +281,7 @@ export async function submitStep(pool, session, step, body = {}, meta = { ip: nu
   if (step === 'review') {
     if (!r.item_id || r.item_id === 'free') throw new AccountError('no_paid_plan', 409, 'Choose a paid plan first');
     if (body.authoriseRecurring !== true) throw bad('authorisation_required', 'Authorise recurring charges to continue');
-    const item = itemFor(r.plan_id, r.period);
+    const item = itemFor(r.plan_id, r.period, loadCatalog(), session.email);
     // Same rule as POST /v1/me/checkout: Dodo only ever returns to a Satelink page.
     const returnUrl = String(body.returnUrl || 'https://console.satelink.network/welcome?checkout=done');
     if (!/^https:\/\/(console\.)?satelink\.network\//.test(returnUrl) && !/^http:\/\/localhost:\d+\//.test(returnUrl)) {

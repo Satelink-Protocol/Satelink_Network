@@ -11,9 +11,9 @@ export type PlanCatalog = {
     intro: { amountUsd: number; days: number; copy: string } | null;
     allowance: { sessionUu: number; weeklyUu: number; sessionHours: number; sessionTiRequests: number; weeklyTiRequests: number; weeklyListValueUsd: number };
     limits: { api_keys: number; machines: number };
-    inrPrice: number | null; purchasable: boolean; economicsGate: "pass" | "fail";
+    inrPrice: number | null; purchasable: boolean; availability?: "free" | "soon" | null; economicsGate: "pass" | "fail";
   }[];
-  packs: { id: string; name: string; priceUsd: number; grantUu: number; tiRequests: number; inrPrice: number | null; purchasable: boolean }[];
+  packs: { id: string; name: string; priceUsd: number; grantUu: number; tiRequests: number; inrPrice: number | null; purchasable: boolean; availability?: "soon" | null }[];
 };
 
 export type AccountPlan = {

@@ -70,7 +70,7 @@ export default function PricingPage() {
                 <p className="mt-1 text-[12px] text-sl-text-subtle">{k.grantUu.toLocaleString("en-US")} UU</p>
                 {k.purchasable
                   ? <a href={`${CONSOLE}/sign-in?next=${encodeURIComponent("/billing/add")}`} className="mt-4 inline-block text-[14px] font-medium text-sl-accent hover:underline">Buy pack</a>
-                  : <p className="mt-4 text-[13px] text-sl-text-muted">Opening soon</p>}
+                  : <p className="mt-4 text-[13px] text-sl-text-muted">Available soon</p>}
               </li>
             ))}
           </ul>
