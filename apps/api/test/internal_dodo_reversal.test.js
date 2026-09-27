@@ -63,6 +63,7 @@ function makePool() {
           const row = state.apiCredits.get(key);
           row.credits_usdt = +(row.credits_usdt - amt).toFixed(6);
           row.frozen_usdt = +(row.frozen_usdt + amt).toFixed(6);
+          if (s.includes('dodo_funded_usdt = GREATEST(0, dodo_funded_usdt - $1)')) row.dodo_funded_usdt = +Math.max(0, row.dodo_funded_usdt - amt).toFixed(6);
           return { rowCount: 1, rows: [] };
         }
         if (s.includes('credits_usdt = credits_usdt + $1') && s.includes('frozen_usdt = GREATEST')) { // unfreeze
@@ -70,6 +71,7 @@ function makePool() {
           const row = state.apiCredits.get(key);
           row.credits_usdt = +(row.credits_usdt + amt).toFixed(6);
           row.frozen_usdt = +(Math.max(0, row.frozen_usdt - amt)).toFixed(6);
+          if (s.includes('dodo_funded_usdt = dodo_funded_usdt + $1')) row.dodo_funded_usdt = +(row.dodo_funded_usdt + amt).toFixed(6);
           return { rowCount: 1, rows: [] };
         }
         if (s.includes('SET frozen_usdt = GREATEST')) {               // release (forfeit)
@@ -78,10 +80,11 @@ function makePool() {
           row.frozen_usdt = +(Math.max(0, row.frozen_usdt - amt)).toFixed(6);
           return { rowCount: 1, rows: [] };
         }
-        if (s.includes('SET credits_usdt = credits_usdt - $1 WHERE api_key')) { // clawback
+        if (s.includes('SET credits_usdt = credits_usdt - $1') && !s.includes('frozen_usdt')) { // clawback
           const [amt, key] = params;
           const row = state.apiCredits.get(key);
           row.credits_usdt = +(row.credits_usdt - amt).toFixed(6);
+          if (s.includes('dodo_funded_usdt = GREATEST(0, dodo_funded_usdt - $1)')) row.dodo_funded_usdt = +Math.max(0, row.dodo_funded_usdt - amt).toFixed(6);
           return { rowCount: 1, rows: [{ credits_usdt: row.credits_usdt }] };
         }
         if (s.includes('SET payment_hold = true')) {                  // payment hold
@@ -131,6 +134,8 @@ function seedFunding(pool, { paymentId, apiKey, credited, isTest = false, balanc
   pool.state.apiCredits.set(apiKey, {
     api_key: apiKey,
     credits_usdt: balance == null ? credited : balance,
+    // Dodo-credited value is ring-fenced (fix/dodo-rpc-boundary); unspent part only.
+    dodo_funded_usdt: balance == null ? credited : balance,
     frozen_usdt: 0,
     payment_hold: false,
     status: 'active',
@@ -159,6 +164,7 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
     expect(res.status).to.equal(200);
     expect(res.body).to.include({ ok: true, matched: true, action: 'refund_full' });
     expect(pool.state.apiCredits.get('sk_a').credits_usdt).to.equal(0);
+    expect(pool.state.apiCredits.get('sk_a').dodo_funded_usdt).to.equal(0); // ring-fence shrinks with the refund
     const rev = pool.state.revenueEvents.find(r => r.request_id === 'dodo:refund:ref_1');
     expect(rev).to.exist;
     expect(rev.amount_usdt).to.equal(-10);            // negative reversal, original untouched
@@ -174,6 +180,7 @@ describe('POST /internal/dodo/reversal — refunds & disputes', () => {
     expect(res.status).to.equal(200);
     expect(res.body.action).to.equal('refund_partial');
     expect(pool.state.apiCredits.get('sk_b').credits_usdt).to.equal(6);
+    expect(pool.state.apiCredits.get('sk_b').dodo_funded_usdt).to.equal(6); // still TI-only, never RPC
     const rev = pool.state.revenueEvents.find(r => r.request_id === 'dodo:refund:ref_2');
     expect(rev.amount_usdt).to.equal(-4);
   });
