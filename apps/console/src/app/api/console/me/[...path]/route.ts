@@ -20,6 +20,8 @@ const ALLOW: [string, RegExp][] = [
   ["POST", /^\/checkout$/],
   ["POST", /^\/keys\/\d+\/deposit$/],
   ["POST", /^\/onboarding\/(account|name|use|plan|review|safety|back)$/],
+  ["PUT", /^\/alerts$/],
+  ["POST", /^\/alerts\/test$/],
 ];
 
 /** The browser's IP / UA, for consent records (Vercel sets x-forwarded-for). */
