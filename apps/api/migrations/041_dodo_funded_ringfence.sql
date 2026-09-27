@@ -1,0 +1,13 @@
+-- 041_dodo_funded_ringfence.sql (fix/dodo-rpc-boundary) — FOUNDER REVIEW (money path)
+-- Dodo money (card/UPI, Merchant of Record) pays for Trading Intelligence only;
+-- it must never pay for RPC or x402. Legacy Dodo credit packs and every
+-- subscription.renewed are credited into api_credits.credits_usdt (the balance
+-- RPC deducts), so this column ring-fences the unspent Dodo-originated part:
+--   · RPC / x402 deductions require credits_usdt − dodo_funded_usdt >= cost
+--   · Trading Intelligence spends the Dodo part first
+--   · Dodo refunds / disputes shrink it with the clawed-back / frozen amount
+-- Additive only: NOT NULL DEFAULT 0 is a metadata-only change (PG ≥ 11); no
+-- existing row changes. Existing Dodo value already in credits_usdt is NOT
+-- back-filled here — that is a separate, founder-gated data change.
+-- Applied on boot by ensureDodoRailSchema (src/db/dodo_rail_schema.js).
+ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS dodo_funded_usdt NUMERIC(18,6) NOT NULL DEFAULT 0;

@@ -15,6 +15,7 @@
 // Every denial here is `terminal`: enforceCapacity must not fall through to
 // another payment layer for a paused / capped agent.
 import { ensureConsoleAccountsSchema } from './schema.mjs';
+import { deductSql } from '../billing/deduct_sql.mjs';
 import { isUsageLimitsV2Enabled, meterIntelligence } from '../pricing_v2/metering.mjs';
 
 const DENY = {
@@ -56,13 +57,8 @@ const COUNTER_SQL = `
    WHERE account_spend_counters.spent_usdt + EXCLUDED.spent_usdt <= $6::numeric
   RETURNING spent_usdt`;
 
-const DEDUCT_SQL = `
-  UPDATE api_credits
-     SET credits_usdt = credits_usdt - $1,
-         total_spent  = COALESCE(total_spent, 0) + $1,
-         last_used    = NOW()
-   WHERE api_key = $2 AND credits_usdt >= $1
-   RETURNING credits_usdt`;
+// The atomic deduction is shared with authorizeAndMeter: deductSql(product)
+// enforces the Dodo boundary (RPC / x402 cannot spend Dodo-funded value).
 
 /**
  * @returns {Promise<{ok:true, balanceAfter:number|null, accountId:string|null}
@@ -125,7 +121,7 @@ export async function deductWithAccountLimits(pool, { key, cost, product = 'rpc'
     }
 
     if (cost > 0) {
-      const ded = await client.query(DEDUCT_SQL, [cost, key]);
+      const ded = await client.query(deductSql(product), [cost, key]);
       if (ded.rowCount === 0) {
         return finish({ ok: false, code: 'insufficient_credits', http: 402, required_usdt: cost, message: 'Insufficient credits — deposit USDT to continue' });
       }

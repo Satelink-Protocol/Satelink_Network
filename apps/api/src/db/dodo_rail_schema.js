@@ -17,6 +17,12 @@
 import { discord } from '../services/discord_notify.mjs';
 import { setDodoSchemaReady } from './dodo_schema_state.js';
 
+// Dodo boundary (fix/dodo-rpc-boundary, migration 041): the unspent part of
+// credits_usdt that came from Dodo (card/UPI). RPC and x402 may only spend
+// credits_usdt − dodo_funded_usdt; Trading Intelligence spends it first.
+export const DODO_FUNDED_DDL =
+  `ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS dodo_funded_usdt NUMERIC(18,6) NOT NULL DEFAULT 0`;
+
 // Fixed advisory-lock key (arbitrary constant, unique to this migration unit).
 const ADVISORY_KEY = 386_033_035;
 const CONSTRAINT = 'payment_sources_source_check';
@@ -103,6 +109,7 @@ export async function ensureDodoRailSchema(pool, deps = {}) {
     await client.query(`ALTER TABLE revenue_events_v2 ADD COLUMN IF NOT EXISTS is_billable BOOLEAN NOT NULL DEFAULT true`);
     await client.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS frozen_usdt NUMERIC(18,6) NOT NULL DEFAULT 0`);
     await client.query(`ALTER TABLE api_credits ADD COLUMN IF NOT EXISTS payment_hold BOOLEAN NOT NULL DEFAULT false`);
+    await client.query(DODO_FUNDED_DDL);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS dodo_refund_dispute_log (
