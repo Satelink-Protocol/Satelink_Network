@@ -1,6 +1,9 @@
 // fix/rpc-charge-after-success — a paid RPC call is charged ONLY when the
 // upstream call succeeded (same rule as Trading Intelligence, #429).
 //
+// Founder D-4 (2026-09-28): a provider JSON-RPC error (revert, invalid params)
+// is an answer, not a failure — HTTP 200 with the error body, charged once.
+//
 // Before the fix the canonical path deducted api_credits in enforceCapacity
 // BEFORE proxying, and an upstream failure (provider 5xx, timeout, network
 // error) returned 502 with the deduction kept.
@@ -14,6 +17,8 @@ import request from 'supertest';
 
 const KEY = 'sk_basic_rpccharge_test_000000000000000000000000000000000';
 const PRICE = 0.00003;
+// Captured at module load: other suites stub globalThis.fetch in their own hooks.
+const NATIVE_FETCH = globalThis.fetch;
 
 function fakePool({ credits = 1, dailyUsed = 0, spentConcurrently = false, path = null, known = true } = {}) {
   const state = { credits, deductions: [], usageInserts: 0, revenueInserts: 0 };
@@ -78,7 +83,10 @@ describe('RPC charge-after-success (fix/rpc-charge-after-success)', function () 
 
   const upstreamFailures = {
     'provider 5xx': async () => new Response('bad gateway', { status: 503 }),
-    'provider JSON-RPC error': async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 7, error: { code: -32000, message: 'boom' } }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    // Founder D-4: a JSON-RPC error that belongs to the PROVIDER (rate limit /
+    // quota) is a provider failure; a revert or invalid params is not (below).
+    'provider rate-limit JSON-RPC error (-32005)': async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 7, error: { code: -32005, message: 'limit exceeded' } }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    'provider HTTP 429': async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 7, error: { code: -32000, message: 'too many requests' } }), { status: 429, headers: { 'content-type': 'application/json' } }),
     'network error / timeout': async () => { throw new Error('ECONNRESET'); },
   };
 
@@ -102,6 +110,80 @@ describe('RPC charge-after-success (fix/rpc-charge-after-success)', function () 
     expect(pool.state.deductions).to.deep.equal([PRICE]);
     expect(pool.state.usageInserts).to.equal(1);
     expect(res.headers['x-credit-balance']).to.equal(String(+(1 - PRICE).toFixed(6)));
+  });
+
+  // ── Founder D-4: provider JSON-RPC errors pass through as 200 and are charged ──
+  const REVERT_DATA = '0x08c379a0'
+    + '0000000000000000000000000000000000000000000000000000000000000020'
+    + '0000000000000000000000000000000000000000000000000000000000000014'
+    + Buffer.from('insufficient balance').toString('hex').padEnd(64, '0');
+  const jsonRpcErrors = {
+    'revert (code 3, Error(string) data)': { status: 200, error: { code: 3, message: 'execution reverted: insufficient balance', data: REVERT_DATA } },
+    'invalid params (-32602)': { status: 200, error: { code: -32602, message: 'invalid argument 0: hex string has length 3, want 40 for common.Address' } },
+    'invalid params sent as HTTP 400': { status: 400, error: { code: -32602, message: 'invalid params' } },
+  };
+  for (const [name, { status, error }] of Object.entries(jsonRpcErrors)) {
+    it(`passes a provider JSON-RPC error through as HTTP 200 and charges it once (${name})`, async () => {
+      const pool = fakePool({ credits: 1 });
+      let upstreamCalls = 0;
+      globalThis.fetch = async () => { upstreamCalls += 1; return new Response(JSON.stringify({ jsonrpc: '2.0', id: 7, error }), { status, headers: { 'content-type': 'application/json' } }); };
+      const res = await call(pool);
+      expect(res.status, JSON.stringify(res.body)).to.equal(200);
+      expect(res.body).to.deep.equal({ jsonrpc: '2.0', id: 7, error });
+      expect(upstreamCalls, 'a JSON-RPC error is an answer — no failover to another provider').to.equal(1);
+      expect(pool.state.deductions).to.deep.equal([PRICE]);
+    });
+  }
+
+  describe('client libraries parse the passed-through revert (real HTTP server)', () => {
+    let server, url;
+    const provider = (body) => {
+      const req = JSON.parse(body);
+      const error = { code: 3, message: 'execution reverted: insufficient balance', data: REVERT_DATA };
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: req.id, error }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    let pool;
+    beforeEach(async () => {
+      pool = fakePool({ credits: 1 });
+      await new Promise((r) => { server = app(pool).listen(0, '127.0.0.1', r); });
+      url = `http://127.0.0.1:${server.address().port}/rpc/polygon`;
+      // Only the upstream providers are stubbed; calls to the local gateway go out for real.
+      globalThis.fetch = async (u, init) => (String(u).startsWith('http://127.0.0.1') ? NATIVE_FETCH(u, init) : provider(init.body));
+    });
+    afterEach(async () => { await new Promise((r) => server.close(r)); });
+
+    const TOKEN = '0x0000000000000000000000000000000000001010';
+    const HOLDER = '0x000000000000000000000000000000000000dEaD';
+
+    it('ethers v6: provider.call rejects with CALL_EXCEPTION and the decoded reason', async () => {
+      const { ethers } = await import('ethers');
+      const req = new ethers.FetchRequest(url);
+      req.setHeader('X-API-Key', KEY);
+      const p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: ethers.Network.from(137), batchMaxCount: 1 });
+      const erc20 = new ethers.Contract(TOKEN, ['function balanceOf(address) view returns (uint256)'], p);
+      let err;
+      try { await erc20.balanceOf(HOLDER); } catch (e) { err = e; }
+      p.destroy();
+      expect(err, 'must reject').to.exist;
+      expect(err.code).to.equal('CALL_EXCEPTION');
+      expect(err.reason).to.equal('insufficient balance');
+      expect(pool.state.deductions).to.deep.equal([PRICE]);
+    });
+
+    it('viem: readContract throws ContractFunctionRevertedError with the decoded reason', async () => {
+      const { createPublicClient, http, ContractFunctionRevertedError, parseAbi } = await import('viem');
+      const { polygon } = await import('viem/chains');
+      const client = createPublicClient({ chain: polygon, transport: http(url, { fetchOptions: { headers: { 'X-API-Key': KEY } }, retryCount: 0 }) });
+      let err;
+      try {
+        await client.readContract({ address: TOKEN, abi: parseAbi(['function balanceOf(address) view returns (uint256)']), functionName: 'balanceOf', args: [HOLDER] });
+      } catch (e) { err = e; }
+      expect(err, 'must reject').to.exist;
+      const reverted = err.walk((e) => e instanceof ContractFunctionRevertedError);
+      expect(reverted, err.message).to.be.instanceOf(ContractFunctionRevertedError);
+      expect(reverted.reason).to.equal('insufficient balance');
+      expect(pool.state.deductions).to.deep.equal([PRICE]);
+    });
   });
 
   it('withholds the data when the post-call charge is refused (balance spent concurrently)', async () => {
