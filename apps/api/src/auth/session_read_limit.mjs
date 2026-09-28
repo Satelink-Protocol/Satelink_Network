@@ -79,9 +79,14 @@ export function createSessionReadLimiter({
     }
     const ipKey = 'ip:' + (ipBucket(req.headers?.[CLIENT_IP_HEADER]) || 'unknown');
     const ipB = hit(ipKey, t);
-    const key = sessionReadKey(req);
-    const b = key === ipKey ? ipB : hit(key, t);
-    const over = ipB.count > ipMax ? ipB : (b.count > max ? b : null);
+    let over = ipB.count > ipMax ? ipB : null;
+    if (!over) {
+      // Session buckets are only created while the IP is under its ceiling, so
+      // a throttled flood cannot churn the bounded map and evict real users.
+      const key = sessionReadKey(req);
+      const b = key === ipKey ? ipB : hit(key, t);
+      if (b.count > max) over = b;
+    }
     if (over) {
       const retry = Math.max(1, Math.ceil((over.start + windowMs - t) / 1000));
       res.set('Retry-After', String(retry));

@@ -85,8 +85,24 @@ export function resolveClientIp(req) {
   return peer || clean(req.socket?.remoteAddress) || null;
 }
 
+const HOST_RE = /^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/;
+function canonicalHost(host) {
+  try {
+    const u = process.env.BETTER_AUTH_URL && new URL(process.env.BETTER_AUTH_URL);
+    if (u) return u.host;
+  } catch { /* fall through */ }
+  return typeof host === 'string' && HOST_RE.test(host) ? host : 'api.satelink.network';
+}
+
 /** Express middleware: replace any inbound X-Satelink-Client-Ip with the trusted one. */
 export function identityClientIp(req, _res, next) {
+  // better-call builds Better Auth's Request URL from x-forwarded-proto + host
+  // (+ :authority). Client-controlled values there could make Better Auth route
+  // a different path than the one our limiter matched — pin them.
+  const proto = req.headers['x-forwarded-proto'];
+  req.headers['x-forwarded-proto'] = proto === 'http' || proto === 'https' ? proto : 'https';
+  delete req.headers[':authority'];
+  req.headers.host = canonicalHost(req.headers.host);
   delete req.headers[CLIENT_IP_HEADER];
   const ip = resolveClientIp(req);
   if (ip) req.headers[CLIENT_IP_HEADER] = ip;

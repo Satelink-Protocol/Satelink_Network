@@ -144,6 +144,23 @@ describe('identity rate limits — per session for reads, trusted IP for the res
       expect(resolveClientIp({ headers: { 'x-forwarded-for': '203.0.113.9', 'cf-connecting-ip': '198.51.100.8' } })).to.equal('203.0.113.9');
     });
 
+    it('pins x-forwarded-proto / host so Better Auth cannot be steered to another path than the limiter saw', async () => {
+      const a = express();
+      a.all('/api/identity/*splat', identityClientIp, (req, res) => res.json({ proto: req.headers['x-forwarded-proto'], host: req.headers.host }));
+      const saved = process.env.BETTER_AUTH_URL;
+      process.env.BETTER_AUTH_URL = 'https://api.satelink.network/api/identity';
+      try {
+        const r = await request(a).get('/api/identity/foo').set('X-Forwarded-Proto', 'http://h/api/identity/get-session?');
+        expect(r.body).to.deep.equal({ proto: 'https', host: 'api.satelink.network' });
+        const u = new URL(`${r.body.proto}://${r.body.host}/api/identity/foo`);
+        expect(u.pathname).to.equal('/api/identity/foo');
+      } finally { if (saved === undefined) delete process.env.BETTER_AUTH_URL; else process.env.BETTER_AUTH_URL = saved; }
+      delete process.env.BETTER_AUTH_URL;
+      const r2 = await request(a).get('/api/identity/foo').set('Host', 'h/api/identity/get-session?');
+      expect(r2.body.host).to.equal('api.satelink.network');
+      if (saved !== undefined) process.env.BETTER_AUTH_URL = saved;
+    });
+
     it('does not trust a multi-value X-Forwarded-For (a client-chosen first value never wins)', () => {
       expect(resolveClientIp({ headers: { 'x-forwarded-for': '1.1.1.1, 203.0.113.9' }, socket: { remoteAddress: '10.0.0.9' } })).to.equal('10.0.0.9');
     });
