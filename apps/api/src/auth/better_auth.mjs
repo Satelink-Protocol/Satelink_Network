@@ -26,6 +26,46 @@
 import { CLIENT_IP_HEADER, identityClientIp } from './client_ip.mjs';
 import { SESSION_READ_PATHS, createSessionReadLimiter } from './session_read_limit.mjs';
 
+// Session tokens are bearer secrets. Better Auth returns them in the
+// /list-sessions and /get-session bodies; the console proxies /api/identity/*
+// same-origin, so any script on the console could read every device's token.
+// Strip them from those two responses — nothing in Satelink reads them there
+// (sessions are listed/revoked by id via /v1/me/sessions).
+const TOKEN_STRIPPED_PATHS = new Set(['/list-sessions', '/get-session']);
+
+export function stripSessionTokens(path, body) {
+  if (!TOKEN_STRIPPED_PATHS.has(path) || body == null || typeof body !== 'object') return body;
+  const clean = (s) => {
+    if (!s || typeof s !== 'object') return s;
+    const { token: _t, ...rest } = s;
+    return rest;
+  };
+  if (Array.isArray(body)) return body.map(clean);
+  if (body.session) return { ...body, session: clean(body.session) };
+  return body;
+}
+
+async function tokenStripPlugin() {
+  const { createAuthMiddleware } = await import('better-auth/api');
+  return {
+    id: 'satelink-strip-session-tokens',
+    hooks: {
+      after: [{
+        matcher: (ctx) => TOKEN_STRIPPED_PATHS.has(ctx.path),
+        handler: createAuthMiddleware(async (ctx) => {
+          let body = ctx.context.returned;
+          if (body instanceof Response) {
+            if (!body.ok) return;
+            body = await body.clone().json().catch(() => undefined);
+          }
+          if (body == null || typeof body !== 'object' || body instanceof Error) return;
+          return ctx.json(stripSessionTokens(ctx.path, body));
+        }),
+      }],
+    },
+  };
+}
+
 let _authInstance = null;
 let _nodeHandler = null;
 
@@ -120,6 +160,7 @@ export async function getBetterAuth(pool) {
     },
     socialProviders,
     plugins: [
+      await tokenStripPlugin(),
       magicLink({
         sendMagicLink: async ({ email, url }) => {
           await sendEmailViaResend(email, 'Your Satelink sign-in link',

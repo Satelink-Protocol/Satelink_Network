@@ -57,7 +57,7 @@ export function createMeRouter(pool, {
   // account owns — resolved here, never sent to the browser.
   intelBase = process.env.INTEL_LOOPBACK_BASE || `http://127.0.0.1:${process.env.PORT || 8080}`,
   fetchImpl = globalThis.fetch,
-  sessionsApi = betterAuthSessionsApi(() => getBetterAuth(pool)),
+  sessionsApi = betterAuthSessionsApi(() => getBetterAuth(pool), pool),
 } = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '16kb' }));

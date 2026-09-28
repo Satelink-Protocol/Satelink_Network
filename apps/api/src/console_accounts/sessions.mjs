@@ -7,14 +7,19 @@
 // own session list, and never leaves the API.
 import { AccountError } from './keys.mjs';
 
-/** Default adapter over Better Auth's server API (headers carry the caller's cookie). */
-export function betterAuthSessionsApi(getAuth) {
+/** Default adapter. Listing reads Better Auth's `session` table directly, scoped
+ *  to the signed-in user: Better Auth's listSessions endpoint requires a FRESH
+ *  session (freshAge, 24 h), so it failed for most returning users. Revoking goes
+ *  through Better Auth (revokeSession: no freshness requirement), which also
+ *  re-checks that the token belongs to the caller. */
+export function betterAuthSessionsApi(getAuth, pool) {
   return {
     async list(req) {
-      const auth = await getAuth();
-      if (!auth) throw new AccountError('accounts_unavailable', 503, 'Sign-in service unavailable');
-      const { fromNodeHeaders } = await import('better-auth/node');
-      return auth.api.listSessions({ headers: fromNodeHeaders(req.headers) });
+      const r = await pool.query(
+        `SELECT id, token, "createdAt", "expiresAt", "userAgent", "ipAddress"
+           FROM "session" WHERE "userId" = $1 AND "expiresAt" > now() ORDER BY "createdAt" DESC LIMIT 100`,
+        [req.account.accountId]);
+      return r.rows;
     },
     async revoke(req, token) {
       const auth = await getAuth();

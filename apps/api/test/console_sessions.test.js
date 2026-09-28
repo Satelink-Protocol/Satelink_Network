@@ -13,6 +13,8 @@ import pg from 'pg';
 import express from 'express';
 import { __resetSchemaCache, ensureConsoleAccountsSchema } from '../src/console_accounts/schema.mjs';
 import { createMeRouter } from '../src/console_accounts/router.mjs';
+import { betterAuthSessionsApi } from '../src/console_accounts/sessions.mjs';
+import { stripSessionTokens } from '../src/auth/better_auth.mjs';
 
 const URL_ = process.env.CONSOLE_ACCOUNTS_TEST_DB;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -106,5 +108,47 @@ d('/v1/me/sessions — revoke by opaque id, tokens never leave the API', functio
     const anon = await fetch(base + '/sessions');
     assert.equal(anon.status, 401);
     assert.deepEqual(revoked, []);
+  });
+
+  describe('default adapter — lists from the session table (no Better Auth freshAge)', () => {
+    before(async () => {
+      await pool.query(`CREATE TABLE "session" (id TEXT PRIMARY KEY, "expiresAt" TIMESTAMPTZ NOT NULL, token TEXT NOT NULL UNIQUE,
+        "createdAt" TIMESTAMPTZ NOT NULL, "updatedAt" TIMESTAMPTZ NOT NULL, "ipAddress" TEXT, "userAgent" TEXT, "userId" TEXT NOT NULL)`);
+      await pool.query(`INSERT INTO "session" VALUES
+        ('old', now() + interval '5 days', 'tok_old', now() - interval '6 days', now(), '1.1.1.1', 'Chrome', 'ua'),
+        ('new', now() + interval '7 days', 'tok_new', now() - interval '1 hour', now(), '1.1.1.2', 'Safari', 'ua'),
+        ('exp', now() - interval '1 hour', 'tok_exp', now() - interval '8 days', now(), null, null, 'ua'),
+        ('oth', now() + interval '7 days', 'tok_oth', now(), now(), null, null, 'ub')`);
+    });
+
+    it('returns the caller\'s live sessions, including ones older than 24 h; never other users\' or expired ones', async () => {
+      const api = betterAuthSessionsApi(async () => null, pool);
+      const rows = await api.list({ account: { accountId: 'ua' } });
+      assert.deepEqual(rows.map((r) => r.id), ['new', 'old']);
+    });
+
+    it('revoke goes through Better Auth with the resolved token', async () => {
+      const calls = [];
+      const fakeAuth = { api: { revokeSession: async (o) => { calls.push(o.body.token); return { status: true }; } } };
+      const api = betterAuthSessionsApi(async () => fakeAuth, pool);
+      await api.revoke({ headers: {}, account: { accountId: 'ua' } }, 'tok_old');
+      assert.deepEqual(calls, ['tok_old']);
+    });
+  });
+});
+
+describe('stripSessionTokens — /list-sessions and /get-session bodies carry no token', () => {
+  it('strips token from every listed session', () => {
+    const out = stripSessionTokens('/list-sessions', [{ id: 'a', token: 'T1', userId: 'u' }, { id: 'b', token: 'T2' }]);
+    assert.deepEqual(out, [{ id: 'a', userId: 'u' }, { id: 'b' }]);
+  });
+  it('strips session.token from get-session, keeps user and session id', () => {
+    const out = stripSessionTokens('/get-session', { session: { id: 's', token: 'T', userId: 'u' }, user: { id: 'u', email: 'e' } });
+    assert.deepEqual(out, { session: { id: 's', userId: 'u' }, user: { id: 'u', email: 'e' } });
+  });
+  it('leaves other paths and null bodies untouched', () => {
+    const b = { token: 'keep' };
+    assert.equal(stripSessionTokens('/sign-in/email', b), b);
+    assert.equal(stripSessionTokens('/get-session', null), null);
   });
 });
