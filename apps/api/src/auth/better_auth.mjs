@@ -59,6 +59,19 @@ async function sendEmailViaResend(to, subject, html) {
 }
 
 /** Build (and cache) the Better Auth instance. Returns null when disabled. */
+// Session READS are exempt from the per-IP limit. The console server-renders
+// every page from Vercel's shared egress IPs and calls get-session (plus the
+// sidebar prefetches), so a 20/min budget per IP signed every console user
+// out after ~10 page views (2026-09-28: 429 after 11 calls/min, console
+// redirected to /sign-in). They need a valid session cookie and write nothing.
+// Sign-in, sign-up, magic-link, 2FA and every other write keep the limit.
+export const RATE_LIMIT = {
+  enabled: true,
+  window: 60,
+  max: 20,
+  customRules: { '/get-session': false, '/list-sessions': false, '/list-accounts': false },
+};
+
 export async function getBetterAuth(pool) {
   if (!isBetterAuthEnabled()) return null;
   if (_authInstance) return _authInstance;
@@ -122,7 +135,7 @@ export async function getBetterAuth(pool) {
       crossSubDomainCookies: { enabled: true, domain: '.satelink.network' },
       defaultCookieAttributes: { sameSite: 'lax', secure: true },
     },
-    rateLimit: { enabled: true, window: 60, max: 20 },
+    rateLimit: RATE_LIMIT,
   });
 
   return _authInstance;
