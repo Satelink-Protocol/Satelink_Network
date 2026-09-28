@@ -3,10 +3,14 @@ import { Empty, NeedsKey, PageHeader, Panel, Table } from "@/components/ui";
 import { loadKey } from "@/lib/data";
 import { int, usd } from "@/lib/format";
 import { getActiveKey } from "@/lib/keys";
+import { accountsEnabled } from "@/lib/account";
+import { loadKeys, loadRequests } from "@/lib/v2";
+import { RequestsExplorer } from "@/components/v2/RequestsExplorer";
 
 export const metadata: Metadata = { title: "Requests" };
 
 export default async function RequestsPage() {
+  if (accountsEnabled()) return <RequestsV2 />;
   const active = await getActiveKey();
   const d = active ? await loadKey(active.k) : null;
   const recent = d?.days ? [...d.days].reverse().slice(0, 14) : null;
@@ -36,6 +40,25 @@ export default async function RequestsPage() {
           </Panel>
         </>
       )}
+    </>
+  );
+}
+
+async function RequestsV2() {
+  const from = Math.floor(Date.now() / 1000) - 7 * 86400;
+  const [keys, log] = await Promise.all([loadKeys(), loadRequests(`limit=50&from=${from}`)]);
+  const list = keys.ok ? keys.data.map((k) => ({ id: k.id, label: k.label })) : [];
+  return (
+    <>
+      <PageHeader title="Requests" lede="Every call your keys made — status, latency, rail, cost and receipt. Kept for 14 days; older billed calls are listed without status or latency." />
+      <Panel title="Request log">
+        {keys.ok && list.length === 0 ? (
+          <Empty title="No keys yet" body="Create a key and make a call — it appears here within seconds." cta={{ label: "Give my software access", href: "/agents/new" }} />
+        ) : (
+          <RequestsExplorer initial={log.ok ? log.data : null} keys={list} />
+        )}
+        {log.ok && log.data.notes?.length ? <p className="mt-3 text-[11px] text-sl-text-subtle">{log.data.notes.join(" ")}</p> : null}
+      </Panel>
     </>
   );
 }

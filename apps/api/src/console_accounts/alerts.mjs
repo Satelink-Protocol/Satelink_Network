@@ -12,9 +12,10 @@
 //                only for keys that were funded at least once.
 //   deposit      api_deposits rows for linked keys, newer than both the
 //                preference and 24 h.
-//   error_rate   NOT MEASURED: failed calls are not recorded per request yet
-//                (the request log only holds served, billed calls — D5). The
-//                threshold is stored and the API says so; no alert is invented.
+//   error_rate   request_log (D5, migration 020): share of the account's calls in
+//                the last 60 min that failed (HTTP ≥ 500, or 4xx other than
+//                402/429 — payment and rate-limit answers are not errors), only
+//                when ≥ 20 calls were made; one alert per hour bucket.
 // Levels (usage and spend cap) and the on/off switches for usage warnings and
 // account notices live in account_settings — one source of truth with Settings.
 //
@@ -31,6 +32,7 @@ import { ensureConsoleAccountsSchema } from './schema.mjs';
 import { isUsageLimitsV2Enabled } from '../pricing_v2/metering.mjs';
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
 import { PRICE_PER_CALL_USDT } from '../billing/credit_service.mjs';
+import { errorRate } from './requests.mjs';
 
 export const ALERT_FROM_DEFAULT = 'Satelink <automation@satelink.network>';
 const HISTORY_LIMIT = 50;
@@ -163,7 +165,7 @@ const pct = (used, cap) => (cap > 0 ? (used / cap) * 100 : 0);
 const fmtUsd = (n) => `$${Number(n).toFixed(Number(n) < 1 ? 5 : 2)}`;
 
 /** Every alert currently due for one account (pure read). */
-export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = isUsageLimitsV2Enabled(), planFn = accountPlan } = {}) {
+export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = isUsageLimitsV2Enabled(), planFn = accountPlan, errorRateFn = errorRate } = {}) {
   const [settings, prefs] = await Promise.all([getSettings(pool, accountId), getAlertPrefs(pool, accountId)]);
   const levels = [...(settings.alertThresholds || [])].sort((a, b) => a - b);
   const notices = settings.notifications?.email !== false;
@@ -282,6 +284,22 @@ export async function dueAlerts(pool, accountId, { now = new Date(), usageV2 = i
         message: {
           subject: `Satelink: deposit of ${fmtUsd(d.amount_usdt)} confirmed`,
           lines: [`A deposit of ${fmtUsd(d.amount_usdt)} was confirmed and ${fmtUsd(d.credited)} credited to ${d.label} (${d.key_hint}).`, `Reference: ${d.tx_hash}`],
+        },
+      });
+    }
+  }
+
+  // Error rate (D5 request log). Measured over the last hour; notices switch applies.
+  if (notices && prefs.errorRatePct !== null) {
+    const er = await errorRateFn(pool, accountId, { minutes: 60 });
+    if (er.measured && er.enough && er.pct >= prefs.errorRatePct) {
+      const hour = now.toISOString().slice(0, 13);
+      out.push({
+        kind: 'error_rate', dedupeKey: `error_rate:${hour}`,
+        detail: { pct: er.pct, failed: er.failed, calls: er.calls, thresholdPct: prefs.errorRatePct, minutes: er.minutes },
+        message: {
+          subject: `Satelink: ${er.pct}% of your calls failed in the last hour`,
+          lines: [`${er.failed} of ${er.calls} calls failed in the last ${er.minutes} minutes (your alert threshold is ${prefs.errorRatePct}%).`, 'Payment (402) and rate-limit (429) answers are not counted as failures.', 'See Requests in the console for each failed call.'],
         },
       });
     }
@@ -407,7 +425,7 @@ export async function getAlerts(pool, accountId, { env = process.env } = {}) {
       { kind: 'spend_cap', status: usageOn && settings.monthlySpendCapUsdt ? 'on' : 'off', levels, capUsdt: settings.monthlySpendCapUsdt },
       { kind: 'low_balance', status: notices && prefs.lowBalanceUsdt !== null ? 'on' : 'off', floorUsdt: prefs.lowBalanceUsdt },
       { kind: 'deposit_confirmed', status: notices && prefs.depositConfirmed ? 'on' : 'off' },
-      { kind: 'error_rate', status: 'not_measured', thresholdPct: prefs.errorRatePct, detail: 'Failed calls are not recorded per request yet, so the error rate cannot be measured. Your threshold is saved and will apply once it can.' },
+      { kind: 'error_rate', status: notices && prefs.errorRatePct !== null ? 'on' : 'off', thresholdPct: prefs.errorRatePct, detail: 'Share of your calls in the last hour that failed (5xx, or 4xx other than 402/429), checked when at least 20 calls were made' },
     ],
     history: hist.rows.map(shapeEvent),
   };

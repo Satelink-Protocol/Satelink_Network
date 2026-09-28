@@ -201,6 +201,10 @@ export function createIntelligenceRouter(pool, deps = {}) {
       return res.status(http).json(body);
     }
 
+    // Never the key: a non-reversible reference + time + nonce (TI_KEY_LOGGING).
+    const tiRequestId = `intel:${metric}:${keyRef(apiKey)}:${now()}:${crypto.randomBytes(3).toString('hex')}`;
+    // Descriptive only — read by the D5 request log after the response.
+    res.locals.satelinkBilling = { requestId: meter.cost > 0 ? tiRequestId : null, chargedUsdt: meter.cost, apiKey: meter.apiKey || apiKey };
     // Record real revenue for the deduction (fire-and-forget; only cost > 0).
     if (meter.cost > 0) {
       recordRpcRevenue({
@@ -209,8 +213,7 @@ export function createIntelligenceRouter(pool, deps = {}) {
         method: metric,
         apiKey: meter.apiKey || apiKey,
         source: 'intelligence',
-        // Never the key: a non-reversible reference + time + nonce (TI_KEY_LOGGING).
-        requestId: `intel:${metric}:${keyRef(apiKey)}:${now()}:${crypto.randomBytes(3).toString('hex')}`,
+        requestId: tiRequestId,
         amountUsdt: meter.cost,
         opType: 'intelligence',
       }).catch(() => {});
