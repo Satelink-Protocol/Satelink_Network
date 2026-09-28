@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { RevokeOthers, RevokeSession, SignOut } from "@/components/SessionActions";
 import { Badge, PageHeader, Panel, Table } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
@@ -18,12 +19,15 @@ const PRIVACY_EMAIL = "satelinknetwork@gmail.com";
 
 export default async function SettingsPage() {
   const session = await getSession();
+  // The layout redirects too, but the page renders in parallel with it — a
+  // lost session must redirect here rather than crash on session.user.
+  if (!session) redirect("/sign-in");
   const cookie = await authCookieHeader();
   const [accounts, sessions] = await Promise.all([
     apiFetch<Account[]>("/api/identity/list-accounts", { cookie }),
     apiFetch<SessionRow[]>("/api/identity/list-sessions", { cookie }),
   ]);
-  const u = session!.user;
+  const u = session.user;
   const accountMode = accountsEnabled();
   const prefs = accountMode ? await loadSettings() : null;
   const providers = accounts.ok ? accounts.data.map((a) => a.providerId) : null;
@@ -81,7 +85,7 @@ export default async function SettingsPage() {
                 <td className="font-mono">{s.ipAddress || ""}</td>
                 <td>{date(s.createdAt)}</td>
                 <td>{date(s.expiresAt)}</td>
-                <td className="text-right"><RevokeSession token={s.token} current={s.id === session!.session.id} /></td>
+                <td className="text-right"><RevokeSession token={s.token} current={s.id === session.session.id} /></td>
               </tr>
             ))}
           </Table>
