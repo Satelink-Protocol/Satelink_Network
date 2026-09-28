@@ -31,6 +31,7 @@ import { createWellKnownSatelinkRouter, createMachineV1Router } from "./src/rout
 import { createWellKnownX402Router } from "./src/routes/well_known_x402.js";
 import { createMetricsRouter } from "./src/workloads/rpc_gateway/metrics.js";
 import { createIntelligenceRouter } from "./src/routes/intelligence_route.js";
+import { requestLog, startRequestLog } from "./src/observability/request_log.mjs";
 import { startIntelRefresh } from "./src/intelligence/engine.js";
 import { createMachineIntelRouter } from "./src/routes/machine_intel.js";
 import { createDepositEconomicsRouter, createVaultRouter } from "./src/routes/deposit_economics.js";
@@ -397,6 +398,9 @@ app.get("/api/mode", (req, res) => {
   // RPC Gateway — freeTierGate runs before JSON parsing to reject rate-limited IPs
   // before their request body is allocated (prevents OOM from high-volume abusers).
   // Body limit 1mb covers all legitimate RPC batch calls; 50mb caused heap exhaustion.
+  // D5 request log first: it sees every outcome (402/429/5xx/200) of a
+  // credentialed call; it only buffers in memory (flushed off the hot path).
+  app.use("/rpc", requestLog.middleware('rpc'));
   app.use("/rpc", x402Middleware, freeTierGateUnlessX402Paid, express.json({ limit: '1mb' }), createRpcGateway(pool));
 
   // MEV Private Relay (S3-001) — 10x pricing, requires API key
@@ -421,8 +425,10 @@ app.get("/api/mode", (req, res) => {
   // ai-gateway so its paths are not shadowed. Background refresh is opt-in
   // (INTEL_REFRESH_ENABLED=true) so this mount is inert unless a snapshot loop
   // is running — serving returns an honest 503 warming_up until then.
+  app.use("/v1/intelligence", requestLog.middleware('intelligence'));
   app.use("/v1", express.json({ limit: '16kb' }), createIntelligenceRouter(pool));
   startIntelRefresh(pool, { logger: console });
+  startRequestLog(pool, requestLog, { logger: console });
 
   // Track B (P3.B / P6) — read-only plan catalogue (/v1/plans) + customer
   // console summary (/v1/console/summary). Mounted BEFORE the "/v1" ai-gateway

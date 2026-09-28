@@ -173,14 +173,32 @@ d('D7 console alerts', function () {
     assert.deepEqual(await evaluateAccount(pool, A, { send, env, usageV2: false }), {});
   });
 
-  it('error rate is never alerted on (not measured) and the API says so', async () => {
-    await updateAlertPrefs(pool, A, { errorRatePct: 1 });
+  it('error rate (D5 request log): alerts once per hour above the threshold; 402/429 are not failures; needs ≥ 20 calls', async () => {
+    await pool.query(fs.readFileSync(path.join(here, '..', '..', '..', 'database', 'migrations', '020_request_log.sql'), 'utf8'));
+    const k = await linkedKey(A, { label: 'Errbot' });
+    const log = (status, n) => pool.query(
+      `INSERT INTO request_log (api_key_id, product, endpoint, http_status, latency_ms, rail) SELECT $1, 'rpc', 'eth_call', $2, 40, 'credits' FROM generate_series(1, $3)`,
+      [k.id, status, n]);
+    await updateAlertPrefs(pool, A, { errorRatePct: 25 });
+    // 10 calls, all 502 — below the 20-call minimum → nothing.
+    await log(502, 10);
     await evaluateAccount(pool, A, { send, env, usageV2: false });
-    const r = await getAlerts(pool, A, { env });
-    const rule = r.rules.find((x) => x.kind === 'error_rate');
-    assert.equal(rule.status, 'not_measured');
-    assert.equal(rule.thresholdPct, 1);
     assert.equal((await events(A)).filter((e) => e.kind === 'error_rate').length, 0);
+    // + 30 × 402 and 20 × 429 (not failures) → 10 failed of 60 = 16.67 % < 25 % → nothing.
+    await log(402, 30); await log(429, 20);
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    assert.equal((await events(A)).filter((e) => e.kind === 'error_rate').length, 0);
+    // + 10 × 500 → 20 of 70 = 28.57 % ≥ 25 % → one alert, then de-duplicated within the hour.
+    await log(500, 10);
+    sent.length = 0;
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    await evaluateAccount(pool, A, { send, env, usageV2: false });
+    const er = (await events(A)).filter((e) => e.kind === 'error_rate');
+    assert.equal(er.length, 1);
+    assert.match(sent.find((m) => /failed in the last hour/.test(m.subject)).subject, /28\.57% of your calls failed/);
+    const rule = (await getAlerts(pool, A, { env })).rules.find((x) => x.kind === 'error_rate');
+    assert.deepEqual([rule.status, rule.thresholdPct], ['on', 25]);
+    await pool.query('TRUNCATE request_log');
   });
 
   it('no sender configured → the evaluator waits (claims nothing), so alerts go out once email is configured', async () => {

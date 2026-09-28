@@ -444,6 +444,7 @@ export function createRpcGateway(db) {
             if (cachedResponse) {
                 // A cache hit is a served call: charge it before returning it.
                 if (!(await chargeServedCall())) return;
+                res.locals.satelinkBilling = { requestId: request_id, chargedUsdt: billedUsdt, apiKey }; // D5 request log (descriptive)
                 // Billing - fire and forget (only when a real deduction occurred)
                 recordRpcRevenue({
                     pool: db,
@@ -475,6 +476,7 @@ export function createRpcGateway(db) {
             }
 
             if (!(await chargeServedCall())) return;
+            res.locals.satelinkBilling = { requestId: request_id, chargedUsdt: billedUsdt, apiKey }; // D5 request log (descriptive)
 
             // Cache set - fire and forget
             if (isCacheable(method)) {

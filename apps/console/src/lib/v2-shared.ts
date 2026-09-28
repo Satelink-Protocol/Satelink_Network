@@ -37,8 +37,9 @@ export type Spend = {
 export type UsageSeries = { days: number; keys: { id: number; label: string; points: { date: string; requests: number; spentUsdt: number }[] }[] };
 
 export type RequestLog = {
-  items: { at: string; product: string; method: string | null; chain: string | null; status: string; costUsdt: number; receiptId: string | null; key: { id: number; label: string; hint: string } }[];
+  items: { at: string; product: string; method: string | null; chain: string | null; status: string; httpStatus?: number | null; latencyMs?: number | null; rail?: string | null; source?: "request_log" | "billing"; costUsdt: number; receiptId: string | null; key: { id: number; label: string; hint: string } }[];
   nextCursor: string | null;
+  notes?: string[];
 };
 
 export type IntelCatalog = { metrics: { metric: string; price_usdt: number; kind: string; description: string }[] };
