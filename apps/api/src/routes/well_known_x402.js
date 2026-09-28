@@ -20,7 +20,7 @@
 // acquire-credits pointer.
 
 import { Router } from 'express';
-import { railPrices } from '../pricing_v2/rails.mjs';
+import { railPrices, bundlePriceText } from '../pricing_v2/rails.mjs';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
 const X402_NETWORK = () => process.env.X402_NETWORK || 'eip155:8453';
@@ -51,7 +51,7 @@ function listing() {
       {
         method: 'POST',
         resource: `${base}/rpc/polygon`,
-        price: `$${bundle.price_usd.toFixed(2)} = ${bundle.calls.toLocaleString('en-US')} calls`,
+        price: bundlePriceText(rails),
         rail: 'x402',
         x402_challenge: true,
         status: bundle.status,

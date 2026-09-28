@@ -7,7 +7,7 @@
 // because the payment middleware honours them: discovery shows what is charged.
 import { loadCatalog } from './catalog.mjs';
 
-const usd = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+export const usd = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
 
 export function railPrices(c = loadCatalog(), env = process.env) {
   const r = c.rails;
@@ -38,4 +38,9 @@ export function railPrices(c = loadCatalog(), env = process.env) {
     },
     rails_note: 'Different rails, different prices: never read the x402 bundle and the USDT-credit price as the same product.',
   };
+}
+
+/** "$0.10 = 1,000 calls" — the one bundle wording every surface uses (never rounds an override). */
+export function bundlePriceText(r = railPrices()) {
+  return `${usd(r.rpc_x402_bundle.price_usd)} = ${r.rpc_x402_bundle.calls.toLocaleString('en-US')} calls`;
 }

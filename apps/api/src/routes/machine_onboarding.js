@@ -25,7 +25,7 @@ import {
 import { MIN_CONFIRMATIONS } from '../billing/deposit_validation.mjs';
 import { apiKeyCreateLimiter } from '../security/middleware/rate_limits.js';
 import { getIntelSummary, recordPricingView } from '../economics/pricing_intelligence/index.js';
-import { railPrices } from '../pricing_v2/rails.mjs';
+import { railPrices, bundlePriceText } from '../pricing_v2/rails.mjs';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
 const VAULT = () => process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
@@ -48,7 +48,7 @@ export function registrationMessage(wallet) {
 }
 
 // Every price below comes from the PlanCatalog via railPrices() (Wave 2 C1/C8).
-const bundleText = (r) => `$${r.rpc_x402_bundle.price_usd.toFixed(2)} = ${r.rpc_x402_bundle.calls.toLocaleString('en-US')} calls`;
+const bundleText = (r) => bundlePriceText(r);
 
 function pricingBody() {
   const rails = railPrices();

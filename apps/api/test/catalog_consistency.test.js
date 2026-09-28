@@ -10,12 +10,13 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import request from 'supertest';
 import { loadCatalog, __resetCatalog } from '../src/pricing_v2/catalog.mjs';
-import { railPrices } from '../src/pricing_v2/rails.mjs';
+import { railPrices, bundlePriceText } from '../src/pricing_v2/rails.mjs';
 import { PRICE_PER_CALL_USDT } from '../src/billing/credit_service.mjs';
 import { getX402Config } from '../src/payments/x402/config.js';
 import { METRICS } from '../src/intelligence/compute.js';
 import { createWellKnownX402Router } from '../src/routes/well_known_x402.js';
 import { createWellKnownSatelinkRouter, createMachineV1Router } from '../src/routes/machine_onboarding.js';
+import { _resetIntelCacheForTests } from '../src/economics/pricing_intelligence/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '..', '..', '..');
@@ -24,7 +25,8 @@ const X402_ENV = ['X402_BUNDLE_PRICE_USD', 'X402_BUNDLE_CALLS'];
 describe('Catalog consistency (C8): one price, every surface', () => {
   const saved = {};
   before(() => { for (const k of X402_ENV) { saved[k] = process.env[k]; delete process.env[k]; } __resetCatalog(); });
-  after(() => { for (const k of X402_ENV) if (saved[k] !== undefined) process.env[k] = saved[k]; });
+  // /v1/pricing warms the pricing-intelligence cache; leave it empty for other suites.
+  after(() => { _resetIntelCacheForTests(); for (const k of X402_ENV) if (saved[k] !== undefined) process.env[k] = saved[k]; });
 
   it('catalog rails == the constants enforcement charges', () => {
     const c = loadCatalog();
@@ -41,7 +43,7 @@ describe('Catalog consistency (C8): one price, every surface', () => {
     const body = (await request(app).get('/.well-known/x402')).body;
     const r = railPrices();
     const rpc = body.routes.find((x) => x.resource.endsWith('/rpc/polygon'));
-    assert.equal(rpc.price, `$${r.rpc_x402_bundle.price_usd.toFixed(2)} = ${r.rpc_x402_bundle.calls.toLocaleString('en-US')} calls`);
+    assert.equal(rpc.price, bundlePriceText(r));
     assert.deepEqual([rpc.rail, rpc.x402_challenge], ['x402', true]);
     for (const ti of body.routes.filter((x) => x.resource.includes('/v1/intelligence/'))) {
       assert.equal(ti.price, `$${r.intelligence_credits.price_usd_per_request}/call`);
@@ -57,7 +59,7 @@ describe('Catalog consistency (C8): one price, every surface', () => {
     app.use('/v1', createMachineV1Router({ query: async () => ({ rows: [], rowCount: 0 }) }));
     const m = (await request(app).get('/.well-known/satelink.json')).body;
     assert.equal(m.pricing.price_per_call_usdt, r.rpc_credits.price_usd_per_call);
-    assert.equal(m.pricing.x402_bundle, `$${r.rpc_x402_bundle.price_usd.toFixed(2)} = ${r.rpc_x402_bundle.calls.toLocaleString('en-US')} calls (USDC on Base)`);
+    assert.equal(m.pricing.x402_bundle, `${bundlePriceText(r)} (USDC on Base)`);
     assert.deepEqual(m.pricing.rails, r);
     const p = (await request(app).get('/v1/pricing')).body;
     assert.equal(p.price_per_call_usdt, r.rpc_credits.price_usd_per_call);
@@ -66,14 +68,23 @@ describe('Catalog consistency (C8): one price, every surface', () => {
     assert.deepEqual(p.rails, r);
   });
 
+  it('/api/pricing lists the flat catalog price for every method (no per-method prices nobody is charged)', () => {
+    const src = fs.readFileSync(path.join(here, '..', 'app_factory.mjs'), 'utf8');
+    const block = src.slice(src.indexOf('app.get("/api/pricing"'), src.indexOf('// GET /api/treasury/status'));
+    assert.ok(block.includes('railPrices()'), '/api/pricing must read railPrices()');
+    assert.doesNotMatch(block, /usdt_per_call:\s*0\.\d/, 'no hard-coded per-method price literals');
+  });
+
   // ── Copy on web, console and docs ──────────────────────────────────────────
-  const SURFACES = ['apps/web/src', 'apps/console/src', 'docs/quick-start.md', 'docs/pricing.md', 'docs/api-reference.md', 'docs/sdk-guide.md', 'docs/README.md'];
+  const SURFACES = ['apps/web/src', 'apps/console/src', 'docs/quick-start.md', 'docs/pricing.md', 'docs/api-reference.md', 'docs/sdk-guide.md'];
   // Lines that legitimately show other numbers: operator share, samples, UI kits, admin internals.
   const EXEMPT_FILE = /(\/design\/|\/styleguide\/|\/admin\/|\.bak$|\.test\.|EarningsEstimator|node-operators\.md|revenue-model\.md)/;
   const EXEMPT_LINE = /operator|share|sample|illustrative|example|competitor|median|vs\.? /i;
+  it('every scan target exists (a rename must not silently switch the scan off)', () => {
+    for (const s of SURFACES) assert.ok(fs.existsSync(path.join(ROOT, s)), `missing scan target ${s}`);
+  });
   function files(p) {
     const abs = path.join(ROOT, p);
-    if (!fs.existsSync(abs)) return [];
     if (fs.statSync(abs).isFile()) return [abs];
     return fs.readdirSync(abs, { recursive: true }).map((f) => path.join(abs, String(f)))
       .filter((f) => /\.(tsx?|jsx?|mdx?)$/.test(f) && !f.includes('node_modules') && fs.statSync(f).isFile());
@@ -92,8 +103,11 @@ describe('Catalog consistency (C8): one price, every surface', () => {
     const want = railPrices().rpc_credits.price_usd_per_call;
     const bad = scan((line) => {
       if (!/call/i.test(line)) return null;
-      const nums = [...line.matchAll(/\$\s?0\.0000\d+/g)].map((m) => Number(m[0].replace(/[$\s]/g, '')));
-      const off = nums.filter((n) => n !== want);
+      // Any sub-cent per-call amount, with or without "$" (e.g. "0.00003 USDT").
+      const nums = [...line.matchAll(/(?<![\d.])\$?\s?0\.000\d+/g)].map((m) => Number(m[0].replace(/[$\s]/g, '')));
+      // The x402 bundle's per-call equivalent is allowed where the line says so.
+      const bundlePerCall = railPrices().rpc_x402_bundle.price_usd_per_call;
+      const off = nums.filter((n) => n !== want && !(n === bundlePerCall && /x402|bundle/i.test(line)));
       return off.length ? `per-call ${off.join(', ')} ≠ ${want}` : null;
     });
     assert.deepEqual(bad, [], 'RPC price drift');
