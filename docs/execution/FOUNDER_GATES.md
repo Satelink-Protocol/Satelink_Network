@@ -138,7 +138,7 @@ Also: admin revenue sums ignore `is_billable` (includes WS storm rows and negati
 | FG-PRICE-PACKS | DECISION | pack bonuses: catalog none vs §1 +5 % / +10 % |
 | FG-INR | DECISION | `inr_price` values (all null) |
 | FG-SUBS | GATED | SATELINK_SUBSCRIPTIONS_ENABLED |
-| FG-PLANV2 | GATED | PLAN_BILLING_V2_ENABLED |
+| FG-PLANV2 | GATED | SATELINK_PLAN_BILLING_V2_ENABLED (code name) |
 | FG-USAGEV2 | GATED | SATELINK_USAGE_LIMITS_V2_ENABLED (code name; contract says USAGE_LIMITS_V2) |
 | FG-LEGACYSUB | GATED | DODO_LEGACY_SUB_BUCKET_ENABLED |
 | FG-SETTLE | GATED | SETTLEMENT_DRY_RUN stays 1 (external metered revenue $0.20 < $0.50) |
@@ -203,10 +203,10 @@ Also: admin revenue sums ignore `is_billable` (includes WS storm rows and negati
 
 ## Still-gated flags — exact commands (not executed)
 Order (after FG-FLAG verified): FG-SUBS → FG-DODO-WEBHOOK → FG-PLANV2 → FG-USAGEV2 → FG-LEGACYSUB.
-- `railway variables --service Satelink-api --set SATELINK_SUBSCRIPTIONS_ENABLED=true` → verify `POST /webhooks/dodo/v2` unsigned ≠ 404 (expect 400/401).
+- `railway variables --service Satelink-api --set SATELINK_SUBSCRIPTIONS_ENABLED=true` → verify `POST /webhooks/dodo/v2` unsigned ≠ 404 (expect 401 `bad_signature`).
 - Dodo dashboard (TEST) → Webhooks → add `https://api.satelink.network/webhooks/dodo/v2`; copy signing secret →
   `railway variables --service Satelink-api --set DODO_WEBHOOK_SECRET=<paste>` (handler falls back to another var if unset — set explicitly).
-- `railway variables --service Satelink-api --set PLAN_BILLING_V2_ENABLED=true` → verify checkout returns a TEST checkout URL.
+- `railway variables --service Satelink-api --set SATELINK_PLAN_BILLING_V2_ENABLED=true` → verify checkout returns a TEST checkout URL.
 - `railway variables --service Satelink-api --set SATELINK_USAGE_LIMITS_V2_ENABLED=true` → verify a TI call writes a `pv2_usage_ledger` row.
 - `railway variables --service Satelink-api --set DODO_LEGACY_SUB_BUCKET_ENABLED=true` → verify RPC with a plan-only key still 402s.
 - Refund (after #438): `node apps/api/scripts/incidents/refund_rpc_failed_charges.mjs "<conn>" --apply` (founder keys only with `--include-founder`).

@@ -10,7 +10,7 @@ none of those values has been changed.
 | Rail | What it pays for | Asset / network | Balance it lands in | Status |
 |---|---|---|---|---|
 | USDT credits | RPC, Trading Intelligence | USDT on Polygon 137 → RevenueVaultV2 `0x577D…BaCEF` → DepositListener | `api_credits.credits_usdt` | LIVE |
-| x402 | RPC bundle, Trading Intelligence per call | USDC on Base `eip155:8453`, payTo `0x966E…7Ad4` (founder EOA — FG treasury) | bundle → `api_credits` alias key `x402_<wallet>` | LIVE |
+| x402 | RPC bundle (direct 402 challenge on `/rpc/polygon`); the bundle credits `api_credits`, which Trading Intelligence can then spend — TI has **no** x402 challenge of its own | USDC on Base `eip155:8453`, payTo `0x966E…7Ad4` (founder EOA — FG treasury) | bundle → `api_credits` alias key `x402_<wallet>` | LIVE |
 | Dodo (card / UPI, MoR) | **Trading Intelligence only** | Dodo Payments, TEST mode | legacy: `credits_usdt` ring-fenced by `dodo_funded_usdt` (PR #439); Pricing V2: `pv2_entitlements` / `pv2_pack_balances` | TEST |
 
 Boundary (catalog `boundary`): "Dodo-funded value (plan allowance, packs) is spendable on Trading Intelligence
@@ -22,7 +22,7 @@ only. RPC / x402 stay on the crypto rail (USDT credits)." Enforced in code at th
 |---|---|---|---|---|---|
 | RPC call (Polygon) | call | **$0.00003** | USDT credits | `/v1/pricing` `price_per_call_usdt`; `credit_service.mjs` `PRICE_PER_CALL_USDT` | LIVE |
 | RPC bundle | 1,000 calls | **$0.10** (= $0.0001/call, 3.33× the credits price) | x402 USDC | `/.well-known/x402`, `/.well-known/satelink.json` | LIVE |
-| Trading Intelligence request | request | **$0.01** = 10 UU | USDT credits · x402 · Dodo plan/pack UU | catalog `meters.intelligence_request`; `/.well-known/x402` "$0.01/call" | LIVE (x402/credits), TEST (Dodo) |
+| Trading Intelligence request | request | **$0.01** = 10 UU | api_credits (funded by USDT deposit or the x402 bundle) · Dodo plan/pack UU | catalog `meters.intelligence_request`; `/.well-known/x402` "$0.01/call" | LIVE (credits), TEST (Dodo) |
 | Usage Unit | UU | $0.001 list value | Dodo plans/packs | catalog `unit` | TEST |
 
 The two RPC prices are **different rail prices**, not the same product at two prices. Every surface must label
@@ -81,4 +81,5 @@ Next (C8): one CI test that fetches the catalog and asserts every row above rend
 | Result (`result` present) | 200 | yes |
 | Provider JSON-RPC error (revert, invalid params, method errors — `error` object in a 2xx body) | **200 with the JSON-RPC error body passed through** | **yes** |
 | Transport failure (connect/reset/DNS), timeout | 502/504 | no |
+| Provider rate limit (HTTP 429, JSON-RPC `-32005`, "rate limit" messages) | failover, then 502 | no |
 | Provider HTTP 5xx | 502 | no |

@@ -1,6 +1,6 @@
 # FG-TI-REGION — move ONLY the Trading Intelligence refresh worker out of the US
 
-Status: **PREPARED — founder gate, not executed.** Written 2026-09-28. Legal context: `docs/legal/MARKET_DATA_TERMS.md`.
+Status: **PREPARED — BLOCKED on counsel** (MARKET_DATA_TERMS.md question 5: is a non-US worker permissible, or circumvention?). Not executed. Written 2026-09-28. Legal context: `docs/legal/MARKET_DATA_TERMS.md`.
 
 ## Today (verified 2026-09-28, `railway status --json`)
 - Every Railway service is in **`us-west2`** (California): `Satelink-api`, `Postgres-iQeW`, `Redis`, `satelink-reconciler`, Paperclip.
@@ -41,7 +41,7 @@ No HTTP server, no scheduler, no settlement — nothing else from `server.js` bo
 3. Variables: `DATABASE_URL=${{Postgres-iQeW.DATABASE_URL}}` (private network — Railway private networking spans
    regions within a project environment; if it does not resolve, use `DATABASE_PUBLIC_URL`), plus any `INTEL_*` source
    keys the connectors read (copy by name from `Satelink-api`).
-4. Watch logs for `[Intel] refresh: N/4 metrics updated (binance:200/… bybit:200/…)`.
+4. Watch logs for `[Intel] refresh: N/4 metrics updated (…)` — per-venue status codes are informational; venues whose terms bar the use stay disabled until counsel answers (FG-TI-LEGAL).
 5. Then on the API: `railway variables --service Satelink-api --set INTEL_REFRESH_ENABLED=false` (restart) — exactly one
    writer. Rollback: set it back to `true` and stop the worker service.
 
