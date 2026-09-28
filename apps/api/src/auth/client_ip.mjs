@@ -5,9 +5,10 @@
 //      CONSOLE_S2S_SECRET (timing-safe), X-Satelink-End-User-Ip is the end
 //      user's IP as seen by the console on Vercel. Without the secret that
 //      header is ignored.
-//   2. Railway's edge strips client X-Forwarded-For; its FIRST value is the
-//      connecting peer (Railway staff, 2026-06-12). When that peer is a
-//      Cloudflare edge, CF-Connecting-IP carries the real client.
+//   2. Railway's edge strips client X-Forwarded-For and sets the connecting
+//      peer (Railway staff, 2026-06-12); a multi-value header is not trusted.
+//      When that peer is a Cloudflare edge, CF-Connecting-IP carries the
+//      real client.
 //   3. Otherwise the peer itself, then the socket address.
 // The result is written to X-Satelink-Client-Ip (any inbound value is
 // discarded first) and Better Auth reads only that header.
@@ -39,6 +40,20 @@ function clean(ip) {
   return net.isIP(v) ? v : null;
 }
 
+/** Rate-limit bucket for an IP: IPv4 as-is, IPv6 grouped by /64. */
+export function ipBucket(ip) {
+  const v = clean(ip);
+  if (!v || !net.isIPv6(v)) return v;
+  return expandV6(v.toLowerCase()).split(':').slice(0, 4).join(':') + '::/64';
+}
+
+function expandV6(a) {
+  const [l, r = ''] = a.split('::');
+  const L = l ? l.split(':') : [];
+  const R = r ? r.split(':') : [];
+  return [...L, ...Array(8 - L.length - R.length).fill('0'), ...R].map((g) => g.padStart(4, '0')).join(':');
+}
+
 export function isCloudflare(ip) {
   const v = clean(ip);
   if (!v) return false;
@@ -59,7 +74,10 @@ export function resolveClientIp(req) {
     const endUser = clean(h[END_USER_IP_HEADER]);
     if (endUser) return endUser;
   }
-  const peer = clean(String(h['x-forwarded-for'] || '').split(',')[0]);
+  // Exactly one value only (Better Auth's own rule): if Railway ever appends
+  // instead of stripping, a client-chosen first value must not win.
+  const xff = String(h['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean);
+  const peer = xff.length === 1 ? clean(xff[0]) : null;
   if (peer && isCloudflare(peer)) {
     const cf = clean(h['cf-connecting-ip']);
     if (cf) return cf;
