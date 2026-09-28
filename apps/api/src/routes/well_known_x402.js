@@ -20,12 +20,11 @@
 // acquire-credits pointer.
 
 import { Router } from 'express';
+import { railPrices, bundlePriceText } from '../pricing_v2/rails.mjs';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
 const X402_NETWORK = () => process.env.X402_NETWORK || 'eip155:8453';
 const X402_PAY_TO = () => process.env.X402_PAY_TO || '0x966E1Ae22996545015b1414B35234b10719d7Ad4';
-const BUNDLE_PRICE_USD = () => process.env.X402_BUNDLE_PRICE_USD || '0.10';
-const BUNDLE_CALLS = () => Number(process.env.X402_BUNDLE_CALLS || 1000);
 
 const INTELLIGENCE_ROUTES = [
   ['funding-rate-heatmap', 'Funding-rate heatmap across perp markets — derived analytics, not raw quotes.'],
@@ -38,6 +37,10 @@ function listing() {
   const base = API_BASE();
   const network = X402_NETWORK();
   const payTo = X402_PAY_TO();
+  // Prices from the PlanCatalog (railPrices; x402 env overrides honoured, as enforcement does).
+  const rails = railPrices();
+  const bundle = rails.rpc_x402_bundle;
+  const ti = rails.intelligence_credits;
   return {
     schema_version: '1.0',
     service: 'Satelink',
@@ -48,7 +51,10 @@ function listing() {
       {
         method: 'POST',
         resource: `${base}/rpc/polygon`,
-        price: `$${BUNDLE_PRICE_USD()} = ${BUNDLE_CALLS().toLocaleString('en-US')} calls`,
+        price: bundlePriceText(rails),
+        rail: 'x402',
+        x402_challenge: true,
+        status: bundle.status,
         description:
           'Polygon PoS (chain 137) JSON-RPC — the full standard method set (eth_call, eth_getBalance, ' +
           'eth_blockNumber, eth_getLogs, eth_getTransactionReceipt, eth_sendRawTransaction, and the rest).',
@@ -57,12 +63,17 @@ function listing() {
       ...INTELLIGENCE_ROUTES.map(([path, description]) => ({
         method: 'GET',
         resource: `${base}/v1/intelligence/${path}`,
-        price: '$0.01/call',
+        price: `$${ti.price_usd_per_request}/call`,
         description,
         live: true,
+        // C5: these routes are metered from api_credits — NOT an x402 challenge on this path.
+        rail: 'api_credits',
+        x402_challenge: false,
+        status: ti.status,
         note: 'Metered via api_credits (funded by the x402 bundle on /rpc/polygon or a USDT deposit) — not a direct x402 challenge on this path. Free discovery: GET /v1/intelligence.',
       })),
     ],
+    rails,
     manifest_url: `${base}/.well-known/satelink.json`,
     docs: 'https://docs.satelink.network',
   };
