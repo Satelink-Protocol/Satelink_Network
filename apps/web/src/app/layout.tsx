@@ -120,12 +120,12 @@ const RPC_PRODUCT_JSON_LD = {
   operatingSystem: "Any (HTTP API)",
   url: "https://rpc.satelink.network",
   description:
-    "Multi-chain JSON-RPC gateway (Polygon, Ethereum, Arbitrum, Base) metered at a flat $0.00003 USDT per call with a 500-calls/day free tier.",
+    "Multi-chain JSON-RPC gateway (Polygon, Ethereum, Arbitrum, Base) metered at a flat $0.00003 USDT per call from prepaid USDT credits, or $0.10 = 1,000 calls via x402 (USDC on Base). No free RPC tier.",
   offers: {
     "@type": "Offer",
     price: "0.00003",
     priceCurrency: "USD",
-    description: "Flat metered rate per RPC call, from the same one-time USD credit pack.",
+    description: "Flat metered rate per RPC call, paid from prepaid USDT credits (Polygon). Card/UPI plans and packs pay for Trading Intelligence only.",
   },
 };
 
