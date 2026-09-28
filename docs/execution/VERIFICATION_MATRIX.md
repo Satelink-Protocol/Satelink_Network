@@ -1,6 +1,6 @@
 # VERIFICATION_MATRIX
 
-Only PROD-VERIFIED counts toward completion. Completion now: 2 / 89 = 2.2% (B5, B4).
+Only PROD-VERIFIED counts toward completion. Completion now: 6 / 89 = 6.7% (updated 2026-09-28 06:20 IST).
 
 | ID | Requirement | UI | Backend | Data | Tests | PR | Deployed | Prod-verified | Evidence | Status | Blocker |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -9,35 +9,35 @@ Only PROD-VERIFIED counts toward completion. Completion now: 2 / 89 = 2.2% (B5, 
 | A3 | Railway `Satelink-api` serves `main` HEAD; migrations through latest applied (list proof). | | | | | | | | | IN PROGRESS | Railway == main; migrations 017–019 pending (FG-MIG) |
 | A4 | Flag inventory: exact names from code, where read (build/runtime), value per environment. | | | | | | | | | IN PROGRESS | names+read sites+values captured (EXECUTION_STATE) |
 | A5 | UI flags enabled in production after preview proof, rollback documented. |  |  |  |  |  |  |  | Railway+Vercel flipped 22:16Z; probes 404→401 / 404→403 | DEPLOYED | signed-in prod Playwright pass needs founder session |
-| A6 | Money flags prepared as FOUNDER-GATE with ordered commands and post-flip verification scri… | | | | | | | | | IN PROGRESS | commands drafted in FOUNDER_GATES |
-| B1 | `cloudflare_Example Usage` token: FOUNDER-GATE rotate → then delete variable → verify gone… | | | | | | | | | FOUNDER-GATE:FG-CF-TOKEN |  |
-| B2 | Exposed keys: rotate 3 funded first (FOUNDER-GATE), plan for remaining 48 active, redactio… | | | | | | | | | FOUNDER-GATE:FG-KEYROT |  |
+| A6 | Money flags prepared as FOUNDER-GATE with ordered commands and post-flip verification scri… |  | FOUNDER_GATES 2026-09-28 (code names verified) |  |  | #451 | 0187b45 |  | FOUNDER_GATES §money flags | FOUNDER-GATE:FG-SUBS/FG-PLANV2 | needs #449 merged + allowlist set |
+| B1 | `cloudflare_Example Usage` token: FOUNDER-GATE rotate → then delete variable → verify gone… |  | var absent on Satelink-api (exact-name lookup 2026-09-28) |  |  |  |  |  | CONFLICT_REGISTER C-18 | BLOCKED:founder to confirm old token revoked | old-token test impossible (no copy) |
+| B2 | Exposed keys: rotate 3 funded first (FOUNDER-GATE), plan for remaining 48 active, redactio… |  | 3 funded exposed keys = founder-owned (12, 29, 132); redaction dry-run 0 rows |  |  |  |  |  | evidence/funded-exposed-keys-2026-09-28.txt, redact-dryrun-2026-09-28.txt | FOUNDER-GATE:FG-KEYROT | founder rotates own keys; 1 external email notice drafted |
 | B3 | No full API key in any log path (code grep + prod log count proof). | | | | | | | | | NOT STARTED |  |
 | B4 | TI charge-after-success live; past failed-call refunds confirmed (amount + key count). |  |  |  |  |  |  |  | post-flip smoke: RPC charged once on success; TI 503 uncharged (evidence/smoke-postflip-2026-09-28.txt); #429+#438 | PROD-VERIFIED |  |
 | B5 | Refund ledger `kind` constraint fixed in production DB. |  |  |  |  |  |  |  | schema_migrations 19 + rolled-back refund insert (evidence/mig-017-019-after.txt); #430 merge 0547420 | PROD-VERIFIED |  |
 | B6 | Dodo-funded value cannot pay RPC/x402 (negative test in prod with test key). |  |  |  |  |  |  |  | #439 35cb2b5; column live | DEPLOYED | ring-fence backfill FG-DODO-FENCE |
 | B7 | Railway/Vercel env: list vars unread by code (names only) → removal proposals (gate). | | | | | | | | | NOT STARTED |  |
-| B8 | Triage the 286 GitHub security alerts: fix critical/high in production deps via PRs; docum… | | | | | | | | | NOT STARTED |  |
-| B9 | Alchemy key rotation status confirmed or gated. | | | | | | | | | NOT STARTED |  |
+| B8 | Triage the 286 GitHub security alerts: fix critical/high in production deps via PRs; docum… |  | deps: fast-uri, ip-address, nanoid, immutable; web mocha→dev |  | CI | #450 |  |  | docs/execution/SECURITY_ALERTS_TRIAGE_2026-09-28.md | IN PROGRESS | axios needs coordinated x402 upgrade (founder); CodeQL JS not running on main |
+| B9 | Alchemy key rotation status confirmed or gated. |  |  |  |  |  |  |  | FOUNDER_GATES FG-ALCHEMY | FOUNDER-GATE:FG-ALCHEMY | key in git history (pre-#357); dashboard check |
 | B10 | x402 payTo is a founder EOA → treasury decision gated; show clearly in admin Treasury. | | | | | | | | | NOT STARTED |  |
 | B11 | Admin routes: auth + role checks + rate limits + audit log on every mutation; CSRF where c… | | | | | | | | | NOT STARTED |  |
 | B12 | Webhooks: signature verification + idempotency keys on Dodo v2 and deposit crediting (test… | | | | | | | | | NOT STARTED |  |
-| C1 | `PRICING_TRUTH.md` + catalog as single source. |  |  |  |  |  |  |  | PRICING_TRUTH.md draft | IN PROGRESS | FG-PRICE-LAUNCH, FG-PRICE-PACKS |
-| C2 | Console Billing: Free/Launch/Pro/Max, monthly/yearly toggle, credit packs $10/$50/$200 wit… | | | | | | | | | NOT STARTED |  |
-| C3 | Free-tier contradiction resolved everywhere (UI, API gate, docs, well-known). |  |  |  |  |  |  |  | PRICING_TRUTH §5 | IN PROGRESS | surfaces not yet catalog-fed |
-| C4 | RPC per-rail prices labeled (USDT credits $0.00003/call vs x402 bundle $0.10/1,000 = $0.00… | | | | | | | | | NOT STARTED |  |
-| C5 | x402 page: rail/status per route truthful (TI routes shown as api_credits-metered, not x40… | | | | | | | | | NOT STARTED |  |
+| C1 | `PRICING_TRUTH.md` + catalog as single source. | catalog-fed (web/console) | catalog rails + railPrices() |  | catalog_consistency.test.js | #452 | 60e1eef | discovery 15/15 | PRICING_TRUTH.md + evidence: ~/satelink-private/evidence/live-consistency-postdeploy-2026-09-28.txt (15/15) | DEPLOYED | PRICING_TRUTH still DRAFT (INR values = FOUNDER) |
+| C2 | Console Billing: Free/Launch/Pro/Max, monthly/yearly toggle, credit packs $10/$50/$200 wit… | pack bonus labels | bonus_uu in catalog + ledger grant |  | pricing_v2 28 passing | #447 |  |  |  | IMPLEMENTED | FOUNDER-GATE:FG-PR-447 (money path) |
+| C3 | Free-tier contradiction resolved everywhere (UI, API gate, docs, well-known). | web JSON-LD fixed | /api/pricing free_tier null; docs example fixed |  | free-RPC-claim scan in CI | #452 | 60e1eef | satelink.network JSON-LD verified | curl satelink.network: "No free RPC tier", 0× "500-calls/day" | DEPLOYED | Mintlify docs publish not verified |
+| C4 | RPC per-rail prices labeled (USDT credits $0.00003/call vs x402 bundle $0.10/1,000 = $0.00… |  | rails labels in /v1/pricing, satelink.json, x402 |  | catalog_consistency.test.js | #452 | 60e1eef | yes | evidence: ~/satelink-private/evidence/live-consistency-postdeploy-2026-09-28.txt (15/15) | PROD-VERIFIED |  |
+| C5 | x402 page: rail/status per route truthful (TI routes shown as api_credits-metered, not x40… |  | x402 listing: rail + x402_challenge per route (TI = api_credits/false) |  | catalog_consistency.test.js | #452 | 60e1eef | yes | evidence: ~/satelink-private/evidence/live-consistency-postdeploy-2026-09-28.txt (15/15) | PROD-VERIFIED |  |
 | C6 | Dodo boundary enforced in code and stated in UI + docs + billing policy. |  |  |  |  |  |  |  | #439 | DEPLOYED |  |
 | C7 | INR display path ready (`inr_price`); values = FOUNDER-GATE. | | | | | | | | | NOT STARTED |  |
-| C8 | CI consistency test across all public surfaces. | | | | | | | | | NOT STARTED |  |
+| C8 | CI consistency test across all public surfaces. | web/console/docs copy scanned |  |  | catalog_consistency.test.js (8 cases) in CI | #452 | 60e1eef | yes | evidence: ~/satelink-private/evidence/live-consistency-postdeploy-2026-09-28.txt (15/15); caught 2 live drifts (JSON-LD free tier, /api/pricing per-method) | PROD-VERIFIED |  |
 | C9 | Balances shown per asset/rail with source, timestamp, reference — never a blended "credits… | | | | | | | | | NOT STARTED |  |
 | D1 | Overview passes the 10-second rule: balance per rail, plan + UU used vs session/weekly lim… | | | | | | | | | NOT STARTED |  |
 | D2 | Server-side account-linked keys (V2). Migration path for V1 cookie-connected keys. Header … | | | | | | | | | NOT STARTED |  |
 | D3 | Key lifecycle: create (secret shown once), label, environment, product scopes, revoke (ser… | | | | | | | | | NOT STARTED |  |
 | D4 | Agents as server-side entities: create, describe, bind key(s), pause/resume (enforced at g… | | | | | | | | | NOT STARTED |  |
-| D5 | Request log: reuse `revenue_events_v2`/usage tables if they hold per-call rows; otherwise … | | | | | | | | | NOT STARTED |  |
+| D5 | Request log: reuse `revenue_events_v2`/usage tables if they hold per-call rows; otherwise … | /requests V2 page | request_log (bounded, async, 14 d) + /v1/me/requests union | migration 020 (additive, pending) | request_log 24 + console_accounts 32 | #453 |  |  |  | TESTED | FOUNDER-GATE:#453 (touches /rpc hot path); then migration 020 |
 | D6 | Usage: per-product meters from Pricing V2 endpoints; 24h/7d/30d/90d/custom; requests, succ… | | | | | | | | | NOT STARTED |  |
-| D7 | Alerts: thresholds stored per account (usage 70/85/95/100%, monthly spend cap, error rate,… |  |  |  |  |  |  |  | #441 1bc4558; 17 api + 3 e2e tests | DEPLOYED | live only after FG-FLAG; error-rate not measured (D5) |
+| D7 | Alerts: thresholds stored per account (usage 70/85/95/100%, monthly spend cap, error rate,… |  | error_rate alert live in #453 |  | console_alerts 17 | #441, #453 | 1bc4558 |  |  | DEPLOYED | error-rate part in #453 |
 | D8 | Spend controls: monthly cap + credit auto-use toggle, enforced in the credit gate (FOUNDER… | | | | | | | | | NOT STARTED |  |
 | D9 | x402 per-wallet view: link a wallet to the account by signed message; show 402s issued vs … | | | | | | | | | NOT STARTED |  |
 | D10 | Trading Intelligence: playground works end to end with correct charging; server-side saved… |  |  |  |  |  |  |  |  | NOT STARTED | TI saved-queries page has no V2 branch |
@@ -64,7 +64,7 @@ Only PROD-VERIFIED counts toward completion. Completion now: 2 / 89 = 2.2% (B5, 
 | E14 | Machine-commerce health scorecard (Discovery, Auth, Payment, Execution, Metering, Settleme… | | | | | | | | | NOT STARTED |  |
 | E15 | `DATA_LINEAGE.md` complete for every E-tile. | | | | | | | | | NOT STARTED |  |
 | E16 | Legacy RPC/DePIN tabs preserved but re-homed under Infrastructure; nothing working deleted… | | | | | | | | | NOT STARTED |  |
-| F1 | `/.well-known/satelink.json` and `/.well-known/x402` match the catalog; no nonexistent end… | | | | | | | | | NOT STARTED |  |
+| F1 | `/.well-known/satelink.json` and `/.well-known/x402` match the catalog; no nonexistent end… |  | well-known read railPrices() |  | catalog_consistency.test.js | #452 | 60e1eef | yes | evidence: ~/satelink-private/evidence/live-consistency-postdeploy-2026-09-28.txt (15/15) | PROD-VERIFIED |  |
 | F2 | `/v1/pricing`, `/v1/capabilities`, `/v1/compare`, `/v1/machine/register`, `/v1/intelligenc… | | | | | | | | | NOT STARTED |  |
 | F3 | `docs.satelink.network` canonical; `satelink.network/docs*` → 308 to docs (path-preserving… | | | | | | | | | NOT STARTED |  |
 | F4 | Web copy: Machine Commerce positioning; LIVE/BETA/DRY-RUN/PLANNED labels; zero "guaranteed… | | | | | | | | | NOT STARTED |  |

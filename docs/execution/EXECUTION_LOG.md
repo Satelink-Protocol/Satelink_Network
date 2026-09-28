@@ -33,3 +33,13 @@
 - 20:40 Pre-flip smoke (founder keys): RPC charged once; TI 503 uncharged; unfunded 402. Found prod capacity path = 'new' (platform_flags) → #442. Found TI snapshots empty (0/4 refresh).
 - 20:45 #437 (cc6e0f4) and #440 (45dd274) merged.
 - 2026-09-28 03:46 IST CONSOLE_ACCOUNTS_V1 flipped: Railway (22:16Z, restart SUCCESS, /v1/me 404→401, schema created, no errors) → smoke pass → Vercel production env + deploy dpl_DFXLuWueftXjztdon4xobRu1Qa1U @ 4ca6b44 (me-migrate 404→403 bad_origin). Vercel API token had expired; refreshed via CLI.
+- 2026-09-28 04:31 IST resume; DATABASE_URL inherited (SET) → neutralised per command with `env -u`.
+- 04:35 headed Playwright opened at console sign-in (persistent profile outside repo); waiting for founder.
+- 04:40 D-5: `cloudflare_Example Usage` absent on Satelink-api; old-token test impossible. Redirect error exposed ADMIN_SECRET_TOKEN to transcript → FG-ADMIN-TOKEN-ROTATE.
+- 04:45 D-3 dry-run: key 132 only; founder-owned (evidence/key132-ownership-2026-09-28.txt). Apply blocked by classifier.
+- 04:55 #447 (D-2 pack bonuses), 05:00 #448 (D-4), 05:11 #449 (checkout allowlist) opened; CI green.
+- 05:05 Task 4: founder key 29 eth_blockNumber → 200, $0.00003, revenue_events_v2 row 2734806.
+- 05:25 #450 (deps high alerts) + SECURITY_ALERTS_TRIAGE; redaction dry-run 0/0.
+- 05:40 #451 docs (decisions, gates, legal, region plan) · #452 catalog single source; review APPROVE both after fixes.
+- 06:00 merged #451 (0187b45) + #452 (60e1eef); Railway SUCCESS; live consistency 15/15; web JSON-LD verified.
+- 06:10 #453 D5 request log + D7 error rate + /requests V2 (founder review: /rpc hot path).
