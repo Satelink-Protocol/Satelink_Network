@@ -25,13 +25,15 @@ function toCsv(head: string[], rows: (string | number | null)[][]) {
   return [head, ...rows].map((r) => r.map(esc).join(",")).join("\n");
 }
 
-export function DataFlow({ metrics, keys, plan }: { metrics: Metric[]; keys: KeyOpt[]; plan: AccountPlan | null }) {
-  const [step, setStep] = useState(0);
-  const [metric, setMetric] = useState<string>("");
+export function DataFlow({ metrics, keys, plan, initialMetric, initialSymbol }: { metrics: Metric[]; keys: KeyOpt[]; plan: AccountPlan | null; initialMetric?: string; initialSymbol?: string }) {
+  // A saved query opens straight on its run step (metric + market already chosen).
+  const preset = Boolean(initialMetric && initialSymbol && metrics.some((x) => x.metric === initialMetric));
+  const [step, setStep] = useState(preset ? 2 : 0);
+  const [metric, setMetric] = useState<string>(preset ? initialMetric! : "");
   const [universe, setUniverse] = useState<string[] | null>(null);
   const [uErr, setUErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [symbol, setSymbol] = useState<string>("");
+  const [symbol, setSymbol] = useState<string>(preset ? initialSymbol! : "");
   const [keyId, setKeyId] = useState<number | null>(keys[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);

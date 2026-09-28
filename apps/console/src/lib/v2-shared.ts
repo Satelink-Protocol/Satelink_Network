@@ -66,3 +66,5 @@ export type AlertsState = {
   rules: AlertRule[];
   history: AlertEvent[];
 };
+
+export type SavedQuery = { id: number; name: string; query: { kind?: string; metric?: string; symbol?: string }; createdAt: string };

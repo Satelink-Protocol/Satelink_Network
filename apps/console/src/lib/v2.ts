@@ -3,7 +3,7 @@
 // the console comes from one of these; failures render designed empty states.
 import { apiFetch } from "./api";
 import { me } from "./account";
-import type { AccountPlan, AlertsState, IntelCatalog, PlanCatalog, RequestLog, Spend, UsageSeries } from "./v2-shared";
+import type { AccountPlan, AlertsState, IntelCatalog, PlanCatalog, RequestLog, SavedQuery, Spend, UsageSeries } from "./v2-shared";
 import type { AccountKey, AccountSettings } from "./account-types";
 
 export * from "./v2-shared";
@@ -23,4 +23,5 @@ export const loadSpend = () => me<Spend>("/spend");
 export const loadUsage = (days = 30) => me<UsageSeries>(`/usage?days=${days}`);
 export const loadRequests = (qs = "limit=200") => me<RequestLog>(`/requests?${qs}`);
 export const loadAlerts = () => me<AlertsState>("/alerts");
+export const loadSavedQueries = () => me<SavedQuery[]>("/saved-queries");
 
