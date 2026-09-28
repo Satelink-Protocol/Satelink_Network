@@ -23,6 +23,9 @@
 //   rate limiting. Email is sent via Resend; if RESEND_API_KEY is absent, email
 //   flows are disabled with a clear error (never silently log-only, §6.2).
 
+import { CLIENT_IP_HEADER, identityClientIp } from './client_ip.mjs';
+import { SESSION_READ_PATHS, createSessionReadLimiter } from './session_read_limit.mjs';
+
 let _authInstance = null;
 let _nodeHandler = null;
 
@@ -59,6 +62,19 @@ async function sendEmailViaResend(to, subject, html) {
 }
 
 /** Build (and cache) the Better Auth instance. Returns null when disabled. */
+// Better Auth's per-IP limit (20/min) keys on X-Satelink-Client-Ip, set by
+// identityClientIp from trusted sources only (client_ip.mjs). The read-only
+// session endpoints are limited per SESSION instead (session_read_limit.mjs,
+// 300/min): the console calls them from shared Vercel IPs, and a per-IP limit
+// signed users out after ~11 calls/min (2026-09-28). Sign-in, sign-up, magic
+// link, 2FA and every write keep the per-IP limits below.
+export const RATE_LIMIT = {
+  enabled: true,
+  window: 60,
+  max: 20,
+  customRules: Object.fromEntries(SESSION_READ_PATHS.map((p) => [p, false])),
+};
+
 export async function getBetterAuth(pool) {
   if (!isBetterAuthEnabled()) return null;
   if (_authInstance) return _authInstance;
@@ -121,8 +137,10 @@ export async function getBetterAuth(pool) {
       // Sessions shared across *.satelink.network.
       crossSubDomainCookies: { enabled: true, domain: '.satelink.network' },
       defaultCookieAttributes: { sameSite: 'lax', secure: true },
+      // Only the header identityClientIp writes; never raw X-Forwarded-For.
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
-    rateLimit: { enabled: true, window: 60, max: 20 },
+    rateLimit: RATE_LIMIT,
   });
 
   return _authInstance;
@@ -136,10 +154,11 @@ export async function getBetterAuth(pool) {
  *  initializes on first request. */
 export function mountBetterAuth(app, pool, basePath = '/api/identity') {
   if (!isBetterAuthEnabled()) return false;
+  const sessionReadLimit = createSessionReadLimiter();
   // Express 5 (path-to-regexp v8) requires a NAMED wildcard — a bare `/*`
   // throws "Missing parameter name" and crashes createApp. `/*splat` matches
   // every sub-path under basePath, which is what Better Auth's node handler needs.
-  app.all(`${basePath}/*splat`, async (req, res, next) => {
+  app.all(`${basePath}/*splat`, identityClientIp, sessionReadLimit, async (req, res, next) => {
     try {
       if (!_nodeHandler) {
         const [{ toNodeHandler }, auth] = await Promise.all([
