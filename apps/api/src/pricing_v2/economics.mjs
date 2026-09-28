@@ -24,7 +24,8 @@ export function feeIndiaDomestic(priceUsd, { subscription }, fees) {
 }
 
 function cycleUu(item, c) {
-  if (item.grant_uu) return item.grant_uu;
+  // A pack's cost includes its bonus UU (founder D-2): the bonus is served too.
+  if (item.grant_uu) return item.grant_uu + (item.bonus_uu || 0);
   const ent = item.entitlement_plan ? c.plans.find((p) => p.id === item.entitlement_plan) : item;
   // A yearly plan's cycle is the year: its allowance over the longest year.
   return ent.allowance.weekly_uu * (item.interval === 'year' ? (c.economics.weeks_per_year_worst ?? 53) : c.economics.weeks_per_month_worst);

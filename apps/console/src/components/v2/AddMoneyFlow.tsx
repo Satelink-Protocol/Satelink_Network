@@ -104,7 +104,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
             <legend className="sr-only">Packs</legend>
             {catalog.packs.map((k) => (
               <Choice key={k.id} name="pack" value={k.id} checked={item === k.id} onChange={setItem}
-                title={`$${k.priceUsd}`} detail={`${k.grantUu.toLocaleString()} UU — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Not available to buy yet."}`} />
+                title={`$${k.priceUsd}`} detail={`${(k.totalUu ?? k.grantUu).toLocaleString()} UU${k.bonusUu ? ` (includes +${k.bonusPct}% bonus)` : ""} — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Not available to buy yet."}`} />
             ))}
           </fieldset>
           <div className="mt-6 flex justify-between">

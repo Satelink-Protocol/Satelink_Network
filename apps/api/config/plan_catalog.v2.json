@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-25.2",
+  "version": "2026-09-28.1",
   "unit": {
     "name": "Usage Unit",
     "symbol": "UU",
@@ -166,6 +166,7 @@
       "name": "Credit pack $10",
       "price_usd": 10,
       "grant_uu": 10000,
+      "bonus_uu": 0,
       "dodo": {
         "test": "pdt_0NoMEReibUHWGhnHdJBfK",
         "live": null
@@ -177,6 +178,7 @@
       "name": "Credit pack $50",
       "price_usd": 50,
       "grant_uu": 50000,
+      "bonus_uu": 2500,
       "dodo": {
         "test": "pdt_0NoMERgL454CfiHbnYgdh",
         "live": null
@@ -188,6 +190,7 @@
       "name": "Credit pack $200",
       "price_usd": 200,
       "grant_uu": 200000,
+      "bonus_uu": 20000,
       "dodo": {
         "test": "pdt_0NoMERhtlswnoRgwYjJ1f",
         "live": null

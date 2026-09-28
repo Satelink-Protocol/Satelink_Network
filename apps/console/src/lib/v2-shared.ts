@@ -13,7 +13,7 @@ export type PlanCatalog = {
     limits: { api_keys: number; machines: number };
     inrPrice: number | null; purchasable: boolean; economicsGate: "pass" | "fail";
   }[];
-  packs: { id: string; name: string; priceUsd: number; grantUu: number; tiRequests: number; inrPrice: number | null; purchasable: boolean }[];
+  packs: { id: string; name: string; priceUsd: number; grantUu: number; bonusUu?: number; bonusPct?: number; totalUu?: number; tiRequests: number; inrPrice: number | null; purchasable: boolean }[];
 };
 
 export type AccountPlan = {
