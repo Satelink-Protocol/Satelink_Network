@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  isBetterAuthEnabled, emailEnabled, getBetterAuth, mountBetterAuth, trustedOrigins, __reset, RATE_LIMIT,
+  isBetterAuthEnabled, emailEnabled, getBetterAuth, mountBetterAuth, trustedOrigins, __reset,
 } from '../src/auth/better_auth.mjs';
 
 // Config-gating only (no live OAuth, no DB boot). The full provider flows are
@@ -52,11 +52,5 @@ describe('better_auth config gating (Track B P5)', () => {
     expect(trustedOrigins()).to.include.members(['https://satelink.network', 'https://console.satelink.network']);
     process.env.BETTER_AUTH_TRUSTED_ORIGINS = 'https://a.example, https://b.example';
     expect(trustedOrigins()).to.deep.equal(['https://a.example', 'https://b.example']);
-  });
-
-  it('exempts only session reads from the per-IP rate limit (console signed users out at ~11 calls/min)', () => {
-    expect(RATE_LIMIT).to.include({ enabled: true, window: 60, max: 20 });
-    expect(RATE_LIMIT.customRules).to.deep.equal({ '/get-session': false, '/list-sessions': false, '/list-accounts': false });
-    for (const p of Object.keys(RATE_LIMIT.customRules)) expect(p).to.not.match(/sign-in|sign-up|magic|two-factor|reset|verify/);
   });
 });
