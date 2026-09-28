@@ -6,14 +6,17 @@ import { DataFlow } from "@/components/v2/DataFlow";
 
 export const metadata: Metadata = { title: "Get market data" };
 
-export default async function DataPage() {
+export default async function DataPage({ searchParams }: { searchParams: Promise<{ metric?: string; symbol?: string }> }) {
   if (!accountsEnabled()) redirect("/trading-intelligence");
+  const sp = await searchParams;
   const [catalog, keys, plan] = await Promise.all([loadIntelCatalog(), loadKeys(), loadPlan()]);
   return (
     <DataFlow
       metrics={catalog?.metrics ?? []}
       keys={keys.ok ? keys.data.filter((k) => k.status === "active" && !k.limits.paused && (!k.limits.scopes || k.limits.scopes.includes("intelligence"))).map((k) => ({ id: k.id, label: k.label, hint: k.hint, balanceUsdt: k.balanceUsdt })) : []}
       plan={plan.ok ? plan.data : null}
+      initialMetric={typeof sp.metric === "string" ? sp.metric.slice(0, 40) : undefined}
+      initialSymbol={typeof sp.symbol === "string" ? sp.symbol.slice(0, 20) : undefined}
     />
   );
 }
