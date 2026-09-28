@@ -213,3 +213,12 @@ Order (after FG-FLAG verified): FG-SUBS → FG-DODO-WEBHOOK → FG-PLANV2 → FG
 - Ring-fence (after #439 deploys): `node apps/api/scripts/incidents/backfill_dodo_ringfence.mjs "<conn>" --apply`.
 - Redaction: `node apps/api/scripts/incidents/redact_exposed_keys.mjs --apply` (dry-run first) — after FG-KEYROT.
 - Cloudflare: rotate token in dashboard → `railway variables --service Satelink-api --remove "cloudflare_Example Usage"` → verify absent via `railway variables --kv | cut -d= -f1`.
+
+### FG-TI-LEGAL (new, 2026-09-28 — decide before selling Trading Intelligence)
+`docs/legal/MARKET_DATA_TERMS.md` (for legal review — not legal advice): production TI refreshes from Binance, Bybit,
+**OKX** and Hyperliquid. OKX's API Agreement §9.4 (verified, 28 July 2026) prohibits using Market Data — including
+funding rate and open interest from **public endpoints** — to operate a "financial data aggregator … or analytics
+platform", and lists **India** as a restricted location. Bybit's API terms prohibit repackaging/reselling Service Data.
+Options: (a) counsel review before any paid TI sale (TI external revenue is $0 today); (b) restrict inputs to Hyperliquid
+until licences exist (code change, prepared on request); (c) pursue an OKX data licence. Region move (FG-TI-REGION)
+does **not** resolve this. Recommend (a)+(b).
