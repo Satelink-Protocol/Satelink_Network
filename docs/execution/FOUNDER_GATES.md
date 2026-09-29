@@ -129,7 +129,7 @@ Also: admin revenue sums ignore `is_billable` (includes WS storm rows and negati
 | FG-MIG-017-019 | **DONE 2026-09-27 13:39Z** — pre-approved shape (DROP CONSTRAINT re-added as superset); all conditions verified | — |
 | FG-PR-438 | **DONE** — merged 07e7cb2 (founder-approved), deployed | — |
 | FG-PR-439 | **DONE** — merged 35cb2b5 (founder-approved), deployed; column verified in prod | — |
-| FG-PR-442 | **REVIEW** — RPC preflight on the 'new' capacity path (regression from #438: unfunded/unknown keys reached upstream) | recommended before FG-FLAG (d) |
+| FG-PR-442 | **DONE** — merged 7a9c875 (founder), deployed | — |
 | FG-FLAG-CONSOLE_ACCOUNTS_V1 | **FLIPPED 2026-09-27 22:16Z** (founder go). Railway ✅ `/v1/me/*` 404→401; Vercel prod `dpl_DFXLuWueftXjztdon4xobRu1Qa1U` @ 4ca6b44 ✅ (`me-migrate` 404 `accounts_disabled` → 403 `bad_origin`); smoke ✅; signed-in prod check pending founder session | D2–D14 |
 | FG-RPC-REFUND | GATED | `refund_rpc_failed_charges.mjs --apply` (external $0; founder ≤ $0.00102) |
 | FG-DODO-FENCE | GATED | `backfill_dodo_ringfence.mjs --apply` after #439 deploys (key 132 → $19.98) |
@@ -196,6 +196,9 @@ Also: admin revenue sums ignore `is_billable` (includes WS storm rows and negati
 - (e) post-flip smoke (`evidence/smoke-postflip-2026-09-28.txt`, founder keys): RPC key 29 → 200, charged exactly
   $0.00003 (4.999250 → 4.999220) through the accounts deduction path + revenue row `rpc_7125e271…`; TI → 503
   warming_up, not charged; unfunded founder key 134 → 402. TI debit not demonstrable (0 snapshots) — accepted by "flip".
+  UPDATE 2026-09-27 22:45Z: after #445 (7b402f9) TI serves data (refresh `4/4 … binance:451/0 bybit:403/0 okx:200/5
+  hyperliquid:200/5`); founder key 29 TI call → 200, fresh, charged exactly $0.01 (4.999190 → 4.989190) + revenue row
+  `intelligence` 0.01. Condition (e) now fully met. #442 (7a9c875) deployed; RPC smoke re-passed.
 - Remaining for PROD-VERIFIED of D2–D14: one signed-in Playwright pass on console.satelink.network (needs a founder
   session). Rollback (pre-written, unused):
   Railway: `railway variables --service Satelink-api --set CONSOLE_ACCOUNTS_V1=false` (restart; read at call time).
