@@ -275,7 +275,9 @@ export function createRpcGateway(db) {
         // payment hold / no credits 402, daily limit 429) BEFORE any upstream
         // work. The binding, atomic charge — enforceCapacity, unchanged — runs
         // only AFTER the upstream call succeeded; an upstream failure (provider
-        // 5xx, JSON-RPC error, timeout, network error) returns 502 uncharged.
+        // 5xx, timeout, network error) returns 502 uncharged. A JSON-RPC error
+        // from the provider (revert, invalid params) is the answer to the call:
+        // it passes through as HTTP 200 and is charged (founder D-4).
         // If the charge is refused at that point (balance spent by a concurrent
         // call, an owner control such as a paused key), the caller gets that
         // denial and NOT the data.
@@ -476,8 +478,9 @@ export function createRpcGateway(db) {
 
             if (!(await chargeServedCall())) return;
 
-            // Cache set - fire and forget
-            if (isCacheable(method)) {
+            // Cache set - fire and forget. A JSON-RPC error body is never
+            // cached: it answers this call only (a revert can depend on state).
+            if (isCacheable(method) && !routeResult.rpcError) {
                 setCached(chain, method, params, routeResult.result).catch(() => {});
             }
 
@@ -496,7 +499,7 @@ export function createRpcGateway(db) {
             }).catch(() => {});
 
             const elapsed = Date.now() - startTime;
-            console.log(`[RPC Gateway] ${chain}/${method} → ${routeResult.provider} (${elapsed}ms)`);
+            console.log(`[RPC Gateway] ${chain}/${method} → ${routeResult.provider} (${elapsed}ms)${routeResult.rpcError ? ' [json-rpc error, charged]' : ''}`);
 
             res.status(200).json(routeResult.result);
         } catch (error) {

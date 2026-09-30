@@ -107,6 +107,27 @@ function sortProvidersByLatency(providersWithLatency) {
   });
 }
 
+// Founder D-4 (2026-09-28): a JSON-RPC error from the provider — a revert,
+// invalid params, an unknown method — is the answer to the caller's request,
+// not a provider failure. It passes through as HTTP 200 with the JSON-RPC
+// error body and is charged (the provider did the work). Only transport
+// failures, timeouts and provider 5xx (plus provider-side refusals: HTTP
+// 401/403/429 and JSON-RPC rate-limit errors) fail over and stay uncharged.
+const PROVIDER_SIDE_HTTP = new Set([401, 403, 408, 429]);
+const PROVIDER_SIDE_RPC_MESSAGE = /rate.?limit|too many requests|request limit|capacity exceeded|exceeded .*(quota|limit)|daily request count/i;
+
+/** A JSON-RPC error that belongs to the provider (capacity/quota), not to the call. */
+export function isProviderSideRpcError(error) {
+  if (!error || typeof error !== 'object') return false;
+  return error.code === -32005 || PROVIDER_SIDE_RPC_MESSAGE.test(String(error.message || ''));
+}
+
+/** A well-formed JSON-RPC 2.0 error response body. */
+function isJsonRpcErrorBody(body) {
+  return Boolean(body && typeof body === 'object' && body.jsonrpc === '2.0' && body.error
+    && typeof body.error === 'object' && Number.isInteger(body.error.code));
+}
+
 async function executeRpcCall(providerUrl, method, params, id) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -129,14 +150,22 @@ async function executeRpcCall(providerUrl, method, params, id) {
     clearTimeout(timeout);
     const latency = Date.now() - startTime;
 
-    if (!response.ok) {
+    if (response.status >= 500 || PROVIDER_SIDE_HTTP.has(response.status)) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const result = await response.json();
+    // Some providers answer a JSON-RPC error with HTTP 4xx; the body decides.
+    const result = await response.json().catch(() => null);
 
-    if (result.error) {
-      throw new Error(result.error.message || "RPC error");
+    if (isJsonRpcErrorBody(result)) {
+      if (isProviderSideRpcError(result.error)) {
+        throw new Error(result.error.message || "provider rate limit");
+      }
+      return { success: true, rpcError: true, result, latency };
+    }
+
+    if (!response.ok || !result || typeof result !== 'object' || !('result' in result)) {
+      throw new Error(response.ok ? "malformed JSON-RPC response" : `HTTP ${response.status}`);
     }
 
     return { success: true, result, latency };
@@ -214,7 +243,8 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
               result: result.data,
               provider: `node:${node.node_id}`,
               latency: result.latencyMs,
-              source: 'network_node'
+              source: 'network_node',
+              rpcError: Boolean(result.data && result.data.error)
             };
           }
 
@@ -290,7 +320,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
 
     attemptedProviders.push(provider.id);
 
-    const { success, result, error, latency } = await executeRpcCall(
+    const { success, result, error, latency, rpcError } = await executeRpcCall(
       provider.url,
       method,
       params,
@@ -312,6 +342,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
         result,
         provider: provider.id,
         latency,
+        rpcError: Boolean(rpcError),
       };
     }
 
@@ -330,7 +361,7 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
   if (emergencyUrl) {
     console.warn(`[RPC Router] Trying emergency fallback: ${emergencyUrl}`);
 
-    const { success, result, error, latency } = await executeRpcCall(
+    const { success, result, error, latency, rpcError } = await executeRpcCall(
       emergencyUrl,
       method,
       params,
@@ -344,7 +375,8 @@ export async function routeRpcRequest(chain, method, params, id, options = {}) {
         result,
         provider: 'emergency-fallback',
         latency,
-        source: 'emergency_fallback'
+        source: 'emergency_fallback',
+        rpcError: Boolean(rpcError)
       };
     }
 
