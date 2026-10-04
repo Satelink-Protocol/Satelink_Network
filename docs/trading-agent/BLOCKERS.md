@@ -54,6 +54,7 @@
 | 14 backtest + paper | #470 | B-06, B-07, B-09 | additive migration 024 on local ephemeral DBs only; simulated book only (no broker, no orders/fills/positions/ledger writes); job runner not scheduled; market data only through the Stage 11 entitlement-checked port (internal_use) |
 | 15 risk engine | #471 | B-06, B-07, B-02, B-08 | additive migration 025 on local ephemeral DBs only; pure checks + fail-closed wrapper; not mounted, nothing calls decide(); live and autonomous orders still impossible (LIVE_TRADING / AUTONOMOUS_MODE locked, check 3); admin role is asserted by the caller until staff auth exists (B-02) |
 | 16 mandates | #472 | B-06, B-07, B-02, B-08 | additive migration 026 on local ephemeral DBs only; existing login flows untouched (TOTP adapter uses only getSession/verifyTOTP on an existing 2FA session); not mounted; mode C refused while AUTONOMOUS_MODE is locked; HMAC attestation key is injected (KMS = B-08); admin revoke is caller-asserted (B-02) |
+| 17 OMS | (this PR) | B-06, B-07, B-08, B-09 | additive migration 027 on local ephemeral DBs only; no existing queue touched (reuses the 011 outbox pattern on trading_outbox); dispatcher and reconciler not scheduled; only MockBroker / test venues exist — no real broker adapter (B-08/B-09) |
 
 ## Open questions for the founder (no action taken)
 
