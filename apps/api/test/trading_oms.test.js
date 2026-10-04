@@ -229,6 +229,9 @@ describe('oms: dispatcher with MockBroker failure injection (brief §11)', () =>
       const evs = r.store.state.events.filter((e) => e.orderId === a.orderId).map((e) => e.toStatus);
       expect(evs.slice(0, 2)).to.deep.equal(['approved', 'submitted']); // write-ahead SENT before the call
       if (want !== S.REJECTED) expect((await m.getOrder('bka_0001', { clientOrderId: a.clientOrderId })).clientOrderId).to.equal(a.clientOrderId);
+      // regression (found by the Stage 19 receipt): a fill reported at submit must record its quantity
+      if (want === S.FILLED) expect((await orderOf(r, a.orderId)).filledQuantity).to.equal('0.001');
+      if (want === S.PARTIAL) expect((await orderOf(r, a.orderId)).filledQuantity).to.equal('0.0005');
     }
   });
 

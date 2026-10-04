@@ -95,7 +95,10 @@ describe('Stage 13 strategy store on 021 tables', () => {
     expect(ev.warmupBars).toBe(31);
 
     // tampering at rest is detected on read (superuser test DB; the app role has UPDATE revoked by 021)
+    await expect(pool.query(`UPDATE strategy_versions SET definition = jsonb_set(definition, '{risk,stopLossPct}', '"49"') WHERE id = $1`, [v2.id])).rejects.toThrow(/append-only/); // 029 guard
+    await pool.query(`ALTER TABLE strategy_versions DISABLE TRIGGER strategy_versions_append_only`); // simulate a superuser bypass
     await pool.query(`UPDATE strategy_versions SET definition = jsonb_set(definition, '{risk,stopLossPct}', '"49"') WHERE id = $1`, [v2.id]);
+    await pool.query(`ALTER TABLE strategy_versions ENABLE TRIGGER strategy_versions_append_only`);
     await expect(svc.getVersion(v2.id)).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 

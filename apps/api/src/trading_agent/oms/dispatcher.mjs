@@ -105,7 +105,15 @@ export class OrderDispatcher {
       return this.#onSubmitError(ev, order, adapter, ref, e);
     }
     this.#faults.crash('after_broker_call');
-    await applyBrokerSnapshot(this.#store, order, { ...result, filledQuantity: result.filledQuantity ?? null }, { actor: 'system:dispatcher', at: this.#now(), source: 'submit' });
+    // A submit result may report FILLED / PARTIAL without the filled quantity (Stage 10 SubmitResult has
+    // no such field). Recording the status alone would freeze a terminal order at filled_quantity 0
+    // (found by the Stage 19 trade receipt), so take the venue snapshot, which carries it.
+    let snap = { ...result, filledQuantity: result.filledQuantity ?? null };
+    if (snap.filledQuantity === null && (result.status === 'filled' || result.status === 'partially_filled')) {
+      const found = await this.#lookup(adapter, order, ref);
+      if (found.snapshot) snap = found.snapshot;
+    }
+    await applyBrokerSnapshot(this.#store, order, snap, { actor: 'system:dispatcher', at: this.#now(), source: 'submit' });
     this.#faults.crash('after_record_result');
     await this.#store.completeOutbox(ev.id, this.#now());
     return 'placed';
