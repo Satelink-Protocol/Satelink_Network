@@ -117,7 +117,9 @@ describe('027_oms', () => {
     // SKIP LOCKED lets a claimer come back empty while rows are locked; drain the rest sequentially.
     for (let x = await dispatcher().runOnce(); x !== null; x = await dispatcher().runOnce()) outs.push(x);
     expect(outs.filter((x) => x === 'placed')).toHaveLength(6);
-    expect(outs.filter((x) => x !== null && x !== 'placed').every((x) => x === 'noop' || x === 'concurrent')).toBe(true); // duplicate events: idempotent
+    // A loser holding a duplicate event may legitimately no-op, lose the CAS, find the order via the
+    // venue (reconciled) or wait out the not-found grace while it is in flight — never send.
+    expect(outs.filter((x) => x !== null && x !== 'placed').every((x) => ['noop', 'concurrent', 'reconciled', 'awaiting_grace'].includes(x))).toBe(true);
     const st = (await pool.query(`SELECT status, dispatch_count FROM orders WHERE id = ANY($1)`, [ids])).rows;
     expect(st.every((r) => r.status === 'acknowledged' && r.dispatch_count === 1)).toBe(true);
     for (const id of ids) {
