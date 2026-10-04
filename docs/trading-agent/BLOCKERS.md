@@ -51,6 +51,7 @@
 | 11 market data | #466 | B-09, B-06 | public-endpoint provider injected, not wired; entitlements deny by default; no prod Redis |
 | 12 agent tool layer | #467 | B-04, B-02 | propose-only tools; not mounted; the existing AI gateway is untouched; proposal review UI not built (B-02) |
 | 13 strategy DSL | #469 | B-06, B-09, B-07 | pure validator/hasher/evaluator; no migration (uses 021 tables); not mounted; LIVE_SMALL/LIVE unreachable (LIVE_TRADING locked); no venue access |
+| 14 backtest + paper | (this PR) | B-06, B-07, B-09 | additive migration 024 on local ephemeral DBs only; simulated book only (no broker, no orders/fills/positions/ledger writes); job runner not scheduled; market data only through the Stage 11 entitlement-checked port (internal_use) |
 
 ## Open questions for the founder (no action taken)
 

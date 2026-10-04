@@ -21,6 +21,8 @@ import { applyMigrationsForTest } from './apply-migrations.js';
 const HERE = import.meta.dirname ?? new URL('.', import.meta.url).pathname;
 const MIGRATIONS_DIR = resolve(HERE, '..', 'migrations');
 const DOWN_SQL = readFileSync(resolve(HERE, '..', 'migrations-down', '021_trading_foundation.down.sql'), 'utf8');
+// Later migrations with FKs into 021 tables; rolled back first, newest first (reverse order).
+const DEPENDENT_DOWNS = ['024_backtests'].map((m) => ({ name: `${m}.sql`, sql: readFileSync(resolve(HERE, '..', 'migrations-down', `${m}.down.sql`), 'utf8') }));
 
 const TRADING_TABLES = [
   'broker_accounts', 'broker_credentials_metadata', 'broker_credential_ciphertexts', 'strategies',
@@ -135,6 +137,7 @@ describe('021_trading_foundation up/down', () => {
   it('down: drops only the 14 trading tables and its schema_migrations row; up re-applies', async () => {
     const c = new Client({ connectionString: conn });
     await c.connect();
+    for (const d of DEPENDENT_DOWNS) await c.query(d.sql);
     const before = await c.query(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`);
     await c.query(DOWN_SQL);
     const after = await c.query(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`);
@@ -147,7 +150,7 @@ describe('021_trading_foundation up/down', () => {
 
     const again = await migrate(conn, MIGRATIONS_DIR);
     expect(again.errors).toHaveLength(0);
-    expect(again.applied).toEqual(['021_trading_foundation.sql']);
+    expect(again.applied).toEqual(['021_trading_foundation.sql', ...DEPENDENT_DOWNS.map((d) => d.name)]);
     expect(await tables(conn)).toEqual([...TRADING_TABLES].sort());
   });
 });
