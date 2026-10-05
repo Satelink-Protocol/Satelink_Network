@@ -6,12 +6,15 @@ import { getSession } from "@/lib/session";
 import { accountsEnabled } from "@/lib/account";
 import { loadSettings } from "@/lib/v2";
 import { loadOnboarding, onboardingEnabled } from "@/lib/onboarding-server";
+import { agentIaEnabled, isRevenueAdmin } from "@/lib/trading/flags";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
   const jar = await cookies();
   const theme = jar.get("slc_theme")?.value === "light" ? "light" : "dark";
+  // Stage 25: agent-first navigation only when CONSOLE_AGENT_IA=true (off ⇒ unchanged console).
+  const agentIa = agentIaEnabled() ? { revenueAdmin: isRevenueAdmin(session.user.id) } : null;
   if (accountsEnabled()) {
     if (onboardingEnabled()) {
       // First run: finish onboarding (consents, plan, spend protection) before
@@ -24,7 +27,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     const settings = cookieMode === "simple" || cookieMode === "advanced" ? null : await loadSettings();
     const mode = cookieMode === "simple" || cookieMode === "advanced" ? cookieMode : settings?.ok ? settings.data.defaultMode : "simple";
     return (
-      <Shell mode={mode} user={{ name: session.user.name, email: session.user.email }} keys={[]} activeFp={null} theme={theme}>
+      <Shell mode={mode} user={{ name: session.user.name, email: session.user.email }} keys={[]} activeFp={null} theme={theme} agentIa={agentIa}>
         {children}
       </Shell>
     );
@@ -37,6 +40,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
       keys={keys.map((k) => ({ fp: fingerprint(k.k), label: k.label }))}
       activeFp={active ? fingerprint(active.k) : null}
       theme={theme}
+      agentIa={agentIa}
     >
       {children}
     </Shell>

@@ -12,6 +12,8 @@ import { loadKey, series, windowSum } from "@/lib/data";
 import { date, int, shortHash, usd } from "@/lib/format";
 import { getActiveKey, getKeys } from "@/lib/keys";
 import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { agentIaEnabled } from "@/lib/trading/flags";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -19,6 +21,8 @@ const RANGES = ["1h", "24h", "7d", "30d", "90d"];
 
 export default async function Overview({ searchParams }: { searchParams?: Promise<{ range?: string; task?: string }> }) {
   const sp = searchParams ? await searchParams : undefined;
+  // Stage 25: with the agent-first console on, Home is /trading (this page is kept, not deleted).
+  if (agentIaEnabled()) redirect("/trading");
   if (accountsEnabled()) {
     const mode = await getMode();
     if (mode === "advanced") return <AdvancedDashboard range={RANGES.includes(String(sp?.range)) ? String(sp?.range) : "30d"} />;

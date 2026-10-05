@@ -4,9 +4,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, BarChart3, Bell, Bot, CreditCard, Home, KeyRound, LayoutDashboard, LineChart, Menu, MoreHorizontal, Moon, Search,
-  Server, Settings, Sun, Wallet, X, Zap,
+  Activity, BarChart3, Bell, Bot, Briefcase, CheckCheck, CreditCard, Home, KeyRound, Landmark, LayoutDashboard, LineChart, ListOrdered, Lock, Menu, MoreHorizontal, Moon, Search,
+  Server, Settings, Shield, Sun, Wallet, Workflow, X, Zap,
 } from "lucide-react";
+import { agentNav, AGENT_NAV_GROUPS, AGENT_TABS } from "@/lib/trading/nav";
+
+// Stage 25: icon names used by the agent-first nav config (src/lib/trading/nav.ts).
+const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  home: Home, bot: Bot, "line-chart": LineChart, workflow: Workflow, shield: Shield, landmark: Landmark, briefcase: Briefcase,
+  "list-ordered": ListOrdered, "check-check": CheckCheck, "bar-chart": BarChart3, activity: Activity, key: KeyRound, server: Server,
+  zap: Zap, "credit-card": CreditCard, lock: Lock, settings: Settings,
+};
 
 type NavItem = { href: string; label: string; key: string; icon: React.ComponentType<{ className?: string }>; group?: string };
 
@@ -62,10 +70,15 @@ type Props = {
   activeFp: string | null;
   theme: "dark" | "light";
   children: React.ReactNode;
+  /** Stage 25: agent-first IA (CONSOLE_AGENT_IA). null/undefined ⇒ today's navigation, unchanged. */
+  agentIa?: { revenueAdmin: boolean } | null;
 };
 
-export function Shell({ mode = null, user, keys, activeFp, theme: initialTheme, children }: Props) {
-  const nav = mode === "simple" ? SIMPLE_NAV : mode === "advanced" ? ADVANCED_NAV : NAV;
+export function Shell({ mode = null, user, keys, activeFp, theme: initialTheme, children, agentIa = null }: Props) {
+  const nav: NavItem[] = agentIa
+    ? agentNav(agentIa).map((i) => ({ href: i.href, label: i.label, key: i.key, icon: AGENT_ICONS[i.icon] ?? LayoutDashboard, group: i.group || undefined }))
+    : mode === "simple" ? SIMPLE_NAV : mode === "advanced" ? ADVANCED_NAV : NAV;
+  const tabs = agentIa ? AGENT_TABS.map((t) => ({ href: t.href, label: t.label, icon: AGENT_ICONS[t.icon] ?? LayoutDashboard })) : TABS;
   const pathname = usePathname();
   const router = useRouter();
   const [theme, setTheme] = useState(initialTheme);
@@ -124,8 +137,8 @@ export function Shell({ mode = null, user, keys, activeFp, theme: initialTheme, 
     return () => window.removeEventListener("keydown", onKey);
   }, [router, nav]);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
-  const groups = ["", "Products", "Account"];
+  const isActive = (href: string) => (href === "/" || href === "/trading" ? pathname === href : pathname === href || pathname.startsWith(href + "/"));
+  const groups: readonly string[] = agentIa ? AGENT_NAV_GROUPS : ["", "Products", "Account"];
 
   const sidebar = (
     <nav aria-label="Console" className="flex h-full flex-col gap-4 overflow-y-auto p-2">
@@ -203,7 +216,7 @@ export function Shell({ mode = null, user, keys, activeFp, theme: initialTheme, 
 
       {mode && (
         <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-sl-border bg-sl-bg-raised pb-[env(safe-area-inset-bottom)] md:hidden">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <Link key={t.href} href={t.href} aria-current={isActive(t.href) ? "page" : undefined}
               className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] ${isActive(t.href) ? "text-sl-accent" : "text-sl-text-muted"}`}>
               <t.icon aria-hidden className="size-5" />{t.label}
