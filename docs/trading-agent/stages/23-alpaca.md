@@ -1,6 +1,6 @@
 # Stage 23 — Alpaca Broker API foundation
 
-**Branch:** `trading-agent/stage-23-alpaca`, stacked on Stage 22 (#477).
+**Branch:** `trading-agent/stage-23-alpaca` (PR #478), stacked on Stage 22 (#477).
 
 **State recorded: ALPACA = IMPLEMENTED/TESTED only:**
 - the `ALPACA` flag stays OFF, and the adapter refuses to construct without it;
