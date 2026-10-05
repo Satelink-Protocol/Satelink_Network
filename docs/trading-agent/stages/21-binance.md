@@ -1,6 +1,6 @@
 # Stage 21 — Native Binance Spot adapter
 
-**Branch:** `trading-agent/stage-21-binance`, stacked on Stage 19 (#475). Stage 20 (revenue) is STOPPED awaiting a founder decision and has no branch.
+**Branch:** `trading-agent/stage-21-binance` (PR #476), stacked on Stage 19 (#475). Stage 20 (revenue) is STOPPED awaiting a founder decision and has no branch.
 
 **State recorded: BINANCE = IMPLEMENTED/TESTED only.**
 - The `BINANCE` flag stays OFF; the adapter refuses to construct without it.
