@@ -58,6 +58,7 @@
 | 18 portfolio + P&L | #474 | B-06, B-07, B-09 | additive migration 028 on local ephemeral DBs only; never writes the ledger (fills.ledger_txn_id NULL); not scheduled; broker positions only through an injected port (no real adapter); auto-pause uses the existing Stage 15 kill switch |
 | 19 audit trail | #475 | B-06, B-07 | additive migration 029 on local ephemeral DBs only; append-only via triggers (no role changed — REVOKE stays inert under the prod superuser, B-07 / S-12 still open); no log format or OTel dependency added; not mounted |
 | 21 Binance Spot adapter | #476 | B-08, B-09 | no migration; not mounted; `BINANCE` flag OFF; Spot Testnet only — production refused (`LIVE_TRADING` locked); credentials only via the injected loader (testnet keys in the founder's shell, never committed); key check refuses transfer/withdraw-enabled or non-IP-restricted keys; rebate sources read-only (Stage 20 stopped). Stage 20 revenue: STOPPED, no row |
+| 22 Upstox COPILOT | #TBD | B-08, B-09, B-02 | no migration; not mounted; `UPSTOX_COPILOT` flag OFF; sandbox only — production refused (`LIVE_TRADING` locked); `UPSTOX_AUTOMATED` locked so no `X-Algo-Name`; LIMIT only with per-order human confirmation (port, B-02); static IP is per customer at Upstox, so production resolves to prepare-order only until a dedicated per-customer egress exists (B-08); tokens sealed with an injected keyring, never persisted |
 
 ## Open questions for the founder (no action taken)
 
