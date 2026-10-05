@@ -10,7 +10,8 @@
         "lint": "echo Skipped",
         "test": "vitest",
         "test:run": "vitest run",
-        "e2e": "playwright test"
+        "e2e": "playwright test",
+        "lint:claims": "node scripts/claims-lint.mjs"
     },
     "dependencies": {
         "@base-org/account": "^2.5.6",
