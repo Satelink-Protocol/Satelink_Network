@@ -48,6 +48,8 @@ Per the standing instruction (*"Do not silently treat them as solved. Continue b
 
 A test asserts `app_factory.mjs` and `server.js` still don't reference `trading_agent`. Registering is a founder decision. Either resolve B-03/B-06/B-10, or accept a recorded exception and change the register; then add the line in a separate change.
 
+**Founder decision (2026-10-06): Option A, keep it unregistered.** The API stays out of `app_factory.mjs` / `server.js` until B-03, B-06 and B-10 are resolved. No exception was recorded, and the register and its CI test are unchanged.
+
 ## Design
 
 **Flags.** `TRADING_AGENT` gates the whole router, and the check runs **per request**: flag off means every route is **404**, even unauthenticated, with the same body as an unknown path. `/mcp` additionally needs `MCP_TRADING`.
@@ -136,7 +138,7 @@ No blocker changes status. The Stage 24 row is added to the acceptance log in `d
 
 ## Follow-ups (not in this stage)
 
-- **Founder decision: registration.** Add `mountTradingRoutes(app, { env, api })` to `app_factory.mjs`, before the `/v1` ai-gateway, once B-03/B-06/B-10 allow it (or an exception is recorded and the register test updated).
+- **Registration (decided 2026-10-06: wait).** Add `mountTradingRoutes(app, { env, api })` to `app_factory.mjs`, before the `/v1` ai-gateway, only after B-03, B-06 and B-10 are resolved.
 - **Durable idempotency store:** a Postgres-backed one; this stage adds no table.
 - **Order listing** by principal (an OMS read model).
 - **The proposal review queue and approval UI (B-02).** `approve` should run Stage 17 acceptance with `origin: 'agent'`, `approvedBy` set to the human, after step-up.
