@@ -1,8 +1,8 @@
 // Trading agent module (Stage 09 foundation). See ./README.md.
 //
-// NOT MOUNTED: apps/api/app_factory.mjs does not import this module. A later
-// stage wires it in by calling mountTradingRoutes(app, deps), which is itself a
-// no-op unless TRADING_FLAG_TRADING_AGENT === 'true'. Nothing here touches the
+// NOT MOUNTED: apps/api/app_factory.mjs does not import this module (B-03/B-06/B-10; the
+// register test enforces it). The registration, when approved, is mountTradingRoutes(app,
+// { env, api }), itself a no-op unless TRADING_FLAG_TRADING_AGENT === 'true'. Nothing here touches the
 // RPC, billing, ledger or settlement paths.
 import { Router } from 'express';
 import { isTradingFlagEnabled, tradingFlagSnapshot, TRADING_FLAGS, LOCKED_TRADING_FLAGS } from './flags.mjs';
@@ -17,6 +17,7 @@ import * as execution from './execution/index.mjs';
 import * as positions from './positions/index.mjs';
 import * as outbox from './outbox/index.mjs';
 import * as audit from './audit/index.mjs';
+import { createTradingApiRouter } from './api/router.mjs';
 
 export { isTradingFlagEnabled, tradingFlagSnapshot, TRADING_FLAGS, LOCKED_TRADING_FLAGS };
 
@@ -45,10 +46,12 @@ export function createTradingRouter({ env = process.env } = {}) {
  * Mount the trading routes only when TRADING_AGENT is enabled.
  * @returns {{mounted: boolean, reason?: string}}
  */
-export function mountTradingRoutes(app, { env = process.env } = {}) {
+export function mountTradingRoutes(app, { env = process.env, api = null } = {}) {
   if (!isTradingFlagEnabled('TRADING_AGENT', env)) {
     return { mounted: false, reason: 'TRADING_AGENT flag is off' };
   }
-  app.use(TRADING_MOUNT_PATH, createTradingRouter({ env }));
+  // Stage 24: with `api` deps (resolvePrincipal, services, stepUp, …) the full /v1/trading API is
+  // mounted; it also re-checks the flag per request, so turning it off later yields 404.
+  app.use(TRADING_MOUNT_PATH, api ? createTradingApiRouter({ ...api, env }) : createTradingRouter({ env }));
   return { mounted: true };
 }
