@@ -1,6 +1,6 @@
 # Stage 24 — Trading agent API (/v1/trading) + MCP
 
-**Branch:** `trading-agent/stage-24-api`, stacked on Stage 23 (#478).
+**Branch:** `trading-agent/stage-24-api` (PR #479), stacked on Stage 23 (#478).
 
 **State:** the API, the MCP endpoint and the OpenAPI file are **built and tested, but NOT registered** in `app_factory.mjs` (see "Registration" below).
 
