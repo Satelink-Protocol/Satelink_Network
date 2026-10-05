@@ -1,6 +1,6 @@
 # Stage 25 — Agent-first console
 
-**Branch:** `trading-agent/stage-25-console`, stacked on Stage 24 (#479).
+**Branch:** `trading-agent/stage-25-console` (PR #480), stacked on Stage 24 (#479).
 
 **State:** built and tested behind **`CONSOLE_AGENT_IA`** (default off; off ⇒ today's console, unchanged).
 
