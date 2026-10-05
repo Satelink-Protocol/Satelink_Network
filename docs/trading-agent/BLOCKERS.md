@@ -39,7 +39,7 @@
 | Automated Upstox orders: `UPSTOX_AUTOMATED` | B-08, B-09 | same |
 | Mounting any trading route or importing `trading_agent` from `app_factory.mjs` / `server.js` | B-03, B-06, B-10 | register test (static check) |
 | Merging `trading-agent/integration` → `main` (= production deploy) | B-01, B-03, B-06, B-10 | process: every PR in the chain targets integration; founder merge only |
-| Real broker adapters / credential ciphertext writes | B-08, B-09 | Stage 10 exposes only an injected credential loader + mock broker; Stage 12 boundary lint |
+| Real broker adapters / credential ciphertext writes | B-08, B-09 | Stage 10 exposes only an injected credential loader; Stage 12 boundary lint. Stage 21's Binance adapter is testnet-only: it refuses to construct with the `BINANCE` flag OFF, refuses production while `LIVE_TRADING` is LOCKED, holds no credential material and writes no ciphertext (adapter tests) |
 | Human approval UI for agent proposals | B-02 | not built; the proposal sink stays a port |
 
 ## Founder acceptance log (isolated build only; no status change)
@@ -57,6 +57,7 @@
 | 17 OMS | #473 | B-06, B-07, B-08, B-09 | additive migration 027 on local ephemeral DBs only; no existing queue touched (reuses the 011 outbox pattern on trading_outbox); dispatcher and reconciler not scheduled; only MockBroker / test venues exist — no real broker adapter (B-08/B-09) |
 | 18 portfolio + P&L | #474 | B-06, B-07, B-09 | additive migration 028 on local ephemeral DBs only; never writes the ledger (fills.ledger_txn_id NULL); not scheduled; broker positions only through an injected port (no real adapter); auto-pause uses the existing Stage 15 kill switch |
 | 19 audit trail | #475 | B-06, B-07 | additive migration 029 on local ephemeral DBs only; append-only via triggers (no role changed — REVOKE stays inert under the prod superuser, B-07 / S-12 still open); no log format or OTel dependency added; not mounted |
+| 21 Binance Spot adapter | #TBD | B-08, B-09 | no migration; not mounted; `BINANCE` flag OFF; Spot Testnet only — production refused (`LIVE_TRADING` locked); credentials only via the injected loader (testnet keys in the founder's shell, never committed); key check refuses transfer/withdraw-enabled or non-IP-restricted keys; rebate sources read-only (Stage 20 stopped). Stage 20 revenue: STOPPED, no row |
 
 ## Open questions for the founder (no action taken)
 

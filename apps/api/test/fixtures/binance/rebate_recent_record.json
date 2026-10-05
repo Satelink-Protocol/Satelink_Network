@@ -1,0 +1,3 @@
+[{"subaccountId":"1001","income":"0.00102000","asset":"USDT","symbol":"BTCUSDT","tradeId":1739,"time":1759654800000,"status":1},
+ {"subaccountId":"1001","income":"0.50000000","asset":"BNB","symbol":"BNBUSDT","tradeId":1740,"time":1759654900000,"status":0},
+ {"subaccountId":"1002","income":"0.00000100","asset":"BTC","symbol":"BTCUSDT","tradeId":1741,"time":1759655000000,"status":2}]
