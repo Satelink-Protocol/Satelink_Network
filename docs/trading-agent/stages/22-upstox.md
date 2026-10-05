@@ -1,6 +1,6 @@
 # Stage 22 — Upstox COPILOT foundation
 
-**Branch:** `trading-agent/stage-22-upstox`, stacked on Stage 21 (#476).
+**Branch:** `trading-agent/stage-22-upstox` (PR #477), stacked on Stage 21 (#476).
 
 **State recorded: UPSTOX = IMPLEMENTED/TESTED** (COPILOT only):
 - `UPSTOX_COPILOT` stays OFF, and the adapter refuses to construct without it;
