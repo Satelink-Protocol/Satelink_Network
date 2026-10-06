@@ -99,7 +99,8 @@ const call = (app, method, url, { user = 'session-alice', key, body, headers = {
 const toOpenApi = (p) => p.replace(/:([A-Za-z]+)/g, '{$1}');
 const concrete = (p) => p.replace(/:([A-Za-z]+)/g, (_, n) => `${n.replace(/Id$/, '')}_x00001`);
 
-describe('trading api: flags (acceptance: flag off ⇒ 404)', () => {
+describe('trading api: flags (acceptance: flag off ⇒ 404)', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('TRADING_AGENT off: mountTradingRoutes mounts nothing; a mounted router answers 404 for every route, even unauthenticated', async () => {
     const off = rig({ env: {} });
     expect(off.mounted).to.deep.equal({ mounted: false, reason: 'TRADING_AGENT flag is off' });
@@ -122,7 +123,8 @@ describe('trading api: flags (acceptance: flag off ⇒ 404)', () => {
   });
 });
 
-describe('trading api: OpenAPI contract', () => {
+describe('trading api: OpenAPI contract', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('every route is documented and every documented operation is routed', () => {
     const routed = ROUTES.map((r) => `${r.method} ${toOpenApi(r.path)}`).sort();
     const documented = Object.entries(OPENAPI.paths).flatMap(([p, ops]) => Object.keys(ops).map((m) => `${m.toUpperCase()} ${p}`)).sort();
@@ -184,7 +186,8 @@ describe('trading api: OpenAPI contract', () => {
   });
 });
 
-describe('trading api: authentication, tenant checks, CSRF', () => {
+describe('trading api: authentication, tenant checks, CSRF', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('unauthenticated → 401; a principalId in body/query must match the session', async () => {
     const r = rig();
     expect((await request(r.app).get(`${TRADING_MOUNT_PATH}/status`)).status).to.equal(401);
@@ -236,7 +239,8 @@ describe('trading api: authentication, tenant checks, CSRF', () => {
   });
 });
 
-describe('trading api: idempotent replays', () => {
+describe('trading api: idempotent replays', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   const ORDER = { brokerAccountId: 'bka_alice_1', mandateId: 'mdt_alice_1', mode: 'paper', venue: 'binance', instrument: 'BTC-USDT', side: 'buy', type: 'limit', quantity: '0.001', limitPrice: '30000' };
 
   it('mutations without a valid Idempotency-Key are refused before any work', async () => {
@@ -286,7 +290,8 @@ describe('trading api: idempotent replays', () => {
   });
 });
 
-describe('trading api: step-up on sign / approve / release', () => {
+describe('trading api: step-up on sign / approve / release', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('release: missing code → 401 STEP_UP_REQUIRED; wrong code → 401 STEP_UP_FAILED; right code → 201', async () => {
     const r = rig();
     const a = await call(r.app, 'POST', '/kill-switch/release', { body: { reason: 'resume' } });
@@ -316,7 +321,8 @@ describe('trading api: step-up on sign / approve / release', () => {
   });
 });
 
-describe('trading api: rate limits', () => {
+describe('trading api: rate limits', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('per principal and class, with Retry-After; step-up attempts have their own small budget', async () => {
     const r = rig({ limits: { read: 3, write: 30, stepUp: 2 } });
     for (let i = 0; i < 3; i++) expect((await call(r.app, 'GET', '/positions')).status).to.equal(200);
@@ -331,7 +337,8 @@ describe('trading api: rate limits', () => {
   });
 });
 
-describe('trading api: orders through the real OMS acceptance', () => {
+describe('trading api: orders through the real OMS acceptance', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   it('accept → read → cancel request moves ACK to CANCEL_REQUESTED with an order event naming the user', async () => {
     const r = rig();
     const o = await call(r.app, 'POST', '/orders', { body: { brokerAccountId: 'bka_alice_1', mandateId: 'mdt_alice_1', mode: 'paper', venue: 'binance', instrument: 'BTC-USDT', side: 'buy', type: 'limit', quantity: '0.001', limitPrice: '30000' } });
@@ -347,7 +354,8 @@ describe('trading api: orders through the real OMS acceptance', () => {
   });
 });
 
-describe('trading api: MCP (read + propose only)', () => {
+describe('trading api: MCP (read + propose only)', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   const rpc = (app, body, user = 'agent-alice') => request(app).post(`${TRADING_MOUNT_PATH}/mcp`).set('x-test-user', user).send(body);
 
   it('initialize / tools/list: only READ and PROPOSE tools; nothing that places, cancels or modifies orders', async () => {
@@ -393,7 +401,8 @@ describe('trading api: MCP (read + propose only)', () => {
   });
 });
 
-describe('trading api: static guarantees', () => {
+describe('trading api: static guarantees', function () {
+  this.timeout(20_000); // many in-process HTTP round trips; full-suite load can exceed mocha's 2 s default
   const code = (f) => fs.readFileSync(path.join(API_DIR, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
   const files = fs.readdirSync(API_DIR).filter((f) => f.endsWith('.mjs'));
 

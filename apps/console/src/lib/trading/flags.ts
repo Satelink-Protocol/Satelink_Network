@@ -11,3 +11,8 @@ export function isRevenueAdmin(userId: string | null | undefined, env: Record<st
   const ids = (env.CONSOLE_REVENUE_ADMIN_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return ids.includes(userId);
 }
+
+/** Stage 29: trace-viewer URL template (server-side only), e.g. https://grafana…/explore?…{traceId}… */
+export function traceUrlTemplate(env: Record<string, string | undefined> = process.env): string | null {
+  return env.CONSOLE_TRACE_URL_TEMPLATE ?? null;
+}

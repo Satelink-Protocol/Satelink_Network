@@ -5,12 +5,14 @@ import { ApiState, ModeBadge, OrderState, TradingDisclosure } from "@/components
 import { tradingGet } from "@/lib/trading/client";
 import { requireAgentIa } from "@/lib/trading/guard";
 import { receiptText, venueName } from "@/lib/trading/states";
+import { traceLink } from "@/lib/trading/trace";
+import { traceUrlTemplate } from "@/lib/trading/flags";
 import { requestCancel } from "../../actions";
 
 export const metadata: Metadata = { title: "Order" };
 
 type Order = { id: string; status: string; venue: string; mode: string; instrument: string; side: string; orderType: string; quantity: string; limitPrice: string | null; filledQuantity: string; avgFillPrice: string | null; clientOrderId: string; createdAt: number | string };
-type Receipt = { completeness?: { complete: boolean; missing: string[] }; ledger?: { note?: string } };
+type Receipt = { completeness?: { complete: boolean; missing: string[] }; ledger?: { note?: string }; traceparent?: string | null };
 
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ orderId: string }>; searchParams?: Promise<{ placed?: string; cancel?: string; error?: string }> }) {
   requireAgentIa();
@@ -46,6 +48,16 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <>
             <p><Badge tone={receiptText(receipt.data).complete ? "good" : "warn"}>{receiptText(receipt.data).text}</Badge></p>
             <p className="mt-1 text-sl-text-muted">Paper results are not added to your account statement.</p>
+            {(() => {
+              const t = traceLink(receipt.data.traceparent, traceUrlTemplate());
+              if (!t) return null;
+              return (
+                <p className="mt-1 text-sl-text-muted">
+                  Trace reference <span className="font-mono text-[11px]">{t.traceId}</span>
+                  {t.url && <> · <a className="text-sl-accent underline" href={t.url} rel="noopener noreferrer" target="_blank">Open the full trace</a></>}
+                </p>
+              );
+            })()}
           </>
         )}
       </Panel>
