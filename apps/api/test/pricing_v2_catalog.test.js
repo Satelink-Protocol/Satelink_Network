@@ -37,6 +37,30 @@ describe('Pricing V2 — PlanCatalog', () => {
     assert.match(errs, /duplicate/);
   });
 
+  it('credit packs carry the founder D-2 bonuses: $10 none, $50 +5 %, $200 +10 %', () => {
+    const pub = publicCatalog(loadCatalog(), { mode: 'test' });
+    const pk = Object.fromEntries(pub.packs.map((k) => [k.id, k]));
+    assert.deepEqual([pk.pack_10.bonusUu, pk.pack_10.bonusPct, pk.pack_10.totalUu], [0, 0, 10000]);
+    assert.deepEqual([pk.pack_50.bonusUu, pk.pack_50.bonusPct, pk.pack_50.totalUu], [2500, 5, 52500]);
+    assert.deepEqual([pk.pack_200.bonusUu, pk.pack_200.bonusPct, pk.pack_200.totalUu], [20000, 10, 220000]);
+    // Requests are counted on everything the pack credits (10 UU per TI request).
+    assert.equal(pk.pack_200.tiRequests, 22000);
+  });
+
+  it('rejects a negative or fractional bonus, and the bonus is costed in the economics gate', () => {
+    const c = structuredClone(loadCatalog());
+    c.packs[1].bonus_uu = -1;
+    c.packs[2].bonus_uu = 1.5;
+    const errs = validateCatalog(c).join(' | ');
+    assert.match(errs, /pack_50: bonus_uu/);
+    assert.match(errs, /pack_200: bonus_uu/);
+    const base = structuredClone(loadCatalog());
+    base.economics.marginal_cost_usd_per_uu = 0.0001; // non-zero so served UU has a cost
+    const withBonus = worstCase(base.packs[2], base).rows[0].worstContributionUsd;
+    base.packs[2].bonus_uu = 0;
+    assert.ok(worstCase(base.packs[2], base).rows[0].worstContributionUsd > withBonus, 'bonus UU must raise the worst-case cost');
+  });
+
   it('Launch is Pro with a paid first cycle — same allowance, $5 intro, $19 renewal', () => {
     const pub = publicCatalog(loadCatalog(), { mode: 'test' });
     const [launch, pro] = ['launch', 'pro'].map((id) => pub.plans.find((p) => p.id === id));

@@ -71,6 +71,7 @@ jobs:
           echo "Result: ok=$ok ($reason)"
 
       - name: Open / update / close the x402 incident issue
+        id: issue
         if: always()
         uses: actions/github-script@v7
         env:
@@ -98,6 +99,7 @@ jobs:
                   body: `Still failing at ${now}: ${reason}. ${runUrl}`,
                 });
               } else {
+                core.setOutput('transition', 'opened');
                 await github.rest.issues.create({
                   owner, repo,
                   title: '🔴 x402 402 challenge is not payable',
@@ -110,6 +112,7 @@ jobs:
                 });
               }
             } else if (existing) {
+              core.setOutput('transition', 'recovered');
               await github.rest.issues.createComment({
                 owner, repo, issue_number: existing.number,
                 body: `✅ Recovered at ${now}. Auto-closing.`,
@@ -118,6 +121,28 @@ jobs:
                 owner, repo, issue_number: existing.number, state: 'closed',
               });
             }
+
+      - name: Email on state change (Resend)
+        if: always() && steps.issue.outputs.transition != ''
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          TRANSITION: ${{ steps.issue.outputs.transition }}
+          CHECK: x402 challenge
+          DETAIL: ${{ steps.probe.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ] || [ -z "$ALERT_EMAIL_TO" ] || [ -z "$ALERT_EMAIL_FROM" ]; then
+            echo "::warning::Resend alert not configured (RESEND_API_KEY / ALERT_EMAIL_FROM / ALERT_EMAIL_TO)"; exit 0
+          fi
+          if [ "$TRANSITION" = "opened" ]; then subject="🔴 Satelink DOWN: $CHECK"; else subject="✅ Satelink recovered: $CHECK"; fi
+          body="$(jq -n --arg from "$ALERT_EMAIL_FROM" --arg to "$ALERT_EMAIL_TO" --arg subject "$subject" \
+            --arg text "$subject"$'\n\n'"$DETAIL"$'\n'"Run: $RUN_URL" '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          code="$(curl -sS -m 20 -o /dev/null -w '%{http_code}' https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -d "$body")"
+          echo "Resend HTTP $code"
+          [ "$code" = "200" ] || echo "::warning::Resend returned HTTP $code"
 
       - name: Fail the run if the challenge is not payable
         if: steps.probe.outputs.ok != 'true'
@@ -157,6 +182,7 @@ jobs:
           echo "Result: healthy=$healthy http=$code"
 
       - name: Open / update / close the incident issue
+        id: issue
         if: always()
         uses: actions/github-script@v7
         env:
@@ -184,6 +210,7 @@ jobs:
                   body: `Still DOWN at ${now} (HTTP ${code}). ${runUrl}`,
                 });
               } else {
+                core.setOutput('transition', 'opened');
                 await github.rest.issues.create({
                   owner, repo,
                   title: '🔴 Satelink /health is DOWN',
@@ -197,6 +224,7 @@ jobs:
                 });
               }
             } else if (existing) {
+              core.setOutput('transition', 'recovered');
               await github.rest.issues.createComment({
                 owner, repo, issue_number: existing.number,
                 body: `✅ Recovered at ${now} (HTTP ${code}). Auto-closing.`,
@@ -206,8 +234,119 @@ jobs:
               });
             }
 
+      - name: Email on state change (Resend)
+        if: always() && steps.issue.outputs.transition != ''
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          TRANSITION: ${{ steps.issue.outputs.transition }}
+          CHECK: reconciler /readyz (DB)
+          DETAIL: HTTP ${{ steps.probe.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ] || [ -z "$ALERT_EMAIL_TO" ] || [ -z "$ALERT_EMAIL_FROM" ]; then
+            echo "::warning::Resend alert not configured (RESEND_API_KEY / ALERT_EMAIL_FROM / ALERT_EMAIL_TO)"; exit 0
+          fi
+          if [ "$TRANSITION" = "opened" ]; then subject="🔴 Satelink DOWN: $CHECK"; else subject="✅ Satelink recovered: $CHECK"; fi
+          body="$(jq -n --arg from "$ALERT_EMAIL_FROM" --arg to "$ALERT_EMAIL_TO" --arg subject "$subject" \
+            --arg text "$subject"$'\n\n'"$DETAIL"$'\n'"Run: $RUN_URL" '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          code="$(curl -sS -m 20 -o /dev/null -w '%{http_code}' https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -d "$body")"
+          echo "Resend HTTP $code"
+          [ "$code" = "200" ] || echo "::warning::Resend returned HTTP $code"
+
       - name: Fail the run if unhealthy (surfaces the red X + GitHub notification)
         if: steps.probe.outputs.healthy != 'true'
         run: |
           echo "::error title=Satelink health check::/health is DOWN (HTTP ${{ steps.probe.outputs.code }})"
+          exit 1
+
+  api-db:
+    # 2026-09-28 outage: Railway stopped Postgres + Redis; the API stayed up (/health
+    # server ok) while every DB call failed with ENOTFOUND and sign-in returned 500.
+    # This probes the API's own DB-dependent paths on its Cloudflare-free Railway
+    # domain (repo variable API_PROBE_BASE, default below):
+    #   /health                     → 200 and "db":"ok" (runs SELECT 1 on the API pool)
+    #   /api/identity/get-session   → 200 (Better Auth's DB path; 500 during the outage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe the API's DB-dependent paths (3 attempts)
+        id: probe
+        env:
+          BASE: ${{ vars.API_PROBE_BASE || 'https://satelink-api-production.up.railway.app' }}
+        run: |
+          ok=false; reason=unknown
+          for attempt in 1 2 3; do
+            h="$(curl -sS -m 15 -w $'\n%{http_code}' "$BASE/health" || true)"
+            hc="$(printf '%s' "$h" | tail -n1)"; hb="$(printf '%s' "$h" | sed '$d')"
+            sc="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$BASE/api/identity/get-session" || echo 000)"
+            if [ "$hc" != "200" ]; then reason="/health HTTP $hc"
+            elif ! printf '%s' "$hb" | grep -q '"db":"ok"'; then reason="/health db not ok: $(printf '%s' "$hb" | head -c 120)"
+            elif [ "$sc" != "200" ]; then reason="/api/identity/get-session HTTP $sc"
+            else ok=true; reason="db ok, session check 200"; break; fi
+            echo "attempt $attempt: $reason"; sleep 10
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"; echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Result: ok=$ok ($reason)"
+
+      - name: Open / update / close the API DB incident issue
+        id: issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OK: ${{ steps.probe.outputs.ok }}
+          REASON: ${{ steps.probe.outputs.reason }}
+        with:
+          script: |
+            const ok = process.env.OK === 'true';
+            const reason = process.env.REASON || 'probe did not run';
+            const marker = '<!-- satelink-api-db-monitor -->';
+            const label = 'health-incident';
+            const { owner, repo } = context.repo;
+            const now = new Date().toISOString();
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: label, per_page: 20 });
+            const existing = open.data.find((i) => (i.body || '').includes(marker));
+            if (!ok) {
+              if (existing) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body: `Still failing at ${now}: ${reason}. ${runUrl}` });
+              } else {
+                core.setOutput('transition', 'opened');
+                await github.rest.issues.create({ owner, repo, title: '🔴 Satelink API database path is DOWN', labels: [label],
+                  body: `${marker}\nAPI DB check failed at ${now}.\n\n- Reason: ${reason}\n- Run: ${runUrl}\n\n`
+                      + `Likely causes: Railway usage limit / stopped Postgres or Redis (2026-09-28), failed deploy. Auto-closes on recovery.` });
+              }
+            } else if (existing) {
+              core.setOutput('transition', 'recovered');
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body: `✅ Recovered at ${now}. Auto-closing.` });
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: 'closed' });
+            }
+
+      - name: Email on state change (Resend)
+        if: always() && steps.issue.outputs.transition != ''
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          TRANSITION: ${{ steps.issue.outputs.transition }}
+          CHECK: API database path
+          DETAIL: ${{ steps.probe.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ] || [ -z "$ALERT_EMAIL_TO" ] || [ -z "$ALERT_EMAIL_FROM" ]; then
+            echo "::warning::Resend alert not configured (RESEND_API_KEY / ALERT_EMAIL_FROM / ALERT_EMAIL_TO)"; exit 0
+          fi
+          if [ "$TRANSITION" = "opened" ]; then subject="🔴 Satelink DOWN: $CHECK"; else subject="✅ Satelink recovered: $CHECK"; fi
+          body="$(jq -n --arg from "$ALERT_EMAIL_FROM" --arg to "$ALERT_EMAIL_TO" --arg subject "$subject" \
+            --arg text "$subject"$'\n\n'"$DETAIL"$'\n'"Run: $RUN_URL" '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          code="$(curl -sS -m 20 -o /dev/null -w '%{http_code}' https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -d "$body")"
+          echo "Resend HTTP $code"
+          [ "$code" = "200" ] || echo "::warning::Resend returned HTTP $code"
+
+      - name: Fail the run if the API DB path is down
+        if: steps.probe.outputs.ok != 'true'
+        run: |
+          echo "::error title=API DB path::${{ steps.probe.outputs.reason }}"
           exit 1

@@ -183,23 +183,31 @@ Network status for monitoring.
 }
 ```
 
-### GET /api/pricing
+### GET /v1/pricing
 
-Machine-readable pricing catalog.
+Machine-readable pricing, served from the Satelink PlanCatalog. Different payment rails have different prices;
+they are never the same product at two prices.
 
-**Response:**
+**Response (abridged):**
 ```json
 {
-  "provider": "Satelink",
-  "pricing_model": "pay_per_use",
-  "settlement_token": "USDT",
-  "methods": {
-    "eth_blockNumber": {"usdt_per_call": 0.000001},
-    "eth_call": {"usdt_per_call": 0.000030}
-  },
-  "free_tier": {"requests_per_day": 200}
+  "ok": true,
+  "pricing_model": "prepaid_credits_pay_per_call",
+  "price_per_call_usdt": 0.00003,
+  "tiers": [
+    { "tier": "free", "daily_limit": 500, "cost_per_call_usdt": 0.00003,
+      "note": "No free RPC — a \"free\" account must deposit; every call is charged." }
+  ],
+  "intelligence": { "price_usdt_per_call": 0.01 },
+  "rails": {
+    "rpc_credits":     { "price_usd_per_call": 0.00003, "asset": "USDT", "network": "eip155:137", "status": "LIVE" },
+    "rpc_x402_bundle": { "price_usd": 0.1, "calls": 1000, "price_usd_per_call": 0.0001, "asset": "USDC", "network": "eip155:8453", "status": "LIVE" }
+  }
 }
 ```
+
+There is no free RPC tier: an anonymous call returns HTTP 402 with payment instructions. The tier `daily_limit` is a
+rate cap on a funded key, not free calls.
 
 ---
 

@@ -16,7 +16,7 @@
 // Dodo money is Trading-Intelligence value only: grants go to pv2_entitlements
 // (plan UU) and pv2_pack_balances (pack UU), never to api_credits.
 import crypto from 'node:crypto';
-import { loadCatalog, entitlementPlan, itemForDodoProduct } from './catalog.mjs';
+import { loadCatalog, entitlementPlan, itemForDodoProduct, packTotalUu } from './catalog.mjs';
 import { ensurePricingV2Schema } from './schema.mjs';
 import { shadowWriteRevenueLedger, shadowReverseRevenueLedger } from '../ledger/shadow_ledger_write.js';
 
@@ -135,14 +135,18 @@ export async function processDodoEvent(pool, event, { webhookId, mode = dodoMode
           [amountUsd, currency, `dodo:${data.payment_id}`, `acct:${accountId}`, mode === 'test']
         );
         if (match.type === 'pack') {
+          // `uu` is everything credited (grant + bonus) so a refund reverses
+          // the bonus with the pack; `bonus_uu` records the bonus part.
+          const bonusUu = match.item.bonus_uu || 0;
+          const totalUu = packTotalUu(match.item);
           await client.query(
-            `INSERT INTO pv2_pack_grants (dodo_payment_id, account_id, pack_id, uu) VALUES ($1, $2, $3, $4)`,
-            [data.payment_id, accountId, match.item.id, match.item.grant_uu]
+            `INSERT INTO pv2_pack_grants (dodo_payment_id, account_id, pack_id, uu, bonus_uu) VALUES ($1, $2, $3, $4, $5)`,
+            [data.payment_id, accountId, match.item.id, totalUu, bonusUu]
           );
           await client.query(
             `INSERT INTO pv2_pack_balances (account_id, uu_balance) VALUES ($1, $2)
              ON CONFLICT (account_id) DO UPDATE SET uu_balance = pv2_pack_balances.uu_balance + EXCLUDED.uu_balance, updated_at = NOW()`,
-            [accountId, match.item.grant_uu]
+            [accountId, totalUu]
           );
           outcome = 'pack_granted';
         } else {

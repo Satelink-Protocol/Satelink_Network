@@ -25,6 +25,7 @@ import {
 import { MIN_CONFIRMATIONS } from '../billing/deposit_validation.mjs';
 import { apiKeyCreateLimiter } from '../security/middleware/rate_limits.js';
 import { getIntelSummary, recordPricingView } from '../economics/pricing_intelligence/index.js';
+import { railPrices, bundlePriceText } from '../pricing_v2/rails.mjs';
 
 const API_BASE = () => process.env.API_BASE_URL || 'https://rpc.satelink.network';
 const VAULT = () => process.env.REVENUE_VAULT_ADDRESS || '0x577D3716d6Ad5b676d230f5409deF9838FABaCEF';
@@ -46,19 +47,24 @@ export function registrationMessage(wallet) {
   return `satelink:register:${String(wallet).toLowerCase()}`;
 }
 
+// Every price below comes from the PlanCatalog via railPrices() (Wave 2 C1/C8).
+const bundleText = (r) => bundlePriceText(r);
+
 function pricingBody() {
+  const rails = railPrices();
+  const perCall = rails.rpc_credits.price_usd_per_call;
   return {
     ok: true,
     service: 'Satelink RPC Gateway',
     pricing_model: 'prepaid_credits_pay_per_call',
-    price_per_call_usdt: PRICE_PER_CALL_USDT,
+    price_per_call_usdt: perCall,
     currency: 'USDT',
     settlement_chain: { name: 'Polygon PoS Mainnet', chain_id: 137 },
     tiers: [
-      { tier: 'free', daily_limit: TIER_DAILY_LIMIT.free, cost_per_call_usdt: PRICE_PER_CALL_USDT, note: 'No free RPC — a "free" account must deposit; every call is charged.' },
-      { tier: 'basic', daily_limit: TIER_DAILY_LIMIT.basic, cost_per_call_usdt: PRICE_PER_CALL_USDT },
-      { tier: 'pro', daily_limit: TIER_DAILY_LIMIT.pro, cost_per_call_usdt: PRICE_PER_CALL_USDT },
-      { tier: 'enterprise', daily_limit: TIER_DAILY_LIMIT.enterprise, cost_per_call_usdt: PRICE_PER_CALL_USDT },
+      { tier: 'free', daily_limit: TIER_DAILY_LIMIT.free, cost_per_call_usdt: perCall, note: 'No free RPC — a "free" account must deposit; every call is charged.' },
+      { tier: 'basic', daily_limit: TIER_DAILY_LIMIT.basic, cost_per_call_usdt: perCall },
+      { tier: 'pro', daily_limit: TIER_DAILY_LIMIT.pro, cost_per_call_usdt: perCall },
+      { tier: 'enterprise', daily_limit: TIER_DAILY_LIMIT.enterprise, cost_per_call_usdt: perCall },
     ],
     deposit: {
       token: 'USDT',
@@ -80,14 +86,17 @@ function pricingBody() {
     },
     credit_semantics:
       'Prepaid, non-expiring USDT credits on the account (api_credits). Every RPC call ' +
-      `atomically deducts ${PRICE_PER_CALL_USDT} USDT — there is no free tier (Phase 2, 2026-09): ` +
+      `atomically deducts ${perCall} USDT — there is no free tier (Phase 2, 2026-09): ` +
       'a key serves only while it carries a funded balance. HTTP 402 with a machine-readable ' +
       'payment block is returned when a key is unfunded or credits are exhausted; HTTP 429 when ' +
       'the tier daily limit is reached.',
+    // Per-rail prices with rail/network/status labels (C4): the credits price and
+    // the x402 bundle are different rails, never the same product at two prices.
+    rails,
     // M3 — derived trading intelligence product, metered off the SAME credits.
     intelligence: {
       catalog: `${API_BASE()}/v1/intelligence`,
-      price_usdt_per_call: 0.01,
+      price_usdt_per_call: rails.intelligence_credits.price_usd_per_request,
       note: 'Derived analytics from public market data (funding divergence, OI shifts, ' +
         'liquidation-pressure model, microstructure). Not raw feed redistribution, not advice.',
     },
@@ -96,6 +105,7 @@ function pricingBody() {
 
 function manifestBody() {
   const base = API_BASE();
+  const rails = railPrices();
   return {
     schema_version: '1.0',
     service: 'Satelink RPC Gateway',
@@ -106,8 +116,9 @@ function manifestBody() {
       'Fully autonomous onboarding — no email, no dashboard, no human.',
     chain: { name: 'Polygon PoS Mainnet', chain_id: 137 },
     pricing: {
-      x402_bundle: `$${process.env.X402_BUNDLE_PRICE_USD || '0.10'} = ${Number(process.env.X402_BUNDLE_CALLS || 1000).toLocaleString('en-US')} calls (USDC on Base)`,
-      price_per_call_usdt: PRICE_PER_CALL_USDT,
+      x402_bundle: `${bundleText(rails)} (USDC on Base)`,
+      price_per_call_usdt: rails.rpc_credits.price_usd_per_call,
+      rails,
       details: `${base}/v1/pricing`,
     },
     // Primary rail: x402 (USDC on Base). x402-native agents auto-pay the
@@ -118,7 +129,7 @@ function manifestBody() {
       rail: 'x402',
       network: 'eip155:8453',
       asset: 'USDC',
-      price: `$${process.env.X402_BUNDLE_PRICE_USD || '0.10'} = ${Number(process.env.X402_BUNDLE_CALLS || 1000).toLocaleString('en-US')} calls`,
+      price: bundleText(rails),
       payTo: process.env.X402_PAY_TO || '0x966E1Ae22996545015b1414B35234b10719d7Ad4',
       resource: `${base}/rpc/polygon`,
       note: 'permissionless — pay the 402 challenge with any x402 v2 client (@x402/fetch, pay.sh); no account',

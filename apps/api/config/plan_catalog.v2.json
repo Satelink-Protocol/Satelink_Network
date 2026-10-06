@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-25.2",
+  "version": "2026-09-28.1",
   "unit": {
     "name": "Usage Unit",
     "symbol": "UU",
@@ -10,6 +10,12 @@
       "uu": 10,
       "note": "Trading Intelligence request, list $0.01"
     }
+  },
+  "rails": {
+    "note": "Per-rail prices shown by discovery (/v1/pricing, /.well-known/satelink.json, /.well-known/x402). Enforcement reads credit_service.PRICE_PER_CALL_USDT and x402/config.js; test/catalog_consistency.test.js fails CI if these drift.",
+    "rpc_credits": { "product": "rpc", "unit": "call", "price_usd_per_call": 0.00003, "asset": "USDT", "network": "eip155:137", "status": "LIVE" },
+    "rpc_x402_bundle": { "product": "rpc", "unit": "bundle", "price_usd": 0.10, "calls": 1000, "asset": "USDC", "network": "eip155:8453", "status": "LIVE" },
+    "intelligence_credits": { "product": "intelligence", "unit": "request", "asset": "USDT credits (funded by USDT deposit or the x402 bundle)", "status": "LIVE" }
   },
   "boundary": "Dodo-funded value (plan allowance, packs) is spendable on Trading Intelligence only. RPC / x402 stay on the crypto rail (USDT credits).",
   "windows": {
@@ -160,6 +166,7 @@
       "name": "Credit pack $10",
       "price_usd": 10,
       "grant_uu": 10000,
+      "bonus_uu": 0,
       "dodo": {
         "test": "pdt_0NoMEReibUHWGhnHdJBfK",
         "live": null
@@ -171,6 +178,7 @@
       "name": "Credit pack $50",
       "price_usd": 50,
       "grant_uu": 50000,
+      "bonus_uu": 2500,
       "dodo": {
         "test": "pdt_0NoMERgL454CfiHbnYgdh",
         "live": null
@@ -182,6 +190,7 @@
       "name": "Credit pack $200",
       "price_usd": 200,
       "grant_uu": 200000,
+      "bonus_uu": 20000,
       "dodo": {
         "test": "pdt_0NoMERhtlswnoRgwYjJ1f",
         "live": null
