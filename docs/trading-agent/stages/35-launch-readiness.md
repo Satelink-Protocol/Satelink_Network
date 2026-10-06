@@ -2,7 +2,7 @@
 
 **Decision recommended: NO-GO. Nothing was enabled or deployed.** Stage 35 triggered its STOP: no gate is signed, Gates 1–5, 8 and 9 aren't defined in the repository, and there is no staging for the rollback drill. The founder chose **Option 1** (2026-10-06): write the readiness doc as a NO-GO review, with the undefined gates marked UNDEFINED.
 
-PR: #TBD (draft, stacked on #488)
+PR: #489 (draft, stacked on #488)
 
 ## Output
 

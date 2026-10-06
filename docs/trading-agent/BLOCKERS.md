@@ -70,7 +70,7 @@
 | 32 partner validation | #486 | B-09, B-08 | partner tracker (docs) + tracker schema + Link ID config from the secret store (fingerprint only in git); no evidence provided → all brokers UNVERIFIED, no state change, no Link ID configured; verbal evidence refused by rule |
 | 33 first real trade | #487 | all (Phase 0), B-06, B-08, B-09 | STOP triggered (gate unsigned, no user authorisation, nothing deployed) → founder Option 1: runbook + evidence template only (docs); no trade executed; ledger journal BLOCKED by Stage 20; acceptance open |
 | 34 real revenue gate | #488 | B-09 | STOP triggered (no real trade, live billing unapproved, real-book posting blocked by Stage 20) → founder Option 2: read-only three-way matcher (journal ↔ statement ↔ gateway/broker; refuses test/simulated/founder-funded/unsettled/unmatched) + reconciliation test + procedure + evidence template (all PENDING); no path verified; nothing posted |
-| 35 launch readiness | #TBD | all (Gate 0), B-06, B-10 | STOP triggered (no gate signed; Gates 1–5, 8, 9 undefined; no staging for the drill) → founder Option 1: NO-GO readiness doc (per-broker 6-state table, evidenced states only; 14 go/no-go items all NO-GO; flags/cohort/rollback/support/incident plans proposed; drill not performed); no flag or deploy change |
+| 35 launch readiness | #489 | all (Gate 0), B-06, B-10 | STOP triggered (no gate signed; Gates 1–5, 8, 9 undefined; no staging for the drill) → founder Option 1: NO-GO readiness doc (per-broker 6-state table, evidenced states only; 14 go/no-go items all NO-GO; flags/cohort/rollback/support/incident plans proposed; drill not performed); no flag or deploy change |
 
 ## Open questions for the founder (no action taken)
 
