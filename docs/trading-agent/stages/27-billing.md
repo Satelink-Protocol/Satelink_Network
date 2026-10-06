@@ -1,6 +1,6 @@
 # Stage 27 — Subscriptions billing (Razorpay, test mode)
 
-**Branch:** `trading-agent/stage-27-billing`, stacked on Stage 26 (#481).
+**Branch:** `trading-agent/stage-27-billing` (PR #482), stacked on Stage 26 (#481).
 
 **State:** built and tested behind **`SUBSCRIPTIONS`**. The flag is off; with it off every route returns 404. Nothing is registered in `app_factory.mjs` (founder Option A).
 
