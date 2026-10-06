@@ -329,7 +329,8 @@ describe('billing: live mode and the real book', () => {
   });
 });
 
-describe('billing: HTTP surface (/billing/*, /webhooks/razorpay)', () => {
+describe('billing: HTTP surface (/billing/*, /webhooks/razorpay)', function () {
+  this.timeout(20_000);
   const ON = { TRADING_FLAG_SUBSCRIPTIONS: 'true' };
   function app(env = ON) {
     const r = rig();

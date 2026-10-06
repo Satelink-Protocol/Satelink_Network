@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AGENT_NAV, AGENT_NAV_GROUPS, IA_AREAS, agentNav } from "@/lib/trading/nav";
 import { apiStateText, formatMinor, modeLabel, orderStateText, receiptText } from "@/lib/trading/states";
 import { agentIaEnabled, isRevenueAdmin } from "@/lib/trading/flags";
+import { traceLink } from "@/lib/trading/trace";
 import { ApiState, ModeBadge, OrderState, TradingDisclosure } from "@/components/trading/parts";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/trading", useRouter: () => ({ push: () => {} }), notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, redirect: () => { throw new Error("NEXT_REDIRECT"); } }));
@@ -47,6 +48,20 @@ describe("layer 5 — flags and the information architecture", () => {
     for (const f of TRADING_PAGES) expect(fs.readFileSync(f, "utf8"), f).toMatch(/requireAgentIa\(\)/);
     expect(fs.readFileSync(path.join(APP, "trading/revenue/page.tsx"), "utf8")).toMatch(/if \(!isRevenueAdmin\(session\?\.user\.id\)\) notFound\(\)/);
     for (const f of ["actions.ts"]) expect(fs.readFileSync(path.join(APP, "trading", f), "utf8").match(/if \(!agentIaEnabled\(\)\) redirect/g)).toHaveLength(4);
+  });
+});
+
+describe("Stage 29 — receipt → trace link", () => {
+  it("parses W3C traceparent; links only through an https template containing {traceId}", () => {
+    const tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    expect(traceLink(tp, "https://grafana.example.invalid/explore?trace={traceId}")).toEqual({ traceId: "0af7651916cd43dd8448eb211c80319c", url: "https://grafana.example.invalid/explore?trace=0af7651916cd43dd8448eb211c80319c" });
+    expect(traceLink(tp, undefined)).toEqual({ traceId: "0af7651916cd43dd8448eb211c80319c", url: null });
+    expect(traceLink(tp, "http://insecure.example/{traceId}")!.url).toBe(null);
+    expect(traceLink(tp, "javascript:alert({traceId})")!.url).toBe(null);
+    expect(traceLink(tp, "https://no-placeholder.example/")!.url).toBe(null);
+    expect(traceLink("00-00000000000000000000000000000000-b7ad6b7169203331-01", "https://x/{traceId}")).toBe(null);
+    expect(traceLink("garbage", "https://x/{traceId}")).toBe(null);
+    expect(traceLink(null, "https://x/{traceId}")).toBe(null);
   });
 });
 
