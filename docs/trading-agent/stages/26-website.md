@@ -1,6 +1,6 @@
 # Stage 26 — Website repositioning (Trading Agent public pages)
 
-**Branch:** `trading-agent/stage-26-website`, stacked on Stage 25 (#480).
+**Branch:** `trading-agent/stage-26-website` (PR #481), stacked on Stage 25 (#480).
 
 **State:** built and tested behind **`SITE_TRADING_AGENT`** (default off ⇒ every page is a 404). Pages are noindex and disallowed in `robots.ts`, are not in the sitemap, and nothing in the live navigation links to them.
 
