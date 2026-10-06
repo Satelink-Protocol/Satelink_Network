@@ -1,0 +1,4 @@
+{
+  "_note": "LIVE_SMALL allowlist for REAL MONEY GATE 1. Empty until the founder adds accounts. Caps are integer minor units (USDT, 2 dp) and must be within the ceilings in scripts/trading/real-money-gate.mjs. Adding an entry does NOT enable anything.",
+  "accounts": []
+}
