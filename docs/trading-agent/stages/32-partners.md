@@ -2,7 +2,7 @@
 
 **Human approval is required. No partner state changed.** No partner evidence was provided for this stage, so every broker stays **UNVERIFIED**, every item stays NO_EVIDENCE and no Link ID was configured. The STOP condition (evidence is verbal only) was not triggered, because there is no evidence of any kind. **The founder supplies the documents; nothing moves without them.**
 
-PR: #TBD (draft, stacked on #485)
+PR: #486 (draft, stacked on #485)
 
 ## Inspection
 
