@@ -2,7 +2,7 @@
 
 **No real revenue was verified, because none exists yet.** Stage 34 triggered its STOP: no real trade (Stage 33), no live billing approval (Stage 27), and real-book posting blocked by Stage 20, so there's no amount to match. The founder chose **Option 2** (2026-10-06): docs plus a read-only matching tool with an accounting reconciliation test. No path is REAL-REVENUE-VERIFIED.
 
-PR: #TBD (draft, stacked on #487)
+PR: #488 (draft, stacked on #487)
 
 ## Inspection (read-only, 2026-10-06)
 
