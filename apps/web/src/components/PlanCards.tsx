@@ -31,7 +31,7 @@ export function PlanCards({ catalog }: { catalog: PublicCatalog }) {
                 {p.kind === "free" ? "Start free" : `Choose ${p.name}`}
               </a>
             ) : (
-              <p className="mt-5 inline-flex h-11 items-center justify-center rounded-[var(--sl-radius)] border border-dashed border-sl-border text-[14px] text-sl-text-muted">Opening soon</p>
+              <p className="mt-5 inline-flex h-11 items-center justify-center rounded-[var(--sl-radius)] border border-dashed border-sl-border text-[14px] text-sl-text-muted">Available soon</p>
             )}
           </article>
         );

@@ -21,6 +21,7 @@ const ERRORS: Record<string, string> = {
   invalid_first_task: "Pick a first task, or choose to explore yourself.",
   no_yearly: "This plan is billed monthly only.",
   not_purchasable: "This plan isn't available to buy yet. You can continue with Free.",
+  checkout_not_available: "Available soon — paid plans open when billing goes live. You can continue with Free.",
   billing_v2_disabled: "Card and UPI checkout isn't switched on yet. You can continue with Free and upgrade later.",
   authorisation_required: "Tick the authorisation to continue.",
   advice_ack_required: "Confirm you understand this isn't investment advice.",
@@ -237,7 +238,7 @@ function PlanStep({ ob, catalog, country, busy, onSubmit, onBack, error }: { ob:
                 disabled={busy || !available}
                 onClick={() => onSubmit({ planId: b.id, period: y ? "year" : "month" })}
               >
-                {b.kind === "free" ? "Continue with Free" : available ? `Choose ${b.name}` : "Not available yet"}
+                {b.kind === "free" ? "Continue with Free" : available ? `Choose ${b.name}` : "Available soon"}
               </button>
             </li>
           );

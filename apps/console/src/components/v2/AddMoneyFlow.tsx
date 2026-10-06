@@ -32,7 +32,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
     const j = await r.json().catch(() => null);
     setBusy(false);
     if (j?.ok && j.data?.checkoutUrl) { window.location.href = j.data.checkoutUrl; return; }
-    setErr(j?.error === "billing_v2_disabled" ? "Card and UPI checkout isn't switched on yet. USDT works today." : j?.error === "not_purchasable" ? "This option isn't available to buy yet." : "Checkout couldn't start. Try again.");
+    setErr(j?.error === "billing_v2_disabled" ? "Card and UPI checkout isn't switched on yet. USDT works today." : j?.error === "checkout_not_available" ? "Available soon — card and UPI checkout opens when billing goes live. USDT works today." : j?.error === "not_purchasable" ? "This option isn't available to buy yet." : "Checkout couldn't start. Try again.");
   }
 
   async function loadInfo(id: number) {
@@ -89,7 +89,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
             {plans.map((p) => (
               <Choice key={p.id} name="plan" value={p.id} checked={item === p.id} onChange={setItem}
                 title={`${p.name} — ${p.intro ? `$${p.intro.amountUsd} first month, then ` : ""}$${p.priceUsd}/${p.interval === "year" ? "year" : "month"}${current === p.id ? " (your plan)" : ""}`}
-                detail={`${p.intro ? p.intro.copy + " " : ""}About ${p.allowance.weeklyTiRequests.toLocaleString()} market-data requests a week, up to ${p.allowance.sessionTiRequests.toLocaleString()} per ${p.allowance.sessionHours} hours.${p.purchasable ? "" : " Not available to buy yet."}`} />
+                detail={`${p.intro ? p.intro.copy + " " : ""}About ${p.allowance.weeklyTiRequests.toLocaleString()} market-data requests a week, up to ${p.allowance.sessionTiRequests.toLocaleString()} per ${p.allowance.sessionHours} hours.${p.purchasable ? "" : " Available soon."}`} />
             ))}
           </fieldset>
           <div className="mt-6 flex justify-between">
@@ -104,7 +104,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
             <legend className="sr-only">Packs</legend>
             {catalog.packs.map((k) => (
               <Choice key={k.id} name="pack" value={k.id} checked={item === k.id} onChange={setItem}
-                title={`$${k.priceUsd}`} detail={`${(k.totalUu ?? k.grantUu).toLocaleString()} UU${k.bonusUu ? ` (includes +${k.bonusPct}% bonus)` : ""} — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Not available to buy yet."}`} />
+                title={`$${k.priceUsd}`} detail={`${(k.totalUu ?? k.grantUu).toLocaleString()} UU${k.bonusUu ? ` (includes +${k.bonusPct}% bonus)` : ""} — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Available soon."}`} />
             ))}
           </fieldset>
           <div className="mt-6 flex justify-between">

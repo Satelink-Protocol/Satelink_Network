@@ -17,6 +17,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCheckoutSession } from "@dodopayments/core/checkout";
 import { getDodoClientConfig } from "@/lib/dodo/environment";
 import { findCreditPack } from "@/lib/dodo/credit-packs";
+// @ts-expect-error — plain ESM module from apps/api (one allowlist rule for both services).
+import { checkoutAllowed } from "../../../../../api/src/pricing_v2/test_checkout_guard.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,6 +103,20 @@ export async function POST(req: NextRequest) {
   const pack = findCreditPack(productId);
   if (!pack) {
     return NextResponse.json({ ok: false, error: "unknown_or_unconfigured_product" }, { status: 400 });
+  }
+
+  // TEST mode: checkout is open only to the founder allowlist
+  // (DODO_TEST_CHECKOUT_ALLOWLIST, default empty = nobody). Checked before any
+  // account is resolved or created.
+  let environment: ReturnType<typeof getDodoClientConfig>["environment"];
+  try {
+    environment = getDodoClientConfig().environment;
+  } catch (err) {
+    console.error("[dodo-checkout]", (err as Error).message);
+    return NextResponse.json({ ok: false, error: "dodo_not_configured" }, { status: 503 });
+  }
+  if (!checkoutAllowed(email, environment === "live_mode" ? "live" : "test")) {
+    return NextResponse.json({ ok: false, error: "checkout_not_available", message: "Available soon" }, { status: 403 });
   }
 
   let apiKey: string;

@@ -439,7 +439,9 @@ app.get("/api/mode", (req, res) => {
   // Billing and satelink.network/pricing). Dodo V2 webhooks + the daily
   // reconciliation only with SATELINK_SUBSCRIPTIONS_ENABLED. FOUNDER REVIEW.
   app.get("/v2/plans", (req, res) => {
-    try { res.json({ ok: true, data: publicCatalog(loadCatalog(), { mode: dodoMode() }) }); }
+    // Anonymous: while Dodo is in TEST mode nobody can buy from a public page
+    // (checkout is allowlist-only — /v1/me/catalog answers per account).
+    try { const mode = dodoMode(); res.json({ ok: true, data: publicCatalog(loadCatalog(), { mode, checkoutAllowed: mode !== 'test' }) }); }
     catch (err) { res.status(503).json({ ok: false, error: "catalog_unavailable" }); }
   });
   if (isSubscriptionsEnabled()) {
