@@ -2,7 +2,7 @@
 
 **Human approval is required. This stage enables nothing.** Live trading stays locked in code (`LIVE_TRADING`, `AUTONOMOUS_MODE` and `UPSTOX_AUTOMATED` are in `LOCKED_TRADING_FLAGS`). No flag was set anywhere, no exchange was called and no key was used. **Every live action stops for a founder decision.**
 
-PR: #TBD (draft, stacked on #484)
+PR: #485 (draft, stacked on #484)
 
 ## What was built
 
