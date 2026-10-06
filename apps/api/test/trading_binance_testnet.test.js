@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import fs from 'node:fs';
 import { runLimitLifecycle } from './helpers/binance_lifecycle.mjs';
+import { classifyTestnetFailure } from './helpers/testnet_failure.mjs';
 
 // Stage 21 acceptance — Binance SPOT TESTNET (https://testnet.binance.vision), opt-in.
 // Places ONE LIMIT BUY at 0.6 × the market price (never marketable), then cancels it through the
@@ -14,6 +15,7 @@ import { runLimitLifecycle } from './helpers/binance_lifecycle.mjs';
 //   BINANCE_TESTNET_TRACE_OUT          optional path to write the redacted receipt JSON
 // The adapter itself never reads the environment and refuses production (LIVE_TRADING is locked).
 const env = process.env;
+
 const apiKey = env.BINANCE_TESTNET_API_KEY;
 const credential = !apiKey ? null
   : env.BINANCE_TESTNET_ED25519_KEY_PATH ? { apiKey, keyType: 'ed25519', privateKeyPem: fs.readFileSync(env.BINANCE_TESTNET_ED25519_KEY_PATH, 'utf8') }
@@ -24,7 +26,12 @@ describe('binance: Spot Testnet LIMIT place + cancel (opt-in)', function () {
   before(function () { if (!credential) this.skip(); });
 
   it('LIMIT → ACK → CANCEL_REQUESTED → CANCELLED on testnet.binance.vision, recorded in the audit trace', async () => {
-    const r = await runLimitLifecycle({ fetch: globalThis.fetch, credential, linkId: env.BINANCE_LINK_ID ?? 'SLTEST01', environment: 'testnet' });
+    let r;
+    try {
+      r = await runLimitLifecycle({ fetch: globalThis.fetch, credential, linkId: env.BINANCE_LINK_ID ?? 'SLTEST01', environment: 'testnet' });
+    } catch (e) {
+      throw new Error(`${classifyTestnetFailure(e)}: ${e?.code ?? ''} ${e?.message ?? e}`);
+    }
     expect(r.lifecycleOk, JSON.stringify(r.states)).to.equal(true);
     expect(r.atVenue.status).to.equal('acknowledged');
     expect(r.afterCancel.status).to.equal('cancelled');
