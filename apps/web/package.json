@@ -21,7 +21,6 @@
         "@metamask/connect-evm": "^2.1.0",
         "@microsoft/fetch-event-source": "^2.0.1",
         "@openzeppelin/defender-sdk": "1.10.0",
-        "@rainbow-me/rainbowkit": "^2.1.7",
         "@satelink/ui": "*",
         "@satelink/web-ui": "*",
         "@satelink/content": "*",

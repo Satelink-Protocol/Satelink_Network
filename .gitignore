@@ -188,3 +188,6 @@ scripts/ops/.m5-gate-state.json
 client_secret*.json
 *.apps.googleusercontent.com.json
 .env*
+
+# Playwright MCP session artefacts
+.playwright-mcp/
