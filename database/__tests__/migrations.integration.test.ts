@@ -139,13 +139,14 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '018_subscriptions.sql',
       '019_ledger_kind_refund.sql',
       '021_trading_foundation.sql',
+      '022_market_data_entitlements.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
 
   // The exact count is derived from the applied list above so adding a
   // migration only requires updating that one list.
-  const MIGRATION_COUNT = 20;
+  const MIGRATION_COUNT = 21;
 
   it('re-running applies nothing (idempotent)', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
