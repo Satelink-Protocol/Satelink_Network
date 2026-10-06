@@ -4,7 +4,6 @@ process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=400
 // the CDP x402 facilitator auth needs it (T-04 layer 2). Side-effect import.
 import "./src/bootstrap/webcrypto_global.js";
 import express from "express";
-import { createPhase3Router } from "./src/gateway/routes/api_phase3.js";
 import { createServer } from 'http';
 import { pathToFileURL } from 'url';
 import { startSentinel } from "./src/autonomous/sentinel.js";
@@ -15,6 +14,7 @@ import { checkTreasury, getTreasuryStatus } from "./src/autonomous/treasury_moni
 import { getCapacityStats } from "./src/autonomous/capacity_alerter.js";
 import { startEconomyCommander, createEconomyCommanderRouter } from "./src/autonomous/economy_commander.js";
 import { createApp } from "./app_factory.mjs";
+import { requireAdminAuth } from "./src/admin/admin_router.js";
 import { createWsGateway, getWsStats } from "./src/workloads/rpc_gateway/ws_gateway.js";
 import { startHealthMonitor, healthMonitorStatus } from "./src/scheduler/node_health_monitor.js";
 import { startOfflineDetector, offlineDetectorStatus } from "./src/services/node_registry/offline_detector.js";
@@ -268,7 +268,10 @@ async function start() {
   try {
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true, limit: '5mb' }));
-    app.use("/", createPhase3Router());
+    // Gate 0 B-03 (2026-10-07): api_phase3 (/node/me/withdraw, /node/me/claim,
+    // /treasury/status, /services/settlement/mode) is UNMOUNTED — its withdraw
+    // and claim routes ran without auth against a hard-coded fallback wallet.
+    // File kept at src/gateway/routes/api_phase3.js. See SECURITY_HOTFIX.md.
     app.use("/", createEconomyCommanderRouter());
 
     app.get('/ws/stats', (req, res) => {
@@ -287,8 +290,8 @@ async function start() {
       res.json({ ok: true, ...schedulerStatus });
     });
 
-    // Manual epoch trigger for testing/recovery
-    app.post('/system/epoch-scheduler/trigger', async (req, res) => {
+    // Manual epoch trigger for testing/recovery (admin-only — Gate 0 B-03)
+    app.post('/system/epoch-scheduler/trigger', requireAdminAuth, async (req, res) => {
       try {
         console.log('[ADMIN] Manual epoch cycle triggered');
         const result = await runEpochCycle(pool);
@@ -394,8 +397,8 @@ async function start() {
       }
     });
 
-    // Manual data retention trigger for testing/recovery
-    app.post('/system/data-retention/trigger', async (req, res) => {
+    // Manual data retention trigger for testing/recovery (admin-only — Gate 0 B-03)
+    app.post('/system/data-retention/trigger', requireAdminAuth, async (req, res) => {
       try {
         console.log('[ADMIN] Manual data retention triggered');
         const { DataRetentionJob } = await import('./src/jobs/data_retention_job.mjs');

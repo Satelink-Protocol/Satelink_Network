@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { adminUiAllowed, isGatedPagePath, isGatedSubdomain } from '@/lib/admin-ui-gate'
 
 const SUBDOMAIN_MAP: Record<string, string> = {
   'developer': '/satelink/os',
@@ -67,6 +68,13 @@ export function middleware(req: NextRequest) {
   // Extract subdomain. Strip the port first so localhost:3000 -> "localhost"
   // and works for *.satelink.network in production.
   const subdomain = host.split(':')[0].split('.')[0]
+
+  // Gate 0 B-03 (2026-10-07): staff surfaces (/admin*, /ops*, admin./ops.
+  // hosts) 404 unless the admin UI gate passes. Their old guards were a
+  // forgeable cookie (/ops) and a client-side, unverified JWT decode (/admin).
+  if ((isGatedSubdomain(subdomain) || isGatedPagePath(url.pathname)) && !adminUiAllowed(req)) {
+    return new NextResponse('Not Found', { status: 404 })
+  }
 
   // Redirects apply on the main site host only (not app subdomains), before any
   // subdomain rewrite, so /platform/pricing and /dashboard resolve everywhere.

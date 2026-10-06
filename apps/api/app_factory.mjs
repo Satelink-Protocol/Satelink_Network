@@ -46,6 +46,7 @@ import { isConsoleAccountsEnabled } from './src/console_accounts/flag.mjs';
 import { createMeRouter } from './src/console_accounts/router.mjs';
 import { loadCatalog, publicCatalog } from './src/pricing_v2/catalog.mjs';
 import { createDodoV2WebhookHandler, isSubscriptionsEnabled, dodoMode } from './src/pricing_v2/webhooks.mjs';
+import { railPrices } from './src/pricing_v2/rails.mjs';
 import { startPricingReconcile } from './src/pricing_v2/reconcile.mjs';
 import { createAdminRouter, requireAdminAuth } from './src/admin/admin_router.js';
 import { ensureAdminTables } from './src/admin/ensure_admin_tables.js';
@@ -109,30 +110,18 @@ app.get("/api/mode", (req, res) => {
 
   // ── Public Machine-Readable Endpoints (no auth, for Chainlist/DeFi bots/AI agents) ──
 
-  // GET /api/pricing — RPC pricing catalog for machine discovery
-  app.get("/api/pricing", async (req, res) => {
-    const DEFAULT_METHODS = {
-      eth_blockNumber:          { usdt_per_call: 0.000001 },
-      eth_getBalance:           { usdt_per_call: 0.000010 },
-      eth_call:                 { usdt_per_call: 0.000030 },
-      eth_sendRawTransaction:   { usdt_per_call: 0.000100 },
-      eth_getLogs:              { usdt_per_call: 0.000050 },
-      eth_getTransactionReceipt:{ usdt_per_call: 0.000020 }
-    };
-
-    let rpcPricing = {};
-    try {
-      const result = await pool.query(
-        `SELECT method, base_cost_usdt FROM rpc_method_pricing WHERE enabled = 1 ORDER BY method`
-      );
-      const rows = Array.isArray(result) ? result : (result.rows || []);
-      for (const m of rows) {
-        rpcPricing[m.method] = { usdt_per_call: parseFloat(m.base_cost_usdt) };
-      }
-    } catch (e) {
-      console.warn("[Pricing] rpc_method_pricing unavailable, using defaults:", e.message);
-    }
-
+  // GET /api/pricing — RPC pricing catalog for machine discovery. Prices come
+  // from the PlanCatalog (railPrices). The RPC charge is FLAT per call on the
+  // credits rail (credit_service.PRICE_PER_CALL_USDT; credit_gate's per-method
+  // table is bypassed under CREDIT_CANONICAL), so every method lists the same
+  // price — the old per-method table advertised numbers nobody was charged.
+  app.get("/api/pricing", (req, res) => {
+    const rails = railPrices();
+    const flat = rails.rpc_credits.price_usd_per_call;
+    const methods = Object.fromEntries(
+      ["eth_blockNumber", "eth_getBalance", "eth_call", "eth_sendRawTransaction", "eth_getLogs", "eth_getTransactionReceipt"]
+        .map((m) => [m, { usdt_per_call: flat }])
+    );
     res.json({
       provider: "Satelink",
       network: "Polygon PoS",
@@ -142,12 +131,14 @@ app.get("/api/mode", (req, res) => {
       settlement_token: "USDT",
       settlement_chain: "Polygon",
       deposit_address: process.env.REVENUE_VAULT_ADDRESS || "0x577D3716d6Ad5b676d230f5409deF9838FABaCEF",
-      methods: Object.keys(rpcPricing).length > 0 ? rpcPricing : DEFAULT_METHODS,
+      methods,
+      method_pricing: "flat — every JSON-RPC method costs price_per_call_usdt",
       // Free RPC removed (Phase 2, 2026-09): every /rpc call requires a funded
       // API key or a settled x402 payment. There is no anonymous/free tier.
       free_tier: null,
       auth_required: true,
-      price_per_call_usdt: 0.00003,
+      price_per_call_usdt: flat,
+      rails,
       status_url: "https://rpc.satelink.network/api/status"
     });
   });

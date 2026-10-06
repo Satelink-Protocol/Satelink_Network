@@ -184,7 +184,10 @@ d('Pricing V2 — Dodo test-mode lifecycle', function () {
     const r = await send('payment.succeeded', { payment_id: 'pay_pack', total_amount: 5000, currency: 'USD', product_cart: [{ product_id: product('pack_50'), quantity: 1 }], metadata: meta('pack_50') });
     assert.equal(r.body.outcome, 'pack_granted');
     const bal = async () => Number((await pool.query('SELECT uu_balance FROM pv2_pack_balances WHERE account_id = $1', [ACCT])).rows[0].uu_balance);
-    assert.equal(await bal(), 50000);
+    // Founder D-2: pack_50 = 50,000 UU + 5 % bonus; the grant row keeps the split.
+    assert.equal(await bal(), 52500);
+    const g = (await pool.query('SELECT uu, bonus_uu FROM pv2_pack_grants WHERE dodo_payment_id = $1', ['pay_pack'])).rows[0];
+    assert.deepEqual([Number(g.uu), Number(g.bonus_uu)], [52500, 2500]);
     const key = 'sk_basic_' + 'b'.repeat(48);
     await pool.query(`INSERT INTO api_credits (api_key, tier, daily_limit, credits_usdt) VALUES ($1, 'basic', 100000, 0)`, [key]);
     await linkKey(pool, ACCT, { apiKey: key });
@@ -193,7 +196,7 @@ d('Pricing V2 — Dodo test-mode lifecycle', function () {
     try {
       // Burn the Free window, then the pack pays.
       for (let i = 0; i < 12; i++) await authorizeAndMeter(pool, { apiKey: key, methodPrice: 0.01, product: 'intelligence' });
-      assert.equal(await bal(), 50000 - 20);
+      assert.equal(await bal(), 52500 - 20);
       const rpc = await authorizeAndMeter(pool, { apiKey: key, product: 'rpc' });
       assert.equal(rpc.ok, false, 'RPC needs crypto credits; the Dodo pack never pays for it');
       assert.equal(rpc.code, 'insufficient_credits');

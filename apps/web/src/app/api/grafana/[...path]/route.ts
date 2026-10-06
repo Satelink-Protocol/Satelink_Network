@@ -15,6 +15,13 @@
 // Required env (server-only):
 //   GRAFANA_URL    e.g. https://grafana.internal.satelink.network
 //   GRAFANA_TOKEN  Grafana service-account token (Bearer)
+//
+// Gate 0 B-02 (2026-10-07): previously ANY caller got GRAFANA_TOKEN injected.
+// Now 404 unless the admin UI gate passes (ADMIN_UI_ENABLED=true AND a
+// server-verified staff session — none exists yet, so this is OFF; see
+// src/lib/admin-ui-gate.ts). Segments containing ".." are rejected.
+
+import { adminUiAllowed, notFoundResponse, safeGrafanaSegments } from "@/lib/admin-ui-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +56,8 @@ async function forward(
   req: Request,
   segments: string[]
 ): Promise<Response> {
+  if (!adminUiAllowed(req)) return notFoundResponse();
+  if (!safeGrafanaSegments(segments)) return notFoundResponse();
   if (!GRAFANA_URL || !GRAFANA_TOKEN) return notConfigured();
 
   const incoming = new URL(req.url);

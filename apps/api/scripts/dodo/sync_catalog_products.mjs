@@ -40,7 +40,7 @@ function desiredBody(item, kind) {
   if (kind === 'pack') {
     return {
       name: `Satelink — ${item.name}`,
-      description: `${item.grant_uu.toLocaleString('en-US')} Usage Units for Trading Intelligence. Prepaid; does not expire.`,
+      description: `${(item.grant_uu + (item.bonus_uu || 0)).toLocaleString('en-US')} Usage Units for Trading Intelligence${item.bonus_uu ? ` (includes ${item.bonus_uu.toLocaleString('en-US')} bonus)` : ''}. Prepaid; does not expire.`,
       tax_category: 'saas',
       price: { type: 'one_time_price', price: Math.round(item.price_usd * 100), currency: 'USD', discount: 0, purchasing_power_parity: false },
       metadata,

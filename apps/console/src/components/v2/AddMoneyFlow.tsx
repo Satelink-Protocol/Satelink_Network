@@ -88,7 +88,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
             <legend className="sr-only">Plans</legend>
             {plans.map((p) => (
               <Choice key={p.id} name="plan" value={p.id} checked={item === p.id} onChange={setItem}
-                title={`${p.name} — ${p.intro ? `$${p.intro.amountUsd} first month, then ` : ""}$${p.priceUsd}/month${current === p.id ? " (your plan)" : ""}`}
+                title={`${p.name} — ${p.intro ? `$${p.intro.amountUsd} first month, then ` : ""}$${p.priceUsd}/${p.interval === "year" ? "year" : "month"}${current === p.id ? " (your plan)" : ""}`}
                 detail={`${p.intro ? p.intro.copy + " " : ""}About ${p.allowance.weeklyTiRequests.toLocaleString()} market-data requests a week, up to ${p.allowance.sessionTiRequests.toLocaleString()} per ${p.allowance.sessionHours} hours.${p.purchasable ? "" : " Available soon."}`} />
             ))}
           </fieldset>
@@ -104,7 +104,7 @@ export function AddMoneyFlow({ catalog, keys, plan, returned }: { catalog: PlanC
             <legend className="sr-only">Packs</legend>
             {catalog.packs.map((k) => (
               <Choice key={k.id} name="pack" value={k.id} checked={item === k.id} onChange={setItem}
-                title={`$${k.priceUsd}`} detail={`${k.grantUu.toLocaleString()} UU — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Available soon."}`} />
+                title={`$${k.priceUsd}`} detail={`${(k.totalUu ?? k.grantUu).toLocaleString()} UU${k.bonusUu ? ` (includes +${k.bonusPct}% bonus)` : ""} — about ${k.tiRequests.toLocaleString()} market-data requests.${k.purchasable ? "" : " Available soon."}`} />
             ))}
           </fieldset>
           <div className="mt-6 flex justify-between">

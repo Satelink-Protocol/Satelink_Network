@@ -156,7 +156,7 @@ async function BillingV2() {
           {cat ? (
             <Table head={["Pack", "UU", "≈ requests", ""]} numeric={[1, 2]}>
               {cat.packs.map((k) => (
-                <tr key={k.id}><td>${k.priceUsd}</td><td className="text-right">{k.grantUu.toLocaleString()}</td><td className="text-right">{k.tiRequests.toLocaleString()}</td>
+                <tr key={k.id}><td>${k.priceUsd}</td><td className="text-right">{(k.totalUu ?? k.grantUu).toLocaleString()}{k.bonusUu ? <span className="ml-1 text-[11px] text-sl-text-subtle">+{k.bonusPct}% bonus</span> : null}</td><td className="text-right">{k.tiRequests.toLocaleString()}</td>
                   <td className="text-right">{k.purchasable ? <Link className="text-xs text-sl-accent hover:underline" href="/billing/add">Buy</Link> : <span className="text-[11px] text-sl-text-subtle">Available soon</span>}</td></tr>
               ))}
             </Table>

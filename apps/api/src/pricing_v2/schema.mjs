@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS pv2_pack_grants (
   status          TEXT        NOT NULL DEFAULT 'granted' CHECK (status IN ('granted', 'reversed')),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Founder D-2 (2026-09-28): pack bonus UU, recorded apart from the grant; uu stays the total credited.
+ALTER TABLE pv2_pack_grants ADD COLUMN IF NOT EXISTS bonus_uu BIGINT NOT NULL DEFAULT 0;
 
 -- Every metered consumption: native meter + UU + pricing version + which
 -- bucket paid. The single source for session/weekly windows and usage views.

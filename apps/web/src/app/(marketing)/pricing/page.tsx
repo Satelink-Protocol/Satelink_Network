@@ -67,7 +67,7 @@ export default function PricingPage() {
               <li key={k.id} className="rounded-[var(--sl-radius-lg)] border border-sl-border bg-sl-surface p-5">
                 <p className="font-sl-display text-[2rem] leading-none text-sl-text">${k.priceUsd}</p>
                 <p className="mt-2 text-[14px] text-sl-text">About {k.tiRequests.toLocaleString("en-US")} requests</p>
-                <p className="mt-1 text-[12px] text-sl-text-subtle">{k.grantUu.toLocaleString("en-US")} UU</p>
+                <p className="mt-1 text-[12px] text-sl-text-subtle">{(k.totalUu ?? k.grantUu).toLocaleString("en-US")} UU{k.bonusUu ? ` (includes +${k.bonusPct}% bonus)` : ""}</p>
                 {k.purchasable
                   ? <a href={`${CONSOLE}/sign-in?next=${encodeURIComponent("/billing/add")}`} className="mt-4 inline-block text-[14px] font-medium text-sl-accent hover:underline">Buy pack</a>
                   : <p className="mt-4 text-[13px] text-sl-text-muted">Available soon</p>}

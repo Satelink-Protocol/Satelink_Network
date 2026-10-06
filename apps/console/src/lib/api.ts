@@ -5,6 +5,23 @@
 export const API_BASE = process.env.SATELINK_API_BASE || "https://api.satelink.network";
 const UA = "Mozilla/5.0 (compatible; SatelinkConsole/1.0; +https://console.satelink.network)";
 
+// Better Auth's per-IP limits key on the END USER's IP. Every console call to
+// /api/identity/* comes from Vercel's shared egress IPs, so it forwards the
+// visitor's IP, authenticated by CONSOLE_S2S_SECRET (the API ignores the IP
+// header without it — apps/api/src/auth/client_ip.mjs). Never sent elsewhere.
+async function identityHeaders(path: string): Promise<Record<string, string>> {
+  const secret = process.env.CONSOLE_S2S_SECRET;
+  if (!secret || !path.startsWith("/api/identity/")) return {};
+  try {
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const ip = h.get("x-real-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim();
+    return ip ? { "X-Satelink-Console-Auth": secret, "X-Satelink-End-User-Ip": ip } : {};
+  } catch {
+    return {}; // outside a request scope
+  }
+}
+
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
 export async function apiFetch<T>(
@@ -15,7 +32,7 @@ export async function apiFetch<T>(
   if (opts.key) headers["X-API-Key"] = opts.key;
   if (opts.cookie) headers.Cookie = opts.cookie;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  Object.assign(headers, opts.headers || {});
+  Object.assign(headers, await identityHeaders(path), opts.headers || {});
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method: opts.method || "GET",
