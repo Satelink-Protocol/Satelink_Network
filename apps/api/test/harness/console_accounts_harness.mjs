@@ -15,6 +15,8 @@ process.env.CONSOLE_ACCOUNTS_V1 = 'true';
 process.env.SATELINK_USAGE_LIMITS_V2_ENABLED = 'true';
 process.env.SATELINK_PLAN_BILLING_V2_ENABLED = 'true';
 process.env.DODO_MODE = 'test';
+// TEST-mode checkout is allowlist-only; the harness's fixture users are @example.test.
+process.env.DODO_TEST_CHECKOUT_ALLOWLIST ??= '@example.test';
 
 const { createMeRouter } = await import('../../src/console_accounts/router.mjs');
 const { ensureConsoleAccountsSchema } = await import('../../src/console_accounts/schema.mjs');

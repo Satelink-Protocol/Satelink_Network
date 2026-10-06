@@ -8,9 +8,22 @@ import type { AccountKey, AccountSettings } from "./account-types";
 
 export * from "./v2-shared";
 
+/** The PlanCatalog as the signed-in account may buy it (/v1/me/catalog: in Dodo
+ *  TEST mode only allowlisted founder emails see purchasable items). If that
+ *  read fails, the public catalog is shown with every paid item "Available
+ *  soon" — never purchasable by default. */
 export async function loadCatalog() {
+  const mine = await me<PlanCatalog>("/catalog");
+  if (mine.ok) return mine.data;
   const r = await apiFetch<{ ok: true; data: PlanCatalog }>("/v2/plans", { revalidate: 60 });
-  return r.ok ? r.data.data : null;
+  if (!r.ok) return null;
+  const c = r.data.data;
+  return {
+    ...c,
+    checkoutAvailable: false,
+    plans: c.plans.map((p) => ({ ...p, purchasable: false, availability: p.kind === "free" ? "free" : "soon" })),
+    packs: c.packs.map((k) => ({ ...k, purchasable: false, availability: "soon" })),
+  } as PlanCatalog;
 }
 export async function loadIntelCatalog() {
   const r = await apiFetch<IntelCatalog>("/v1/intelligence", { revalidate: 300 });
