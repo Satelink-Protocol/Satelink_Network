@@ -2,18 +2,26 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RevokeOthers, RevokeSession, SignOut } from "@/components/SessionActions";
 import { Badge, PageHeader, Panel, Table } from "@/components/ui";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, type ApiResult } from "@/lib/api";
 import { date } from "@/lib/format";
 import { authCookieHeader, getSession } from "@/lib/session";
 import { accountsEnabled } from "@/lib/account";
 import { loadSettings } from "@/lib/v2";
+import { me } from "@/lib/account";
 import { Preferences } from "@/components/v2/Preferences";
 import { TwoFactor } from "@/components/v2/TwoFactor";
 
 export const metadata: Metadata = { title: "Settings" };
 
 type Account = { providerId: string; createdAt: string };
-type SessionRow = { id: string; token: string; createdAt: string; expiresAt: string; userAgent?: string | null; ipAddress?: string | null };
+// No session token here: the console lists and revokes by opaque id (/v1/me/sessions).
+type SessionRow = { id: string; createdAt: string; expiresAt: string; userAgent?: string | null; ipAddress?: string | null; current?: boolean };
+
+/** V1 fallback (no /v1/me): Better Auth's list, reduced to fields without the token. */
+async function identitySessions(cookie: string): Promise<ApiResult<SessionRow[]>> {
+  const r = await apiFetch<(SessionRow & { token?: string })[]>("/api/identity/list-sessions", { cookie });
+  return r.ok ? { ok: true, data: r.data.map(({ id, createdAt, expiresAt, userAgent, ipAddress }) => ({ id, createdAt, expiresAt, userAgent, ipAddress })) } : r;
+}
 
 const PRIVACY_EMAIL = "satelinknetwork@gmail.com";
 
@@ -23,12 +31,12 @@ export default async function SettingsPage() {
   // lost session must redirect here rather than crash on session.user.
   if (!session) redirect("/sign-in");
   const cookie = await authCookieHeader();
+  const accountMode = accountsEnabled();
   const [accounts, sessions] = await Promise.all([
     apiFetch<Account[]>("/api/identity/list-accounts", { cookie }),
-    apiFetch<SessionRow[]>("/api/identity/list-sessions", { cookie }),
+    accountMode ? me<SessionRow[]>("/sessions") : identitySessions(cookie),
   ]);
   const u = session.user;
-  const accountMode = accountsEnabled();
   const prefs = accountMode ? await loadSettings() : null;
   const providers = accounts.ok ? accounts.data.map((a) => a.providerId) : null;
 
@@ -85,7 +93,11 @@ export default async function SettingsPage() {
                 <td className="font-mono">{s.ipAddress || ""}</td>
                 <td>{date(s.createdAt)}</td>
                 <td>{date(s.expiresAt)}</td>
-                <td className="text-right"><RevokeSession token={s.token} current={s.id === session.session.id} /></td>
+                <td className="text-right">
+                  {(s.current ?? s.id === session.session.id)
+                    ? <span className="text-[11px] text-sl-accent">this device</span>
+                    : accountMode ? <RevokeSession id={s.id} /> : null}
+                </td>
               </tr>
             ))}
           </Table>

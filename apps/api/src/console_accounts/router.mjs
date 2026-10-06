@@ -18,6 +18,7 @@ import { getAlerts, updateAlertPrefs, sendTestAlert } from './alerts.mjs';
 import { createChallenge, verifyAndLink, listWallets, unlinkWallet, x402ForWallet } from './wallets.mjs';
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
 import { createCheckout, isPlanBillingV2Enabled } from '../pricing_v2/checkout.mjs';
+import { betterAuthSessionsApi, listSessionsSafe, revokeSessionById } from './sessions.mjs';
 import { loadCatalog as loadPlanCatalog, publicCatalog } from '../pricing_v2/catalog.mjs';
 import { checkoutAllowed } from '../pricing_v2/test_checkout_guard.mjs';
 import { dodoMode } from '../pricing_v2/webhooks.mjs';
@@ -29,7 +30,7 @@ export async function betterAuthSession(pool, req) {
   if (!auth) return null;
   const { fromNodeHeaders } = await import('better-auth/node');
   const s = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-  return s?.user ? { accountId: s.user.id, email: s.user.email, name: s.user.name ?? null } : null;
+  return s?.user ? { accountId: s.user.id, email: s.user.email, name: s.user.name ?? null, sessionId: s.session?.id ?? null } : null;
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -59,6 +60,7 @@ export function createMeRouter(pool, {
   // account owns — resolved here, never sent to the browser.
   intelBase = process.env.INTEL_LOOPBACK_BASE || `http://127.0.0.1:${process.env.PORT || 8080}`,
   fetchImpl = globalThis.fetch,
+  sessionsApi = betterAuthSessionsApi(() => getBetterAuth(pool), pool),
 } = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '16kb' }));
@@ -95,6 +97,10 @@ export function createMeRouter(pool, {
   };
 
   router.get('/', h(async (req) => ({ accountId: req.account.accountId, email: req.account.email })));
+
+  // Sessions — opaque ids only; tokens stay server-side (sessions.mjs).
+  router.get('/sessions', h((req) => listSessionsSafe(sessionsApi, req, req.account.sessionId)));
+  router.post('/sessions/:sid/revoke', h((req) => revokeSessionById(pool, sessionsApi, req, req.params.sid)));
 
   // Keys
   router.get('/keys', h((req) => listKeys(pool, req.account.accountId)));

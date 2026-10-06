@@ -9,18 +9,26 @@ async function identity(path: string, body: unknown = {}) {
   return r.ok;
 }
 
-export function RevokeSession({ token, current }: { token: string; current: boolean }) {
+// Revokes by opaque session id: the API resolves the token server-side from the
+// signed-in user's own sessions, so no session token ever reaches this page.
+export function RevokeSession({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  if (current) return <span className="text-[11px] text-sl-accent">this device</span>;
+  const [failed, setFailed] = useState(false);
   return (
     <button
       type="button"
       disabled={busy}
       className="rounded border border-sl-border px-2 py-0.5 text-[11px] hover:border-sl-down hover:text-sl-down disabled:opacity-50"
-      onClick={async () => { setBusy(true); await identity("revoke-session", { token }); router.refresh(); }}
+      onClick={async () => {
+        setBusy(true);
+        const r = await fetch(`/api/console/me/sessions/${encodeURIComponent(id)}/revoke`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => null);
+        setBusy(false);
+        setFailed(!r?.ok);
+        if (r?.ok) router.refresh();
+      }}
     >
-      Revoke
+      {failed ? "Retry revoke" : "Revoke"}
     </button>
   );
 }
