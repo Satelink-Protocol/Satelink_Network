@@ -1,6 +1,6 @@
 # Stage 29 — Observability (traces, metrics, alerts, dashboard)
 
-**Branch:** `trading-agent/stage-29-observability`, stacked on Stage 27 (#482). Stage 28 has no PR: it is **paused**, because its STOP (KMS needs a new cloud account) is unanswered.
+**Branch:** `trading-agent/stage-29-observability` (PR #483), stacked on Stage 27 (#482). Stage 28 has no PR: it is **paused**, because its STOP (KMS needs a new cloud account) is unanswered.
 
 **State:** built and tested. It is not wired into a running service, because trading isn't registered (Option A) and no observability backend is deployed.
 
