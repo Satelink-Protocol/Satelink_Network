@@ -1,0 +1,1 @@
+{"status":"success","data":[{"segment":"NSE_EQ","segment_status":"ACTIVE","kill_switch_enabled":false},{"segment":"BSE_EQ","segment_status":"ACTIVE","kill_switch_enabled":false},{"segment":"NSE_FO","segment_status":"INACTIVE","kill_switch_enabled":true}]}
