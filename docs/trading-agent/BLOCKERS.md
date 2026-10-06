@@ -50,6 +50,7 @@
 | 10 broker abstraction | #465 | B-08, B-09 | interfaces + mock broker only; no real adapter, no credential material |
 | 11 market data | #466 | B-09, B-06 | public-endpoint provider injected, not wired; entitlements deny by default; no prod Redis |
 | 12 agent tool layer | #467 | B-04, B-02 | propose-only tools; not mounted; the existing AI gateway is untouched; proposal review UI not built (B-02) |
+| 13 strategy DSL | #469 | B-06, B-09, B-07 | pure validator/hasher/evaluator; no migration (uses 021 tables); not mounted; LIVE_SMALL/LIVE unreachable (LIVE_TRADING locked); no venue access |
 
 ## Open questions for the founder (no action taken)
 
