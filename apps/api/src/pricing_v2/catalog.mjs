@@ -68,11 +68,16 @@ export function itemForDodoProduct(productId, mode, c = loadCatalog()) {
 }
 
 /** Public shape (API /v2/plans → console Billing + /pricing). */
-export function publicCatalog(c = loadCatalog(), { mode = 'test' } = {}) {
+// checkoutAllowed: false marks every paid item "Available soon" (not purchasable)
+// — the TEST-mode checkout allowlist (test_checkout_guard.mjs) for callers who
+// are not on it, and for anonymous callers while Dodo is in TEST mode.
+export function publicCatalog(c = loadCatalog(), { mode = 'test', checkoutAllowed = true } = {}) {
   const uu = c.unit.usd_list_value;
   const tiReq = c.meters.intelligence_request.uu;
   return {
     version: c.version,
+    mode,
+    checkoutAvailable: checkoutAllowed,
     unit: c.unit,
     boundary: c.boundary,
     windows: c.windows,
@@ -100,7 +105,8 @@ export function publicCatalog(c = loadCatalog(), { mode = 'test' } = {}) {
         },
         limits: p.limits,
         inrPrice: p.inr_price ?? null,
-        purchasable: p.kind === 'free' ? false : Boolean(p.dodo?.[mode]) && econ.gate === 'pass',
+        purchasable: p.kind === 'free' ? false : checkoutAllowed && Boolean(p.dodo?.[mode]) && econ.gate === 'pass',
+        availability: p.kind === 'free' ? 'free' : !checkoutAllowed ? 'soon' : null,
         economicsGate: econ.gate,
       };
     }),
@@ -114,7 +120,8 @@ export function publicCatalog(c = loadCatalog(), { mode = 'test' } = {}) {
       totalUu: packTotalUu(k),
       tiRequests: Math.floor(packTotalUu(k) / tiReq),
       inrPrice: k.inr_price ?? null,
-      purchasable: Boolean(k.dodo?.[mode]) && worstCase(k, c).gate === 'pass',
+      purchasable: checkoutAllowed && Boolean(k.dodo?.[mode]) && worstCase(k, c).gate === 'pass',
+      availability: !checkoutAllowed ? 'soon' : null,
     })),
   };
 }

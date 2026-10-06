@@ -207,6 +207,9 @@ d('Pricing V2 — Dodo test-mode lifecycle', function () {
   });
 
   it('checkout: V2 metadata bound to the account; unknown / free items refused', async () => {
+    const prevAllow = process.env.DODO_TEST_CHECKOUT_ALLOWLIST;
+    process.env.DODO_TEST_CHECKOUT_ALLOWLIST = 'life@example.test';
+    after(() => { if (prevAllow === undefined) delete process.env.DODO_TEST_CHECKOUT_ALLOWLIST; else process.env.DODO_TEST_CHECKOUT_ALLOWLIST = prevAllow; });
     let sent;
     const request = async (mode, method, p, body) => { sent = { mode, method, p, body }; return { checkout_url: 'https://test.checkout.dodopayments.com/x', session_id: 'cks_1' }; };
     const out = await createCheckout({ accountId: ACCT, email: 'life@example.test', itemId: 'launch', returnUrl: 'https://console.satelink.network/billing', mode: 'test', catalog: cat, request });
@@ -215,6 +218,13 @@ d('Pricing V2 — Dodo test-mode lifecycle', function () {
     assert.deepEqual(sent.body.metadata, meta('launch'));
     await assert.rejects(createCheckout({ accountId: ACCT, itemId: 'free', mode: 'test', catalog: cat, request }), { code: 'unknown_item' });
     await assert.rejects(createCheckout({ accountId: ACCT, itemId: 'launch', mode: 'live', catalog: cat, request }), { code: 'not_purchasable' });
+    // TEST mode is allowlist-only: another email, no email, or an empty allowlist → refused before Dodo is called.
+    sent = null;
+    await assert.rejects(createCheckout({ accountId: ACCT, email: 'someone@else.test', itemId: 'launch', mode: 'test', catalog: cat, request }), { code: 'checkout_not_available' });
+    await assert.rejects(createCheckout({ accountId: ACCT, itemId: 'launch', mode: 'test', catalog: cat, request }), { code: 'checkout_not_available' });
+    process.env.DODO_TEST_CHECKOUT_ALLOWLIST = '';
+    await assert.rejects(createCheckout({ accountId: ACCT, email: 'life@example.test', itemId: 'launch', mode: 'test', catalog: cat, request }), { code: 'checkout_not_available' });
+    assert.equal(sent, null, 'Dodo was never called');
   });
 
   it('reconciliation finds missing / mismatched payments', async () => {

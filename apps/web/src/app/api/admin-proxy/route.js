@@ -3,6 +3,12 @@
 // ADMIN_TOKEN is read on the server only and never reaches the browser.
 // Its value MUST match the API's ADMIN_SECRET_TOKEN.
 //
+// Gate 0 B-02 (2026-10-07): this proxy previously injected ADMIN_TOKEN for ANY
+// caller — an open admin relay. It now returns 404 unless the admin UI gate
+// passes (ADMIN_UI_ENABLED=true AND a server-verified staff session; see
+// src/lib/admin-ui-gate.ts — no such session exists yet, so it is OFF).
+// ADMIN_TOKEN is never read before the gate and path check pass.
+//
 // Client usage (from the admin dashboard):
 //   const adminFetch = (path, opts = {}) =>
 //     fetch('/api/admin-proxy', {
@@ -11,7 +17,11 @@
 //       body: JSON.stringify({ path, method: opts.method || 'GET', body: opts.body }),
 //     }).then(r => r.json());
 
+import { adminUiAllowed, notFoundResponse, resolveAdminUpstream } from '@/lib/admin-ui-gate';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://rpc.satelink.network';
+
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,17 +31,20 @@ export const dynamic = 'force-dynamic';
 // here server-side and the upstream text/event-stream is piped straight back
 // to the browser. Used as: new EventSource('/api/admin-proxy?stream=live/feed')
 async function stream(req) {
+  if (!adminUiAllowed(req)) return notFoundResponse();
+
   const { searchParams } = new URL(req.url);
   const streamPath = searchParams.get('stream');
   if (!streamPath) return proxy(req); // no stream param → normal JSON proxy
+
+  const upstream = resolveAdminUpstream(API_BASE, streamPath);
+  if (!upstream) return notFoundResponse();
 
   const token = process.env.ADMIN_TOKEN; // server-side only
   if (!token) {
     return Response.json({ ok: false, error: 'ADMIN_TOKEN not configured' }, { status: 503 });
   }
 
-  const cleanPath = String(streamPath).replace(/^\/+/, '');
-  const upstream = `${API_BASE}/admin/${cleanPath}`;
   try {
     const res = await fetch(upstream, {
       headers: { 'x-admin-token': token, Accept: 'text/event-stream' },
@@ -54,24 +67,28 @@ async function stream(req) {
 }
 
 async function proxy(req) {
-  const token = process.env.ADMIN_TOKEN; // server-side only
-  if (!token) {
-    return Response.json({ ok: false, error: 'ADMIN_TOKEN not configured' }, { status: 503 });
-  }
+  if (!adminUiAllowed(req)) return notFoundResponse();
 
   let payload = {};
   try { payload = await req.json(); } catch { /* empty body */ }
   const { path = '', method = 'GET', body } = payload;
 
-  // Only allow forwarding to /admin/* on the API — no open relay.
-  const cleanPath = String(path).replace(/^\/+/, '');
-  const upstream = `${API_BASE}/admin/${cleanPath}`;
+  // Only forward to /admin/* on the API — no open relay, no traversal.
+  const upstream = resolveAdminUpstream(API_BASE, path);
+  if (!upstream) return notFoundResponse();
+  const verb = String(method).toUpperCase();
+  if (!ALLOWED_METHODS.has(verb)) return notFoundResponse();
+
+  const token = process.env.ADMIN_TOKEN; // server-side only
+  if (!token) {
+    return Response.json({ ok: false, error: 'ADMIN_TOKEN not configured' }, { status: 503 });
+  }
 
   try {
     const result = await fetch(upstream, {
-      method,
+      method: verb,
       headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
-      body: method !== 'GET' && body !== undefined ? JSON.stringify(body) : undefined,
+      body: verb !== 'GET' && body !== undefined ? JSON.stringify(body) : undefined,
     });
     const data = await result.json().catch(() => ({ ok: false, error: 'non-JSON upstream response' }));
     return Response.json(data, { status: result.status });

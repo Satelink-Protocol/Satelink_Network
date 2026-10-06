@@ -30,6 +30,7 @@ describe("POST /api/dodo-checkout", () => {
       INTERNAL_API_URL: "http://localhost:8080",
       NEXT_PUBLIC_DODO_CREDIT_PACKS: "pdt_pack:9.99:Starter Pack",
       NEXT_PUBLIC_SITE_URL: "https://satelink.network",
+      DODO_TEST_CHECKOUT_ALLOWLIST: "buyer@example.com",
     };
     fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -131,5 +132,30 @@ describe("POST /api/dodo-checkout", () => {
     const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));
     expect(res.status).toBe(502);
     expect(res.body.error).toBe("checkout_session_failed");
+  });
+
+  // TEST-mode founder allowlist (DODO_TEST_CHECKOUT_ALLOWLIST; empty = nobody).
+  for (const [name, allowlist] of [["an email not on the allowlist", "founder@example.com"], ["an empty allowlist", ""]] as const) {
+    it(`TEST mode refuses checkout for ${name} — 403 before any account is resolved`, async () => {
+      process.env.DODO_TEST_CHECKOUT_ALLOWLIST = allowlist;
+      const { POST } = await import("./route");
+      const res: any = await POST(makeReq({ email: "buyer@example.com", productId: "pdt_pack" }));
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("checkout_not_available");
+      expect(res.body.message).toBe("Available soon");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+    });
+  }
+
+  it("TEST mode allows an allowlisted domain entry (@example.com), case-insensitively", async () => {
+    process.env.DODO_TEST_CHECKOUT_ALLOWLIST = " @Example.com ";
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, apiKey: "sk_basic_x" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, claimToken: "claim_x" }) });
+    createCheckoutSessionMock.mockResolvedValueOnce({ session_id: "cks_2", checkout_url: "https://checkout.dodopayments.com/cks_2" });
+    const { POST } = await import("./route");
+    const res: any = await POST(makeReq({ email: "Buyer@Example.com", productId: "pdt_pack" }));
+    expect(res.status).toBe(200);
   });
 });

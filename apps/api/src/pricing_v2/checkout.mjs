@@ -6,6 +6,7 @@ import { loadCatalog, getPlan, getPack, publicCatalog } from './catalog.mjs';
 import { dodoRequest } from './dodo_client.mjs';
 import { dodoMode } from './webhooks.mjs';
 import { AccountError } from '../console_accounts/keys.mjs';
+import { checkoutAllowed, AVAILABLE_SOON } from './test_checkout_guard.mjs';
 
 export function isPlanBillingV2Enabled() {
   return process.env.SATELINK_PLAN_BILLING_V2_ENABLED === 'true';
@@ -14,6 +15,8 @@ export function isPlanBillingV2Enabled() {
 export async function createCheckout({ accountId, email, itemId, returnUrl, mode = dodoMode(), catalog = loadCatalog(), request = dodoRequest }) {
   const item = getPlan(itemId, catalog) || getPack(itemId, catalog);
   if (!item || item.kind === 'free') throw new AccountError('unknown_item', 404, 'No such plan or pack');
+  // TEST mode: only allowlisted founder emails may open a checkout.
+  if (!checkoutAllowed(email, mode)) throw new AccountError('checkout_not_available', 403, `${AVAILABLE_SOON} — paid plans open when billing goes live`);
   const pub = publicCatalog(catalog, { mode });
   const listed = [...pub.plans, ...pub.packs].find((x) => x.id === itemId);
   if (!listed?.purchasable) throw new AccountError('not_purchasable', 409, 'This plan is not available to buy yet');

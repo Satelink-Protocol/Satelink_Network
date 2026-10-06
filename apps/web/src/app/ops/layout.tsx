@@ -1,35 +1,20 @@
 // ops.satelink.network — internal operations console.
 //
-// Auth gate runs server-side because the session marker ('ops-session') is an
-// httpOnly cookie set by /api/ops-auth and is therefore unreadable by client
-// JS. We also accept an 'x-admin-token' cookie as a direct escape hatch for
-// tooling / bootstrap access. (An ?ADMIN_TOKEN=… query param can't be read from
-// a layout — Next.js only passes searchParams to pages — so it is not honored
-// here.)
-//
-// The '/ops/login' route is exempt from the gate (otherwise it would redirect
-// to itself in a loop). The pathname is provided by middleware via the
-// 'x-ops-pathname' request header since layouts don't receive it directly.
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+// Gate 0 B-03 (2026-10-07): this layout used to admit any request carrying a
+// non-empty 'ops-session' or 'x-admin-token' cookie — trivially forgeable.
+// There is no signed, server-verified staff session in apps/web yet, so the
+// whole /ops tree now 404s unless the admin UI gate passes (see
+// src/lib/admin-ui-gate.ts, which is OFF until such a session exists).
+// middleware.ts applies the same gate first; this is defense in depth.
+import { notFound } from "next/navigation";
+import { adminUiAllowed } from "@/lib/admin-ui-gate";
 
-export default async function OpsLayout({
+export default function OpsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [jar, hdrs] = await Promise.all([cookies(), headers()]);
-  const pathname = hdrs.get("x-ops-pathname") || "";
-
-  const isLoginRoute = pathname === "/ops/login" || pathname.startsWith("/ops/login/");
-
-  const authed =
-    Boolean(jar.get("ops-session")?.value) ||
-    Boolean(jar.get("x-admin-token")?.value);
-
-  if (!isLoginRoute && !authed) {
-    redirect("/ops/login");
-  }
+  if (!adminUiAllowed()) notFound();
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">{children}</div>
