@@ -1,0 +1,49 @@
+{
+  "schema": "partner-tracker/1.0",
+  "_note": "Partner validation tracker (Stage 32). Validated by apps/api/src/trading_agent/partners/tracker.mjs. Every state change cites founder-provided WRITTEN evidence references; verbal evidence is refused. No Link ID values, secrets, personal data or document contents here: references and fingerprints only. Public repository.",
+  "partners": [
+    {
+      "id": "binance",
+      "name": "Binance",
+      "programme": "Binance Link (Exchange Link or Link-and-Trade: not yet determined)",
+      "state": "UNVERIFIED",
+      "approvalRequires": ["application", "written_confirmation", "link_id", "rebate_api"],
+      "items": [
+        { "id": "application", "title": "Application to the Binance Link programme submitted", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "written_confirmation", "title": "Written acceptance from Binance", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "link_id", "title": "Link ID issued (value in the secret store only; fingerprint here)", "status": "NO_EVIDENCE", "evidence": [], "linkIdFingerprint": null },
+        { "id": "rebate_api", "title": "Written answer: which rebate API applies to our programme (Exchange Link rebate records or Link-and-Trade)", "status": "NO_EVIDENCE", "evidence": [], "answer": null }
+      ],
+      "evidence": [],
+      "history": []
+    },
+    {
+      "id": "upstox",
+      "name": "Upstox",
+      "programme": "Business / multi-customer API integration",
+      "state": "UNVERIFIED",
+      "approvalRequires": ["application", "written_confirmation", "api_order_terms"],
+      "items": [
+        { "id": "application", "title": "Application or registration for a multi-customer integration submitted", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "written_confirmation", "title": "Written confirmation that the integration may place orders on customers' behalf", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "api_order_terms", "title": "Written answer: static IP and algorithm registration requirements for API order placement", "status": "NO_EVIDENCE", "evidence": [], "answer": null }
+      ],
+      "evidence": [],
+      "history": []
+    },
+    {
+      "id": "alpaca",
+      "name": "Alpaca",
+      "programme": "Broker API (correspondent)",
+      "state": "UNVERIFIED",
+      "approvalRequires": ["application", "written_confirmation", "commission_terms"],
+      "items": [
+        { "id": "application", "title": "Broker API application submitted", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "written_confirmation", "title": "Signed Broker API agreement", "status": "NO_EVIDENCE", "evidence": [] },
+        { "id": "commission_terms", "title": "Written answer: the commission model allowed for the correspondent", "status": "NO_EVIDENCE", "evidence": [], "answer": null }
+      ],
+      "evidence": [],
+      "history": []
+    }
+  ]
+}
