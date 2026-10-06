@@ -19,6 +19,9 @@ import { createChallenge, verifyAndLink, listWallets, unlinkWallet, x402ForWalle
 import { accountPlan } from '../pricing_v2/account_plan.mjs';
 import { createCheckout, isPlanBillingV2Enabled } from '../pricing_v2/checkout.mjs';
 import { betterAuthSessionsApi, listSessionsSafe, revokeSessionById } from './sessions.mjs';
+import { loadCatalog as loadPlanCatalog, publicCatalog } from '../pricing_v2/catalog.mjs';
+import { checkoutAllowed } from '../pricing_v2/test_checkout_guard.mjs';
+import { dodoMode } from '../pricing_v2/webhooks.mjs';
 import { isOnboardingEnabled, getOnboarding, submitStep, backTo, clientMeta, consentHistory } from './onboarding.mjs';
 
 /** Default session resolver: Better Auth, from the request's cookies. */
@@ -125,6 +128,12 @@ export function createMeRouter(pool, {
 
   // Pricing V2: current plan, UU windows, pack balance; Dodo checkout.
   router.get('/plan', h(async (req) => accountPlan(pool, req.account.accountId, { tz: (await getSettings(pool, req.account.accountId)).timezone })));
+  // The PlanCatalog as THIS account may buy it: in TEST mode only allowlisted
+  // founder emails see purchasable items; everyone else sees "Available soon".
+  router.get('/catalog', h(async (req) => {
+    const mode = dodoMode();
+    return publicCatalog(loadPlanCatalog(), { mode, checkoutAllowed: isPlanBillingV2Enabled() && checkoutAllowed(req.account.email, mode) });
+  }));
   router.post('/checkout', h(async (req) => {
     if (!isPlanBillingV2Enabled()) throw new AccountError('billing_v2_disabled', 404, 'Plan checkout is not enabled yet');
     const returnUrl = String(req.body?.returnUrl || 'https://console.satelink.network/billing?checkout=done');

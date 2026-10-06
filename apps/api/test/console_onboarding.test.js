@@ -27,6 +27,8 @@ const SECRET = 'whsec_' + Buffer.from('satelink-onboarding-test-secret!').toStri
 const ENV = {
   CONSOLE_ONBOARDING_V1: 'true', SATELINK_PLAN_BILLING_V2_ENABLED: 'true', DODO_MODE: 'test',
   DODO_API_KEY_TEST: 'test-key-not-real', DODO_WEBHOOK_SECRET: SECRET,
+  // TEST-mode checkout is allowlist-only; acct_x is deliberately NOT on it.
+  DODO_TEST_CHECKOUT_ALLOWLIST: 'acct_a@example.test, acct_b@example.test, acct_c@example.test, acct_old@example.test',
 };
 
 d('console onboarding — server-side, resumable (real Postgres)', function () {
@@ -238,6 +240,26 @@ d('console onboarding — server-side, resumable (real Postgres)', function () {
   it('the data export includes the consent history', async () => {
     const r = await as('acct_a').get('/export');
     assert.deepEqual(r.body.data.consents.map((x) => x.purpose), ['terms', 'acceptable_use', 'age_18_plus', 'dpdp_processing', 'product_updates', 'recurring_charges']);
+  });
+
+  it('TEST mode: an account not on the checkout allowlist sees "Available soon" and cannot check out', async () => {
+    const x = (await as('acct_x').get('/catalog')).body.data;
+    assert.equal(x.checkoutAvailable, false);
+    for (const i of [...x.plans.filter((p) => p.kind !== 'free'), ...x.packs]) assert.deepEqual([i.id, i.purchasable, i.availability], [i.id, false, 'soon']);
+    const a = (await as('acct_a').get('/catalog')).body.data;
+    assert.equal(a.checkoutAvailable, true);
+    assert.equal(a.plans.find((p) => p.id === 'launch').purchasable, true);
+    const before = checkouts.length;
+    const c = await as('acct_x').post('/checkout', { itemId: 'launch', returnUrl: 'https://console.satelink.network/billing' });
+    assert.deepEqual([c.status, c.body.error], [403, 'checkout_not_available']);
+    await as('acct_x').post('/onboarding/account', ACCOUNT_OK);
+    await as('acct_x').post('/onboarding/name', { name: 'Xavier' });
+    await as('acct_x').post('/onboarding/use', { useCase: 'automated_trading', firstTask: 'market-data' });
+    const p = await as('acct_x').post('/onboarding/plan', { planId: 'launch', period: 'month' });
+    assert.deepEqual([p.status, p.body.error], [403, 'checkout_not_available']);
+    assert.equal(checkouts.length, before, 'no Dodo checkout was created');
+    const f = await as('acct_x').post('/onboarding/plan', { planId: 'free', period: 'month' });
+    assert.equal(f.body.data.step, 'safety', 'Free stays open to everyone');
   });
 
   it('consent document versions match the published legal pages', () => {
