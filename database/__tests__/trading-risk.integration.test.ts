@@ -103,7 +103,7 @@ describe('025_risk_engine', () => {
     expect((await ks.engaged('prn_alice')).map((e: { scopeType: string }) => e.scopeType).sort()).toEqual(['global', 'mandate']);
     await ks.release({ actor: admin, scopeType: 'global', reason: 'resolved' });
     expect((await ks.engaged('prn_alice')).map((e: { scopeType: string }) => e.scopeType)).toEqual(['mandate']);
-    await expect(pool.query(`UPDATE kill_switch_events SET action = 'release'`)).resolves.toBeDefined(); // superuser bypasses REVOKE…
+    await expect(pool.query(`UPDATE kill_switch_events SET action = 'release'`)).rejects.toThrow(/append-only/); // 029: even a superuser is refused
     const grants = (await pool.query(`SELECT has_table_privilege('public', 'kill_switch_events', 'UPDATE') AS u, has_table_privilege('public', 'kill_switch_events', 'DELETE') AS d`)).rows[0];
     expect(grants).toEqual({ u: false, d: false }); // …but PUBLIC (and satelink_app) cannot
     const bad = [
@@ -119,7 +119,10 @@ describe('025_risk_engine', () => {
   });
 
   it('decisions are recorded in audit_events; a breaker trip lands in kill_switch_events', async () => {
+    // Fresh slate for this test: the 029 guard blocks DELETE for every role, so a superuser must disable it first (the residual risk 029 documents).
+    await pool.query(`ALTER TABLE kill_switch_events DISABLE TRIGGER kill_switch_events_append_only`);
     await pool.query(`DELETE FROM kill_switch_events`);
+    await pool.query(`ALTER TABLE kill_switch_events ENABLE TRIGGER kill_switch_events_append_only`);
     const ctx = { now: NOW, policy: null };
     const engine = new RiskEngine({ loadContext: async () => ctx, store, idFactory: ids, clock: () => new Date(NOW) });
     const order = { idempotencyKey: 'idem_risk_0001', principalId: 'prn_alice', mandateId: 'mdt_1' };
