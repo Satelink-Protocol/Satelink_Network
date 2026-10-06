@@ -68,7 +68,7 @@
 | 30 E2E paper loop | #484 | B-01, B-03, B-06, B-10, B-08 | tests + a schedule-only nightly workflow (read-only token, testnet-only secrets in the `trading-testnet` environment, no deploy); paper loop deterministic (5 local green runs); acceptance (5 nightly green runs → BINANCE PAPER-VALIDATED, Gate 6) needs the workflow on `main` (Gate 0) + founder testnet secrets — not achieved |
 | 31 live money gate | #485 | all (read), B-06, B-08, B-09, B-10 | read-only gate tooling: evidence collector + generated checklist (all 9 items PENDING-HUMAN, verdict CLOSED), state separation per broker, empty LIVE_SMALL allowlist, two-person enable procedure documented; nothing enabled, no keys, no network; Gates 0/6/7 not met |
 | 32 partner validation | #486 | B-09, B-08 | partner tracker (docs) + tracker schema + Link ID config from the secret store (fingerprint only in git); no evidence provided → all brokers UNVERIFIED, no state change, no Link ID configured; verbal evidence refused by rule |
-| 33 first real trade | #TBD | all (Phase 0), B-06, B-08, B-09 | STOP triggered (gate unsigned, no user authorisation, nothing deployed) → founder Option 1: runbook + evidence template only (docs); no trade executed; ledger journal BLOCKED by Stage 20; acceptance open |
+| 33 first real trade | #487 | all (Phase 0), B-06, B-08, B-09 | STOP triggered (gate unsigned, no user authorisation, nothing deployed) → founder Option 1: runbook + evidence template only (docs); no trade executed; ledger journal BLOCKED by Stage 20; acceptance open |
 
 ## Open questions for the founder (no action taken)
 

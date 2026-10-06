@@ -2,7 +2,7 @@
 
 **No trade was executed, and none can be yet.** Stage 33 triggered its STOP: REAL MONEY GATE 1 isn't signed and there's no user authorisation. The founder chose **Option 1** (2026-10-06): prepare the runbook and the evidence template, with no live action. Acceptance (evidence pack complete, zero reconciliation variance) stays **open** until the founder executes the trade.
 
-PR: #TBD (draft, stacked on #486)
+PR: #487 (draft, stacked on #486)
 
 ## Inspection (read-only, 2026-10-06)
 
