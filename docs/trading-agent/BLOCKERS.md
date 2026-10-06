@@ -2,7 +2,7 @@
 
 **Gate 0 status: NOT PASSED.** This register is the single source of truth for the Gate 0 blockers (B-01…B-12). They were first listed in the Stage 08 audit (§8.2, local audit commit `9b8eff69`).
 
-**Last re-verified:** 2026-10-01, read-only, against `origin/main` @ `7fec0cba` (git reads plus one GitHub branch-protection read).
+**Last re-verified:** 2026-10-01, read-only, against `origin/main` @ `7fec0cba` (git reads plus one GitHub branch-protection read). **Updated 2026-10-07:** B-02/B-03 → PARTIAL after #490 (code fixed, rotation pending).
 
 ## Rules
 
@@ -18,8 +18,8 @@
 | ID | Status | Category | Gates (what stays blocked while not RESOLVED) | Owner | Verification 2026-10-01 | Resolution evidence |
 |---|---|---|---|---|---|---|
 | B-01 | OPEN | Leaked credential in git history needs rotation (plus a check that an old fallback value isn't reused) | merge of trading code to `main`; trading use of any notification channel | founder | rotation can't be verified from code; needs founder confirmation | — |
-| B-02 | OPEN | Web-tier staff/admin access control weakness; staff tokens need rotation after the fix | any trading admin/ops UI; **any human proposal-review/approval flow**; any staff-authorised action | founder + code stage | still present on `main` | — |
-| B-03 | OPEN | Unauthenticated money-adjacent internal endpoints | merge of trading code to `main`; any trading integration with ledger, payables, epochs or withdrawals | code stage (founder approval) | still present on `main` | — |
+| B-02 | PARTIAL | Web-tier staff/admin access control weakness; staff tokens need rotation after the fix | any trading admin/ops UI; **any human proposal-review/approval flow**; any staff-authorised action | founder + code stage | **2026-10-07: code fixed in #490** (merged to `main` b1c1b107; staff web surfaces deny-by-default, prod curl → 404). **Pending rotation:** remove the web-project admin token, rotate the API admin token (founder, `SECURITY_HOTFIX.md`) | — |
+| B-03 | PARTIAL | Unauthenticated money-adjacent internal endpoints | merge of trading code to `main`; any trading integration with ledger, payables, epochs or withdrawals | code stage (founder approval) | **2026-10-07: code fixed in #490** (merged to `main` b1c1b107; triggers behind the admin middleware → prod curl 401; legacy router unmounted → 404). **Pending rotation** of the admin token and the DB-role switch (founder, `SECURITY_HOTFIX.md`) | — |
 | B-04 | OPEN | Dev-agent auto-approve in committed settings; Paperclip decommission; model-provider key rotation | deploying any agent runtime; giving any agent production credentials | founder | `autoApprove: true` still in committed `.claude/settings.json` on `main` | — |
 | B-05 | OPEN | Public node-operator earnings claims need removal or rewording | any public trading UI, copy or marketing | founder | not re-checked (content); treated as open | — |
 | B-06 | OPEN | No staging environment | merging `trading-agent/integration` → `main`; applying migrations 021–023 to any shared DB; any deploy | founder | no staging branch or env on origin | — |
