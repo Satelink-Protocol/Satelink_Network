@@ -33,6 +33,7 @@ const HERE = import.meta.dirname ?? new URL('.', import.meta.url).pathname;
 const MIGRATIONS_DIR = resolve(HERE, '..', 'migrations');
 const DOWN_SQL = readFileSync(resolve(HERE, '..', 'migrations-down', '029_audit_trail.down.sql'), 'utf8');
 const DOWN_030 = readFileSync(resolve(HERE, '..', 'migrations-down', '030_billing_subscriptions.down.sql'), 'utf8'); // 030 reuses 029's guard function
+const DOWN_034 = readFileSync(resolve(HERE, '..', 'migrations-down', '034_trading_memory.down.sql'), 'utf8'); // 034 depends on 033 and 029's guard
 const DOWN_033 = readFileSync(resolve(HERE, '..', 'migrations-down', '033_trading_decisions.down.sql'), 'utf8'); // 033 reuses 029's guard function too
 const T0 = Date.UTC(2026, 9, 6, 9, 0);
 const SPEC = defineInstrument({ canonical: 'BTC-USDT', venue: 'mock', venueSymbol: 'BTCUSDT', quoteCurrency: 'USDT', quoteDecimals: 2, tickSize: '0.01', lotSize: '0.0001', minQuantity: '0.0001', minNotional: '1' });
@@ -202,6 +203,7 @@ describe('029_audit_trail', () => {
   });
 
   it('down migration removes the guards, the trace columns and the functions', async () => {
+    await pool.query(DOWN_034); // depends on 033 (Phase 6 item 9)
     await pool.query(DOWN_033); // dependents of 029's guard first (Phase 6 item 6)
     await pool.query(DOWN_030); // dependent (Stage 27) first
     await pool.query(DOWN_SQL);

@@ -24,6 +24,7 @@ import {
 const HERE = import.meta.dirname ?? new URL('.', import.meta.url).pathname;
 const MIGRATIONS_DIR = resolve(HERE, '..', 'migrations');
 const DOWN_SQL = readFileSync(resolve(HERE, '..', 'migrations-down', '033_trading_decisions.down.sql'), 'utf8');
+const DOWN_034 = readFileSync(resolve(HERE, '..', 'migrations-down', '034_trading_memory.down.sql'), 'utf8'); // depends on 033
 
 function assertLocal(url: string): void {
   const u = new URL(url);
@@ -107,6 +108,7 @@ describe('033_trading_decisions', () => {
   });
 
   it('down migration drops the table and its schema_migrations row', async () => {
+    await pool.query(DOWN_034);
     await pool.query(DOWN_SQL);
     expect((await pool.query(`SELECT to_regclass('trading_decisions') AS t`)).rows[0].t).toBeNull();
     expect((await pool.query(`SELECT 1 FROM schema_migrations WHERE filename = '033_trading_decisions.sql'`)).rowCount).toBe(0);
