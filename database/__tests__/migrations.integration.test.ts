@@ -148,6 +148,7 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '028_portfolio.sql',
       '029_audit_trail.sql',
       '030_billing_subscriptions.sql',
+      '031_trading_credential_roles.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
