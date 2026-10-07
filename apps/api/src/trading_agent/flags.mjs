@@ -26,6 +26,7 @@ export const TRADING_FLAGS = Object.freeze([
   'AUTONOMOUS_MODE',   // agent acts without per-order approval (LOCKED)
   'REVENUE_ENGINE',    // trading fees / revenue booking
   'SUBSCRIPTIONS',     // trading subscriptions
+  'MANDATE_MODE_B',    // agent / machine proposals under a human-signed Mode B mandate (paper unless LIVE_TRADING)
 ]);
 
 export const LOCKED_TRADING_FLAGS = Object.freeze(new Set([

@@ -130,7 +130,7 @@ describe('025_risk_engine', () => {
     expect([d.decision, d.failedCheck.code, d.recorded]).toEqual(['REJECT', 'POLICY_MISSING', true]);
     const row = (await pool.query(`SELECT actor_type, actor_id, principal_id, target_id, payload FROM audit_events WHERE action = 'risk.decision'`)).rows[0];
     expect(row).toMatchObject({ actor_type: 'system', actor_id: 'risk-engine', principal_id: 'prn_alice', target_id: 'idem_risk_0001' });
-    expect(row.payload).toMatchObject({ decision: 'REJECT', checksVersion: 'risk-checks/1.0', decisionId: d.decisionId });
+    expect(row.payload).toMatchObject({ decision: 'REJECT', checksVersion: 'risk-checks/1.1', decisionId: d.decisionId });
     expect(row.payload.trace).toHaveLength(20);
 
     const breaker = new RiskEngine({

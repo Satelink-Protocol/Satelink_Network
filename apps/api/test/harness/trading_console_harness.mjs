@@ -31,7 +31,7 @@ const adapters = { forVenue: () => broker };
 const mandate = { id: 'mdt_e2e_1', principalId: 'prn_e2e_alice', brokerAccountId: 'bka_e2e_1', currency: 'USDT', decimals: 2, termsHash: TERMS, status: 'active', approvedBy: 'prn_e2e_alice' };
 const mandates = { async verifyForOrder(id) { if (id !== mandate.id) throw Object.assign(new Error('mandate not found'), { code: 'NOT_FOUND' }); return mandate; } };
 const decisions = new Map();
-const risk = { async decide() { const d = { decisionId: ids('rdc'), decision: 'APPROVE', recorded: true, failedCheck: null, checksVersion: 'risk-checks/1.0', engineVersion: 'harness', trace: [] }; decisions.set(d.decisionId, d); return d; } };
+const risk = { async decide() { const d = { decisionId: ids('rdc'), decision: 'APPROVE', recorded: true, failedCheck: null, checksVersion: 'risk-checks/1.1', engineVersion: 'harness', trace: [] }; decisions.set(d.decisionId, d); return d; } };
 const acceptance = new OrderAcceptanceService({ store: omsStore, mandates, risk, venues: { capabilities: () => broker.capabilities() }, idFactory: ids });
 const riskPolicies = new RiskPolicyService({ store: riskStore, planCaps: async () => ({ maxLeverage: '3', currency: 'USDT' }), idFactory: ids });
 await riskPolicies.createVersion({ actor: { principalId: 'prn_e2e_alice', kind: 'human', role: 'user' }, principalId: 'prn_e2e_alice',

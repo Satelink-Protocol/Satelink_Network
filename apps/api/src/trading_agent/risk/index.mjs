@@ -6,7 +6,7 @@ export const FLAGS = Object.freeze(["TRADING_AGENT"]);
 export const STATUS = "skeleton";
 
 export { RiskError, RiskErrorCode } from './errors.mjs';
-export { CHECKS, CHECKS_VERSION, ORDER_INTENT_SCHEMA, PASS, referencePrice, notionalMinor, reducesExposure } from './checks.mjs';
+export { CHECKS, CHECKS_VERSION, ORDER_INTENT_SCHEMA, PASS, referencePrice, notionalMinor, reducesExposure, MODE_B_CAPS, isModeB } from './checks.mjs';
 export { evaluateChecks, Decision } from './evaluate.mjs';
 export { RiskEngine, RISK_ENGINE_VERSION } from './engine.mjs';
 export { KILL_SWITCH_SCOPES, KillSwitchSource, engagedSwitches, activeKillSwitchesFor, assertKillSwitchPermission } from './kill_switch.mjs';

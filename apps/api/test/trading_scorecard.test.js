@@ -26,7 +26,7 @@ describe('trading: scorecard + hard gates + GO/WAIT/REJECT (Phase 6 item 6)', ()
     expect(Object.keys(d.dimension_scores)).to.deep.equal([...DIMENSIONS]);
     expect(d.strategy_version).to.equal('stv_1');
     expect(d.evidence_refs.some((r) => r.startsWith('backtest:sha256:'))).to.equal(true);
-    expect(d.evidence_refs.some((r) => r.startsWith('risk:risk-checks/1.0:APPROVE'))).to.equal(true);
+    expect(d.evidence_refs.some((r) => r.startsWith('risk:risk-checks/1.1:APPROVE'))).to.equal(true);
   });
 
   it('the score is documented as decision quality, NOT a probability of profit', () => {

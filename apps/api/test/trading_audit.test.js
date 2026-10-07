@@ -129,7 +129,7 @@ function source(over = {}) {
       { eventType: 'broker_status', fromStatus: 'submitted', toStatus: 'filled', actor: 'system:dispatcher', createdAt: at(5), traceId: TRACE, spanId: 'e'.repeat(16) },
     ],
     fills: [{ brokerFillId: 'mock-fill-1', quantity: '0.002', price: '30000', feeMinor: '6', feeCurrency: 'USDT', executedAt: at(5), ledgerTxnId: null, traceId: TRACE, spanId: 'f'.repeat(16) }],
-    decision: { decisionId: 'rdc_1', decision: 'APPROVE', checksVersion: 'risk-checks/1.0', engineVersion: 'risk-1.0', policy: { id: 'rsk_1', version: 1, hash: `sha256:${'2'.repeat(64)}` }, trace: Array.from({ length: 20 }, (_, i) => ({ n: i + 1, outcome: 'pass' })), failedCheck: null },
+    decision: { decisionId: 'rdc_1', decision: 'APPROVE', checksVersion: 'risk-checks/1.1', engineVersion: 'risk-1.0', policy: { id: 'rsk_1', version: 1, hash: `sha256:${'2'.repeat(64)}` }, trace: Array.from({ length: 20 }, (_, i) => ({ n: i + 1, outcome: 'pass' })), failedCheck: null },
     mandate: { id: 'mdt_1', mode: 'copilot', modeCode: 'A', status: 'active', termsHash: `sha256:${'1'.repeat(64)}`, signedAt: at(0), stepUpMethod: 'totp', approvedBy: 'prn_alice' },
     runs: [{ id: 'run_1', principalId: 'prn_alice', status: 'completed', goalRedacted: `buy a little BTC; my key is ${SECRET}`, finalOutputRedacted: 'proposed', startedAt: at(1), spanId: '1'.repeat(16) }],
     toolCalls: [{ runId: 'run_1', seq: 1, toolName: 'get_quote', tier: 'READ', status: 'ok' }, { runId: 'run_1', seq: 2, toolName: 'propose_order', tier: 'CONTROLLED', status: 'ok' }],
