@@ -27,7 +27,8 @@ export const FORBIDDEN_TOOL_PATTERNS = Object.freeze([
   /(withdraw|transfer|payout|settle|deposit|sweep|send_funds|send_crypto)/,
   /(credential|api_key|apikey|secret|private[_]key|seed|mnemonic|password)/,
   /^(set|update|disable|override)_(risk|mandate|kill_switch|limit)/,
-  /(shell|exec_command|run_sql|sql_query|eval|http_request|fetch_url)/,
+  /(shell|exec_command|run_sql|sql_query|http_request|fetch_url)/,
+  /(^|_)eval(_|$)/, // whole token: blocks eval / run_eval / eval_js, not evaluate_opportunity (Phase 6 item 11)
 ]);
 
 export function isForbiddenToolName(name) {

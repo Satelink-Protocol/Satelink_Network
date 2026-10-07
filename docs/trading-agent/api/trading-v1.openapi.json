@@ -3,7 +3,7 @@
   "info": {
     "title": "Satelink Trading Agent API",
     "version": "1.0.0-stage24",
-    "description": "Internal, versioned API under /v1/trading. Every route is behind TRADING_AGENT (off ⇒ 404); MCP additionally behind MCP_TRADING. Mutations need Idempotency-Key; sign/approve/release need step-up. Not mounted in app_factory while B-03/B-06/B-10 are open."
+    "description": "Internal, versioned API under /v1/trading. Every route is behind TRADING_AGENT (off \u21d2 404); MCP additionally behind MCP_TRADING. Mutations need Idempotency-Key; sign/approve/release need step-up. Not mounted in app_factory while B-03/B-06/B-10 are open."
   },
   "servers": [
     {
@@ -3248,6 +3248,473 @@
           }
         }
       }
+    },
+    "/agent/opportunities/evaluate": {
+      "post": {
+        "summary": "Agent / machine: evaluate an opportunity \u2192 GO / WAIT / REJECT (score = decision quality, not a probability of profit). Never places an order. Scope READ; budgeted and metered.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ClientHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "instrument"
+                ],
+                "properties": {
+                  "instrument": {
+                    "type": "string"
+                  },
+                  "mandateId": {
+                    "type": "string"
+                  },
+                  "opportunityId": {
+                    "type": "string"
+                  },
+                  "intent": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or missing Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (tenant mismatch, CSRF, agent on a mutation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or TRADING_AGENT is off (the whole API answers 404)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / illegal transition / idempotent request still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "application/json required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Idempotency-Key reused for a different request, or refused by acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented yet (backing read model missing)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Budget exhausted for the key's period (calls or USD)"
+          }
+        }
+      }
+    },
+    "/agent/proposals": {
+      "post": {
+        "summary": "Agent / machine: create a proposal bound to a mandate, for human review (or the Mode B path when the key is EXECUTE_UNDER_MANDATE). Scope PROPOSE.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ClientHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mandateId",
+                  "instrument",
+                  "side",
+                  "quantity"
+                ],
+                "properties": {
+                  "mandateId": {
+                    "type": "string"
+                  },
+                  "instrument": {
+                    "type": "string"
+                  },
+                  "side": {
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "quantity": {
+                    "type": "string"
+                  },
+                  "limitPrice": {
+                    "type": "string"
+                  },
+                  "decisionId": {
+                    "type": "string"
+                  },
+                  "rationale": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request or missing Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (tenant mismatch, CSRF, agent on a mutation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or TRADING_AGENT is off (the whole API answers 404)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / illegal transition / idempotent request still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "application/json required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Idempotency-Key reused for a different request, or refused by acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented yet (backing read model missing)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Budget exhausted for the key's period (calls or USD)"
+          },
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/receipts/{receiptId}": {
+      "get": {
+        "summary": "Agent / machine: read a persisted decision receipt (owner only). Scope READ.",
+        "parameters": [
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ClientHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or missing Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (tenant mismatch, CSRF, agent on a mutation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or TRADING_AGENT is off (the whole API answers 404)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / illegal transition / idempotent request still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "application/json required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Idempotency-Key reused for a different request, or refused by acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented yet (backing read model missing)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Budget exhausted for the key's period (calls or USD)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3273,7 +3740,7 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{8,128}$"
         },
-        "description": "Same key + same request ⇒ replay (Idempotent-Replayed: true); different request ⇒ 422. Scoped to the principal, 24 h."
+        "description": "Same key + same request \u21d2 replay (Idempotent-Replayed: true); different request \u21d2 422. Scoped to the principal, 24 h."
       },
       "ClientHeader": {
         "name": "X-Satelink-Client",
