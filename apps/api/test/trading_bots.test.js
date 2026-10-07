@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { BotRunner, BOTS, Outcome } from '../src/trading_agent/bots/index.mjs';
 import { tradingFlagEnvName as F } from '../src/trading_agent/flags.mjs';
@@ -12,6 +13,8 @@ const ROOT = path.resolve(HERE, '../../..');
 const ON = { [F('TRADING_AGENT')]: 'true', [F('BINANCE')]: 'true', [F('REVENUE_ENGINE')]: 'true' };
 const GLOBAL_ENGAGED = [{ seq: 1, scopeType: 'global', scopeId: null, principalId: null, action: 'engage', source: 'admin', reason: 'halt' }];
 const quiet = { info() {}, error() {} };
+/** GET via node:http — independent of globalThis.fetch (other suites stub it). */
+const get = (url) => new Promise((resolve, reject) => { http.get(url, (res) => { let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => resolve(b)); }).on('error', reject); });
 
 /** Manual timer: records scheduled callbacks, runs them on demand. */
 function manualTimer() {
@@ -161,12 +164,12 @@ describe('trading: automation bot runner (Phase 6 item 10)', () => {
       let health;
       for (let i = 0; i < 50 && !health; i += 1) {
         await new Promise((res) => setTimeout(res, 100));
-        health = await fetch(`http://127.0.0.1:${port}/health`).then((x) => x.json()).catch(() => null);
+        health = await get(`http://127.0.0.1:${port}/health`).then((x) => JSON.parse(x)).catch(() => null);
       }
       expect(health).to.include({ ok: true, service: 'trading-bots' });
       expect(Object.keys(health.bots)).to.have.length(11);
       await new Promise((res) => setTimeout(res, 200));
-      const metrics = await fetch(`http://127.0.0.1:${port}/metrics`).then((x) => x.text());
+      const metrics = await get(`http://127.0.0.1:${port}/metrics`);
       expect(metrics).to.match(/trading_bot_runs_total\{bot="oms_dispatcher",outcome="skipped_flag"\}/);
       expect(metrics).to.not.match(/outcome="ok"/);
     } finally {

@@ -24,6 +24,7 @@ Before this item nothing scheduled the dispatcher, reconcilers or fill consumer 
 | Suite | Result |
 |---|---|
 | `apps/api/test/trading_bots.test.js` | **11 passing**: registry (9 + 2); deterministic bots run the jobs and never reach the orchestrator; flags read at run time (master + per-bot); **global kill switch stops acting bots, watchers continue**; fail-closed without kill-switch visibility; not_configured; fail-open error then recovery; overlap skipped; timeout; scheduling at each interval + stop() clears all timers; event bots via the orchestrator only, post-trade review writes memory, bounded queue drops; metrics text; API process has no bot/trading imports; **a real spawned worker process serves /health (11 bots) and /metrics (skipped_flag, no ok runs)** |
+| Full API suite | 1066 passing, no new failures from this stage. The first run caught a real test fragility: another suite stubs `globalThis.fetch` and never restores it, so the worker test now uses `node:http`. The rate-limiter / TI / api-keys tests that failed under load pass alone (7/7, 2/2, 19/19 ×2) |
 | Mutation checks (9) | all caught: master flag ignored, kill switch ignored, acting without kill-switch visibility, overlap allowed, timeout ignored, no rescheduling, unbounded queue, dispatcher not treated as acting, missing deps run |
 | Postgres | the worker reads kill-switch events through the existing `PgRiskStore` (covered by Stage 15's integration suite); the bots drive Postgres stores end to end in the item-14 full-loop E2E |
 
