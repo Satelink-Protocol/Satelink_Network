@@ -68,6 +68,10 @@ describe('agent: model cannot call placeOrder', () => {
     for (const n of EXECUTION_NAMES) expect(registry.has(n), n).to.equal(false);
     for (const s of registry.specs()) expect(isForbiddenToolName(s.function.name), s.function.name).to.equal(false);
   });
+  it('eval-style names stay forbidden as whole tokens; evaluate_opportunity is allowed (Phase 6 item 11)', () => {
+    for (const n of ['eval', 'run_eval', 'eval_js', 'js_eval_code']) expect(isForbiddenToolName(n), n).to.equal(true);
+    for (const n of ['evaluate_opportunity', 'get_receipt', 'propose_strategy']) expect(isForbiddenToolName(n), n).to.equal(false);
+  });
   it('execution tools cannot be registered', () => {
     const { registry } = harness();
     for (const n of EXECUTION_NAMES.filter((x) => /^[a-z][a-z0-9_]+$/.test(x))) {

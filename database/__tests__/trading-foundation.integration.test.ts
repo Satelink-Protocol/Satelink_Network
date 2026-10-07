@@ -22,7 +22,7 @@ const HERE = import.meta.dirname ?? new URL('.', import.meta.url).pathname;
 const MIGRATIONS_DIR = resolve(HERE, '..', 'migrations');
 const DOWN_SQL = readFileSync(resolve(HERE, '..', 'migrations-down', '021_trading_foundation.down.sql'), 'utf8');
 // Later migrations with FKs into 021 tables; rolled back first, newest first (reverse order).
-const DEPENDENT_DOWNS = ['034_trading_memory', '033_trading_decisions', '032_model_cost_metering', '031_trading_credential_roles', '030_billing_subscriptions', '029_audit_trail', '028_portfolio', '027_oms', '026_mandates', '025_risk_engine', '024_backtests'].map((m) => ({ name: `${m}.sql`, sql: readFileSync(resolve(HERE, '..', 'migrations-down', `${m}.down.sql`), 'utf8') }));
+const DEPENDENT_DOWNS = ['035_trading_agent_access', '034_trading_memory', '033_trading_decisions', '032_model_cost_metering', '031_trading_credential_roles', '030_billing_subscriptions', '029_audit_trail', '028_portfolio', '027_oms', '026_mandates', '025_risk_engine', '024_backtests'].map((m) => ({ name: `${m}.sql`, sql: readFileSync(resolve(HERE, '..', 'migrations-down', `${m}.down.sql`), 'utf8') }));
 
 const TRADING_TABLES = [
   'broker_accounts', 'broker_credentials_metadata', 'broker_credential_ciphertexts', 'strategies',

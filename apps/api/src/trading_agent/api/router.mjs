@@ -10,6 +10,7 @@ import { isTradingFlagEnabled, tradingFlagSnapshot } from '../flags.mjs';
 import { ApiError } from './errors.mjs';
 import { flagGate, authenticate, csrfGuard, humanForMutations, rateLimiter, idempotency, requireStepUp, wrap, InMemoryIdempotencyStore } from './middleware.mjs';
 import { createMcpHandler } from './mcp.mjs';
+import { randomUUID } from 'node:crypto';
 
 /** The route table (method, path, step-up?) — the OpenAPI contract test checks it both ways. */
 export const ROUTES = Object.freeze([
@@ -23,6 +24,7 @@ export const ROUTES = Object.freeze([
   ['GET', '/positions'], ['GET', '/portfolio/snapshots'],
   ['GET', '/proposals'], ['POST', '/proposals/:proposalId/approve', 'step-up'], ['POST', '/proposals/:proposalId/reject'],
   ['POST', '/mcp'],
+  ['POST', '/agent/opportunities/evaluate'], ['POST', '/agent/proposals'], ['GET', '/agent/receipts/:receiptId'],
 ].map(([method, path, stepUp]) => Object.freeze({ method, path, stepUp: stepUp === 'step-up' })));
 
 const ok = (res, data, status = 200) => res.status(status).json({ ok: true, data });
@@ -54,6 +56,14 @@ export function createTradingApiRouter({ env = {}, resolvePrincipal, services, s
     if (!mcpHandler) throw new ApiError(404, 'NOT_FOUND', 'not found');
     return mcpHandler(req, res);
   }));
+
+  // ── Machine / AI-agent interface (Phase 6 item 11): agent & machine API keys; scope, budget, rate
+  //    limit and metering inside the port (access/guard.mjs). Registered before the human-only
+  //    mutation guard on purpose; still idempotent. Nothing here can place an order.
+  const agentIdem = idempotency({ store: idempotencyStore, clock });
+  r.post('/agent/opportunities/evaluate', limit('write'), agentIdem, wrap(async (req, res) => ok(res, await services.agent.evaluate(req.principal, req.body, req.idempotencyKey))));
+  r.post('/agent/proposals', limit('write'), agentIdem, wrap(async (req, res) => ok(res, await services.agent.propose(req.principal, req.body, req.idempotencyKey), 201)));
+  r.get('/agent/receipts/:receiptId', limit('read'), wrap(async (req, res) => ok(res, await services.agent.receipt(req.principal, req.params.receiptId, req.get('x-request-id') ?? randomUUID()))));
 
   r.use(csrfGuard({ trustedOrigins }), humanForMutations());
   r.use((req, res, next) => (req.method === 'GET' ? limit('read')(req, res, next) : limit('write')(req, res, next)));

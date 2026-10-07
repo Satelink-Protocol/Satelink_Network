@@ -22,6 +22,7 @@ const strOrNull = (v) => (typeof v === 'string' && v.length ? v : null);
  * @param d.portfolio                                    Stage 18 PortfolioReadService
  * @param d.receipts                                     Stage 19 TradeReceiptAssembler
  * @param d.proposals                                    optional review queue (B-02) { list, approve, reject }
+ * @param d.machine                                      optional machine / agent interface (access/interface.mjs)
  */
 export function createServicePorts(d) {
   const ownStrategy = async (p, strategyId) => { const s = await d.strategyStore.getStrategy(strategyId); must(s && s.principalId === p.principalId); return s; };
@@ -85,6 +86,11 @@ export function createServicePorts(d) {
       list: async () => { throw notImplemented('the proposal review queue (B-02)'); },
       approve: async () => { throw notImplemented('the proposal review queue (B-02)'); },
       reject: async () => { throw notImplemented('the proposal review queue (B-02)'); },
+    },
+    agent: d.machine ?? {
+      evaluate: async () => { throw notImplemented('the machine / agent interface'); },
+      propose: async () => { throw notImplemented('the machine / agent interface'); },
+      receipt: async () => { throw notImplemented('the machine / agent interface'); },
     },
   });
 }

@@ -23,7 +23,8 @@ export function authenticate(resolvePrincipal) {
     for (const src of [req.body, req.query]) {
       if (src && Object.hasOwn(src, 'principalId') && src.principalId !== p.principalId) throw new ApiError(403, 'TENANT_MISMATCH', 'principalId does not match the authenticated principal');
     }
-    req.principal = Object.freeze({ principalId: p.principalId, kind: p.kind === 'human' ? 'human' : 'agent', via: p.via ?? 'session', role: 'user' });
+    // machine principals keep their kind; an agent/machine API key keeps its scope / budget / mandate (Phase 6 item 11)
+    req.principal = Object.freeze({ principalId: p.principalId, kind: p.kind === 'human' ? 'human' : p.kind === 'machine' ? 'machine' : 'agent', via: p.via ?? 'session', role: 'user', ...(p.agentKey ? { agentKey: p.agentKey } : {}) });
     next();
   });
 }
