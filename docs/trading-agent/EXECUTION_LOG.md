@@ -101,3 +101,17 @@ Integration then synced with main (4cee5e7f). API suite on it (local PG): **873 
 - Stashes: 10, none dropped (listed under Phase 1).
 ### Side effect
 Vercel build quota exhausted (≈26 integration merges × 3 projects of preview builds) → all Vercel builds rate-limited for 24 h from ~02:05 IST.
+
+## Phase 4 — Repository cleanup (2026-10-07 02:10–02:27 IST; merge HELD)
+- Tag `archive/pre-cleanup-2026-10-07` → `bdb52ecf` pushed.
+- PR **#493** `chore(repo): evidence-based cleanup` (583f5c17): 134 files, +111 / −10,640. 116 deleted, 13 archived to `legacy/`, manifest `docs/CLEANUP_MANIFEST.md`.
+- Local verification (clean `npm ci` in worktree): lockfile prune 41 removed / 0 added / 0 version changes; `next build` web ✅ console ✅ corporate ✅; API 408 passing / 20 failing (identical set to main); web vitest 192/192.
+- CI on #493: all required checks pass (Tests, Type Check + Lint, Build Verification, Secret Scan, API Test Baseline Guard, + Architecture, Financial OS, CodeQL). Vercel previews: "Deployment rate limited".
+- `.env.staging.example` deletion deferred: `scripts/pre-commit-gate.sh:24` blocks any staged `.env.*` path incl. deletions; not bypassed.
+- `git gc --prune=now`: `.git` 128M → 119M.
+- **13:55 IST:** API found down again — Railway deployments 8e932739 / 8e555331 / 7cecb63b (from the 01:30–01:56 main merges) all REMOVED (administrative, not crash; last POST health 01:59 = 200 ×7). Founder decision (13:58): **hold all merges to `main`**, continue Phases 5–6 on integration.
+
+## Phase 5 — Architecture map (2026-10-07 14:05 IST)
+- `docs/trading-agent/ARCHITECTURE.md` at integration 443ad62f. EXISTS 9 / PARTIAL 10 / MISSING 15 / WRONG 1 / DUPLICATE 2.
+- Architecture test (27 questions, reconstructed from the locked definition — original list not in repo): YES 8 / PARTIAL 7 / NO 11 / Q18 NO (desired).
+- Spot checks: `grep -c trading_agent apps/api/app_factory.mjs apps/api/server.js` → 0/0; 501 ports `api/ports.mjs:59,85-87`; `/v1/intelligence` mounted `app_factory.mjs:419` (WRONG vs definition).
