@@ -6,6 +6,7 @@ import { runBacktest } from '../../src/trading_agent/backtest/index.mjs';
 import { walkForward, stressTest, WALK_FORWARD_CONFIG } from '../../src/trading_agent/validation/index.mjs';
 import { barsFromCandles, classifyRegime, analyzeLiquidity, assessDataConfidence } from '../../src/trading_agent/engines/index.mjs';
 import { normalizeCandle } from '../../src/trading_agent/market_data/types.mjs';
+import { assessPortfolioFit } from '../../src/trading_agent/portfolio/fit.mjs';
 import { tradingFlagEnvName as F } from '../../src/trading_agent/flags.mjs';
 
 export const H = 3_600_000;
@@ -81,13 +82,20 @@ export function evidence() {
   return cached;
 }
 
+/** Real portfolio-fit assessment: a small ETH long already held, candidate = 300 USDT of BTC. */
+export const PORTFOLIO_FIT = (over = {}) => assessPortfolioFit({
+  equity: '10000', positions: [{ instrument: 'ETH-USDT', quantity: '0.5', avgEntryPrice: '2000', mark: '2000' }],
+  candidate: { instrument: 'BTC-USDT', side: 'buy', notional: '300', strategyId: 'stg_1' },
+  activeStrategies: [{ strategyId: 'stg_1', instruments: ['BTC-USDT'] }], ...over,
+});
+
 /** A complete, healthy decision input. Each test mutates a fresh copy. */
 export function goodInput() {
   const e = evidence();
   return {
     strategy: { versionId: 'stv_1', definitionHash: DSL.hash, preferredRegimes: ['ranging'] },
     backtest: e.backtest, walkForward: e.walk, stress: e.stress, regime: e.regime, dataConfidence: e.dataConfidence,
-    portfolioFit: { score: 80, configVersion: 'portfolio-fit/1.0' },
+    portfolioFit: PORTFOLIO_FIT(),
     liquidity: analyzeLiquidity(BOOK, { side: 'buy', notional: '300' }),
     modelledSlippageBps: '10',
     broker: { status: 'ok' },

@@ -49,6 +49,8 @@ describe('trading: scorecard + hard gates + GO/WAIT/REJECT (Phase 6 item 6)', ()
       ['validation_expired', (i) => { i.validationTimes.stress = new Date(NOW - 8 * DAY).toISOString(); }],
       ['validation_expired', (i) => { delete i.validationTimes.walk_forward; }],
       ['risk', (i) => { i.order = null; }],
+      ['concentration', (i) => { i.portfolioFit = { ...i.portfolioFit, concentration: { ...i.portfolioFit.concentration, verdict: 'fail', flags: ['instrument_concentration'] } }; }],
+      ['concentration', (i) => { i.portfolioFit = null; }],
     ];
     for (const [gate, mut] of cases) {
       it(`${gate} → REJECT`, () => {
@@ -78,7 +80,7 @@ describe('trading: scorecard + hard gates + GO/WAIT/REJECT (Phase 6 item 6)', ()
 
   describe('WAIT', () => {
     it('no gate fails but the score is below the GO threshold → WAIT', () => {
-      const d = run((i) => { i.portfolioFit = { score: 0, configVersion: 'portfolio-fit/1.0' }; i.regime = { ...i.regime, primary: 'uncertain', labels: ['uncertain'] }; i.strategy.preferredRegimes = ['trending']; });
+      const d = run((i) => { i.portfolioFit = { ...i.portfolioFit, score: 0 }; i.regime = { ...i.regime, primary: 'uncertain', labels: ['uncertain'] }; i.strategy.preferredRegimes = ['trending']; });
       expect(d.failed_gates).to.deep.equal([]);
       expect(d.decision).to.equal(d.score < SCORECARD_CONFIG.goScore || d.confidence < SCORECARD_CONFIG.goConfidence ? 'WAIT' : 'GO');
       const forced = decide(goodInput(), { now, cfg: { ...SCORECARD_CONFIG, goScore: 99 } });
@@ -90,9 +92,9 @@ describe('trading: scorecard + hard gates + GO/WAIT/REJECT (Phase 6 item 6)', ()
     });
   });
 
-  it('a missing input is null and lowers confidence — never silently neutral', () => {
+  it('a missing input is null and lowers confidence — never silently neutral (a missing portfolio assessment also fails the concentration gate)', () => {
     const full = run();
-    const d = run((i) => { i.portfolioFit = null; i.liquidity = { ...i.liquidity, fill: null }; });
+    const d = run((i) => { i.portfolioFit = { ...i.portfolioFit, score: null }; i.liquidity = { ...i.liquidity, fill: null }; });
     expect(d.dimension_scores.portfolio_fit).to.equal(null);
     expect(d.dimension_scores.execution_quality).to.equal(null);
     expect(d.confidence).to.equal(full.confidence - 10);

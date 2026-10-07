@@ -6,10 +6,11 @@
 //   insufficient_liquidity / abnormal_spread — liquidity engine flags
 //   mandate_expired       — mandate missing, not active, or past expiry
 //   validation_expired    — walk-forward / stress missing or older than validationMaxAgeMs
+//   concentration         — portfolio-fit engine verdict (Phase 6 item 7); fails CLOSED when no assessment
 import { evaluateChecks, Decision } from '../risk/evaluate.mjs';
 import { activeKillSwitchesFor } from '../risk/kill_switch.mjs';
 
-export const GATES = Object.freeze(['risk', 'kill_switch', 'stale_data', 'broker_unavailable', 'insufficient_liquidity', 'abnormal_spread', 'mandate_expired', 'validation_expired']);
+export const GATES = Object.freeze(['risk', 'kill_switch', 'stale_data', 'broker_unavailable', 'insufficient_liquidity', 'abnormal_spread', 'mandate_expired', 'validation_expired', 'concentration']);
 
 export function evaluateGates(i, cfg, now) {
   const failed = [];
@@ -41,5 +42,8 @@ export function evaluateGates(i, cfg, now) {
     if (!v || !at) fail('validation_expired', `${name} missing`);
     else if (now.getTime() - Date.parse(at) > cfg.validationMaxAgeMs) fail('validation_expired', `${name} computed ${at}`);
   }
+  const conc = i.portfolioFit?.concentration;
+  if (!conc) fail('concentration', 'no portfolio-fit assessment (the portfolio check cannot be skipped)');
+  else if (conc.verdict !== 'pass') fail('concentration', `${conc.flags.join(', ')}: instrument ${conc.instrumentPct}% / gross ${conc.grossExposurePct}% of equity`);
   return Object.freeze({ failed: Object.freeze(failed), riskResult });
 }

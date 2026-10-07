@@ -12,3 +12,4 @@ export { PortfolioSnapshotter } from './snapshots.mjs';
 export { PortfolioReconciler, RECON_ACTOR } from './reconcile.mjs';
 export { PortfolioReadService } from './service.mjs';
 export { InMemoryPortfolioStore, PgPortfolioStore } from './store.mjs';
+export { assessPortfolioFit, correlation, PORTFOLIO_FIT_CONFIG } from './fit.mjs';
