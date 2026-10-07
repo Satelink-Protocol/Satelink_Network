@@ -13,6 +13,10 @@ export { ToolRegistry, ToolTier, defineTool, isForbiddenToolName, FORBIDDEN_TOOL
 export { createDefaultTools, MARKET_PURPOSE } from './tools.mjs';
 export { AIProvider, ScriptedProvider, Task } from './provider.mjs';
 export { GroqProvider, GROQ_DEFAULT_BASE_URL } from './providers/groq.mjs';
+export { AnthropicProvider } from './providers/anthropic.mjs';
 export { ModelRouter } from './router.mjs';
-export { TraceRecorder, InMemoryTraceStore, PgTraceStore } from './trace.mjs';
+export { TieredModelRouter } from './tiered_router.mjs';
+export { Tier, LLM_TIERS, TASK_TIER, tierFor, DEFAULT_TIER_ROUTES, TIER_OPTIONS, ROUTER_CONFIG_VERSION } from './tiers.mjs';
+export { PRICES, PRICE_VERSION, costOf } from './pricing.mjs';
+export { TraceRecorder, InMemoryTraceStore, PgTraceStore, COST_DIMENSIONS } from './trace.mjs';
 export { AgentRunner, SYSTEM_PROMPT } from './runtime.mjs';

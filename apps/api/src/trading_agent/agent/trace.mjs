@@ -11,7 +11,32 @@ export class InMemoryTraceStore {
   async finishRun(id, patch) { Object.assign(this.runs.find((r) => r.id === id), patch); }
   async insertToolCall(r) { this.toolCalls.push(r); }
   async insertModelTrace(r) { this.modelTraces.push(r); }
+  /** Same contract as PgTraceStore.costBy. */
+  async costBy(dimension) {
+    const col = COST_DIMENSIONS[dimension];
+    if (!col) throw new AgentError('CONFIG', `unknown cost dimension ${dimension}`);
+    const principalOf = new Map(this.runs.map((r) => [r.id, r.principalId]));
+    const agg = new Map();
+    for (const t of this.modelTraces) {
+      const key = dimension === 'principal' ? principalOf.get(t.runId) : t[col.field];
+      if (key == null) continue;
+      const a = agg.get(key) ?? { key, calls: 0, pricedCalls: 0, unpricedCalls: 0, costUsdMicro: 0n, inputTokens: 0, outputTokens: 0 };
+      a.calls += 1;
+      if (t.costPriced) { a.pricedCalls += 1; a.costUsdMicro += BigInt(t.costUsdMicro); } else a.unpricedCalls += 1;
+      a.inputTokens += t.inputTokens ?? 0; a.outputTokens += t.outputTokens ?? 0;
+      agg.set(key, a);
+    }
+    return [...agg.values()].sort((x, y) => String(x.key).localeCompare(String(y.key))).map((a) => ({ ...a, costUsdMicro: String(a.costUsdMicro) }));
+  }
 }
+
+/** Cost aggregation dimensions → model_traces column (principal comes from agent_runs). */
+export const COST_DIMENSIONS = Object.freeze({
+  principal: { sql: 'r.principal_id', field: null },
+  strategy: { sql: 't.strategy_id', field: 'strategyId' },
+  opportunity: { sql: 't.opportunity_id', field: 'opportunityId' },
+  machine_request: { sql: 't.machine_request_id', field: 'machineRequestId' },
+});
 
 export class PgTraceStore {
   #pool;
@@ -41,11 +66,37 @@ export class PgTraceStore {
   async insertModelTrace(r) {
     await this.#pool.query(
       `INSERT INTO model_traces (id, run_id, seq, task, provider, model, status, error_code, request_redacted, response_redacted,
-                                 input_tokens, output_tokens, latency_ms, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+                                 input_tokens, output_tokens, latency_ms, created_at,
+                                 tier, task_type, cache_read_tokens, cache_write_tokens, cost_usd_micro, cost_priced, price_version,
+                                 strategy_id, opportunity_id, machine_request_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
       [r.id, r.runId, r.seq, r.task, r.provider, r.model, r.status, r.errorCode, JSON.stringify(r.request), JSON.stringify(r.response),
-        r.inputTokens, r.outputTokens, r.latencyMs, r.createdAt],
+        r.inputTokens, r.outputTokens, r.latencyMs, r.createdAt,
+        r.tier ?? null, r.taskType ?? null, r.cacheReadTokens ?? null, r.cacheWriteTokens ?? null,
+        r.costUsdMicro == null ? null : String(r.costUsdMicro), r.costPriced === true, r.priceVersion ?? null,
+        r.strategyId ?? null, r.opportunityId ?? null, r.machineRequestId ?? null],
     );
+  }
+
+  /** LLM cost per user / strategy / opportunity / machine request. Amounts are micro-USD strings. */
+  async costBy(dimension, { since = null, until = null } = {}) {
+    const col = COST_DIMENSIONS[dimension];
+    if (!col) throw new AgentError('CONFIG', `unknown cost dimension ${dimension}`);
+    const { rows } = await this.#pool.query(
+      `SELECT ${col.sql} AS key,
+              count(*)::int AS calls,
+              count(*) FILTER (WHERE t.cost_priced)::int AS priced_calls,
+              count(*) FILTER (WHERE NOT t.cost_priced)::int AS unpriced_calls,
+              COALESCE(sum(t.cost_usd_micro) FILTER (WHERE t.cost_priced), 0)::text AS cost_usd_micro,
+              COALESCE(sum(t.input_tokens), 0)::int AS input_tokens,
+              COALESCE(sum(t.output_tokens), 0)::int AS output_tokens
+         FROM model_traces t JOIN agent_runs r ON r.id = t.run_id
+        WHERE ${col.sql} IS NOT NULL
+          AND ($1::timestamptz IS NULL OR t.created_at >= $1) AND ($2::timestamptz IS NULL OR t.created_at < $2)
+        GROUP BY 1 ORDER BY 1`,
+      [since, until],
+    );
+    return rows.map((x) => ({ key: x.key, calls: x.calls, pricedCalls: x.priced_calls, unpricedCalls: x.unpriced_calls, costUsdMicro: x.cost_usd_micro, inputTokens: x.input_tokens, outputTokens: x.output_tokens }));
   }
 }
 
@@ -95,6 +146,11 @@ export class TraceRecorder {
       request: redact(a.request ?? null), response: redact(a.result ? { content: a.result.content, toolCalls: a.result.toolCalls } : null),
       inputTokens: a.result?.usage?.inputTokens ?? null, outputTokens: a.result?.usage?.outputTokens ?? null,
       latencyMs: a.latencyMs ?? null, createdAt: this.#clock().toISOString(),
+      // Phase 6 item 3 (migration 032): tier, cost and attribution — absent for Stage 12 callers
+      tier: a.tier ?? null, taskType: a.taskType ?? null,
+      cacheReadTokens: a.result?.usage?.cacheReadInputTokens ?? null, cacheWriteTokens: a.result?.usage?.cacheCreationInputTokens ?? null,
+      costUsdMicro: a.cost?.costUsdMicro ?? null, costPriced: a.cost?.priced === true, priceVersion: a.cost?.priceVersion ?? null,
+      strategyId: a.attribution?.strategyId ?? null, opportunityId: a.attribution?.opportunityId ?? null, machineRequestId: a.attribution?.machineRequestId ?? null,
     });
   }
 }
