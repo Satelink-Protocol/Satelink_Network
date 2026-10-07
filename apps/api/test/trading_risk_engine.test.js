@@ -283,7 +283,7 @@ describe('risk: fail closed', () => {
     const store = new InMemoryRiskStore();
     const engine = new RiskEngine({ loadContext: async () => CTX(), store, idFactory: (p) => `${p}_0001`, clock: () => new Date(NOW) });
     const d = await engine.decide(ORDER());
-    expect(d).to.deep.include({ decisionId: 'rdc_0001', decision: 'APPROVE', failedCheck: null, recorded: true, checksVersion: 'risk-checks/1.0', engineVersion: 'risk-1.0' });
+    expect(d).to.deep.include({ decisionId: 'rdc_0001', decision: 'APPROVE', failedCheck: null, recorded: true, checksVersion: 'risk-checks/1.1', engineVersion: 'risk-1.0' });
     const rec = store.decisions[0];
     expect(rec.policy).to.deep.equal({ id: 'rsk_1', version: 1, hash: CTX().policy.hash });
     expect(rec.trace).to.have.length(20);

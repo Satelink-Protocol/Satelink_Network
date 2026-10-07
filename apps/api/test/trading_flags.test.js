@@ -9,7 +9,7 @@ import { mountTradingRoutes, TRADING_MOUNT_PATH } from '../src/trading_agent/ind
 describe('trading_agent flags (Stage 09)', () => {
   const EXPECTED = [
     'TRADING_AGENT', 'BINANCE', 'UPSTOX_COPILOT', 'UPSTOX_AUTOMATED', 'ALPACA', 'LIVE_TRADING',
-    'LIVE_SMALL', 'BYOK', 'MCP_TRADING', 'AUTONOMOUS_MODE', 'REVENUE_ENGINE', 'SUBSCRIPTIONS',
+    'LIVE_SMALL', 'BYOK', 'MCP_TRADING', 'AUTONOMOUS_MODE', 'REVENUE_ENGINE', 'SUBSCRIPTIONS', 'MANDATE_MODE_B',
   ];
 
   it('registers exactly the 12 required flags', () => {

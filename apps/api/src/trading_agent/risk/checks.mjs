@@ -14,7 +14,7 @@ import { isTradingFlagEnabled } from '../flags.mjs';
 import { marketCalendar } from '../backtest/calendar.mjs';
 import { activeKillSwitchesFor } from './kill_switch.mjs';
 
-export const CHECKS_VERSION = 'risk-checks/1.0';
+export const CHECKS_VERSION = 'risk-checks/1.1'; // 1.1 (Phase 6 item 12): Mode B coverage inside check 7, MANDATE_MODE_B in check 3
 export const PASS = Object.freeze({ ok: true });
 const no = (code, detail, extra = {}) => Object.freeze({ ok: false, code, detail, ...extra });
 
@@ -46,8 +46,10 @@ export const ORDER_INTENT_SCHEMA = Object.freeze({
     idempotencyKey: { type: 'string', pattern: '^[A-Za-z0-9_-]{8,128}$' },
     principalId: ID('prn'), brokerAccountId: ID('bka'), mandateId: ID('mdt'),
     strategyVersionId: { ...ID('stv') },
-    origin: { enum: ['strategy', 'manual', 'llm_proposal'] },
+    origin: { enum: ['strategy', 'manual', 'llm_proposal', 'agent_proposal'] },
     approvedBy: ID('prn'),
+    proposedBy: ID('prn'),          // agent / machine principal that proposed it (Mode B)
+    decisionId: ID('dec'),          // the scorecard GO it relies on (Mode B)
     mode: { enum: ['paper', 'live'] },
     venue: { enum: ['binance', 'alpaca', 'upstox', 'mock'] },
     instrument: { type: 'string', pattern: '^([A-Z0-9]{2,15}-[A-Z0-9]{2,15}|[A-Z]{2,10}:[A-Z0-9&._-]{1,30})$' },
@@ -84,6 +86,39 @@ export function reducesExposure(o, ctx) {
 }
 const strategyIdOf = (ctx) => ctx.strategy?.strategyId ?? null;
 
+// ── Mode B (Phase 6 item 12) ─────────────────────────────────────────────────────
+// An agent / machine proposal may proceed WITHOUT a per-order human click only when ALL hold
+// (every other check still runs and must pass; live mode still needs LIVE_TRADING, which is LOCKED):
+//   the mandate is a human step-up-signed Mode B mandate (021 'automated', terms mode B) for the
+//   order's strategy version and instrument; the proposer's key is EXECUTE_UNDER_MANDATE, bound to
+//   this mandate and owned by this principal; a persisted scorecard GO for the same principal,
+//   instrument and side, not expired; and the order is within the LIVE_SMALL caps.
+export const MODE_B_CAPS = Object.freeze({ maxOrderNotional: '50', maxDailyNotional: '200' }); // in policy currency units (LIVE_SMALL, Stage 35)
+export const isModeB = (o) => o.origin === 'agent_proposal' && !o.approvedBy;
+
+function modeBCoverage(o, ctx, m, now) {
+  if (m.mode !== 'automated' || m.termsMode !== 'B') return no('MODE_B_MANDATE_REQUIRED', 'a Mode B mandate is required for orders without a per-order approval');
+  if (!['totp', 'passkey'].includes(m.stepUpMethod)) return no('MANDATE_NOT_APPROVED', 'Mode B mandate must be step-up signed');
+  if (!o.strategyVersionId || o.strategyVersionId !== m.strategyVersionId) return no('MODE_B_STRATEGY_MISMATCH', 'the order is not for the strategy version the mandate binds');
+  if (!Array.isArray(m.instruments) || !m.instruments.includes(o.instrument)) return no('MODE_B_INSTRUMENT', 'the mandate does not cover this instrument');
+  const p = ctx.proposer;
+  if (!p || p.principalId !== o.proposedBy || p.ownerPrincipalId !== o.principalId || p.scope !== 'EXECUTE_UNDER_MANDATE' || p.mandateId !== o.mandateId) {
+    return no('MODE_B_PROPOSER', 'the proposer is not authorised to act under this mandate');
+  }
+  const d = ctx.scorecardDecision;
+  if (!d || d.id !== o.decisionId || d.decision !== 'GO' || !(Date.parse(d.expires_at) > now)
+      || d.subject?.principalId !== o.principalId || d.subject?.instrument !== o.instrument || d.subject?.side !== o.side) {
+    return no('MODE_B_SCORECARD', 'Mode B needs a current scorecard GO for this exact principal, instrument and side');
+  }
+  const dec = int(ctx.policy.decimals, 'policy.decimals');
+  const n = BigInt(notionalMinor(o, ctx));
+  const capOrder = BigInt(toMinor(MODE_B_CAPS.maxOrderNotional, dec, Rounding.FLOOR));
+  const capDay = BigInt(toMinor(MODE_B_CAPS.maxDailyNotional, dec, Rounding.FLOOR));
+  if (n > capOrder) return no('MODE_B_CAP', `order notional exceeds the LIVE_SMALL per-order cap ${MODE_B_CAPS.maxOrderNotional}`);
+  if (BigInt(need(ctx.activity?.todayNotionalMinor, 'activity.todayNotionalMinor')) + n > capDay) return no('MODE_B_CAP', `daily notional would exceed the LIVE_SMALL cap ${MODE_B_CAPS.maxDailyNotional}`);
+  return null;
+}
+
 // ── the checks ──────────────────────────────────────────────────────────────────
 
 function killSwitch(o, ctx) {
@@ -109,7 +144,9 @@ function tradingFlags(o, ctx) {
   const required = ['TRADING_AGENT'];
   required.push({ binance: 'BINANCE', alpaca: 'ALPACA', upstox: 'UPSTOX_COPILOT', mock: null }[o.venue]);
   if (o.mode === 'live') required.push('LIVE_TRADING');
-  if (!o.approvedBy) required.push('AUTONOMOUS_MODE', ...(o.venue === 'upstox' ? ['UPSTOX_AUTOMATED'] : []));
+  // No per-order human approval: only Mode B (agent proposal under a Mode B mandate, MANDATE_MODE_B on)
+  // or full autonomy (AUTONOMOUS_MODE, LOCKED). Upstox automation stays LOCKED either way.
+  if (!o.approvedBy) required.push(isModeB(o) ? 'MANDATE_MODE_B' : 'AUTONOMOUS_MODE', ...(o.venue === 'upstox' ? ['UPSTOX_AUTOMATED'] : []));
   const off = required.filter((f) => f && !isTradingFlagEnabled(f, env));
   return off.length ? no('FLAG_DISABLED', `required flag(s) not enabled: ${off.join(', ')}`) : PASS;
 }
@@ -147,6 +184,11 @@ function mandate(o, ctx) {
   if (!m.approvedAt || !m.stepUpMethod) return no('MANDATE_NOT_APPROVED', 'mandate lacks step-up approval');
   if (now < int(m.validFrom, 'mandate.validFrom') || (m.validUntil !== null && m.validUntil !== undefined && now >= m.validUntil)) return no('MANDATE_EXPIRED', 'outside the mandate validity window');
   if (m.mode === 'copilot' && o.approvedBy !== o.principalId) return no('APPROVAL_REQUIRED', 'copilot mandate: the account owner must approve each order');
+  if (!o.approvedBy) {
+    if (!isModeB(o)) return no('APPROVAL_REQUIRED', 'an order without a human approval is only possible under Mode B');
+    const r = modeBCoverage(o, ctx, m, now);
+    if (r) return r;
+  }
   if (m.currency !== ctx.policy.currency) return no('CURRENCY_MISMATCH', `mandate currency ${m.currency} ≠ policy ${ctx.policy.currency}`);
   return PASS;
 }

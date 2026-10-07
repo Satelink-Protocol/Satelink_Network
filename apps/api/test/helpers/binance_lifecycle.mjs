@@ -28,7 +28,7 @@ export async function runLimitLifecycle({ fetch, credential, linkId, environment
   const adapters = { forVenue: () => adapter };
   const mandate = { id: 'mdt_testnet', principalId: 'prn_founder', brokerAccountId: 'bka_testnet', currency: spec.quoteCurrency, decimals: 2, termsHash: TERMS_HASH, status: 'active', approvedBy: 'prn_founder', mode: 'paper' };
   const mandates = { async verifyForOrder() { return mandate; } };
-  const decision = { decisionId: 'rdc_testnet_1', decision: 'APPROVE', recorded: true, failedCheck: null, checksVersion: 'risk-checks/1.0', engineVersion: 'test', trace: [] };
+  const decision = { decisionId: 'rdc_testnet_1', decision: 'APPROVE', recorded: true, failedCheck: null, checksVersion: 'risk-checks/1.1', engineVersion: 'test', trace: [] };
   const risk = { async decide() { return decision; } };
   let n = 0;
   const acceptance = new OrderAcceptanceService({ store, mandates, risk, venues: { capabilities: () => adapter.capabilities() }, idFactory: (p) => `${p}_${Date.now().toString(36)}_${++n}`, clock });
