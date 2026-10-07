@@ -1,0 +1,96 @@
+# Stage 30 — nightly end-to-end trading check (PAPER loop + Binance Spot TESTNET leg).
+#
+# Never touches production: an ephemeral Postgres service container, the in-process paper venue,
+# and the Binance SPOT TESTNET only (the adapter refuses production while LIVE_TRADING is locked).
+# Testnet keys come from the founder-provisioned GitHub Environment `trading-testnet` (secrets scoped
+# to that environment only). Scheduled workflows run only from the default branch, so this job
+# starts running once the trading-agent integration branch is merged to main (Gate 0 blockers).
+# Rollback: disable the workflow (Actions → Trading E2E nightly → Disable) or delete this file.
+name: Trading E2E nightly
+
+on:
+  schedule:
+    - cron: '30 20 * * *'   # 02:00 IST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trading-e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  paper-loop:
+    name: Paper loop (Postgres, all migrations)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: e2e-local-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGPASSWORD: e2e-local-only
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --prefer-offline
+      - name: Guard database (the integration suite refuses to run without one)
+        run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE e2e_guard"
+          psql -h localhost -U postgres -d e2e_guard -c "CREATE TABLE __test_db_marker (id int)"
+      - name: End-to-end paper loop + failure injection
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:e2e-local-only@localhost:5432/e2e_guard
+          TRADING_FOUNDATION_TEST_DB: postgresql://postgres:e2e-local-only@localhost:5432/postgres
+          E2E_REPORT: ${{ github.workspace }}/e2e-report.json
+        run: npx vitest run --project integration database/__tests__/trading-e2e.integration.test.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-paper-report
+          path: e2e-report.json
+          if-no-files-found: warn
+
+  binance-testnet:
+    name: Binance Spot Testnet leg
+    needs: paper-loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: trading-testnet
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --prefer-offline
+      - name: Require testnet secrets (a green run must have exercised the testnet)
+        env:
+          KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
+          SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$SECRET" ]; then
+            echo "::error::TESTNET_SECRETS_MISSING — create the trading-testnet environment secrets BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_API_SECRET (testnet keys only)"
+            exit 1
+          fi
+      - name: LIMIT place + cancel through the OMS, with a receipt
+        working-directory: apps/api
+        env:
+          BINANCE_TESTNET_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
+          BINANCE_TESTNET_API_SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
+          BINANCE_TESTNET_TRACE_OUT: ${{ github.workspace }}/testnet-receipt.json
+        run: npx mocha --no-config --exit test/trading_binance_testnet.test.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-testnet-receipt
+          path: testnet-receipt.json
+          if-no-files-found: warn

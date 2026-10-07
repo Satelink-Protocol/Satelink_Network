@@ -1,0 +1,29 @@
+# Trading security scans (Stage 28, option 1). NON-BREAKING: report-only, continue-on-error.
+# Findings show as warnings on the PR; making them blocking is a later, reviewed change.
+name: Trading security scans
+
+on:
+  pull_request:
+    branches: [main, 'trading-agent/**']
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Secret + licence scan (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Secret patterns (tracked files)
+        run: node scripts/trading/security-scan.mjs secrets
+      - name: Production dependency licences (package-lock.json)
+        run: node scripts/trading/security-scan.mjs licences

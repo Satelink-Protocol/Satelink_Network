@@ -18,6 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           "/satelink/os/",
           "/login",
           "/tasks",
+          "/trading-agent", // Stage 26: flag-gated (SITE_TRADING_AGENT, default OFF), noindex until launch
           "/checkout",
           "/checkout/",
           "/styleguide",

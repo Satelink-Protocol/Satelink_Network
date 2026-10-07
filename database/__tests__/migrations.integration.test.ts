@@ -138,13 +138,28 @@ describe('M2 — ledger schema migrations', { timeout: 120_000 }, () => {
       '017_satelink_app_role.sql',
       '018_subscriptions.sql',
       '019_ledger_kind_refund.sql',
+      '021_trading_foundation.sql',
+      '022_market_data_entitlements.sql',
+      '023_agent_traces.sql',
+      '024_backtests.sql',
+      '025_risk_engine.sql',
+      '026_mandates.sql',
+      '027_oms.sql',
+      '028_portfolio.sql',
+      '029_audit_trail.sql',
+      '030_billing_subscriptions.sql',
+      '031_trading_credential_roles.sql',
+      '032_model_cost_metering.sql',
+      '033_trading_decisions.sql',
+      '034_trading_memory.sql',
+      '035_trading_agent_access.sql',
     ]);
     expect(result.skipped).toHaveLength(0);
   });
 
   // The exact count is derived from the applied list above so adding a
   // migration only requires updating that one list.
-  const MIGRATION_COUNT = 19;
+  const MIGRATION_COUNT = 28;
 
   it('re-running applies nothing (idempotent)', async () => {
     const result = await migrate(connectionString, MIGRATIONS_DIR);
