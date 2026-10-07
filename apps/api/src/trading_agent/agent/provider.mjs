@@ -30,6 +30,7 @@ export class AIProvider {
     assertSchema(schema, 'structuredOutput');
     const instruction = { role: 'system', content: `Respond with a single JSON value matching this JSON schema, and nothing else:\n${JSON.stringify(schema)}` };
     const res = await this.chat([instruction, ...messages], { ...opts, jsonMode: true, tools: undefined });
+    opts.onUsage?.(res); // cost metering (tiered_router.mjs); the value itself is still re-validated below
     let parsed;
     try { parsed = JSON.parse(stripFences(res.content ?? '')); }
     catch { throw new AgentError('SCHEMA_INVALID', 'model output is not valid JSON'); }

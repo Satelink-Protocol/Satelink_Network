@@ -9,9 +9,10 @@ import { Task } from './provider.mjs';
 export class ModelRouter {
   #routes;
   #providers;
-  constructor({ routes, providers }) {
+  /** @param keys allowed route keys — the Stage 12 tasks by default, or the LLM tiers (tiered_router.mjs) */
+  constructor({ routes, providers, keys = Object.values(Task) }) {
     for (const [task, chain] of Object.entries(routes || {})) {
-      if (!Object.values(Task).includes(task)) throw new AgentError('CONFIG', `unknown task ${task}`);
+      if (!keys.includes(task)) throw new AgentError('CONFIG', `unknown task ${task}`);
       if (!Array.isArray(chain) || chain.length === 0) throw new AgentError('CONFIG', `route for ${task} must be a non-empty array`);
       for (const r of chain) {
         if (!providers?.[r.provider]) throw new AgentError('CONFIG', `route ${task}: unknown provider ${r.provider}`);
@@ -40,10 +41,10 @@ export class ModelRouter {
       const started = Date.now();
       try {
         const result = await fn(this.#providers[pid], model);
-        onAttempt?.({ task, provider: pid, model, status: i === 0 ? 'ok' : 'fallback', latencyMs: Date.now() - started, result });
+        await onAttempt?.({ task, provider: pid, model, status: i === 0 ? 'ok' : 'fallback', latencyMs: Date.now() - started, result });
         return result;
       } catch (e) {
-        onAttempt?.({ task, provider: pid, model, status: 'error', latencyMs: Date.now() - started, error: e });
+        await onAttempt?.({ task, provider: pid, model, status: 'error', latencyMs: Date.now() - started, error: e });
         lastErr = e;
         if (!(e instanceof ProviderError) || !e.retryable) throw e;
       }
